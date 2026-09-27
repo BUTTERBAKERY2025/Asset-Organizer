@@ -452,12 +452,14 @@ export function registerDeliveryRoutes(app: Express) {
           const id = Number(inserted.rows[0].id);
            await event(client, id, requireUser(req).id, "create", null, "assigned",
              { driverId: payload.driverId, vehicleNumber: payload.vehicleNumber });
-          await client.query("COMMIT");
-          return id;
+           // Build the response before committing: a failed source/assignment
+           // read must not report a 500 after the assignment was persisted.
+           const delivery = await dto(req, res, client, (await assignment(client, id))!, s);
+           await client.query("COMMIT");
+           return delivery;
         } catch (e) { await client.query("ROLLBACK"); throw e; }
       });
-      const delivery = await withClient(async client => dto(req, res, client, (await assignment(client, result))!));
-      if (!res.headersSent) res.status(201).json(delivery);
+       if (!res.headersSent) res.status(201).json(result);
     } catch (e) { error(res, e); }
   });
 

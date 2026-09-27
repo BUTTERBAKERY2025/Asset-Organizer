@@ -26,3 +26,9 @@ When source stock operations and delivery metadata share a transaction, lock the
 **Why:** Source dispatch and driver actions enter from opposite modules; reversing the lock order between them creates a deadlock risk. Acknowledgement must bind the actual shipment, including substitute identity, not only a total quantity.
 
 **How to apply:** Reuse the shared source fingerprint and transactional dispatch guard. Late proof after authenticated source receipt is metadata recovery, not permission to repeat receipt or stock posting.
+
+Treat delivery notification event constraints as part of the core assignment deployment contract.
+
+**Why:** Notifications are enqueued inside the assignment transaction. A production CHECK constraint that excludes a newly introduced event type rolls back the entire assignment, not just its notification. Table existence alone does not prove schema readiness.
+
+**How to apply:** Verify allowed event values as well as handover columns before enabling new delivery flows. Never swallow enqueue failures to make assignment appear successful. Build the response inside the transaction so a projection failure cannot report failure after a successful commit; inspect persisted assignments before advising retries.

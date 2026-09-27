@@ -210,6 +210,66 @@ describe("delivery routes against local PostgreSQL contracts", () => {
     state.permissions.set(fixture.manager!.id, previous!);
   });
 
+  it("rolls back creation when its response projection fails", async () => {
+    const order = await client.query(`INSERT INTO central_kitchen_orders
+      (order_number,request_branch_id,central_kitchen_id,order_date,status,idempotency_key,payload_fingerprint,created_by)
+      VALUES ($1,$2,$3,current_date,'prepared',$4,$5,$6) RETURNING id`,
+      [`${fixture.prefix}-projection`, fixture.destination, fixture.kitchen,
+        `${fixture.prefix}-projection-key`, "c".repeat(64), fixture.manager!.id]);
+    const sourceId = order.rows[0].id;
+    const originalQuery = client.query.bind(client);
+    const failure = new Error("simulated assignment projection failure");
+    (client as any).query = (sql: string, values?: any[]) => {
+      if (sql.includes("SELECT a.*, concat_ws(")) return Promise.reject(failure);
+      return originalQuery(sql, values);
+    };
+    try {
+      const response = await invoke("POST", "/api/deliveries", fixture.manager!, {
+        sourceType: "kitchen", sourceId, driverId: fixture.driver!.id,
+        vehicleNumber: "vehicle01", scheduledAt: "2026-09-27T19:15:00+03:00",
+      });
+      expect(response.statusCode).toBe(500);
+    } finally {
+      (client as any).query = originalQuery;
+    }
+    const assignments = await client.query(
+      "SELECT id FROM delivery_assignments WHERE source_type='kitchen' AND source_id=$1", [sourceId]);
+    expect(assignments.rowCount).toBe(0);
+  });
+
+  it("does not create a task when the assigned notice violates an older outbox check", async () => {
+    const order = await client.query(`INSERT INTO central_kitchen_orders
+      (order_number,request_branch_id,central_kitchen_id,order_date,status,idempotency_key,payload_fingerprint,created_by)
+      VALUES ($1,$2,$3,current_date,'prepared',$4,$5,$6) RETURNING id`,
+      [`${fixture.prefix}-outbox`, fixture.destination, fixture.kitchen,
+        `${fixture.prefix}-outbox-key`, "d".repeat(64), fixture.manager!.id]);
+    const sourceId = order.rows[0].id;
+    const originalQuery = client.query.bind(client);
+    (client as any).query = (sql: string, values?: any[]) => {
+      if (sql.includes("INSERT INTO delivery_notification_outbox")) {
+        return Promise.reject(Object.assign(new Error(
+          'new row for relation "delivery_notification_outbox" violates check constraint "delivery_notification_outbox_event_type_check"',
+        ), { code: "23514" }));
+      }
+      return originalQuery(sql, values);
+    };
+    try {
+      const response = await invoke("POST", "/api/deliveries", fixture.manager!, {
+        sourceType: "kitchen", sourceId, driverId: fixture.driver!.id, vehicleNumber: "vehicle01",
+      });
+      expect(response.statusCode).toBe(500);
+    } finally {
+      (client as any).query = originalQuery;
+    }
+    const assignments = await client.query(
+      "SELECT id FROM delivery_assignments WHERE source_type='kitchen' AND source_id=$1", [sourceId]);
+    expect(assignments.rowCount).toBe(0);
+    const events = await client.query(`SELECT e.id FROM delivery_assignment_events e
+      JOIN delivery_assignments a ON a.id=e.assignment_id
+      WHERE a.source_type='kitchen' AND a.source_id=$1`, [sourceId]);
+    expect(events.rowCount).toBe(0);
+  });
+
   it("assigns before dispatch and requires a current-driver physical handover and acknowledgement", async () => {
     const transfer = await client.query(`INSERT INTO finished_goods_transfers
       (inventory_id,source_branch_id,destination_type,destination_branch_id,product_id,product_name,quantity,unit,
