@@ -1921,6 +1921,16 @@ describe.sequential("central kitchen live inventory database-backed handlers", (
     const demands = operations.body.demands.filter((demand: any) =>
       demand.orderId === first.body.id || demand.orderId === second.body.id);
     expect(demands).toHaveLength(2);
+    expect(demands).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        orderId: first.body.id, requestBranchId: fixture.requestBranchId,
+        requestBranchName: "CK live request branch", orderStatus: "approved",
+      }),
+      expect.objectContaining({
+        orderId: second.body.id, requestBranchId: fixture.requestBranchId,
+        requestBranchName: "CK live request branch", orderStatus: "approved",
+      }),
+    ]));
     expect(demands.reduce((sum: number, demand: any) => sum + demand.availableQuantity, 0))
       .toBe(Math.min(available, 6));
     expect(demands.reduce((sum: number, demand: any) => sum + demand.uncoveredQuantity, 0))

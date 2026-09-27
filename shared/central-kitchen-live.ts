@@ -22,6 +22,9 @@ export type CentralKitchenOperationDemand = {
   orderId: number;
   orderItemId: number;
   orderNumber: string;
+  requestBranchId: string;
+  requestBranchName: string | null;
+  orderStatus: string;
   neededDate: string | null;
   kind: "product" | "warehouse";
   catalogId: number;

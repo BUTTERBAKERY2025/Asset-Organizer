@@ -1,15 +1,14 @@
-import { useMemo, useRef, useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
-import type { CentralKitchenOperationsResponse, CentralKitchenRuntimeMode } from "@shared/central-kitchen-live";
-import { AlertTriangle, ArrowLeft, Factory, Loader2, PackageCheck, Play, RefreshCw, Settings2 } from "lucide-react";
+import type { CentralKitchenOperationDemand, CentralKitchenOperationsResponse, CentralKitchenRuntimeMode } from "@shared/central-kitchen-live";
+import { AlertTriangle, ArrowLeft, ChevronLeft, ChevronRight, Factory, Loader2, PackageCheck, Play, RefreshCw, Search, Settings2, SlidersHorizontal } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useToast } from "@/hooks/use-toast";
@@ -17,6 +16,8 @@ import { apiRequest } from "@/lib/queryClient";
 import { RecipeMaterialsPreview, useRecipeMaterialRequirements } from "@/components/central-kitchen/recipe-materials";
 import { RecipeExceptions, exceptionQueryKey, useOrderRecipeExceptions } from "@/components/central-kitchen/recipe-exceptions";
 import { linkedBatchPayload, matchingApprovedException, type ExceptionBinding } from "@/components/central-kitchen/recipe-exception-flow";
+import { OPERATIONS_PAGE_SIZE, selectOperationsDemands, type DemandFilter } from "./operations-board-model";
+import "./operations-board.css";
 
 type Kitchen = { id: string; name: string };
 const modeStyle: Record<CentralKitchenRuntimeMode, string> = {
@@ -38,6 +39,11 @@ export function OperationsBoard({ kitchens, kitchenId, onKitchenChange }: { kitc
   const [date, setDate] = useState(saudiDate);
   const [batchMode, setBatchMode] = useState<"recipe" | "exception">("recipe");
   const batchAttemptRef = useRef<{ signature: string; key: string } | null>(null);
+  const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState<DemandFilter>("all");
+  const [unit, setUnit] = useState("all");
+  const [page, setPage] = useState(1);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
   const operations = useQuery<CentralKitchenOperationsResponse>({
     queryKey: ["/api/central-kitchen-orders/operations", kitchenId],
     queryFn: async () => {
@@ -56,10 +62,7 @@ export function OperationsBoard({ kitchens, kitchenId, onKitchenChange }: { kitc
   });
   const refresh = () => queryClient.invalidateQueries({ queryKey: ["/api/central-kitchen-orders/operations", kitchenId] });
   const recipeRequirements = useRecipeMaterialRequirements({
-    kitchenId,
-    productId: production?.productId || 0,
-    quantity: batchQty,
-    enabled: production !== null,
+    kitchenId, productId: production?.productId || 0, quantity: batchQty, enabled: production !== null,
   });
   const exceptions = useOrderRecipeExceptions(production?.orderId || 0, production !== null);
   const binding: ExceptionBinding | null = production ? {
@@ -93,35 +96,76 @@ export function OperationsBoard({ kitchens, kitchenId, onKitchenChange }: { kitc
     onSuccess: () => { const orderId = production?.orderId; batchAttemptRef.current = null; setProduction(null); setBatchQty(""); setBatchMode("recipe"); refresh(); if (orderId) { void queryClient.invalidateQueries({ queryKey: exceptionQueryKey(orderId) }); void queryClient.invalidateQueries({ queryKey: [`/api/central-kitchen-orders/${orderId}`] }); } toast({ title: batchMode === "recipe" ? "بدأت دفعة الإنتاج وربطت بالوصفة المعتمدة" : "بدأت دفعة استثنائية دون وصفة؛ لا يُسجّل استهلاك مواد خام" }); },
     onError: (error) => toast({ title: "تعذر إنشاء الدفعة", description: error instanceof Error ? error.message : "تحقق من الاحتياج المتبقي.", variant: "destructive" }),
   });
-  const grouped = useMemo(() => {
-    const map = new Map<string, CentralKitchenOperationsResponse["demands"]>();
-    operations.data?.demands.forEach(demand => map.set(demand.unit, [...(map.get(demand.unit) || []), demand]));
-    return [...map.entries()];
-  }, [operations.data]);
+  const data = operations.data;
+  const units = [...new Set(data?.demands.map(d => d.unit) || [])].sort((a, b) => a.localeCompare(b, "ar"));
+  const { filtered, pageItems, currentPage, totalPages } = selectOperationsDemands(data?.demands || [], { search, filter, unit, page });
+  const selected = data?.demands.find(d => d.orderItemId === selectedId) || null;
   const canProduce = canCreate("production");
+  const setCriteria = (next: { search?: string; filter?: DemandFilter; unit?: string }) => {
+    if (next.search !== undefined) setSearch(next.search);
+    if (next.filter !== undefined) setFilter(next.filter);
+    if (next.unit !== undefined) setUnit(next.unit);
+    setPage(1);
+  };
+  const begin = (d: CentralKitchenOperationDemand) => {
+    setBatchQty(String(d.uncoveredQuantity)); setBatchMode("recipe"); batchAttemptRef.current = null;
+    setProduction({ orderId: d.orderId, itemId: d.orderItemId, productId: d.catalogId, unit: d.unit, name: d.name, uncovered: d.uncoveredQuantity });
+  };
+  const productionAllowed = (d: CentralKitchenOperationDemand) => d.kind === "product" && !d.catalogInactive && d.uncoveredQuantity > 0 && canProduce && data?.runtime.mode !== "paused";
 
-  return <section className="space-y-5">
-    <Card className="overflow-hidden border-0 bg-[linear-gradient(120deg,hsl(264_38%_20%),hsl(280_42%_30%))] text-white shadow-lg">
-      <CardContent className="p-5 sm:p-7">
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-          <div><div className="mb-3 flex items-center gap-2 text-amber-200"><Factory className="h-5 w-5" /><span className="text-xs font-semibold tracking-[.14em]">غرفة تحكم المطبخ المركزي</span></div><h2 className="text-2xl font-bold">الطلب المعتمد يتحول إلى إنتاج، ثم جاهزية للشحن.</h2><p className="mt-2 max-w-2xl text-sm text-violet-100">المواد المعروضة تخص مخزون فرع المطبخ فقط. لا يوجد استهلاك خام تلقائي أو افتراض لوصفة تصنيع.</p></div>
-          <div className="flex flex-wrap items-center gap-2"><Select value={kitchenId} onValueChange={onKitchenChange}><SelectTrigger className="w-52 border-white/20 bg-white/10 text-white"><SelectValue placeholder="اختر المطبخ" /></SelectTrigger><SelectContent>{kitchens.map(k => <SelectItem key={k.id} value={k.id}>{k.name}</SelectItem>)}</SelectContent></Select><Button size="icon" variant="secondary" onClick={() => refresh()} aria-label="تحديث"><RefreshCw className={`h-4 w-4 ${operations.isFetching ? "animate-spin" : ""}`} /></Button>{operations.data && <Badge variant="outline" className={`${modeStyle[operations.data.runtime.mode]} border`}>{modeLabel[operations.data.runtime.mode]}</Badge>}</div>
+  return <section dir="rtl" className="operations-board space-y-4">
+    <div className="ops-shell">
+      <div className="ops-top flex flex-wrap items-center justify-between gap-4">
+        <div className="min-w-0"><span className="ops-kicker inline-flex items-center gap-1.5"><Factory className="h-3.5 w-3.5" /> مساحة تشغيل المطبخ</span><h2>احتياجات الإنتاج المعتمدة</h2><p>متابعة كل بند على حدة، دون دمج القطع والكيلو أو افتراض صرف المواد الخام.</p></div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Select value={kitchenId || undefined} onValueChange={id => { onKitchenChange(id); setSelectedId(null); setCriteria({ search: "", filter: "all", unit: "all" }); }}><SelectTrigger aria-label="المطبخ المركزي" className="w-[180px] bg-white"><SelectValue placeholder="اختر المطبخ" /></SelectTrigger><SelectContent>{kitchens.map(k => <SelectItem key={k.id} value={k.id}>{k.name}</SelectItem>)}</SelectContent></Select>
+          {data && <Badge variant="outline" className={`${modeStyle[data.runtime.mode]} border`}>{modeLabel[data.runtime.mode]}</Badge>}
+          <Button size="icon" variant="outline" onClick={() => refresh()} disabled={!kitchenId || operations.isFetching} aria-label="تحديث الاحتياجات"><RefreshCw className="h-4 w-4" /></Button>
         </div>
-      </CardContent>
-    </Card>
-    {!kitchenId ? <State icon={<Factory className="h-7 w-7" />} title="اختر مطبخاً مركزياً" text="اعرض احتياجات الفرع المعتمدة وحالة تغطيتها." /> : operations.isLoading ? <div className="grid gap-3 sm:grid-cols-3">{[1, 2, 3].map(i => <div key={i} className="h-28 animate-pulse rounded-2xl bg-muted" />)}</div> : operations.isError ? <State icon={<AlertTriangle className="h-7 w-7" />} title="البيانات التشغيلية غير متاحة" text={operations.error instanceof Error ? operations.error.message : "تحقق من الاتصال."} action={<Button variant="outline" onClick={() => operations.refetch()}>إعادة المحاولة</Button>} /> : <>
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <Metric label="بنود معتمدة" value={qty(operations.data!.demands.length)} note="لا تُجمع الكميات بين الوحدات" />
-        <Metric label="وحدات تشغيل" value={qty(operations.data!.totals.byUnit.length)} note="كل وحدة لها رصيدها المستقل" tone="violet" />
-        <Metric label="بنود غير مغطاة" value={qty(operations.data!.demands.filter(d => d.uncoveredQuantity > 0).length)} note="راجع المتبقي داخل كل وحدة" tone="danger" />
-        <Metric label="بنود قيد الإنتاج" value={qty(operations.data!.demands.filter(d => d.linkedUnfinishedQuantity > 0).length)} note="دفعات مرتبطة لم تُنه بعد" tone="good" />
       </div>
-      {isAdmin && <Card className="border-dashed"><CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-semibold">ضبط وضع المخزون</p><p className="text-xs text-muted-foreground">الظلّي لا يرحّل المخزون. التغيير إلى الفعلي أو الإيقاف يحتاج تأكيداً صريحاً.</p></div><Select value={operations.data!.runtime.mode} onValueChange={value => { if (value !== operations.data!.runtime.mode) setModeDraft(value as CentralKitchenRuntimeMode); }}><SelectTrigger className="w-44"><Settings2 className="ml-2 h-4 w-4" /><SelectValue /></SelectTrigger><SelectContent><SelectItem value="shadow">تشغيل ظلّي</SelectItem><SelectItem value="real">مخزون فعلي</SelectItem><SelectItem value="paused">إيقاف</SelectItem></SelectContent></Select></CardContent></Card>}
-      {grouped.length === 0 ? <State icon={<PackageCheck className="h-7 w-7" />} title="لا توجد احتياجات معتمدة" text="ستظهر البنود هنا بعد اعتماد طلبات الفروع." /> : grouped.map(([unit, demands]) => <Card key={unit} className="overflow-hidden"><CardContent className="p-0"><div className="border-b bg-muted/35 px-4 py-3"><p className="font-semibold">وحدة: {unit}</p><p className="text-xs text-muted-foreground">الأرقام لا تُدمج عبر وحدات مختلفة.</p></div><div className="divide-y">{demands.map(d => { const covered = Math.max(0, d.targetQuantity - d.uncoveredQuantity); return <div key={d.orderItemId} className="grid gap-3 p-4 md:grid-cols-[1.4fr_2fr_auto] md:items-center"><div><Link href={`/central-kitchen-orders?orderId=${d.orderId}`} className="font-mono text-sm font-bold text-primary">{d.orderNumber}</Link><p className="mt-1 font-semibold">{d.name}</p><p className="text-xs text-muted-foreground">{d.kind === "warehouse" ? "صنف مستودع — لا يمكن فتح دفعة إنتاج" : "منتج كتالوج"} {d.neededDate ? `· الحاجة ${d.neededDate}` : ""}</p>{d.catalogInactive && <p role="alert" className="mt-2 flex items-center gap-1 text-xs font-medium text-amber-800"><AlertTriangle className="h-4 w-4 shrink-0" />الصنف غير مفعّل حالياً؛ يظهر احتياج الطلب المعتمد ورصيد المخزون للمتابعة فقط، ولا يمكن بدء عمليات جديدة عليه.</p>}</div><div><div className="mb-1 flex justify-between text-xs"><span>المغطّى {qty(covered)} / {qty(d.targetQuantity)}</span><span className={d.uncoveredQuantity > 0 ? "text-rose-700" : "text-emerald-700"}>المتبقي {qty(d.uncoveredQuantity)}</span></div><Progress value={Math.min(100, (covered / Math.max(1, d.targetQuantity)) * 100)} className="h-2" /><p className="mt-2 text-[11px] text-muted-foreground">متاح {qty(d.availableQuantity)} · محجوز {qty(d.reservedQuantity)} · قيد الإنتاج {qty(d.linkedUnfinishedQuantity)}</p></div><div className="flex gap-2 md:justify-end"><Link href={`/central-kitchen-orders?orderId=${d.orderId}`} className="inline-flex h-9 items-center rounded-md border px-3 text-xs font-medium">التفاصيل <ArrowLeft className="mr-1 h-3.5 w-3.5" /></Link>{d.kind === "product" && !d.catalogInactive && d.uncoveredQuantity > 0 && canProduce && operations.data!.runtime.mode !== "paused" && <Button size="sm" onClick={() => { setProduction({ orderId: d.orderId, itemId: d.orderItemId, productId: d.catalogId, unit: d.unit, name: d.name, uncovered: d.uncoveredQuantity }); setBatchQty(String(d.uncoveredQuantity)); setBatchMode("recipe"); batchAttemptRef.current = null; }}><Play className="ml-1 h-3.5 w-3.5" />بدء إنتاج</Button>}</div></div>; })}</div></CardContent></Card>)}
-    </>}
+      {!kitchenId ? <State icon={<Factory className="h-7 w-7" />} title="اختر مطبخاً مركزياً" text="اعرض احتياجات الفرع المعتمدة وحالة تغطيتها." /> :
+        operations.isLoading ? <div aria-label="تحميل احتياجات التشغيل" className="space-y-2 p-5">{Array.from({ length: 6 }, (_, i) => <div key={i} className="h-14 animate-pulse rounded-lg bg-violet-100/60" />)}</div> :
+        operations.isError ? <State icon={<AlertTriangle className="h-7 w-7" />} title="البيانات التشغيلية غير متاحة" text={operations.error instanceof Error ? operations.error.message : "تحقق من الاتصال."} action={<Button variant="outline" onClick={() => operations.refetch()}>إعادة المحاولة</Button>} /> : data && <>
+          <div className="ops-statbar" aria-label="ملخص البنود">
+            <Stat value={data.demands.length} label="بنود معتمدة" />
+            <Stat value={data.demands.filter(d => d.uncoveredQuantity > 0).length} label="تحتاج تغطية" />
+            <Stat value={data.demands.filter(d => d.linkedUnfinishedQuantity > 0).length} label="قيد الإنتاج" />
+            <Stat value={data.demands.filter(d => d.catalogInactive).length} label="أصناف غير مفعّلة" />
+            <span className="px-4 text-[11px] text-[#766b84]">الكميات مفصولة بحسب الوحدة داخل تفاصيل كل بند</span>
+          </div>
+          {isAdmin && <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#e9e1ef] bg-[#f8f3fa] px-4 py-2 text-xs"><span><Settings2 className="ml-1 inline h-3.5 w-3.5" /> وضع المخزون: الظلّي لا يرحّل رصيداً؛ التغيير يتطلب تأكيداً.</span><Select value={data.runtime.mode} onValueChange={value => { if (value !== data.runtime.mode) setModeDraft(value as CentralKitchenRuntimeMode); }}><SelectTrigger aria-label="ضبط وضع المخزون" className="h-8 w-40 bg-white"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="shadow">تشغيل ظلّي</SelectItem><SelectItem value="real">مخزون فعلي</SelectItem><SelectItem value="paused">إيقاف</SelectItem></SelectContent></Select></div>}
+          <div className="ops-toolbar">
+            <div className="ops-search"><Search aria-hidden="true" /><Input aria-label="بحث في الطلبات والأصناف" placeholder="ابحث برقم الطلب أو الصنف أو التاريخ..." value={search} onChange={e => setCriteria({ search: e.target.value })} /></div>
+            <Select value={filter} onValueChange={value => setCriteria({ filter: value as DemandFilter })}><SelectTrigger aria-label="تصفية الحالة" className="h-9 w-[154px] bg-white"><SlidersHorizontal className="ml-1 h-3.5 w-3.5" /><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">جميع الحالات</SelectItem><SelectItem value="uncovered">تحتاج تغطية</SelectItem><SelectItem value="production">قيد الإنتاج</SelectItem><SelectItem value="covered">مغطاة</SelectItem><SelectItem value="inactive">غير مفعّلة</SelectItem></SelectContent></Select>
+            <Select value={unit} onValueChange={value => setCriteria({ unit: value })}><SelectTrigger aria-label="تصفية الوحدة" className="h-9 w-[140px] bg-white"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">جميع الوحدات</SelectItem>{units.map(value => <SelectItem key={value} value={value}>{value}</SelectItem>)}</SelectContent></Select>
+            {(search || filter !== "all" || unit !== "all") && <Button variant="ghost" size="sm" onClick={() => setCriteria({ search: "", filter: "all", unit: "all" })}>مسح الفلاتر</Button>}
+          </div>
+          {!data.demands.length ? <State icon={<PackageCheck className="h-7 w-7" />} title="لا توجد احتياجات معتمدة" text="ستظهر البنود هنا بعد اعتماد طلبات الفروع." /> :
+            !filtered.length ? <State icon={<Search className="h-7 w-7" />} title="لا توجد نتائج مطابقة" text="غيّر البحث أو الفلاتر لعرض بنود أخرى." action={<Button variant="outline" onClick={() => setCriteria({ search: "", filter: "all", unit: "all" })}>عرض جميع البنود</Button>} /> : <>
+              <div role="table" aria-label="بنود التشغيل المعتمدة">
+                <div role="row" className="ops-table-head"><span role="columnheader">الطلب</span><span role="columnheader">الصنف</span><span role="columnheader">الفرع</span><span role="columnheader">موعد الحاجة</span><span role="columnheader">التغطية</span><span role="columnheader">الكمية / التغطية</span><span role="columnheader">إجراء</span></div>
+                {pageItems.map(d => <div role="row" className="ops-row" key={d.orderItemId} data-testid="operations-demand-row">
+                  <div role="cell"><span className="ops-primary ops-ellipsis" dir="ltr" title={d.orderNumber}>{d.orderNumber}</span><span className="ops-sub">بند #{d.orderItemId}</span></div>
+                  <div role="cell" className="ops-product"><span className="ops-primary ops-ellipsis" title={d.name}>{d.name}</span><span className="ops-sub">{d.kind === "warehouse" ? "صنف مستودع · لا تُفتح له دفعة" : "منتج كتالوج"}{d.catalogInactive ? " · غير مفعّل" : ""}</span></div>
+                   <div role="cell"><span className="ops-ellipsis" title={d.requestBranchName || d.requestBranchId}>{d.requestBranchName || d.requestBranchId}</span><span className="ops-sub">حالة الطلب: {d.orderStatus === "approved" ? "معتمد" : d.orderStatus}</span></div>
+                  <div role="cell"><span className="ops-number">{d.neededDate || "—"}</span></div>
+                  <div role="cell"><Badge variant="outline" className={d.catalogInactive ? "border-amber-200 bg-amber-50 text-amber-800" : d.uncoveredQuantity > 0 ? "border-rose-200 bg-rose-50 text-rose-800" : "border-emerald-200 bg-emerald-50 text-emerald-800"}>{d.catalogInactive ? "غير مفعّل" : d.uncoveredQuantity > 0 ? "تحتاج تغطية" : "مغطّى"}</Badge></div>
+                  <div role="cell"><span className="ops-primary"><span className="ops-number">{qty(d.uncoveredQuantity)}</span> {d.unit} متبقٍ</span><span className="ops-sub">المطلوب <span className="ops-number">{qty(d.targetQuantity)}</span> {d.unit}</span></div>
+                  <div role="cell" className="ops-action"><Button variant="outline" size="sm" className="h-8" onClick={() => setSelectedId(d.orderItemId)} aria-label={`تفاصيل ${d.name} من الطلب ${d.orderNumber}`}>تفاصيل <ArrowLeft className="mr-1 h-3.5 w-3.5" /></Button></div>
+                </div>)}
+              </div>
+              <div className="ops-foot"><span>عرض {qty((currentPage - 1) * OPERATIONS_PAGE_SIZE + 1)}–{qty(Math.min(currentPage * OPERATIONS_PAGE_SIZE, filtered.length))} من {qty(filtered.length)} بند · ترتيب حسب موعد الحاجة ثم رقم الطلب</span><div className="flex items-center gap-2"><Button size="icon" variant="outline" aria-label="الصفحة السابقة" disabled={currentPage <= 1} onClick={() => setPage(currentPage - 1)}><ChevronRight className="h-4 w-4" /></Button><span aria-live="polite">{currentPage} / {totalPages}</span><Button size="icon" variant="outline" aria-label="الصفحة التالية" disabled={currentPage >= totalPages} onClick={() => setPage(currentPage + 1)}><ChevronLeft className="h-4 w-4" /></Button></div></div>
+            </>}
+        </>}
+    </div>
+    {selected && <Dialog open onOpenChange={open => { if (!open && !batchMutation.isPending) { setSelectedId(null); setProduction(null); setBatchMode("recipe"); } }}><DialogContent dir="rtl" className={`max-h-[92dvh] overflow-y-auto ${production ? "sm:max-w-4xl" : "sm:max-w-xl"}`}>{!production ? <><DialogHeader><DialogTitle>{selected.name}</DialogTitle><DialogDescription>بند الطلب {selected.orderNumber} · كل الأرقام بوحدة {selected.unit}</DialogDescription></DialogHeader><div className="ops-detail"><div className="ops-detail-grid">
+      <DetailValue label="الكمية المطلوبة" value={`${qty(selected.targetQuantity)} ${selected.unit}`} /><DetailValue label="الاحتياج غير المغطّى" value={`${qty(selected.uncoveredQuantity)} ${selected.unit}`} />
+      <DetailValue label="المتاح" value={`${qty(selected.availableQuantity)} ${selected.unit}`} /><DetailValue label="المحجوز" value={`${qty(selected.reservedQuantity)} ${selected.unit}`} />
+      <DetailValue label="قيد الإنتاج" value={`${qty(selected.linkedUnfinishedQuantity)} ${selected.unit}`} /><DetailValue label="تاريخ الحاجة" value={selected.neededDate || "غير محدد"} />
+    </div>{selected.catalogInactive && <p role="alert" className="flex gap-2 rounded-lg bg-amber-50 p-3 text-xs text-amber-900"><AlertTriangle className="h-4 w-4 shrink-0" />الصنف غير مفعّل حالياً. يظهر الاحتياج المعتمد للمتابعة فقط ولا يمكن بدء عمليات جديدة عليه.</p>}<p className="text-xs text-[#766b84]">بيانات الفرع وحالة الطلب التفصيلية متاحة في سجل الطلب. لا تُستنتج من احتياجات الإنتاج.</p><div className="flex flex-wrap gap-2"><Link href={`/central-kitchen-orders?orderId=${selected.orderId}`} className="inline-flex h-9 items-center rounded-md border px-3 text-xs font-medium" onClick={() => setSelectedId(null)}>فتح الطلب <ArrowLeft className="mr-1 h-3.5 w-3.5" /></Link>{productionAllowed(selected) && <Button size="sm" onClick={() => begin(selected)}><Play className="ml-1 h-3.5 w-3.5" />بدء إنتاج</Button>}</div></div></> : <><DialogHeader><DialogTitle>بدء دفعة إنتاج</DialogTitle><DialogDescription>{production.name} · أقصى احتياج غير مغطى: {qty(production.uncovered)} {production.unit}. المسار المعتاد بوصفة معتمدة؛ الإنتاج دون وصفة يتطلب استثناء معتمداً ومطابقاً لهذه الدفعة.</DialogDescription></DialogHeader><div className="grid gap-3 sm:grid-cols-2"><div><Label>كمية صحيحة</Label><Input className="mt-1" type="number" min="1" step="1" disabled={batchMutation.isPending} value={batchQty} onChange={e => setBatchQty(e.target.value)} /></div><div><Label>تاريخ الإنتاج</Label><Input className="mt-1" type="date" disabled={batchMutation.isPending} value={date} onChange={e => setDate(e.target.value)} /></div></div><div className="flex flex-wrap gap-2"><Button type="button" disabled={batchMutation.isPending} variant={batchMode === "recipe" ? "default" : "outline"} onClick={() => setBatchMode("recipe")}>إنتاج بوصفة معتمدة (الافتراضي)</Button><Button type="button" disabled={batchMutation.isPending} variant={batchMode === "exception" ? "default" : "outline"} onClick={() => setBatchMode("exception")}>طلب استثناء دون وصفة</Button></div>{batchMode === "recipe" && <RecipeMaterialsPreview query={recipeRequirements} kitchenId={kitchenId} onRetry={() => recipeRequirements.refetch()} />}{batchMode === "exception" && <><RecipeExceptions key={`${production.orderId}:${production.itemId}:${batchQty}:${date}`} orderId={production.orderId} binding={binding} allowRequest /><p className="text-xs text-amber-900">لا توجد لقطة وصفة أو إثبات لصرف مواد خام في دفعة الاستثناء. {approvedException ? `الاستثناء المعتمد المطابق #${approvedException.id} متاح للاستخدام مرة واحدة.` : "انتظر الاعتماد المطابق قبل إنشاء الدفعة."}</p></>}<DialogFooter><Button variant="outline" disabled={batchMutation.isPending} onClick={() => { setProduction(null); setSelectedId(null); }}>إلغاء</Button><Button disabled={batchMutation.isPending || !binding || !Number.isInteger(binding.quantity) || binding.quantity < 1 || (batchMode === "recipe" ? recipeRequirements.isLoading || recipeRequirements.isError || !recipeRequirements.data?.recipe : !exceptions.data || !approvedException)} onClick={() => batchMutation.mutate()}>{batchMutation.isPending && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}إنشاء الدفعة</Button></DialogFooter></>}</DialogContent></Dialog>}
     <Dialog open={modeDraft !== null} onOpenChange={open => !open && setModeDraft(null)}><DialogContent dir="rtl"><DialogHeader><DialogTitle>تأكيد تغيير وضع تشغيل المطبخ</DialogTitle><DialogDescription>{modeDraft === "real" ? "سيؤثر التفعيل على الطلبات الجديدة فقط: ستُنشأ حجوزات من مخزون فرع المطبخ. لا يُرحّل أو يُصحح أي رصيد أو طلب قديم." : modeDraft === "paused" ? "سيوقف الإيقاف ترحيل المخزون للطلبات الحقيقية المعلّقة ويمنع بدء أو إنهاء دفعات الإنتاج المرتبطة إلى أن يُستأنف التشغيل. تبقى الأرصدة والحجوزات الحالية محفوظة." : "سيعود أثر الطلبات الجديدة إلى السجل الظلّي فقط، دون تعديل أي طلب أو رصيد قديم."}</DialogDescription></DialogHeader><DialogFooter><Button variant="outline" onClick={() => setModeDraft(null)}>إلغاء</Button><Button disabled={runtimeMutation.isPending} onClick={() => modeDraft && runtimeMutation.mutate(modeDraft)}>{runtimeMutation.isPending && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}تأكيد التغيير</Button></DialogFooter></DialogContent></Dialog>
-      <Dialog open={production !== null} onOpenChange={open => { if (!open && !batchMutation.isPending) { setProduction(null); setBatchMode("recipe"); } }}><DialogContent dir="rtl" className="max-h-[92dvh] max-w-4xl overflow-y-auto"><DialogHeader><DialogTitle>بدء دفعة إنتاج</DialogTitle><DialogDescription>{production?.name} · أقصى احتياج غير مغطى: {production && qty(production.uncovered)} {production?.unit}. المسار المعتاد بوصفة معتمدة؛ الإنتاج دون وصفة يتطلب استثناء معتمداً ومطابقاً لهذه الدفعة.</DialogDescription></DialogHeader><div className="grid gap-3 sm:grid-cols-2"><div><Label>كمية صحيحة</Label><Input className="mt-1" type="number" min="1" step="1" disabled={batchMutation.isPending} value={batchQty} onChange={e => setBatchQty(e.target.value)} /></div><div><Label>تاريخ الإنتاج</Label><Input className="mt-1" type="date" disabled={batchMutation.isPending} value={date} onChange={e => setDate(e.target.value)} /></div></div><div className="flex flex-wrap gap-2"><Button type="button" disabled={batchMutation.isPending} variant={batchMode === "recipe" ? "default" : "outline"} onClick={() => setBatchMode("recipe")}>إنتاج بوصفة معتمدة (الافتراضي)</Button><Button type="button" disabled={batchMutation.isPending} variant={batchMode === "exception" ? "default" : "outline"} onClick={() => setBatchMode("exception")}>طلب استثناء دون وصفة</Button></div>{production && batchMode === "recipe" && <RecipeMaterialsPreview query={recipeRequirements} kitchenId={kitchenId} onRetry={() => recipeRequirements.refetch()} />}{production && batchMode === "exception" && <><RecipeExceptions key={`${production.orderId}:${production.itemId}:${batchQty}:${date}`} orderId={production.orderId} binding={binding} allowRequest /><p className="text-xs text-amber-900">لا توجد لقطة وصفة أو إثبات لصرف مواد خام في دفعة الاستثناء. {approvedException ? `الاستثناء المعتمد المطابق #${approvedException.id} متاح للاستخدام مرة واحدة.` : "انتظر الاعتماد المطابق قبل إنشاء الدفعة."}</p></>}<DialogFooter><Button variant="outline" disabled={batchMutation.isPending} onClick={() => setProduction(null)}>إلغاء</Button><Button disabled={batchMutation.isPending || !binding || !Number.isInteger(binding.quantity) || binding.quantity < 1 || (batchMode === "recipe" ? recipeRequirements.isLoading || recipeRequirements.isError || !recipeRequirements.data?.recipe : !exceptions.data || !approvedException)} onClick={() => batchMutation.mutate()}>{batchMutation.isPending && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}إنشاء الدفعة</Button></DialogFooter></DialogContent></Dialog>
   </section>;
 }
-function Metric({ label, value, note, tone }: { label: string; value: string; note: string; tone?: "danger" | "violet" | "good" }) { return <Card className={tone === "danger" ? "border-rose-200 bg-rose-50/50" : tone === "violet" ? "border-violet-200 bg-violet-50/50" : tone === "good" ? "border-emerald-200 bg-emerald-50/50" : ""}><CardContent className="p-4"><p className="text-xs text-muted-foreground">{label}</p><p className="mt-1 text-2xl font-bold tabular-nums">{value}</p><p className="mt-1 text-[11px] text-muted-foreground">{note}</p></CardContent></Card>; }
-function State({ icon, title, text, action }: { icon: ReactNode; title: string; text: string; action?: ReactNode }) { return <Card><CardContent className="flex flex-col items-center py-14 text-center"><div className="mb-3 text-muted-foreground">{icon}</div><h3 className="font-semibold">{title}</h3><p className="mt-1 max-w-md text-sm text-muted-foreground">{text}</p>{action && <div className="mt-4">{action}</div>}</CardContent></Card>; }
+function Stat({ label, value }: { label: string; value: number }) { return <div className="ops-stat"><strong>{qty(value)}</strong><span>{label}</span></div>; }
+function DetailValue({ label, value }: { label: string; value: string }) { return <div><dt>{label}</dt><dd>{value}</dd></div>; }
+function State({ icon, title, text, action }: { icon: ReactNode; title: string; text: string; action?: ReactNode }) { return <Card className="m-4 border-dashed"><CardContent className="flex flex-col items-center py-10 text-center"><div className="mb-3 text-muted-foreground">{icon}</div><h3 className="font-semibold">{title}</h3><p className="mt-1 max-w-md text-sm text-muted-foreground">{text}</p>{action && <div className="mt-4">{action}</div>}</CardContent></Card>; }

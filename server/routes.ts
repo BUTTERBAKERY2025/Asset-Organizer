@@ -8486,6 +8486,9 @@ export async function registerRoutes(
         orderId: centralKitchenOrders.id,
         orderItemId: centralKitchenOrderItems.id,
         orderNumber: centralKitchenOrders.orderNumber,
+        requestBranchId: centralKitchenOrders.requestBranchId,
+        requestBranchName: branches.name,
+        orderStatus: centralKitchenOrders.status,
         neededDate: centralKitchenOrders.neededDate,
         productId: centralKitchenOrderItems.productId,
         warehouseItemId: centralKitchenOrderItems.warehouseItemId,
@@ -8494,11 +8497,17 @@ export async function registerRoutes(
         targetQuantity: centralKitchenOrderItems.requestedQuantity,
       }).from(centralKitchenOrderItems)
         .innerJoin(centralKitchenOrders, eq(centralKitchenOrderItems.orderId, centralKitchenOrders.id))
+        .leftJoin(branches, eq(branches.id, centralKitchenOrders.requestBranchId))
         .where(and(
           eq(centralKitchenOrders.centralKitchenId, kitchenId),
           eq(centralKitchenOrders.inventoryMode, "real"),
           eq(centralKitchenOrders.status, "approved"),
         ));
+      const orderContextByItemId = new Map(rows.map((row) => [row.orderItemId, {
+        requestBranchId: row.requestBranchId,
+        requestBranchName: row.requestBranchName,
+        orderStatus: row.orderStatus,
+      }]));
       const demands = [];
       const processedCatalogs = new Set<string>();
       for (const row of rows) {
@@ -8512,10 +8521,11 @@ export async function registerRoutes(
         // This endpoint only reads already-approved real orders. Keep new selections
         // and production mutations on the default active-catalog guard.
         const allocated = await getAllocatedKitchenDemands(kitchenId, identity, db, { historicalRead: true });
-        demands.push(...allocated.map((demand) => ({
+        demands.push(...allocated.filter((demand) => orderContextByItemId.has(demand.orderItemId)).map((demand) => ({
           orderId: demand.orderId,
           orderItemId: demand.orderItemId,
           orderNumber: demand.orderNumber,
+          ...orderContextByItemId.get(demand.orderItemId)!,
           neededDate: demand.neededDate,
           kind: demand.productId ? "product" as const : "warehouse" as const,
           catalogId: demand.productId || demand.warehouseItemId!,
