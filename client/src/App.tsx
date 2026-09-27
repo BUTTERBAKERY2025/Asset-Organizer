@@ -13,7 +13,9 @@ import { SlowConnectionBanner } from "@/components/slow-connection-banner";
 import { DataErrorBanner } from "@/components/data-error-banner";
 import { InactivityLogout } from "@/components/inactivity-logout";
 import { ProductionProvider } from "@/contexts/ProductionContext";
-import { ProtectedRoute, PublicOnlyRoute, ModuleProtectedRoute, AnyModuleProtectedRoute } from "@/components/protected-route";
+import { ProtectedRoute, PublicOnlyRoute, ModuleProtectedRoute, AnyModuleProtectedRoute, AccessDeniedPage } from "@/components/protected-route";
+import { useAuth } from "@/hooks/useAuth";
+import { canAccessDeliveryWorkspace } from "@shared/delivery-workspace-access";
 import { AuthGate } from "@/contexts/AuthContext";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { Loader2 } from "lucide-react";
@@ -322,13 +324,24 @@ const AdminPage = React.memo(function AdminPage({ component: Component, module }
   );
 });
 
+const StandaloneDeliveryPage = React.memo(function StandaloneDeliveryPage() {
+  const { user } = useAuth();
+  return (
+    <ModuleProtectedRoute module="delivery_tasks">
+      {canAccessDeliveryWorkspace(user)
+        ? <Suspense fallback={<PageLoadingFallback />}><PageWrapper><DriverDeliveriesPage /></PageWrapper></Suspense>
+        : <AccessDeniedPage message="مساحة مهام التوصيل المستقلة متاحة للسائق ومسؤول المستودع والمدير فقط" />}
+    </ModuleProtectedRoute>
+  );
+});
+
 const Router = React.memo(function Router() {
   return (
     <Switch>
       <Route path="/">{() => <ProtectedPage component={PlatformHomePage} />}</Route>
       <Route path="/branch-operations">{() => <ProtectedPage component={BranchOperationsPage} />}</Route>
       <Route path="/branch-complaints">{() => <ModulePage component={BranchComplaintsPage} module="branch_complaints" />}</Route>
-      <Route path="/driver-deliveries">{() => <ModulePage component={DriverDeliveriesPage} module="delivery_tasks" />}</Route>
+      <Route path="/driver-deliveries">{() => <StandaloneDeliveryPage />}</Route>
       <Route path="/login">
         {() => (
           <PublicOnlyRoute>

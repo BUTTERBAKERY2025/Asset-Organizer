@@ -238,7 +238,8 @@
     "employee": "Employee",
     "viewer": "Viewer",
     "attendanceClerk": "Attendance Clerk",
-    "productionDevelopmentManager": "Production & Development Manager"
+    "productionDevelopmentManager": "Production & Development Manager",
+    "warehouseKeeper": "Warehouse Keeper"
   },
   "subItems": {
     "branchEmployees": "Branch Employees",

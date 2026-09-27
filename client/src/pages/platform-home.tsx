@@ -21,6 +21,8 @@ import { HeroWidgets } from "@/components/hero-widgets";
 import { apiRequest } from "@/lib/queryClient";
 import { PlatformAppIcon, type SemanticColor } from "@/components/platform-app-icon";
 import type { LucideIcon } from "lucide-react";
+import { canAccessDeliveryWorkspace } from "@shared/delivery-workspace-access";
+import { canShowWarehouseKeeperDestination } from "@/lib/warehouse-keeper-navigation";
 
 interface AppTileProps {
   title: string;
@@ -67,7 +69,7 @@ export default function PlatformHomePage() {
   // otherwise flip portalOnly true and redirect them to the portal mid-session.
   const NON_PORTAL_ROLES = new Set([
     "admin", "attendance_clerk", "hr_manager", "hr_specialist",
-    "financial_manager", "financial_accountant", "finance_manager", "operations_manager", "production_development_manager", "branch_manager", "viewer",
+    "financial_manager", "financial_accountant", "finance_manager", "operations_manager", "production_development_manager", "branch_manager", "warehouse_keeper", "viewer",
   ]);
   const portalOnly =
     !isAdmin && !isAttendanceClerk && !permsLoading &&
@@ -77,6 +79,8 @@ export default function PlatformHomePage() {
   useEffect(() => {
     if (isAttendanceClerk) {
       navigate("/attendance-check");
+    } else if (!permsLoading && user?.role === "warehouse_keeper" && canView("warehouse")) {
+      navigate("/warehouse");
     } else if (!permsLoading && user?.role === "employee" && user.jobTitle === "delivery" && canView("delivery_tasks")) {
       navigate("/driver-deliveries");
     } else if (portalOnly) {
@@ -129,7 +133,7 @@ export default function PlatformHomePage() {
     { title: t("modules.sales.title"),       icon: Receipt,        href: "/cashier-journals",        color: "money",      module: "cashier_journal" },
     { title: t("modules.operations.title"),  icon: Factory,        href: "/operations",              color: "production", module: "operations" },
     { title: "شكاوى الفروع",                 icon: MessageSquareWarning, href: "/branch-complaints",   color: "people",     module: "branch_complaints" },
-    { title: "مهام التوصيل",                  icon: Truck,         href: "/driver-deliveries",       color: "inventory",  module: "delivery_tasks" },
+    ...(canAccessDeliveryWorkspace(user) ? [{ title: user?.role === "employee" ? "مهامي للتوصيل" : "إدارة التوصيل", icon: Truck, href: "/driver-deliveries", color: "inventory" as const, module: "delivery_tasks" as SystemModule }] : []),
     { title: t("modules.production.title"),  icon: ClipboardList,  href: "/production-dashboard",    color: "production", module: "production" },
     { title: "دفتر وصفات المطبخ المركزي",     icon: ClipboardList,  href: "/central-kitchen-recipes",  color: "production", module: "central_kitchen_recipes" },
     { title: t("modules.assets.title"),      icon: Package,        href: "/inventory",               color: "inventory",  module: "inventory" },
@@ -140,13 +144,13 @@ export default function PlatformHomePage() {
     { title: t("modules.settings.title"),    icon: Settings,       href: "/settings",                color: "system",     module: "settings" },
   ];
 
-  const accessibleApps = apps.filter((a) => !a.module || canView(a.module));
+  const accessibleApps = apps.filter((a) => canShowWarehouseKeeperDestination(user?.role, a.href) && (!a.module || canView(a.module)));
 
   const canViewSales =
     canView("cashier_journal") ||
     canView("sales_analytics") ||
     canView("cashier_performance");
-  const canViewBranchOperations = [
+  const canViewBranchOperations = user?.role !== "warehouse_keeper" && [
     "operations", "maintenance", "waste_tracking", "warehouse", "daily_closures",
     "cashier_journal", "branch_employees", "documents", "hr_advances",
     "central_kitchen_orders", "branch_complaints", "sales_analytics", "targets", "hr_documents", "attendance",

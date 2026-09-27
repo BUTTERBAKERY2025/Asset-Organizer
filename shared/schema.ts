@@ -1836,6 +1836,15 @@ export const ROLE_PERMISSION_TEMPLATES: Record<
     { module: "warehouse_inventory", actions: ["view", "create", "edit", "export"] },
     { module: "branches", actions: ["view"] },
   ],
+  // أمين المستودعات: مخزون المستودع الرئيسي وحركة المواد فقط، دون صلاحيات
+  // مالية أو أصول أو مبيعات. نطاق الفرع محصور بالمستودع الرئيسي في الخادم.
+  warehouse_keeper: [
+    { module: "warehouse", actions: ["view", "create", "edit", "export"] },
+    { module: "material_requests", actions: ["view", "create", "edit", "approve", "export"] },
+    { module: "transfer_requests", actions: ["view", "create", "edit", "approve", "export"] },
+    { module: "warehouse_inventory", actions: ["view", "create", "edit", "export"] },
+    { module: "delivery_tasks", actions: ["view", "create", "edit", "approve"] },
+  ],
   financial_manager: [
     { module: "dashboard", actions: ["view", "export"] },
     // الاعتماد المالي وتحويل المبالغ
@@ -1955,6 +1964,7 @@ export const JOB_TITLES = [
   "supervisor",
   "branch_manager",
   "production_manager",
+  "warehouse_keeper",
   "quality_inspector",
   "delivery",
   "cleaner",
@@ -1972,6 +1982,7 @@ export const JOB_TITLE_LABELS: Record<JobTitle, string> = {
   supervisor: "مشرف",
   branch_manager: "مدير فرع",
   production_manager: "مدير إنتاج",
+  warehouse_keeper: "أمين المستودعات",
   quality_inspector: "مفتش جودة",
   delivery: "توصيل",
   cleaner: "نظافة",
@@ -1985,6 +1996,9 @@ export const JOB_ROLE_PERMISSION_TEMPLATES: Record<
   JobTitle,
   { module: SystemModule; actions: ModuleAction[] }[]
 > = {
+  // Job title is descriptive, not an authorization path: only the dedicated
+  // warehouse_keeper role carries warehouse authority and its branch restriction.
+  warehouse_keeper: [],
   // كاشير - يومية الكاشير فقط
   cashier: [
     { module: "dashboard", actions: ["view"] },

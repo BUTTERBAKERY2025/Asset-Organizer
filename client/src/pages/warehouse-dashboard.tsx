@@ -1,3 +1,4 @@
+import { canShowWarehouseKeeperDestination } from "@/lib/warehouse-keeper-navigation";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -22,6 +23,7 @@ import { PageHeader } from "@/components/dashboard/page-header";
 import { formatDistanceToNow } from "date-fns";
 import { ar } from "date-fns/locale";
 import { useBranches } from "@/hooks/useBranches";
+import { useAuth } from "@/hooks/useAuth";
 import { useBranchNavigation } from "@/hooks/use-branch-navigation";
 import { usePermissions } from "@/hooks/usePermissions";
 
@@ -60,21 +62,28 @@ export default function WarehouseDashboardPage() {
   const queryClient = useQueryClient();
   const [, navigate] = useLocation();
   const { branches, userBranchId, isLoading: branchesLoading } = useBranches();
+  const { user } = useAuth();
+  const isKeeper = user?.role === "warehouse_keeper";
   const navigationBranch = useBranchNavigation(branches, branchesLoading, userBranchId);
   const { canView, canEdit } = usePermissions();
-  const [selectedBranch, setSelectedBranch] = useState<string>("all");
+  const [selectedBranch, setSelectedBranch] = useState<string>(isKeeper ? "main_warehouse" : "all");
   const [notificationOpen, setNotificationOpen] = useState(false);
 
   useEffect(() => {
+    if (isKeeper) {
+      setSelectedBranch("main_warehouse");
+      return;
+    }
     if (!navigationBranch.isResolving && navigationBranch.hasBranchParam) {
       setSelectedBranch(navigationBranch.branchId || "all");
     }
-  }, [navigationBranch.branchId, navigationBranch.hasBranchParam, navigationBranch.isResolving]);
+  }, [navigationBranch.branchId, navigationBranch.hasBranchParam, navigationBranch.isResolving, isKeeper]);
 
   const branchQuery = selectedBranch !== "all"
     ? `?branchId=${encodeURIComponent(selectedBranch)}`
     : "";
   const setBranchScope = (branchId: string) => {
+    if (isKeeper) return;
     setSelectedBranch(branchId);
     navigate(`/warehouse${branchId !== "all" ? `?branchId=${encodeURIComponent(branchId)}` : ""}`, { replace: true });
   };
@@ -86,8 +95,8 @@ export default function WarehouseDashboardPage() {
       if (!res.ok) throw new Error("Failed to fetch warehouse dashboard statistics");
       return res.json();
     },
-    enabled: !navigationBranch.isResolving
-      && (!navigationBranch.hasBranchParam || selectedBranch === navigationBranch.branchId),
+    enabled: (isKeeper || !navigationBranch.isResolving)
+      && (isKeeper || !navigationBranch.hasBranchParam || selectedBranch === navigationBranch.branchId),
     refetchInterval: () => (typeof document !== "undefined" && document.hidden ? false : 60000),
     staleTime: 1000 * 30, // 30 seconds - dashboard stats
     placeholderData: (prev) => prev, // Keep previous data while loading
@@ -105,8 +114,8 @@ export default function WarehouseDashboardPage() {
       if (!res.ok) throw new Error("Failed to fetch warehouse notifications");
       return res.json();
     },
-    enabled: !navigationBranch.isResolving
-      && (!navigationBranch.hasBranchParam || selectedBranch === navigationBranch.branchId),
+    enabled: (isKeeper || !navigationBranch.isResolving)
+      && (isKeeper || !navigationBranch.hasBranchParam || selectedBranch === navigationBranch.branchId),
     refetchInterval: () => (typeof document !== "undefined" && document.hidden ? false : 60000),
     staleTime: 1000 * 30, // 30 seconds
     placeholderData: (prev) => prev,
@@ -120,8 +129,8 @@ export default function WarehouseDashboardPage() {
       if (!res.ok) throw new Error("Failed to fetch unread warehouse notifications");
       return res.json();
     },
-    enabled: !navigationBranch.isResolving
-      && (!navigationBranch.hasBranchParam || selectedBranch === navigationBranch.branchId),
+    enabled: (isKeeper || !navigationBranch.isResolving)
+      && (isKeeper || !navigationBranch.hasBranchParam || selectedBranch === navigationBranch.branchId),
     refetchInterval: () => (typeof document !== "undefined" && document.hidden ? false : 60000),
     staleTime: 1000 * 30, // 30 seconds
     placeholderData: (prev) => prev,
@@ -272,7 +281,9 @@ export default function WarehouseDashboardPage() {
     }
   };
 
-  const selectedBranchName = branches.find(b => b.id === selectedBranch)?.name || (isRTL ? "جميع الفروع" : "All Branches");
+  const selectedBranchName = selectedBranch === "main_warehouse"
+    ? (isRTL ? "المستودع الرئيسي" : "Main Warehouse")
+    : branches.find(b => b.id === selectedBranch)?.name || (isRTL ? "جميع الفروع" : "All Branches");
 
   return (
     <Layout>
@@ -284,7 +295,7 @@ export default function WarehouseDashboardPage() {
           description={selectedBranch !== "all" ? selectedBranchName : (isRTL ? "إدارة شاملة لجميع الفروع" : "Comprehensive management for all branches")}
           actions={
             <div className="flex items-center gap-2 sm:gap-3">
-            <Select value={selectedBranch} onValueChange={setBranchScope} disabled={branchesLoading}>
+            {!isKeeper && <Select value={selectedBranch} onValueChange={setBranchScope} disabled={branchesLoading}>
               <SelectTrigger className="w-[140px] sm:w-[200px] text-xs sm:text-sm" data-testid="select-branch">
                 <Building2 className="w-4 h-4 opacity-60" />
                 <SelectValue placeholder={isRTL ? "اختر الفرع" : "Select Branch"} />
@@ -299,7 +310,7 @@ export default function WarehouseDashboardPage() {
                   </SelectItem>
                 ))}
               </SelectContent>
-            </Select>
+            </Select>}
 
             <Sheet open={notificationOpen} onOpenChange={setNotificationOpen}>
               <SheetTrigger asChild>
@@ -446,7 +457,7 @@ export default function WarehouseDashboardPage() {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2 sm:gap-4">
-          {quickLinks.filter((link) => canView(link.module)).map((link, index) => (
+          {quickLinks.filter((link) => canView(link.module) && canShowWarehouseKeeperDestination(user?.role, link.href)).map((link, index) => (
             <Link key={index} href={link.href}>
               <Card 
                 className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/40 h-full group"

@@ -7,6 +7,7 @@ import { enqueueDeliveryNotice, type DeliveryNoticeEvent } from "./delivery-noti
 import { deliverySourceFingerprint } from "./delivery-dispatch-guard";
 import { isAuthenticated, requirePermission, getAllowedBranchIds, canAccessBranch } from "./auth";
 import { deliveryTransitionAllowed, receiptMatchesSource, type DeliveryDTO, type DeliverySource, type DeliverySourceType, type DeliveryStatus } from "@shared/delivery";
+import { canAccessDeliveryWorkspace } from "@shared/delivery-workspace-access";
 
 type Assignment = {
   id: string; source_type: DeliverySourceType; source_id: number; driver_id: string;
@@ -96,6 +97,10 @@ function requireUser(req: Request) {
   return req.currentUser;
 }
 function managerScope(req: Request, source: SourceRow, action: "view" | "create" | "edit") {
+  if (req.currentUser?.role === "warehouse_keeper") {
+    return (getAllowedBranchIds(req)?.includes("main_warehouse") ?? false)
+      && source.sourceType === "material_transfer" && source.sourceBranchId === "main_warehouse";
+  }
   const allowed = getAllowedBranchIds(req);
   if (source.sourceType === "reverse_movement" && source.sourceBranchId === null) {
     if (source.sourceWarehouseId != null) return warehouseReceiver(req);
@@ -150,14 +155,17 @@ const warehouseReceiver = (req: Request) =>
   ["admin", "operations_manager"].includes(req.currentUser?.role ?? "") && getAllowedBranchIds(req) === null;
 const mainWarehouseAuthority = (req: Request) => warehouseReceiver(req)
   || req.currentUser?.role === "production_development_manager"
+  || (req.currentUser?.role === "warehouse_keeper" && (getAllowedBranchIds(req)?.includes("main_warehouse") ?? false))
   || (req.currentUser?.branchId === "main_warehouse" && (getAllowedBranchIds(req)?.includes("main_warehouse") ?? false));
 const receiverScope = async (req: Request, s: SourceRow) =>
+  req.currentUser?.role === "warehouse_keeper" ? false :
   s.sourceType === "reverse_movement" && s.destinationBranchId === null
     ? s.destinationWarehouseId != null ? warehouseReceiver(req) : mainWarehouseAuthority(req)
     : s.destinationWarehouseId != null ? warehouseReceiver(req) : s.destinationBranchId !== null && await canAccessBranch(req, s.destinationBranchId);
-const isDriver = (req: Request, row: Assignment) => req.currentUser?.id === row.driver_id && req.currentUser?.jobTitle === "delivery" && req.currentUser?.isActive === "active";
+const isDriver = (req: Request, row: Assignment) => req.currentUser?.role !== "warehouse_keeper"
+  && req.currentUser?.id === row.driver_id && req.currentUser?.jobTitle === "delivery" && req.currentUser?.isActive === "active";
 async function driverExists(client: PoolClient, id: string, req: Request) {
-  const allowed = getAllowedBranchIds(req);
+  const allowed = req.currentUser?.role === "warehouse_keeper" ? null : getAllowedBranchIds(req);
   const result = await client.query(`SELECT id FROM users WHERE id = $1 AND job_title = 'delivery'
     AND is_active = 'active' AND ($2::text[] IS NULL OR branch_id=ANY($2::text[]))`, [id, allowed]);
   if (!result.rowCount) throw new DeliveryError("Selected driver is not an active delivery account", 400);
@@ -316,6 +324,7 @@ async function event(client: PoolClient, id: number, actor: string, action: stri
 export function registerDeliveryRoutes(app: Express) {
   app.get("/api/deliveries/sources", isAuthenticated, async (req, res) => {
     try {
+      if (!canAccessDeliveryWorkspace(req.currentUser)) throw new DeliveryError("Delivery workspace access denied", 403);
       const sources = await withClient(async client => {
         const list: DeliverySource[] = [];
          for (const type of ["kitchen", "material_transfer", "finished_goods_transfer", "kitchen_warehouse_shipment", "reverse_movement"] as const) {
@@ -349,8 +358,9 @@ export function registerDeliveryRoutes(app: Express) {
 
   app.get("/api/deliveries/drivers", isAuthenticated, async (req, res) => {
     try {
+      if (!canAccessDeliveryWorkspace(req.currentUser)) throw new DeliveryError("Delivery workspace access denied", 403);
       if (!(await permitted(req, res, "delivery_tasks", "create"))) throw new DeliveryError("Permission denied", 403);
-      const allowed = getAllowedBranchIds(req);
+      const allowed = req.currentUser?.role === "warehouse_keeper" ? null : getAllowedBranchIds(req);
       const drivers = await pool.query(`SELECT id, concat_ws(' ',first_name,last_name) name, job_title "jobTitle"
         FROM users WHERE job_title='delivery' AND is_active='active'
         AND ($1::text[] IS NULL OR branch_id=ANY($1::text[])) ORDER BY first_name,last_name`, [allowed]);
@@ -360,6 +370,7 @@ export function registerDeliveryRoutes(app: Express) {
 
   app.get("/api/deliveries/capabilities", isAuthenticated, async (req, res) => {
     try {
+      if (!canAccessDeliveryWorkspace(req.currentUser)) throw new DeliveryError("Delivery workspace access denied", 403);
       const create = await permitted(req, res, "delivery_tasks", "create");
       const branchScope = getAllowedBranchIds(req);
       const hasBranch = branchScope === null || branchScope.length > 0;
@@ -377,6 +388,7 @@ export function registerDeliveryRoutes(app: Express) {
 
   async function list(req: Request, res: Response, reports = false) {
     try {
+      if (reports && !canAccessDeliveryWorkspace(req.currentUser)) throw new DeliveryError("Delivery workspace access denied", 403);
       if (reports && (req.currentUser?.jobTitle === "delivery"
         || getAllowedBranchIds(req)?.length === 0
         || !(await permitted(req, res, "delivery_tasks", "view"))
@@ -455,6 +467,7 @@ export function registerDeliveryRoutes(app: Express) {
 
   app.post("/api/deliveries", isAuthenticated, async (req, res) => {
     try {
+      if (!canAccessDeliveryWorkspace(req.currentUser)) throw new DeliveryError("Delivery workspace access denied", 403);
       const payload = createSchema.parse(req.body);
       if (!(await permitted(req, res, "delivery_tasks", "create"))
         || !(await permitted(req, res, sourceModule(payload.sourceType), "edit"))) throw new DeliveryError("Permission denied", 403);

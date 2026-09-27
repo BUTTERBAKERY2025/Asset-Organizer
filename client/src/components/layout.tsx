@@ -31,6 +31,8 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { PRODUCT_CATALOG_READ_MODULES } from "@shared/schema";
 import type { SystemModule } from "@shared/schema";
+import { canAccessDeliveryWorkspace } from "@shared/delivery-workspace-access";
+import { canShowWarehouseKeeperDestination } from "@/lib/warehouse-keeper-navigation";
 
 const NotificationsDropdown = lazy(() => import("@/components/notifications-dropdown").then(m => ({ default: m.NotificationsDropdown })));
 const NotificationDisplay = lazy(() => import("@/components/NotificationDisplay").then(m => ({ default: m.NotificationDisplay })));
@@ -43,6 +45,7 @@ const ROLE_KEYS: Record<string, string> = {
   viewer: "roles.viewer",
   attendance_clerk: "roles.attendanceClerk",
   production_development_manager: "roles.productionDevelopmentManager",
+  warehouse_keeper: "roles.warehouseKeeper",
 };
 
 interface NavItem {
@@ -257,10 +260,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
     { href: "/", label: t("sidebar.home"), icon: Home, module: "dashboard" },
     { href: "/branch-operations", label: "لوحة الفرع التشغيلية", icon: Store, modules: ["operations", "maintenance", "waste_tracking", "warehouse", "daily_closures", "cashier_journal", "branch_employees", "documents", "hr_documents", "hr_advances", "branch_complaints", "central_kitchen_orders", "sales_analytics", "targets", "attendance"] as SystemModule[] },
     { href: "/branch-complaints", label: "شكاوى الفروع", icon: MessageSquareWarning, module: "branch_complaints" },
-    { href: "/driver-deliveries", label: "مهام التوصيل", icon: MapPin, module: "delivery_tasks" },
+    ...(canAccessDeliveryWorkspace(user) ? [{ href: "/driver-deliveries", label: user?.role === "employee" ? "مهامي للتوصيل" : "إدارة التوصيل", icon: MapPin, module: "delivery_tasks" as SystemModule }] : []),
     { href: "/my-portal", label: t("sidebar.myPortal"), icon: UserCircle },
     { href: "/central-kitchen-recipes", label: "دفتر وصفات المطبخ المركزي", icon: ClipboardList, module: "central_kitchen_recipes" },
-  ], [t, user?.role]);
+  ], [t, user?.role, user?.jobTitle]);
 
   const allNavGroups: { key: string; group: NavGroup }[] = useMemo(() => [
     {
@@ -502,6 +505,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
   const filterItemsByPermission = (items: NavItem[]): NavItem[] => {
     return items.filter(item => {
+      if (!canShowWarehouseKeeperDestination(user?.role, item.href)) return false;
       if (item.modules) return checkNavPermissions(item.modules);
       if (item.module) return checkNavPermission(item.module);
       return true;
@@ -510,6 +514,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
   const filterGroupItems = (items: NavItem[]): NavItem[] => {
     return items.filter(item => {
+      if (!canShowWarehouseKeeperDestination(user?.role, item.href)) return false;
       if (item.adminOnly && !isAdmin) return false;
       if (item.modules) {
         if (item.hideIfNoPermission && !checkNavPermissions(item.modules)) return false;
@@ -521,7 +526,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     });
   };
 
-  const standaloneItems = useMemo(() => filterItemsByPermission(allStandaloneItems), [isAdmin, canView]);
+  const standaloneItems = useMemo(() => filterItemsByPermission(allStandaloneItems), [isAdmin, canView, allStandaloneItems, user?.role]);
   
   const navGroups = useMemo(() => allNavGroups
     .map(({ key, group }) => ({
@@ -531,7 +536,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         items: filterGroupItems(group.items),
       },
     }))
-    .filter(({ group }) => group.items.length > 0), [isAdmin, canView, currentLang, allNavGroups]);
+    .filter(({ group }) => group.items.length > 0), [isAdmin, canView, currentLang, allNavGroups, user?.role]);
 
   const bottomItems = useMemo(() => filterItemsByPermission(allBottomItems), [isAdmin, canView]);
 

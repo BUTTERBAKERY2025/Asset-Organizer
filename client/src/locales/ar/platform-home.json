@@ -238,7 +238,8 @@
     "employee": "موظف",
     "viewer": "مشاهد",
     "attendanceClerk": "مسجل الحضور",
-    "productionDevelopmentManager": "مدير الإنتاج والتطوير"
+    "productionDevelopmentManager": "مدير الإنتاج والتطوير",
+    "warehouseKeeper": "أمين المستودعات"
   },
   "subItems": {
     "branchEmployees": "موظفو الفروع",

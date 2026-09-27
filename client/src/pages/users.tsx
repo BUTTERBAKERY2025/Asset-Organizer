@@ -16,7 +16,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { TablePagination } from "@/components/ui/pagination";
-import { Loader2, Users, Shield, UserCog, Eye, Plus, Trash2, Settings2, Wand2, Pencil, Search, X, Filter, KeyRound, Power, Copy, Factory } from "lucide-react";
+import { Loader2, Users, Shield, UserCog, Eye, Plus, Trash2, Settings2, Wand2, Pencil, Search, X, Filter, KeyRound, Power, Copy, Factory, Warehouse } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { SettingsBreadcrumb } from "@/components/settings-breadcrumb";
@@ -28,6 +28,8 @@ import {
   ACTION_LABELS,
   ROLE_PERMISSION_TEMPLATES,
   JOB_ROLE_PERMISSION_TEMPLATES,
+  JOB_TITLES,
+  JOB_TITLE_LABELS,
   getGroupedModules,
 } from "@shared/schema";
 import React, { useEffect, useState } from "react";
@@ -110,6 +112,7 @@ const ROLES = [
   { value: "financial_accountant", label: "محاسب مالي", icon: UserCog, description: "اطلاع على التقارير المالية والتشغيلية" },
   { value: "financial_manager", label: "مدير مالي", icon: UserCog, description: "إشراف مالي على كل الفروع: اعتماد الصرف وتحويل المبالغ، إغلاق الرواتب ومتابعتها تفصيليًا، السلف ونهاية الخدمة، ولوحات الأرباح والتقارير المالية (لا يشمل إدارة المستخدمين أو إعدادات النظام)" },
   { value: "production_development_manager", label: "مدير الإنتاج والتطوير", icon: Factory, description: "إدارة الإنتاج والتطوير والمطابخ والمخازن في جميع الفروع والمطابخ (لا يشمل المالية أو الموارد البشرية أو إدارة المستخدمين)" },
+  { value: "warehouse_keeper", label: "أمين المستودعات", icon: Warehouse, description: "إدارة المستودع الرئيسي وطلبات المواد والتحويلات والتوصيل المرتبط به فقط (دون صلاحية على مخزون الفروع)" },
   { value: "operations_manager", label: "مدير تشغيل", icon: UserCog, description: "إدارة العمليات اليومية في جميع الفروع: التشغيل والإنتاج والجودة والهدر، الورديات والحضور والتايم شيت، المخزون والمخازن والصيانة، واعتماد الإجازات، مع رؤية تشغيلية للتقارير والمبيعات (لا يشمل إدارة المستخدمين أو الاعتماد المالي وإغلاق الرواتب)" },
   { value: "branch_manager", label: "مدير فرع", icon: UserCog, description: "إدارة فرعه فقط: اعتماد طلبات إجازات موظفي الفرع، الحضور والورديات، متابعة موظفي الفرع، التشغيل والهدر (بدون رواتب أو أرصدة إجازات أو إعدادات — ويلتزم بالفروع المسموحة له)" },
   { value: "employee", label: "موظف", icon: UserCog, description: "حسب الصلاحيات المحددة" },
@@ -151,6 +154,7 @@ export default function UsersPage() {
     firstName: "",
     lastName: "",
     role: "viewer",
+    jobTitle: "",
     branchIds: [] as string[],
   });
   const [editUser, setEditUser] = useState({
@@ -158,6 +162,7 @@ export default function UsersPage() {
     lastName: "",
     username: "",
     role: "viewer",
+    jobTitle: "",
     password: "",
     branchIds: [] as string[],
   });
@@ -204,9 +209,9 @@ export default function UsersPage() {
 
   const createUserMutation = useMutation({
     mutationFn: async (userData: typeof newUser) => {
-      const payload = INTRINSIC_ALL_BRANCH_ROLES.has(userData.role)
-        ? { ...userData, branchIds: undefined }
-        : userData;
+      const payload = INTRINSIC_ALL_BRANCH_ROLES.has(userData.role) || userData.role === "warehouse_keeper"
+        ? { ...userData, jobTitle: userData.jobTitle || undefined, branchIds: undefined }
+        : { ...userData, jobTitle: userData.jobTitle || undefined };
       const res = await fetch("/api/users", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -222,7 +227,7 @@ export default function UsersPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/users"] });
       toast({ title: "تم إضافة المستخدم بنجاح" });
       setIsAddDialogOpen(false);
-      setNewUser({ username: "", password: "", firstName: "", lastName: "", role: "viewer", branchIds: [] });
+      setNewUser({ username: "", password: "", firstName: "", lastName: "", role: "viewer", jobTitle: "", branchIds: [] });
       setShowNewPassword(false);
     },
     onError: (error: Error) => {
@@ -268,14 +273,15 @@ export default function UsersPage() {
   });
 
   const updateUserMutation = useMutation({
-    mutationFn: async ({ userId, data }: { userId: string; data: { firstName?: string; lastName?: string; username?: string; role?: string; password?: string; branchIds?: string[] } }) => {
+    mutationFn: async ({ userId, data }: { userId: string; data: { firstName?: string; lastName?: string; username?: string; role?: string; jobTitle?: string; password?: string; branchIds?: string[] } }) => {
       const updateData: any = {};
       if (data.firstName !== undefined) updateData.firstName = data.firstName;
       if (data.lastName !== undefined) updateData.lastName = data.lastName;
       if (data.username !== undefined) updateData.username = data.username;
       if (data.role !== undefined) updateData.role = data.role;
+      if (data.jobTitle !== undefined) updateData.jobTitle = data.jobTitle || null;
       if (data.password && data.password.trim() !== "") updateData.password = data.password;
-      if (data.branchIds !== undefined && !INTRINSIC_ALL_BRANCH_ROLES.has(data.role || "")) updateData.branchIds = data.branchIds;
+      if (data.branchIds !== undefined && data.role !== "warehouse_keeper" && !INTRINSIC_ALL_BRANCH_ROLES.has(data.role || "")) updateData.branchIds = data.branchIds;
       
       const res = await fetch(`/api/users/${userId}`, {
         method: "PATCH",
@@ -425,6 +431,7 @@ export default function UsersPage() {
       lastName: user.lastName || "",
       username: user.username || "",
       role: user.role,
+      jobTitle: user.jobTitle || "",
       password: "",
       branchIds: userBranchIds,
     });
@@ -787,14 +794,14 @@ export default function UsersPage() {
                 إضافة مستخدم
               </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="w-[calc(100vw-2rem)] max-w-lg min-w-0 max-h-[90dvh] overflow-y-auto overflow-x-hidden">
               <DialogHeader>
                 <DialogTitle>إضافة مستخدم جديد</DialogTitle>
                 <DialogDescription>أدخل بيانات المستخدم الجديد</DialogDescription>
               </DialogHeader>
-              <form onSubmit={handleAddUser} className="space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-                  <div className="space-y-2">
+              <form onSubmit={handleAddUser} className="w-full min-w-0 space-y-4">
+                <div className="grid min-w-0 grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                  <div className="min-w-0 space-y-2">
                     <Label htmlFor="firstName">الاسم الأول</Label>
                     <Input
                       id="firstName"
@@ -804,7 +811,7 @@ export default function UsersPage() {
                       data-testid="input-first-name"
                     />
                   </div>
-                  <div className="space-y-2">
+                  <div className="min-w-0 space-y-2">
                     <Label htmlFor="lastName">اسم العائلة</Label>
                     <Input
                       id="lastName"
@@ -906,18 +913,28 @@ export default function UsersPage() {
                   </div>
                   <p className="text-[11px] text-muted-foreground">انسخ كلمة المرور وسلّمها للموظف — لن تظهر مرة أخرى بعد الحفظ</p>
                 </div>
-                <div className="space-y-2">
+                <div className="min-w-0 space-y-2">
                   <Label htmlFor="role">الصلاحية</Label>
-                  <Select value={newUser.role} onValueChange={(role) => setNewUser({ ...newUser, role })}>
-                    <SelectTrigger className="h-11 sm:h-10" data-testid="select-role">
-                      <SelectValue />
+                  <Select value={newUser.role} onValueChange={(role) => setNewUser({ ...newUser, role, branchIds: newUser.role === "warehouse_keeper" && role !== "warehouse_keeper" ? [] : newUser.branchIds, jobTitle: role === "warehouse_keeper" ? "warehouse_keeper" : newUser.role === "warehouse_keeper" ? "" : newUser.jobTitle })}>
+                    <SelectTrigger className="min-w-0 max-w-full h-11 sm:h-10 [&>span]:min-w-0 [&>span]:truncate" data-testid="select-role">
+                      <SelectValue>{ROLES.find((item) => item.value === newUser.role)?.label}</SelectValue>
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="max-w-[calc(100vw-2rem)]">
                       {ROLES.map((role) => (
-                        <SelectItem key={role.value} value={role.value}>
+                        <SelectItem className="max-w-full whitespace-normal break-words" key={role.value} value={role.value}>
                           {role.label} - {role.description}
                         </SelectItem>
                       ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="min-w-0 space-y-2">
+                  <Label>المسمى الوظيفي</Label>
+                  <Select value={newUser.jobTitle || "none"} onValueChange={(jobTitle) => setNewUser({ ...newUser, jobTitle: jobTitle === "none" ? "" : jobTitle })}>
+                    <SelectTrigger className="min-w-0 max-w-full [&>span]:min-w-0 [&>span]:truncate" data-testid="select-new-job-title"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">بدون مسمى</SelectItem>
+                      {JOB_TITLES.map(title => <SelectItem key={title} value={title}>{JOB_TITLE_LABELS[title]}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
@@ -925,6 +942,8 @@ export default function UsersPage() {
                   <div className="rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-800" data-testid="new-role-all-branches-note">
                     هذا الدور يشمل جميع الفروع والمطابخ تلقائيًا، ولا يمكن تقييده بفروع محددة.
                   </div>
+                ) : newUser.role === "warehouse_keeper" ? (
+                  <div className="min-w-0 break-words rounded-lg border p-3 text-sm" data-testid="new-warehouse-scope-note">نطاق هذا الدور المستودع الرئيسي فقط، ويُحدّد تلقائيًا دون اختيار فروع.</div>
                 ) : <div className="space-y-2">
                   <Label>الفروع المسموحة</Label>
                   <div className="border rounded-lg p-3 space-y-2 max-h-48 overflow-y-auto">
@@ -1214,7 +1233,7 @@ export default function UsersPage() {
                         </TableCell>
                         <TableCell className="text-muted-foreground font-mono text-xs hidden md:table-cell" dir="ltr">{user.username || "-"}</TableCell>
                         <TableCell className="text-muted-foreground text-xs sm:text-sm hidden lg:table-cell">
-                          {INTRINSIC_ALL_BRANCH_ROLES.has(user.role) || user.branchId === "all_branches"
+                          {user.role === "warehouse_keeper" ? "المستودع الرئيسي" : INTRINSIC_ALL_BRANCH_ROLES.has(user.role) || user.branchId === "all_branches"
                             ? "🌐 جميع الفروع والمطابخ"
                             : user.branchId ? branches.find(b => b.id === user.branchId)?.name || user.branchId : "-"}
                         </TableCell>
@@ -1611,7 +1630,7 @@ export default function UsersPage() {
 
       {/* Edit User Dialog */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent>
+        <DialogContent className="w-[calc(100vw-2rem)] max-w-lg min-w-0 max-h-[90dvh] overflow-y-auto overflow-x-hidden">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Pencil className="w-5 h-5" />
@@ -1623,9 +1642,9 @@ export default function UsersPage() {
               )}
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleEditUser} className="space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-              <div className="space-y-2">
+          <form onSubmit={handleEditUser} className="w-full min-w-0 space-y-4">
+            <div className="grid min-w-0 grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+              <div className="min-w-0 space-y-2">
                 <Label htmlFor="editFirstName">الاسم الأول</Label>
                 <Input
                   id="editFirstName"
@@ -1634,7 +1653,7 @@ export default function UsersPage() {
                   data-testid="input-edit-first-name"
                 />
               </div>
-              <div className="space-y-2">
+              <div className="min-w-0 space-y-2">
                 <Label htmlFor="editLastName">اسم العائلة</Label>
                 <Input
                   id="editLastName"
@@ -1656,19 +1675,19 @@ export default function UsersPage() {
               />
               <p className="text-xs text-muted-foreground">اسم المستخدم الذي يستخدم لتسجيل الدخول</p>
             </div>
-            <div className="space-y-2">
+            <div className="min-w-0 space-y-2">
               <Label htmlFor="editRole">الدور</Label>
               <Select 
                 value={editUser.role} 
-                onValueChange={(role) => setEditUser({ ...editUser, role })}
+                onValueChange={(role) => setEditUser({ ...editUser, role, branchIds: editUser.role === "warehouse_keeper" && role !== "warehouse_keeper" ? [] : editUser.branchIds, jobTitle: role === "warehouse_keeper" ? "warehouse_keeper" : editUser.role === "warehouse_keeper" ? "" : editUser.jobTitle })}
                 disabled={selectedUser?.id === currentUser?.id}
               >
-                <SelectTrigger data-testid="select-edit-role">
-                  <SelectValue />
+                <SelectTrigger className="min-w-0 max-w-full [&>span]:min-w-0 [&>span]:truncate" data-testid="select-edit-role">
+                  <SelectValue>{ROLES.find((item) => item.value === editUser.role)?.label}</SelectValue>
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="max-w-[calc(100vw-2rem)]">
                   {ROLES.map((role) => (
-                    <SelectItem key={role.value} value={role.value}>
+                    <SelectItem className="max-w-full whitespace-normal break-words" key={role.value} value={role.value}>
                       {role.label} - {role.description}
                     </SelectItem>
                   ))}
@@ -1693,10 +1712,22 @@ export default function UsersPage() {
               />
               <p className="text-xs text-muted-foreground">اتركها فارغة إذا لم ترد تغيير كلمة المرور</p>
             </div>
+            <div className="space-y-2">
+              <Label>المسمى الوظيفي</Label>
+              <Select value={editUser.jobTitle || "none"} onValueChange={(jobTitle) => setEditUser({ ...editUser, jobTitle: jobTitle === "none" ? "" : jobTitle })}>
+                <SelectTrigger className="min-w-0 max-w-full [&>span]:min-w-0 [&>span]:truncate" data-testid="select-edit-job-title"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">بدون مسمى</SelectItem>
+                  {JOB_TITLES.map(title => <SelectItem key={title} value={title}>{JOB_TITLE_LABELS[title]}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
             {INTRINSIC_ALL_BRANCH_ROLES.has(editUser.role) ? (
               <div className="rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-800" data-testid="edit-role-all-branches-note">
                 هذا الدور يشمل جميع الفروع والمطابخ تلقائيًا، ولا يمكن تقييده بفروع محددة.
               </div>
+            ) : editUser.role === "warehouse_keeper" ? (
+              <div className="min-w-0 break-words rounded-lg border p-3 text-sm" data-testid="edit-warehouse-scope-note">نطاق هذا الدور المستودع الرئيسي فقط، ويُحدّد تلقائيًا دون اختيار فروع.</div>
             ) : <div className="space-y-2">
               <Label>الفروع المسموحة</Label>
               <div className="border rounded-lg p-3 space-y-2 max-h-48 overflow-y-auto">

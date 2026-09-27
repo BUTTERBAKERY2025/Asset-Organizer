@@ -4,7 +4,8 @@ import connectPg from "connect-pg-simple";
 import rateLimit from "express-rate-limit";
 import { storage } from "./storage";
 import { db, pool } from "./db";
-import { systemAuditLogs, ROLE_PERMISSION_TEMPLATES, JOB_ROLE_PERMISSION_TEMPLATES } from "@shared/schema";
+import { systemAuditLogs, ROLE_PERMISSION_TEMPLATES, JOB_ROLE_PERMISSION_TEMPLATES, userPermissions, userPermissionOverrides, permissions as permissionDefinitions } from "@shared/schema";
+import { and, eq, or, isNull, gt } from "drizzle-orm";
 import { isLoginBlocked, trackLoginAttempt } from "./security";
 import {
   getTwoFactorConfig,
@@ -126,6 +127,41 @@ export const PRODUCTION_DEVELOPMENT_MANAGER_PERMISSIONS: Record<string, string[]
   Object.fromEntries(ROLE_PERMISSION_TEMPLATES.production_development_manager.map(
     (entry) => [entry.module, [...entry.actions]],
   ));
+
+export const WAREHOUSE_KEEPER_PERMISSIONS: Record<string, string[]> =
+  Object.fromEntries(ROLE_PERMISSION_TEMPLATES.warehouse_keeper.map(
+    (entry) => [entry.module, [...entry.actions]],
+  ));
+
+// A custom direct-permission set represents the administrator's complete selection;
+// never re-add template actions removed from it. Deny overrides win over both.
+export function resolveWarehouseKeeperPermissions(
+  effective: { module: string; actions: string[] }[],
+  hasCustomPermissions: boolean,
+  denied: { module: string; action: string }[],
+): { module: string; actions: string[] }[] {
+  const deniedKeys = new Set(denied.map(({ module, action }) => `${module}:${action}`));
+  return Object.entries(WAREHOUSE_KEEPER_PERMISSIONS).map(([module, template]) => {
+    const existing = effective.find((p) => p.module === module)?.actions ?? [];
+    const actions = (hasCustomPermissions ? existing : [...template, ...existing])
+      .filter((action, index, list) => template.includes(action) && list.indexOf(action) === index && !deniedKeys.has(`${module}:${action}`));
+    return { module, actions };
+  }).filter(({ actions }) => actions.length > 0);
+}
+
+export async function getWarehouseKeeperEffectivePermissions(userId: string, effective: { module: string; actions: string[] }[]) {
+  const [direct, denied] = await Promise.all([
+    db.select({ actions: userPermissions.actions }).from(userPermissions).where(eq(userPermissions.userId, userId)),
+    db.select({ module: permissionDefinitions.module, action: permissionDefinitions.action })
+      .from(userPermissionOverrides)
+      .innerJoin(permissionDefinitions, eq(userPermissionOverrides.permissionId, permissionDefinitions.id))
+      .where(and(eq(userPermissionOverrides.userId, userId), eq(userPermissionOverrides.allow, false),
+        or(isNull(userPermissionOverrides.expiresAt), gt(userPermissionOverrides.expiresAt, new Date())))),
+  ]);
+  // An empty direct-permission row can be the result of revoking the final
+  // action. Treat its presence as an explicit custom selection too.
+  return resolveWarehouseKeeperPermissions(effective, direct.length > 0, denied);
+}
 
 export const FINANCIAL_MANAGER_PERMISSIONS: Record<string, string[]> =
   Object.fromEntries(
@@ -692,9 +728,10 @@ export async function setupAuth(app: Express) {
       
       res.json({
         ...safeUser,
-        activeBranchId: req.session.activeBranchId || null,
-        activeBranch,
-        allowedBranches: userBranches,
+        branchId: user.role === "warehouse_keeper" ? "main_warehouse" : safeUser.branchId,
+        activeBranchId: user.role === "warehouse_keeper" ? "main_warehouse" : req.session.activeBranchId || null,
+        activeBranch: user.role === "warehouse_keeper" ? null : activeBranch,
+        allowedBranches: user.role === "warehouse_keeper" ? [] : userBranches,
       });
     } catch (error) {
       console.error("Get user error:", error);
@@ -738,7 +775,9 @@ export async function setupAuth(app: Express) {
       
       const allBranches = await allBranchesPromise;
       let filteredBranches: any[] = [];
-      if (user.role === "admin" || user.role === "financial_manager" || user.role === "production_development_manager") {
+      if (user.role === "warehouse_keeper") {
+        filteredBranches = [];
+      } else if (user.role === "admin" || user.role === "financial_manager" || user.role === "production_development_manager") {
         // Financial Manager is a cross-branch role — sees every branch org-wide.
         filteredBranches = allBranches;
       } else if (user.role === "operations_manager") {
@@ -783,12 +822,16 @@ export async function setupAuth(app: Express) {
         }
         permissions = Array.from(merged, ([module, actions]) => ({ module, actions: [...actions] }));
       }
+      if (user.role === "warehouse_keeper") {
+        permissions = await getWarehouseKeeperEffectivePermissions(user.id, permissions);
+      }
       res.json({
         user: {
           ...user,
-          activeBranchId: req.session.activeBranchId || null,
-          activeBranch,
-          allowedBranches: userBranches,
+          branchId: user.role === "warehouse_keeper" ? "main_warehouse" : user.branchId,
+          activeBranchId: user.role === "warehouse_keeper" ? "main_warehouse" : req.session.activeBranchId || null,
+          activeBranch: user.role === "warehouse_keeper" ? null : activeBranch,
+          allowedBranches: user.role === "warehouse_keeper" ? [] : userBranches,
         },
         branches: filteredBranches,
         permissions,
@@ -817,6 +860,9 @@ export async function setupAuth(app: Express) {
       
       // If no branch access defined, user has access to all branches (for admins)
       const user = await storage.getUser(req.session.userId);
+      if (user?.role === "warehouse_keeper") {
+        return res.status(403).json({ error: "نطاق أمين المستودعات هو المستودع الرئيسي فقط" });
+      }
       if (!hasAccess && userBranches.length > 0 && user?.role !== "admin") {
         return res.status(403).json({ error: "ليس لديك صلاحية للوصول لهذا الفرع" });
       }
@@ -1022,6 +1068,9 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
   // Fresh, request-local snapshot: permission middleware can reuse this read
   // within this request, never across sessions or workers.
   (req as any).authPermissions = permissions;
+  if (user.role === "warehouse_keeper") {
+    (req as any).authPermissions = await getWarehouseKeeperEffectivePermissions(user.id, permissions);
+  }
   
   // Update session activity throttled (only once per 60s per session)
   if (req.sessionID) {
@@ -1089,6 +1138,12 @@ export const requirePermission = (module: string, action?: string): RequestHandl
     // Admin has full access
     if (user.role === "admin") {
       return next();
+    }
+    if (user.role === "warehouse_keeper") {
+      const required = action ?? ({ GET: "view", HEAD: "view", OPTIONS: "view", POST: "create", PATCH: "edit", PUT: "edit", DELETE: "delete" } as Record<string, string>)[req.method] ?? "edit";
+      const allowed = (req as any).authPermissions ?? await getWarehouseKeeperEffectivePermissions(user.id, await storage.getUserPermissions(user.id, { bypassCache: true }));
+      return allowed.some((p: any) => p.module === module && p.actions.includes(required))
+        ? next() : res.status(403).json({ message: "غير مسموح - صلاحية أمين المستودعات محدودة بالمستودع الرئيسي" });
     }
     
     // SECURITY: Attendance clerk has ONLY attendance_check permissions
@@ -1233,6 +1288,11 @@ export const requirePermission = (module: string, action?: string): RequestHandl
 export const requireAnyPermission = (module: string, actions: string[]): RequestHandler => {
   return async (req, res, next) => {
     const user = (req as any).currentUser;
+    if (user?.role === "warehouse_keeper") {
+      const allowed = (req as any).authPermissions ?? await getWarehouseKeeperEffectivePermissions(user.id, await storage.getUserPermissions(user.id, { bypassCache: true }));
+      return allowed.some((p: any) => p.module === module && actions.some((action) => p.actions.includes(action)))
+        ? next() : res.status(403).json({ message: "غير مسموح - صلاحية أمين المستودعات محدودة بالمستودع الرئيسي" });
+    }
     if (!user) {
       return res.status(401).json({ message: "غير مصرح" });
     }
@@ -1338,6 +1398,7 @@ export const requireAnyPermission = (module: string, actions: string[]): Request
 // Get active branch ID from request - returns null for admins (can see all) or the active branch for regular users
 export function getActiveBranchFilter(req: any): string | null {
   const user = req.currentUser;
+  if (user?.role === "warehouse_keeper") return "main_warehouse";
   // Admin can see all branches - return null means no filter
   if (user?.role === "admin") {
     // But if admin has selected a specific branch, filter by it
@@ -1351,6 +1412,7 @@ export function getActiveBranchFilter(req: any): string | null {
 export async function canAccessBranch(req: any, branchId: string): Promise<boolean> {
   const user = req.currentUser;
   if (!user) return false;
+  if (user.role === "warehouse_keeper") return branchId === "main_warehouse";
   
   // Admin can access all branches
   if (user.role === "admin") return true;
@@ -1407,6 +1469,10 @@ export const requireBranchAccess: RequestHandler = async (req, res, next) => {
   const branchId = req.body?.branchId || req.query?.branchId;
   
   if (!branchId) {
+    if (user.role === "warehouse_keeper") {
+      if (req.body) req.body.branchId = "main_warehouse";
+      return next();
+    }
     // If no branch specified, check if user has an active branch
     if (!req.session?.activeBranchId) {
       return res.status(400).json({ message: "يجب تحديد الفرع" });
@@ -1436,6 +1502,7 @@ export const requireBranchAccess: RequestHandler = async (req, res, next) => {
 export function getMandatoryBranchFilter(req: any): string | null {
   const user = req.currentUser;
   if (!user) return null;
+  if (user.role === "warehouse_keeper") return "main_warehouse";
   
   // Admin can see all branches unless they selected a specific one
   if (user.role === "admin") {
@@ -1473,6 +1540,7 @@ export function isUserAdmin(req: any): boolean {
 export function getAllowedBranchIds(req: any): string[] | null {
   const user = req.currentUser;
   if (!user) return [];
+  if (user.role === "warehouse_keeper") return ["main_warehouse"];
   
   // Admin can see all branches
   if (user.role === "admin") {

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef, Suspense, lazy, createElement, type ComponentType } from "react";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -18,13 +18,16 @@ import {
 } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { useReactToPrint } from "react-to-print";
-import { Link, useSearch } from "wouter";
+import { useSearch } from "wouter";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { SignaturePad, SignatureDisplay } from "@/components/signature-pad";
 import { ExportButtons } from "@/components/export-buttons";
 import { useBranches } from "@/hooks/useBranches";
+import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
+import { filterWarehouseTransfers, pageWarehouseTransfers, WAREHOUSE_PAGE_SIZE } from "@/lib/warehouse-keeper-list";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useBranchNavigation } from "@/hooks/use-branch-navigation";
 import { useBranchDeskIntent } from "@/hooks/use-branch-desk-intent";
 import { BranchSupplySources } from "@/components/branch-supply/sources";
@@ -39,6 +42,8 @@ import {
   resolveVisibleBranchFilter,
   resolveWarehouseCreateDestination,
 } from "@/lib/warehouse-branch-supply";
+
+const EmbeddedDeliveryWorkspace = lazy(() => import("@/pages/driver-deliveries").then(module => ({ default: module.DeliveryWorkspace })));
 
 type MaterialTransfer = {
   id: number;
@@ -134,7 +139,10 @@ export default function TransferRequestsPage() {
   const isRTL = i18n.language === "ar";
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const isKeeper = user?.role === "warehouse_keeper";
   const { branches, isLoading: branchesLoading, userBranchId, canSelectBranch } = useBranches();
+  const operationalBranchId = isKeeper ? "main_warehouse" : userBranchId;
   const permissions = usePermissions();
   const { canView, canCreate, canEdit, isLoading: permissionsLoading } = permissions;
   const search = useSearch();
@@ -148,6 +156,8 @@ export default function TransferRequestsPage() {
   const [isModifyQuantitiesOpen, setIsModifyQuantitiesOpen] = useState(false);
   const [selectedTransfer, setSelectedTransfer] = useState<MaterialTransfer | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [listPage, setListPage] = useState(1);
+  const [deliveryWorkspaceId, setDeliveryWorkspaceId] = useState<number | null>(null);
   const incomingOnly = new URLSearchParams(search).get("direction") === "incoming";
   useEffect(() => {
     const params = new URLSearchParams(search);
@@ -208,7 +218,6 @@ export default function TransferRequestsPage() {
 
   // For non-admins, source branch is always their own branch
   const userBranch = branches.find(b => b.id === userBranchId);
-  const isMainWarehouse = userBranchId === "main_warehouse";
 
   const [newTransfer, setNewTransfer] = useState({
     sourceBranchId: userBranchId || "",
@@ -235,15 +244,21 @@ export default function TransferRequestsPage() {
   // A scoped link initializes both the list and request destination. Invalid
   // scopes are resolved by useBranchNavigation and never broaden to "all".
   useEffect(() => {
+    if (isKeeper) {
+      const requested = new URLSearchParams(search).get("branchId");
+      const destination = requested && requested !== "main_warehouse" && branches.some(branch => branch.id === requested) ? requested : "all";
+      setFilterBranch(current => current === destination ? current : destination);
+      return;
+    }
     if (navigationBranch.isResolving || !navigationBranch.hasBranchParam) return;
     if (!navigationBranch.branchId || !setDestinationBranch(navigationBranch.branchId)) return;
     setFilterBranch(navigationBranch.branchId);
-  }, [navigationBranch, setDestinationBranch]);
+  }, [navigationBranch, setDestinationBranch, isKeeper, search, branches]);
 
   // Consume the cross-source create intent once. replaceState deliberately
   // preserves branchId/from and prevents close/rerender from reopening it.
   useEffect(() => {
-    if (createIntentConsumedRef.current || navigationBranch.isResolving || permissionsLoading) return;
+    if (isKeeper || createIntentConsumedRef.current || navigationBranch.isResolving || permissionsLoading) return;
     const intent = parseWarehouseSupplyIntent(search);
     if (!intent.shouldCreate || !intent.fromBranchSupply) return;
     createIntentConsumedRef.current = true;
@@ -256,7 +271,7 @@ export default function TransferRequestsPage() {
     }
     const nextSearch = consumeWarehouseCreateIntent(search);
     window.history.replaceState(window.history.state, "", `${window.location.pathname}${nextSearch}${window.location.hash}`);
-  }, [canCreate, navigationBranch, permissionsLoading, search, setDestinationBranch]);
+  }, [canCreate, navigationBranch, permissionsLoading, search, setDestinationBranch, isKeeper]);
 
   // Fetch warehouse items for selection
   const {
@@ -304,14 +319,14 @@ export default function TransferRequestsPage() {
         notes: "احتياج مواد وصفة إنتاج",
       }],
     }));
-    if (canCreate("warehouse")) setIsCreateOpen(true);
-  }, [branches, canCreate, isRTL, warehouseItems]);
+    if (!isKeeper && canCreate("warehouse")) setIsCreateOpen(true);
+  }, [branches, canCreate, isRTL, warehouseItems, isKeeper]);
 
 
   // Initialize transfer form: source = warehouse, destination = user's branch
   // This models the correct flow: branch requests items FROM warehouse
   useEffect(() => {
-    if (userBranchId && userBranch && !canSelectBranch) {
+    if (userBranchId && userBranch && !canSelectBranch && !isKeeper) {
       // Non-admin: source = warehouse, destination = their branch
       setNewTransfer(prev => ({
         ...prev,
@@ -328,7 +343,7 @@ export default function TransferRequestsPage() {
         sourceBranchName: isRTL ? "المستودع الرئيسي" : "Main Warehouse",
       }));
     }
-  }, [userBranchId, userBranch, canSelectBranch, isRTL]);
+  }, [userBranchId, userBranch, canSelectBranch, isRTL, isKeeper]);
 
   const [statusUpdate, setStatusUpdate] = useState({
     status: "",
@@ -359,13 +374,13 @@ export default function TransferRequestsPage() {
     error: transfersError,
     refetch: refetchTransfers,
   } = useQuery<MaterialTransfer[]>({
-    queryKey: ["/api/warehouse/material-transfers", filterStatus, filterBranch, userBranchId, canSelectBranch],
+    queryKey: ["/api/warehouse/material-transfers", filterStatus, filterBranch, operationalBranchId, canSelectBranch, isKeeper],
     queryFn: async () => {
       const params = new URLSearchParams();
-      if (filterStatus !== "all") params.append("status", filterStatus);
+      if (!isKeeper && filterStatus !== "all") params.append("status", filterStatus);
       // For non-admin branch users, filter by their branch (as source or destination)
       // Admins (canSelectBranch=true) see all transfers
-      const requestedBranchId = filterBranch !== "all"
+      const requestedBranchId = isKeeper ? "main_warehouse" : filterBranch !== "all"
         ? filterBranch
         : (userBranchId && !canSelectBranch ? userBranchId : null);
       if (requestedBranchId) params.append("branchId", requestedBranchId);
@@ -376,7 +391,7 @@ export default function TransferRequestsPage() {
     staleTime: 1000 * 60 * 2, // 2 minutes - frequently changing
     placeholderData: undefined,
     enabled: !navigationBranch.isResolving
-      && (!navigationBranch.hasBranchParam || (!!navigationBranch.branchId && filterBranch === navigationBranch.branchId)),
+      && (isKeeper || !navigationBranch.hasBranchParam || (!!navigationBranch.branchId && filterBranch === navigationBranch.branchId)),
   });
 
   // Notification deep links carry both the exact transfer and its intended
@@ -411,7 +426,7 @@ export default function TransferRequestsPage() {
     detailIntentConsumedRef.current = intentKey;
     // An explicit but invalid/revoked branch scope must not degrade into an
     // unscoped exact-row request.
-    if (params.has("branchId") && !navigationBranch.branchId) {
+    if (!isKeeper && params.has("branchId") && !navigationBranch.branchId) {
       showUnavailable();
       consumeIntent();
       return;
@@ -425,9 +440,12 @@ export default function TransferRequestsPage() {
       .then(result => {
         const transfer = result?.transfer as MaterialTransfer | undefined;
         const scopedBranchId = navigationBranch.branchId;
-        if (!transfer || (scopedBranchId
+        if (isKeeper && params.has("branchId") && params.get("branchId") !== "main_warehouse"
+          && params.get("branchId") !== transfer?.destinationBranchId) throw new Error("scope_mismatch");
+        if (!transfer || (isKeeper && transfer.sourceBranchId !== "main_warehouse")
+          || (!isKeeper && scopedBranchId
           && transfer.sourceBranchId !== scopedBranchId
-          && transfer.destinationBranchId !== scopedBranchId)) {
+           && transfer.destinationBranchId !== scopedBranchId)) {
           throw new Error("scope_mismatch");
         }
         setSelectedTransfer(transfer);
@@ -439,7 +457,7 @@ export default function TransferRequestsPage() {
         showUnavailable();
       })
       .finally(consumeIntent);
-  }, [canView, isRTL, navigationBranch, permissionsLoading, search, toast]);
+  }, [canView, isRTL, navigationBranch, permissionsLoading, search, toast, isKeeper]);
 
   const createMutation = useMutation({
     mutationFn: async (data: typeof newTransfer) => {
@@ -613,7 +631,7 @@ export default function TransferRequestsPage() {
   const visibleBranchId = resolveVisibleBranchFilter(filterBranch, branches);
 
   const openCreateRequest = useCallback(() => {
-    if (!canCreate("warehouse")) return;
+    if (isKeeper || !canCreate("warehouse")) return;
     const destinationBranchId = kitchenRawMode
       ? (kitchenBranches.find(branch => branch.id === filterBranch || branch.id === userBranchId)?.id || (kitchenBranches.length === 1 ? kitchenBranches[0].id : ""))
       : resolveWarehouseCreateDestination(filterBranch, branches, userBranchId);
@@ -629,7 +647,7 @@ export default function TransferRequestsPage() {
     }));
     createIdempotencyKeyRef.current = crypto.randomUUID();
     setIsCreateOpen(true);
-  }, [branches, canCreate, filterBranch, isRTL, userBranchId, kitchenRawMode]);
+  }, [branches, canCreate, filterBranch, isRTL, userBranchId, kitchenRawMode, isKeeper]);
 
   const handleBranchFilterChange = useCallback((value: string) => {
     const branchId = resolveVisibleBranchFilter(value, branches);
@@ -647,9 +665,9 @@ export default function TransferRequestsPage() {
   }, [branches]);
 
   useBranchDeskIntent(navigationBranch.branchId,
-    !navigationBranch.isResolving && !permissionsLoading && filterBranch === navigationBranch.branchId,
+    !isKeeper && !navigationBranch.isResolving && !permissionsLoading && filterBranch === navigationBranch.branchId,
     intent => {
-      if (intent === "create" && canCreate("warehouse")) openCreateRequest();
+      if (intent === "create" && !isKeeper && canCreate("warehouse")) openCreateRequest();
       if (intent === "receive") setFilterStatus("in_transit");
     });
 
@@ -762,28 +780,11 @@ _مُرسل من BUTTER BAKERY SYSTEM_`;
     }
   };
 
-  const filteredTransfers = useMemo(() => transfers.filter(transfer => {
-    if (kitchenRawMode && transfer.stockPostingPolicy !== "on_dispatch") return false;
-    if (incomingOnly && transfer.destinationBranchId !== filterBranch) return false;
-    // Filter by branch (destination or source)
-    if (filterBranch !== "all") {
-      const matchesBranch = transfer.destinationBranchId === filterBranch || 
-                           transfer.sourceBranchId === filterBranch;
-      if (!matchesBranch) return false;
-    }
-    
-    // Filter by search query
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      return (
-        transfer.transferNumber.toLowerCase().includes(query) ||
-        transfer.sourceBranchName?.toLowerCase().includes(query) ||
-        transfer.destinationBranchName?.toLowerCase().includes(query) ||
-        transfer.driverName?.toLowerCase().includes(query)
-      );
-    }
-    return true;
-  }), [transfers, filterBranch, searchQuery, incomingOnly, kitchenRawMode]);
+  const filteredTransfers = useMemo(() => filterWarehouseTransfers(transfers, {
+    keeper: isKeeper, status: filterStatus, branch: filterBranch, incomingOnly, kitchenRawMode, search: searchQuery,
+  }), [transfers, isKeeper, filterStatus, filterBranch, incomingOnly, kitchenRawMode, searchQuery]);
+  const pagedTransfers = pageWarehouseTransfers(filteredTransfers, listPage);
+  useEffect(() => setListPage(1), [filterStatus, filterBranch, searchQuery, incomingOnly, kitchenRawMode]);
 
   // Download PDF only (lazy-loaded)
   const handleDownloadPdf = async () => {
@@ -929,7 +930,7 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
   const getNextStatus = (transfer: MaterialTransfer): string[] => {
     const permitted = (statuses: string[]) => canEdit("warehouse") ? statuses : [];
     // Admins can manage all transfers
-    if (canSelectBranch) {
+    if (canSelectBranch && !isKeeper) {
       switch (transfer.status) {
         case "pending": return permitted(["approved", "rejected", "cancelled"]);
         case "approved": return permitted(["in_transit", "cancelled"]);
@@ -939,8 +940,9 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
     }
     
     // Non-admin users: check if they are source (warehouse) or destination (branch)
-    const isWarehouse = transfer.sourceBranchId === "main_warehouse" && userBranchId === "main_warehouse";
-    const isDestination = transfer.destinationBranchId === userBranchId;
+    const isWarehouse = transfer.sourceBranchId === "main_warehouse" && operationalBranchId === "main_warehouse";
+    const isDestination = !isKeeper && transfer.destinationBranchId === userBranchId;
+    if (isKeeper && !isWarehouse) return [];
     
     switch (transfer.status) {
       case "pending":
@@ -976,12 +978,12 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
         <PageHeader
           icon={Send}
           tone="money"
-          title={kitchenRawMode ? "طلبات مواد المطبخ من المستودع الرئيسي" : (isRTL ? "طلبات التحويل" : "Transfer Requests")}
-          description={kitchenRawMode ? "مواد خام من كتالوج المستودع → اعتماد وتجهيز وإرسال → استلام فعلي في مخزون المطبخ. لا تُستهلك المواد تلقائياً." : (isRTL ? "إدارة طلبات الأصناف من المستودع الرئيسي" : "Manage item requests from main warehouse")}
+          title={kitchenRawMode ? "طلبات مواد المطبخ من المستودع الرئيسي" : (isKeeper ? (isRTL ? "مكتب تشغيل المستودع" : "Warehouse operations desk") : (isRTL ? "طلبات التحويل" : "Transfer Requests"))}
+          description={kitchenRawMode ? "مواد خام من كتالوج المستودع → اعتماد وتجهيز وإرسال → استلام فعلي في مخزون المطبخ. لا تُستهلك المواد تلقائياً." : (isKeeper ? (isRTL ? "طلبات صادرة من المستودع الرئيسي إلى الفروع والمطبخ المركزي" : "Main warehouse requests to branches and the central kitchen") : (isRTL ? "إدارة طلبات الأصناف من المستودع الرئيسي" : "Manage item requests from main warehouse"))}
           backHref={kitchenRawMode ? "/central-kitchen-orders" : (visibleBranchId ? `/warehouse?branchId=${encodeURIComponent(visibleBranchId)}` : "/warehouse")}
           actions={
             <div className="flex items-center gap-2">
-            <div className="hidden md:block">
+            {!isKeeper && permissions.canExport("warehouse") && <div className="hidden md:block">
               <ExportButtons
                 data={exportData}
                 columns={exportColumns}
@@ -989,8 +991,8 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
                 title={isRTL ? "طلبات التحويل" : "Transfer Requests"}
                 sheetName={isRTL ? "التحويلات" : "Transfers"}
               />
-            </div>
-            {canCreate("warehouse") && <Dialog open={isCreateOpen} onOpenChange={(open) => {
+            </div>}
+            {!isKeeper && canCreate("warehouse") && <Dialog open={isCreateOpen} onOpenChange={(open) => {
               if (open && !isCreateOpen) createIdempotencyKeyRef.current = crypto.randomUUID();
               if (!open && !createMutation.isPending) createIdempotencyKeyRef.current = null;
               setIsCreateOpen(open);
@@ -1276,7 +1278,7 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
                     {newTransfer.items.length} {isRTL ? "صنف للمراجعة" : "items to review"}
                   </p>
                   <p>
-                    {newTransfer.items.length > 0 && newTransfer.items.every(isValidWarehouseDraftItem)
+                    {newTransfer.items.length > 0 && newTransfer.items.every(item => isValidWarehouseDraftItem(item, !kitchenRawMode))
                       ? (isRTL ? "الكميات والمتوفر المعلن مكتملة." : "Quantities and declared on-hand are complete.")
                       : (isRTL ? "راجع كل صنف وأكمل الكميات قبل الإرسال." : "Review every item and complete quantities before submitting.")}
                   </p>
@@ -1313,15 +1315,15 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
           }
         />
 
-        <BranchSupplySources
+        {!isKeeper && <BranchSupplySources
           current="warehouse"
           branchId={visibleBranchId}
           canKitchen={canView("central_kitchen_orders")}
           canWarehouse={canView("warehouse")}
           onWarehouseRequest={canCreate("warehouse") ? openCreateRequest : undefined}
-        />
+        />}
 
-        <Card className="border-border bg-card">
+        {!isKeeper && <Card className="border-border bg-card">
           <CardHeader className="pb-3">
             <CardTitle className="text-base">{isRTL ? "مسار التحويل المخزني" : "Warehouse transfer lifecycle"}</CardTitle>
             <CardDescription className="leading-6">
@@ -1330,33 +1332,34 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
                 : "A request does not debit stock. Only confirmed delivery uses the existing material transfer to debit the main warehouse and credit the received quantity to the destination branch; this differs from central-kitchen dispatch."}
             </CardDescription>
           </CardHeader>
-        </Card>
+        </Card>}
 
         {/* Status Summary Cards */}
-        <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 sm:gap-3">
+        <div className="flex gap-1 overflow-x-auto rounded-xl border border-border bg-card p-1.5" role="group" aria-label={isRTL ? "تصفية الحالات" : "Filter statuses"}>
           {[
-            { status: "pending", color: "bg-yellow-50 border-yellow-200", icon: "🕐", textColor: "text-yellow-700" },
-            { status: "approved", color: "bg-blue-50 border-blue-200", icon: "✓", textColor: "text-blue-700" },
-            { status: "in_transit", color: "bg-purple-50 border-purple-200", icon: "🚚", textColor: "text-purple-700" },
-            { status: "delivered", color: "bg-green-50 border-green-200", icon: "✅", textColor: "text-green-700" },
-            { status: "rejected", color: "bg-red-50 border-red-200", icon: "✗", textColor: "text-red-700" },
-          ].map(({ status, color, icon, textColor }) => {
+            { status: "all" },
+            { status: "pending" },
+            { status: "approved" },
+            { status: "in_transit" },
+            { status: "delivered" },
+            { status: "rejected" },
+            { status: "cancelled" },
+          ].map(({ status }) => {
             const statusOpt = STATUS_OPTIONS.find(s => s.value === status);
-            const count = transfers.filter(t => t.status === status).length;
+            const count = isKeeper
+              ? filterWarehouseTransfers(transfers, { keeper: true, status, branch: filterBranch, incomingOnly, kitchenRawMode, search: searchQuery }).length
+              : undefined;
             return (
               <button
                 key={status}
-                onClick={() => setFilterStatus(filterStatus === status ? "all" : status)}
-                className={`p-2 sm:p-3 rounded-lg border ${color} ${filterStatus === status ? "ring-2 ring-offset-1" : ""} transition-all hover:scale-[1.02] cursor-pointer`}
+                type="button"
+                onClick={() => setFilterStatus(status)}
+                aria-pressed={filterStatus === status}
+                className={`shrink-0 rounded-lg px-3 py-2 text-xs font-semibold transition-colors ${filterStatus === status ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}
                 data-testid={`status-card-${status}`}
               >
-                <div className="flex items-center justify-between">
-                  <span className="text-sm sm:text-lg">{icon}</span>
-                  <span className={`text-lg sm:text-2xl font-bold ${textColor}`}>{count}</span>
-                </div>
-                <p className={`text-[10px] sm:text-xs mt-1 ${textColor} truncate`}>
-                  {statusOpt ? (isRTL ? statusOpt.labelAr : statusOpt.labelEn) : status}
-                </p>
+                {statusOpt ? (isRTL ? statusOpt.labelAr : statusOpt.labelEn) : (isRTL ? "الكل" : "All")}
+                {count !== undefined && <span className="ms-2 rounded-md bg-current/10 px-1.5 font-mono tabular-nums">{count}</span>}
               </button>
             );
           })}
@@ -1409,7 +1412,7 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
                 ))}
               </SelectContent>
             </Select>
-            <Button 
+            {permissions.canExport("warehouse") && <Button
               variant="outline" 
               onClick={handleExportExcel}
               className="hidden sm:flex bg-green-50 hover:bg-green-100 text-green-700 border-green-200 h-9 sm:h-10"
@@ -1417,7 +1420,7 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
             >
               <FileSpreadsheet className={`w-4 h-4 ${isRTL ? "ml-2" : "mr-2"}`} />
               <span className="hidden md:inline">{isRTL ? "تصدير Excel" : "Export"}</span>
-            </Button>
+            </Button>}
           </div>
         </div>
 
@@ -1439,8 +1442,8 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8">
-                      {isRTL ? "جاري التحميل..." : "Loading..."}
+                    <TableCell colSpan={7} className="py-4">
+                      <div className="space-y-2">{[0, 1, 2, 3, 4].map(index => <Skeleton key={index} className="h-11 w-full" />)}</div>
                     </TableCell>
                   </TableRow>
                 ) : isTransfersError ? (
@@ -1461,7 +1464,7 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredTransfers.map((transfer) => {
+                  pagedTransfers.rows.map((transfer) => {
                     const nextStatuses = getNextStatus(transfer);
                     return (
                       <TableRow key={transfer.id} data-testid={`transfer-row-${transfer.id}`} className="hover:bg-muted/30">
@@ -1535,19 +1538,19 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
                                 </Button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align={isRTL ? "start" : "end"}>
-                                <DropdownMenuItem onClick={() => handleQuickWhatsApp(transfer)} data-testid={`btn-whatsapp-${transfer.id}`}>
+                                {permissions.canExport("warehouse") && <DropdownMenuItem onClick={() => handleQuickWhatsApp(transfer)} data-testid={`btn-whatsapp-${transfer.id}`}>
                                   <MessageCircle className={`w-4 h-4 ${isRTL ? "ml-2" : "mr-2"} text-green-600`} />
                                   {isRTL ? "مشاركة واتساب" : "Share WhatsApp"}
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => handleViewDetails(transfer)} data-testid={`btn-print-${transfer.id}`}>
+                                </DropdownMenuItem>}
+                                {permissions.canExport("warehouse") && <DropdownMenuItem onClick={() => handleViewDetails(transfer)} data-testid={`btn-print-${transfer.id}`}>
                                   <Printer className={`w-4 h-4 ${isRTL ? "ml-2" : "mr-2"}`} />
                                   {isRTL ? "طباعة" : "Print"}
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => handleQuickPdf(transfer)} data-testid={`btn-pdf-${transfer.id}`}>
+                                </DropdownMenuItem>}
+                                {permissions.canExport("warehouse") && <DropdownMenuItem onClick={() => handleQuickPdf(transfer)} data-testid={`btn-pdf-${transfer.id}`}>
                                   <Download className={`w-4 h-4 ${isRTL ? "ml-2" : "mr-2"} text-red-600`} />
                                   {isRTL ? "تحميل PDF" : "Download PDF"}
-                                </DropdownMenuItem>
-                                {(['pending', 'approved'].includes(transfer.status) && canSelectBranch && canEdit("warehouse")) && (
+                                </DropdownMenuItem>}
+                                {(['pending', 'approved'].includes(transfer.status) && (canSelectBranch || isKeeper) && canEdit("warehouse") && (!isKeeper || transfer.sourceBranchId === "main_warehouse")) && (
                                   <>
                                     <DropdownMenuSeparator />
                                     <DropdownMenuItem 
@@ -1560,7 +1563,7 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
                                     </DropdownMenuItem>
                                   </>
                                 )}
-                                {(transfer.status === 'pending' && canEdit("warehouse") && (canSelectBranch || transfer.destinationBranchId === userBranchId)) && (
+                                {(transfer.status === 'pending' && canEdit("warehouse") && !isKeeper && (canSelectBranch || transfer.destinationBranchId === userBranchId)) && (
                                   <>
                                     <DropdownMenuSeparator />
                                     <DropdownMenuItem 
@@ -1586,6 +1589,14 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
             </div>
           </CardContent>
         </Card>
+        {!isLoading && !isTransfersError && <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground" aria-live="polite">
+          <span>{isRTL ? "الطلبات" : "Requests"} {filteredTransfers.length ? (pagedTransfers.currentPage - 1) * WAREHOUSE_PAGE_SIZE + 1 : 0}–{Math.min(pagedTransfers.currentPage * WAREHOUSE_PAGE_SIZE, filteredTransfers.length)} / {filteredTransfers.length}</span>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" disabled={pagedTransfers.currentPage <= 1} onClick={() => setListPage(pagedTransfers.currentPage - 1)}>{isRTL ? "السابق" : "Previous"}</Button>
+            <span className="font-mono tabular-nums">{pagedTransfers.currentPage} / {pagedTransfers.pageCount}</span>
+            <Button variant="outline" size="sm" disabled={pagedTransfers.currentPage >= pagedTransfers.pageCount} onClick={() => setListPage(pagedTransfers.currentPage + 1)}>{isRTL ? "التالي" : "Next"}</Button>
+          </div>
+        </div>}
 
         <Dialog open={isViewOpen} onOpenChange={setIsViewOpen}>
           <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
@@ -1596,11 +1607,11 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
                   {isRTL ? "تفاصيل طلب التحويل" : "Transfer Request Details"}
                 </DialogTitle>
                 <div className="flex flex-wrap gap-2">
-                  <Button variant="outline" size="sm" onClick={() => handlePrint()} disabled={isLoadingItems || isTransferItemsError || !transferItems.length} data-testid="btn-print">
+                  {permissions.canExport("warehouse") && <Button variant="outline" size="sm" onClick={() => handlePrint()} disabled={isLoadingItems || isTransferItemsError || !transferItems.length} data-testid="btn-print">
                     <Printer className="w-4 h-4 mr-1" />
                     {isRTL ? "طباعة" : "Print"}
-                  </Button>
-                  <Button 
+                  </Button>}
+                  {permissions.canExport("warehouse") && <Button
                     variant="outline" 
                     size="sm" 
                     onClick={handleDownloadPdf}
@@ -1610,8 +1621,8 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
                   >
                     <Download className="w-4 h-4 mr-1" />
                     PDF
-                  </Button>
-                  <Button 
+                  </Button>}
+                  {permissions.canExport("warehouse") && <Button
                     variant="outline" 
                     size="sm" 
                     onClick={handleDownloadTransferExcel}
@@ -1621,8 +1632,8 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
                   >
                     <FileSpreadsheet className="w-4 h-4 mr-1" />
                     Excel
-                  </Button>
-                  <Button 
+                  </Button>}
+                  {permissions.canExport("warehouse") && <Button
                     variant="outline" 
                     size="sm" 
                     onClick={handleWhatsAppShare}
@@ -1631,14 +1642,19 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
                   >
                     <MessageCircle className="w-4 h-4 mr-1" />
                     {isRTL ? "واتساب" : "WhatsApp"}
-                  </Button>
+                  </Button>}
                 </div>
               </div>
+              <DialogDescription>
+                {isRTL
+                  ? "تفاصيل المصدر والوجهة والأصناف والكميات وحالة الطلب."
+                  : "Source, destination, items, quantities, and request status."}
+              </DialogDescription>
             </DialogHeader>
             {selectedTransfer && (
               <>
                 {isLoadingItems ? (
-                  <p className="py-12 text-center text-muted-foreground">{isRTL ? "جاري تحميل مستند التحويل..." : "Loading transfer document..."}</p>
+                  <div className="space-y-3 py-4">{[0, 1, 2, 3].map(index => <Skeleton key={index} className="h-12 w-full" />)}</div>
                 ) : isTransferItemsError ? (
                   <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-5 text-center" role="alert">
                     <p className="font-semibold text-destructive">{isRTL ? "تعذر تحميل أصناف التحويل" : "Could not load transfer items"}</p>
@@ -1648,7 +1664,41 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
                     </Button>
                   </div>
                 ) : (
-                  <TransferDocument ref={printRef} transfer={selectedTransfer} items={transferItems} />
+                  <div className="space-y-4">
+                    <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm">
+                      <span className="font-semibold">{selectedTransfer.sourceBranchName || (isRTL ? "المستودع الرئيسي" : "Main Warehouse")}</span>
+                      <Send className="h-4 w-4 text-muted-foreground" />
+                      <span className="font-semibold">{selectedTransfer.destinationBranchName}</span>
+                      <span className="ms-auto">{getStatusBadge(selectedTransfer.status, isRTL)}</span>
+                    </div>
+                    <div className="overflow-x-auto rounded-lg border border-border">
+                      <Table>
+                        <TableHeader><TableRow><TableHead>{isRTL ? "الصنف" : "Item"}</TableHead><TableHead>{isRTL ? "المطلوب" : "Requested"}</TableHead><TableHead>{isRTL ? "الوحدة" : "Unit"}</TableHead>{selectedTransfer.status === "delivered" && <TableHead>{isRTL ? "المستلم" : "Received"}</TableHead>}</TableRow></TableHeader>
+                        <TableBody>{transferItems.map(item => <TableRow key={item.id}><TableCell className="font-medium">{item.itemName}</TableCell><TableCell className="font-mono tabular-nums">{quantityText(item.quantity)}</TableCell><TableCell>{item.unit}</TableCell>{selectedTransfer.status === "delivered" && <TableCell className="font-mono tabular-nums">{quantityText(item.receivedQuantity ?? item.quantity)}</TableCell>}</TableRow>)}</TableBody>
+                      </Table>
+                    </div>
+                    {permissions.canExport("warehouse") && <div className="sr-only"><TransferDocument ref={printRef} transfer={selectedTransfer} items={transferItems} /></div>}
+                    {isKeeper && selectedTransfer.sourceBranchId === "main_warehouse" && canView("delivery_tasks") && (
+                      <div className="border-t border-border pt-4">
+                        <Button type="button" variant="outline" onClick={() => setDeliveryWorkspaceId(current => current === selectedTransfer.id ? null : selectedTransfer.id)}>
+                          <Truck className="me-2 h-4 w-4" />{isRTL ? "إسناد السائق ومتابعة التوصيل" : "Assign driver and track delivery"}
+                        </Button>
+                        {deliveryWorkspaceId === selectedTransfer.id && <div className="mt-4 rounded-xl border border-border bg-card p-3">
+                          <Suspense fallback={<Skeleton className="h-32 w-full" />}>
+                            {createElement(EmbeddedDeliveryWorkspace as ComponentType<any>, {
+                              embedded: true,
+                              sourceType: "material_transfer",
+                              sourceId: selectedTransfer.id,
+                              onChanged: () => {
+                                void queryClient.invalidateQueries({ queryKey: ["/api/warehouse/material-transfers"] });
+                                void refetchTransferItems();
+                              },
+                            })}
+                          </Suspense>
+                        </div>}
+                      </div>
+                    )}
+                  </div>
                 )}
                 <div className="hidden">
                 {/* Header for print */}
@@ -1873,7 +1923,7 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
               {statusUpdate.status === "in_transit" && (
                 <div className="space-y-3 border rounded-lg p-3 bg-blue-50 dark:bg-blue-950/20">
                   <p className="text-sm font-medium text-blue-700 dark:text-blue-300">يجب إسناد السائق وتوثيق كمية كل بند واستلام تأكيد السائق قبل الإرسال. بيانات السائق والمركبة تؤخذ من مهمة التوصيل.</p>
-                  {selectedTransfer && <Link href={`/driver-deliveries?sourceType=material_transfer&sourceId=${selectedTransfer.id}`}><Button variant="outline" type="button">إسناد السائق وتوثيق التسليم</Button></Link>}
+                  {selectedTransfer && canView("delivery_tasks") && <Button variant="outline" type="button" onClick={() => { setIsUpdateStatusOpen(false); setIsViewOpen(true); setDeliveryWorkspaceId(selectedTransfer.id); }}>إسناد السائق وتوثيق التسليم</Button>}
                   <div className="grid grid-cols-1 gap-3">
                     <div className="space-y-1">
                       <Label className="text-xs">{isRTL ? "تاريخ الإرسال" : "Dispatch Date"}</Label>

@@ -68,6 +68,15 @@ describe("delivery workspace permissions (synthetic read-only fixture)", () => {
     expect(reportEnabled()).toBe(false);
   });
 
+  it("keeps the order-scoped embedded receipt workspace independent of standalone role navigation", () => {
+    const html = renderToStaticMarkup(createElement(DeliveryWorkspace, {
+      embedded: true, sourceType: "kitchen", sourceId: 42,
+    }));
+    expect(html).toContain("توصيل الطلب");
+    expect(html).not.toContain("بوابة التوصيل");
+    expect(fixture.queries.find(query => query.key[0] === "/api/deliveries")?.enabled).toBe(true);
+  });
+
   it("shows the manager's report tab, but never exports without export capability", () => {
     fixture.caps = { canAssign: true, canReport: true, canExport: false };
     fixture.tab = "reports";

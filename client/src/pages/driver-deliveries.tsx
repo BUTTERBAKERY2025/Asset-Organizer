@@ -3,6 +3,9 @@ import type { Dispatch, ReactNode, SetStateAction } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { BarChart3, CircleAlert, ClipboardList, Loader2, Plus, RefreshCw, Truck } from "lucide-react";
 import { Layout } from "@/components/layout";
+import { AccessDeniedPage } from "@/components/protected-route";
+import { useAuth } from "@/hooks/useAuth";
+import { canAccessDeliveryWorkspace } from "@shared/delivery-workspace-access";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { DeliveryCard, DeliveryDetail, DeliveryItemLabel, canOpenDeliverySource, deliveryDate, deliveryDraftChanged, deliveryMatchesContext, deliverySourceLabel, deliverySourcePath, deliveryStatus } from "@/components/delivery/delivery-ui";
 import { SignatureCapture } from "@/components/delivery/signature-capture";
@@ -34,6 +37,10 @@ const fetchJson = async <T,>(path: string): Promise<T> => { const response = awa
 const dateValue = (offset = 0) => { const value = new Date(); value.setDate(value.getDate() + offset); return value.toISOString().slice(0, 10); };
 
 export default function DriverDeliveriesPage() {
+  const { user } = useAuth();
+  if (!canAccessDeliveryWorkspace(user)) {
+    return <AccessDeniedPage message="مساحة مهام التوصيل المستقلة متاحة للسائق ومسؤول المستودع والمدير فقط" />;
+  }
   return <Layout><DeliveryWorkspace /></Layout>;
 }
 

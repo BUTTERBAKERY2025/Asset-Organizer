@@ -28,7 +28,7 @@ interface AnyModuleProtectedRouteProps {
   requiredRole?: "admin" | "employee" | "viewer";
 }
 
-function AccessDeniedPage({ message }: { message?: string }) {
+export function AccessDeniedPage({ message }: { message?: string }) {
   const handleLogout = async () => {
     try {
       await detachPushSubscriptionFromCurrentUser();
