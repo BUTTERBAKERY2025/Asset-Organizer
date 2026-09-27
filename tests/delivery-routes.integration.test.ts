@@ -35,7 +35,7 @@ vi.mock("../server/shareholder-security", () => ({
   verifyOtpForUser: vi.fn(), logShareholderActivity: vi.fn(),
 }));
 
-import { registerDeliveryRoutes } from "../server/delivery-routes";
+import { csvCell, reportDateBounds, registerDeliveryRoutes } from "../server/delivery-routes";
 
 const handlers = new Map<string, any[]>();
 const app: any = {
@@ -71,16 +71,19 @@ const actor = (name: string, branchId: string, jobTitle = "employee"): Actor => 
 const grant = (user: Actor, modules: Record<string, string[]>) => {
   state.permissions.set(user.id, Object.entries(modules).map(([module, actions]) => ({ module, actions })));
 };
-async function invoke(method: string, path: string, user: Actor, body: any = {}, params: any = {}) {
+async function invoke(method: string, path: string, user: Actor, body: any = {}, params: any = {}, query: any = {}) {
   const route = handlers.get(`${method} ${path}`);
   if (!route) throw Error(`Missing route ${method} ${path}`);
-  const req: any = { currentUser: user, method, body, params, query: {}, userBranchAccess: [],
+  const req: any = { currentUser: user, method, body, params, query, userBranchAccess: [],
     headers: {}, originalUrl: path, ip: "127.0.0.1" };
+  if (user.role === "warehouse_keeper") req.authPermissions = state.permissions.get(user.id) || [];
   const res: any = {
-    statusCode: 200, headersSent: false, body: null,
+    statusCode: 200, headersSent: false, body: null, csv: "",
     status(code: number) { this.statusCode = code; return this; },
     json(data: any) { this.body = data; this.headersSent = true; return this; },
     setHeader() {},
+    write(chunk: string) { this.headersSent = true; this.csv += chunk; return true; },
+    end() { this.headersSent = true; },
   };
   // The first middleware is the real isAuthenticated; its session lookup is
   // deliberately excluded. All in-handler permission checks use real auth.ts.
@@ -475,6 +478,103 @@ describe("delivery routes against local PostgreSQL contracts", () => {
     } finally {
       state.permissions.set(fixture.manager!.id, original);
     }
+  });
+
+  it("paginates after source authorization, counts all matches and exports every row safely", async () => {
+    const manager = { ...fixture.manager!, role: "warehouse_keeper", branchId: "main_warehouse" };
+    const original = state.permissions.get(manager.id)!;
+    const ids: number[] = [];
+    try {
+      grant(manager, { delivery_tasks: ["view", "export"], warehouse: ["view"] });
+      // More than the old 500-row cap, with inaccessible rows first in scan order.
+      for (let n = 0; n < 510; n++) {
+        const allowed = n >= 505;
+        const order = allowed ? await client.query(`INSERT INTO material_transfers
+          (transfer_number,source_type,source_branch_id,destination_branch_id,transfer_date,status,created_by)
+          VALUES ($1,'branch',$2,$3,current_date::text,'in_transit',$4) RETURNING id`,
+          [`${fixture.prefix}-${n}`, "main_warehouse", fixture.destination, manager.id])
+          : await client.query(`INSERT INTO central_kitchen_orders
+          (order_number,request_branch_id,central_kitchen_id,order_date,status,idempotency_key,payload_fingerprint,created_by)
+          VALUES ($1,$2,$3,current_date,'dispatched',$4,$5,$6) RETURNING id`,
+          [`${fixture.prefix}-${n}`, fixture.destination,
+            fixture.outsider, `${fixture.prefix}-report-${n}`,
+            "f".repeat(64), manager.id]);
+        const assignment = await client.query(`INSERT INTO delivery_assignments
+          (source_type,source_id,transport_mode,driver_id,vehicle_number,status,created_by,created_at,
+            carrier,carrier_name,waybill,package_count)
+          VALUES ($6,$1,'external',NULL,NULL,'assigned',$2,$3,'other',$4,$5,1) RETURNING id`,
+          [order.rows[0].id, manager.id, n === 509 ? "2026-01-02T20:59:59Z" : "2026-01-01T21:00:00Z",
+            allowed ? "شركة =SUM(1)" : "hidden", allowed ? "=2+2" : "hidden",
+            allowed ? "material_transfer" : "kitchen"]);
+        ids.push(Number(assignment.rows[0].id));
+      }
+      const outside = await client.query(`INSERT INTO material_transfers
+        (transfer_number,source_type,source_branch_id,destination_branch_id,transfer_date,status,created_by)
+        VALUES ($1,'branch','main_warehouse',$2,current_date::text,'in_transit',$3) RETURNING id`,
+        [`${fixture.prefix}-outside`, fixture.destination, manager.id]);
+      await client.query(`INSERT INTO delivery_assignments
+        (source_type,source_id,transport_mode,driver_id,vehicle_number,status,created_by,created_at,carrier,carrier_name,waybill,package_count)
+        VALUES ('material_transfer',$1,'external',NULL,NULL,'assigned',$2,$3,'other','شركة =SUM(1)','=2+2',1)`,
+        [outside.rows[0].id, manager.id, "2026-01-02T21:00:00Z"]);
+      await client.query("UPDATE delivery_assignments SET started_at=$2,completed_at=$3,status='completed' WHERE id=$1",
+        [ids[505], "2026-01-04T09:00:00Z", "2026-01-02T20:59:59Z"]);
+      await client.query(`UPDATE material_transfers SET departure_time=$2 WHERE id=
+        (SELECT source_id FROM delivery_assignments WHERE id=$1)`,
+        [ids[505], "2026-01-01T21:00:00Z"]);
+      const q = { from: "2026-01-02", to: "2026-01-02", carrier: "other", carrierName: "شركة =SUM(1)" };
+      const page = await invoke("GET", "/api/deliveries/reports", manager, {}, {}, { ...q, page: "1", pageSize: "2" });
+      expect(page.statusCode).toBe(200);
+      expect(page.body.summary.total).toBe(5);
+      expect(page.body.deliveries).toHaveLength(2);
+      const last = await invoke("GET", "/api/deliveries/reports", manager, {}, {}, { ...q, page: "3", pageSize: "2" });
+      expect(last.body.deliveries).toHaveLength(1);
+      const csv = await invoke("GET", "/api/deliveries/reports/export", manager, {}, {}, q);
+      expect(csv.statusCode).toBe(200);
+      expect(csv.csv.startsWith("\uFEFF")).toBe(true);
+      expect(csv.csv.split("\r\n").filter(Boolean)).toHaveLength(6);
+      expect(csv.csv.slice(1).split("\r\n")[0].split(",").map(value => value.replace(/^"|"$/g, "")))
+        .toEqual(["المصدر", "النوع", "شركة الشحن", "رقم البوليصة", "السائق الداخلي", "المركبة",
+          "المستلم", "الحالة", "الإنشاء (السعودية +03:00)", "الإرسال الفعلي من المصدر (السعودية +03:00)",
+          "الإكمال (السعودية +03:00)"]);
+      expect(csv.csv).toContain("'=2+2");
+      expect(csv.csv).not.toContain("hidden");
+      expect(csv.csv).toContain("نقل مواد");
+      expect(csv.csv).toContain("مكتملة");
+      expect(csv.csv).toContain("الإرسال الفعلي من المصدر (السعودية +03:00)");
+      expect(csv.csv).toContain("2026-01-02T00:00:00.000+03:00");
+      expect(csv.csv).not.toContain("2026-01-04T09:00:00");
+      expect((await invoke("GET", "/api/deliveries/reports", manager, {}, {},
+        { ...q, sourceBranchId: fixture.outsider })).body.summary.total).toBe(0);
+      expect((await invoke("GET", "/api/deliveries/reports", manager, {}, {},
+        { ...q, destinationBranchId: fixture.outsider })).body.summary.total).toBe(0);
+      expect((await invoke("GET", "/api/deliveries/reports", manager, {}, {},
+        { ...q, carrierName: "unknown" })).body.summary.total).toBe(0);
+      expect((await invoke("GET", "/api/deliveries/reports", manager, {}, {},
+        { ...q, status: "completed" })).body.summary.total).toBe(1);
+      expect((await invoke("GET", "/api/deliveries/reports/export", fixture.driver!, {}, {}, q)).statusCode).toBe(403);
+      grant(manager, { delivery_tasks: ["view"], warehouse: ["view"] });
+      expect((await invoke("GET", "/api/deliveries/reports/export", manager, {}, {}, q)).statusCode).toBe(403);
+      for (const dateType of ["created", "dispatched", "completed"]) {
+        const result = await invoke("GET", "/api/deliveries/reports", manager, {}, {},
+          { ...q, dateType });
+        expect(result.body.summary.total).toBe(dateType === "created" ? 5 : 1);
+        if (dateType === "dispatched") {
+          expect(result.body.deliveries[0].reportDispatchedAt).toBe("2026-01-01T21:00:00.000Z");
+          expect(result.body.deliveries[0].startedAt).toBe("2026-01-04T09:00:00.000Z");
+        }
+      }
+      for (const invalid of [{ dateType: "a.created_at;DROP TABLE users" }, { carrier: "bogus" },
+        { from: "2026-01-03", to: "2026-01-02" }, { carrier: "road", carrierName: "hidden" }]) {
+        expect((await invoke("GET", "/api/deliveries/reports", manager, {}, {}, { ...q, ...invalid })).statusCode).toBe(400);
+      }
+    } finally { state.permissions.set(manager.id, original); }
+  });
+
+  it("uses inclusive Riyadh calendar days and neutralizes spreadsheet formulas", () => {
+    expect(reportDateBounds("2026-01-02").start.toISOString()).toBe("2026-01-01T21:00:00.000Z");
+    expect(reportDateBounds("2026-01-02").end.toISOString()).toBe("2026-01-02T21:00:00.000Z");
+    expect(csvCell('=1+2 "quoted"')).toBe('"\'=1+2 ""quoted"""');
+    expect(csvCell("  @cmd")).toBe('"\'  @cmd"');
   });
 
   it("denies a revoked driver write and hides old proof after cancellation", async () => {

@@ -38,3 +38,9 @@ External carriers are a transport mode, not fake driver accounts or a second inv
 **Why:** The user wants a single simple shipping workspace with automatic source data, not repeated forms, separate shipping modules or multiple windows. Carrier tracking and a typed receiver name do not prove branch acceptance.
 
 **How to apply:** Keep source stock operations authoritative, evidence private and assignment-bound, and the next action in the existing detail view. When one UI action performs source dispatch followed by delivery tracking, refresh the authoritative state before retrying so a tracking failure cannot repeat dispatch. Do not silently resolve stock loss through a carrier exception note.
+
+Shipping reports must distinguish physical source dispatch from delivery tracking start.
+
+**Why:** The combined send-and-track action can dispatch successfully while tracking fails and resumes later. Using tracking start in a dispatch-date report moves a real shipment into the wrong period.
+
+**How to apply:** Use the original source's dispatch timestamp for the dispatch filter and column. If it is absent, show no date rather than substituting creation or tracking time. Interpret report date boundaries in Saudi time consistently with displayed/exported timestamps.

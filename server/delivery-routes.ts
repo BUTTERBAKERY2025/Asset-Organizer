@@ -299,6 +299,136 @@ async function source(client: PoolClient, type: DeliverySourceType, id: number):
 }
 const assignmentQuery = `SELECT a.*, CASE WHEN u.id IS NOT NULL THEN concat_ws(' ', u.first_name, u.last_name) END AS driver_name
   FROM delivery_assignments a LEFT JOIN users u ON u.id=a.driver_id`;
+// Source dispatch is distinct from delivery_assignments.started_at (the latter
+// records when follow-up began). The reverse movement logs dispatch as an event.
+// Source timestamp-without-time-zone columns are written as UTC by the source
+// handlers; normalize explicitly rather than inheriting the DB session timezone.
+const reportDispatchSql = `CASE a.source_type
+  WHEN 'kitchen' THEN k.dispatched_at AT TIME ZONE 'UTC'
+  WHEN 'material_transfer' THEN mt.departure_time AT TIME ZONE 'UTC'
+  WHEN 'finished_goods_transfer' THEN fg.dispatched_at AT TIME ZONE 'UTC'
+  WHEN 'kitchen_warehouse_shipment' THEN ks.dispatched_at
+  WHEN 'reverse_movement' THEN re.created_at END`;
+// Lightweight projection for reports: no proof, item aggregates or attachments. Scope is
+// evaluated before pagination (including the keeper's main-warehouse-only exception).
+const reportQuery = `SELECT a.id,a.source_type,a.source_id,a.status,a.transport_mode,a.carrier,a.carrier_name,
+  a.waybill,a.driver_id,a.vehicle_number,a.receiver_name,a.created_at,a.completed_at,
+  ${reportDispatchSql} dispatched_at,
+  concat_ws(' ',u.first_name,u.last_name) driver_name,
+  CASE a.source_type WHEN 'kitchen' THEN k.central_kitchen_id
+    WHEN 'material_transfer' THEN mt.source_branch_id
+    WHEN 'finished_goods_transfer' THEN fg.source_branch_id
+    WHEN 'kitchen_warehouse_shipment' THEN ks.source_branch_id
+    WHEN 'reverse_movement' THEN rm.source_branch_id END source_branch_id,
+  CASE a.source_type WHEN 'kitchen' THEN k.request_branch_id
+    WHEN 'material_transfer' THEN mt.destination_branch_id
+    WHEN 'finished_goods_transfer' THEN fg.destination_branch_id
+    WHEN 'reverse_movement' THEN rm.destination_branch_id END destination_branch_id,
+  rm.source_warehouse_id, COALESCE(ks.destination_warehouse_id,rm.destination_warehouse_id) destination_warehouse_id,
+  COALESCE(k.order_number,mt.transfer_number,
+    CASE WHEN fg.id IS NOT NULL THEN '#' || fg.id::text || ' · ' || fg.product_name END,
+    CASE WHEN ks.id IS NOT NULL THEN '#' || ks.id::text || ' · ' || ks.product_name END,
+    CASE WHEN rm.id IS NOT NULL THEN '#' || rm.id::text || ' · ' || rm.item_name END) source_label,
+  COALESCE(k.status,mt.status,fg.status,ks.status,rm.status) source_status
+  FROM delivery_assignments a LEFT JOIN users u ON u.id=a.driver_id
+  LEFT JOIN central_kitchen_orders k ON a.source_type='kitchen' AND k.id=a.source_id
+  LEFT JOIN material_transfers mt ON a.source_type='material_transfer' AND mt.id=a.source_id
+  LEFT JOIN finished_goods_transfers fg ON a.source_type='finished_goods_transfer' AND fg.id=a.source_id
+    AND fg.destination_type='branch' AND fg.transport_policy='branch_receipt'
+  LEFT JOIN kitchen_warehouse_shipments ks ON a.source_type='kitchen_warehouse_shipment' AND ks.id=a.source_id
+  LEFT JOIN reverse_movements rm ON a.source_type='reverse_movement' AND rm.id=a.source_id
+  LEFT JOIN LATERAL (SELECT e.created_at FROM reverse_movement_events e
+    WHERE e.movement_id=rm.id AND e.action='dispatch' ORDER BY e.id DESC LIMIT 1) re ON true`;
+const reportFilters = z.object({
+  from: z.string().date().optional(), to: z.string().date().optional(),
+  dateType: z.enum(["created", "dispatched", "completed"]).default("created"),
+  carrier: z.enum(["all", "internal", "road", "naqel", "other"]).default("all"),
+  carrierName: z.string().trim().min(1).max(160).optional(),
+  sourceBranchId: z.string().min(1).max(100).optional(),
+  destinationBranchId: z.string().min(1).max(100).optional(),
+  status: z.enum(["assigned", "in_transit", "awaiting_receipt", "receipt_approved", "completed", "failed", "cancelled"]).optional(),
+  page: z.coerce.number().int().min(1).max(1000000).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(25),
+}).strict().superRefine((v, ctx) => {
+  if (v.from && v.to && v.from > v.to) ctx.addIssue({ code: "custom", message: "from must precede to" });
+  if (v.carrierName && v.carrier !== "other") ctx.addIssue({ code: "custom", message: "carrierName requires other" });
+});
+export function reportDateBounds(day: string) {
+  // YYYY-MM-DD in Asia/Riyadh (UTC+03, no DST); upper bound is next local midnight.
+  const start = new Date(`${day}T00:00:00+03:00`);
+  return { start, end: new Date(start.getTime() + 86400000) };
+}
+export function csvCell(value: unknown) {
+  const text = String(value ?? "");
+  // Quoting alone does not neutralize formulas when spreadsheets open CSV.
+  return `"${(/^[\s\x00-\x1f]*[=+\-@]/.test(text) ? "'" : "") + text.replaceAll('"', '""')}"`;
+}
+const csvLine = (values: unknown[]) => values.map(csvCell).join(",") + "\r\n";
+const reportTimestamp = (date: Date | null) => date
+  ? new Date(date.getTime() + 3 * 3600000).toISOString().replace("Z", "+03:00") : "";
+const reportStatusLabels: Record<DeliveryStatus, string> = {
+  assigned: "مسندة", in_transit: "في الطريق", awaiting_receipt: "بانتظار الإيصال",
+  receipt_approved: "إيصال معتمد", completed: "مكتملة", failed: "متعذرة", cancelled: "ملغاة",
+};
+const reportSourceLabels: Record<DeliverySourceType, string> = {
+  kitchen: "طلب المطبخ المركزي", material_transfer: "نقل مواد",
+  finished_goods_transfer: "نقل منتجات جاهزة", kitchen_warehouse_shipment: "شحنة مطبخ إلى مستودع",
+  reverse_movement: "إرجاع أو نقل بين المستودعات",
+};
+type ReportRow = Assignment & {
+  source_branch_id: string | null; destination_branch_id: string | null;
+  source_warehouse_id: number | null; destination_warehouse_id: number | null;
+  source_label: string | null; source_status: string | null; dispatched_at: Date | null;
+};
+async function reportAccess(req: Request, res: Response, exporting: boolean) {
+  if (!canAccessDeliveryWorkspace(req.currentUser) || req.currentUser?.jobTitle === "delivery"
+    || getAllowedBranchIds(req)?.length === 0
+    || !(await permitted(req, res, "delivery_tasks", "view"))
+    || !(await permitted(req, res, "warehouse", "view")
+      || await permitted(req, res, "central_kitchen_orders", "view")
+      || await permitted(req, res, "production", "view"))
+    || (exporting && !(await permitted(req, res, "delivery_tasks", "export"))))
+    throw new DeliveryError("Permission denied", 403);
+}
+async function scanReport(req: Request, res: Response, client: PoolClient,
+  filters: z.infer<typeof reportFilters>, onRows: (rows: ReportRow[]) => Promise<void>) {
+  const dateColumn = { created: "a.created_at", dispatched: reportDispatchSql, completed: "a.completed_at" }[filters.dateType];
+  const from = filters.from ? reportDateBounds(filters.from).start : null;
+  const to = filters.to ? reportDateBounds(filters.to).end : null;
+  const permissions = new Map<string, boolean>();
+  let cursor = 0;
+  for (;;) {
+    if (res.destroyed) throw new Error("Report request disconnected");
+    const rows = (await client.query(`${reportQuery} WHERE a.id > $1
+      AND ($2::timestamptz IS NULL OR ${dateColumn} >= $2)
+      AND ($3::timestamptz IS NULL OR ${dateColumn} < $3)
+      AND ($4::text IS NULL OR a.status=$4)
+      AND ($5::text = 'all' OR ($5 = 'internal' AND a.transport_mode='internal')
+        OR ($5 <> 'internal' AND a.transport_mode='external' AND a.carrier=$5))
+      AND ($6::text IS NULL OR a.carrier_name=$6)
+      ORDER BY a.id LIMIT 250`,
+      [cursor, from, to, filters.status || null, filters.carrier, filters.carrierName || null])).rows as ReportRow[];
+    if (!rows.length) break;
+    cursor = Number(rows[rows.length - 1].id);
+    const scoped: ReportRow[] = [];
+    for (const row of rows) {
+      if (!row.source_label) continue;
+      const src = {
+        sourceType: row.source_type, sourceBranchId: row.source_branch_id,
+        destinationBranchId: row.destination_branch_id, sourceWarehouseId: row.source_warehouse_id,
+        destinationWarehouseId: row.destination_warehouse_id,
+      } as SourceRow;
+      if ((filters.sourceBranchId && src.sourceBranchId !== filters.sourceBranchId)
+        || (filters.destinationBranchId && src.destinationBranchId !== filters.destinationBranchId)
+        || !managerScope(req, src, "view")) continue;
+      const module = sourceModule(row.source_type);
+      if (!permissions.has(module)) permissions.set(module, await permitted(req, res, module, "view"));
+      if (permissions.get(module)) scoped.push(row);
+    }
+    await onRows(scoped);
+    if (rows.length < 250) break;
+  }
+}
 async function assignment(client: PoolClient, id: number, lock = false): Promise<Assignment | null> {
   const { rows } = await client.query(`${assignmentQuery} WHERE a.id=$1${lock ? " FOR UPDATE OF a" : ""}`, [id]);
   return rows[0] || null;
@@ -483,14 +613,40 @@ export function registerDeliveryRoutes(app: Express) {
 
   async function list(req: Request, res: Response, reports = false) {
     try {
-      if (reports && !canAccessDeliveryWorkspace(req.currentUser)) throw new DeliveryError("Delivery workspace access denied", 403);
-      if (reports && (req.currentUser?.jobTitle === "delivery"
-        || getAllowedBranchIds(req)?.length === 0
-        || !(await permitted(req, res, "delivery_tasks", "view"))
-        || !(await permitted(req, res, "warehouse", "view")
-          || await permitted(req, res, "central_kitchen_orders", "view")
-          || await permitted(req, res, "production", "view"))))
-        throw new DeliveryError("Permission denied", 403);
+      if (reports) {
+        await reportAccess(req, res, false);
+        const filters = reportFilters.parse(req.query);
+        const result = await withClient(async client => {
+          const summary: Record<string, number> = { total: 0, assigned: 0, in_transit: 0, awaiting_receipt: 0, receipt_approved: 0, completed: 0, failed: 0, cancelled: 0 };
+          const ids: number[] = [];
+          const dispatchTimes = new Map<number, string | null>();
+          const start = (filters.page - 1) * filters.pageSize;
+          await scanReport(req, res, client, filters, async rows => {
+            for (const row of rows) {
+              if (summary.total >= start && ids.length < filters.pageSize) {
+                ids.push(Number(row.id));
+                dispatchTimes.set(Number(row.id), row.dispatched_at?.toISOString() ?? null);
+              }
+              summary.total++;
+              summary[row.status]++;
+            }
+          });
+          const deliveries: (DeliveryDTO & { reportDispatchedAt: string | null })[] = [];
+          if (ids.length) {
+            const selected = (await client.query(`${assignmentQuery} WHERE a.id=ANY($1::bigint[])`, [ids])).rows as Assignment[];
+            const byId = new Map(selected.map(row => [Number(row.id), row]));
+            for (const id of ids) {
+              const row = byId.get(id);
+              if (!row) continue;
+              const src = await source(client, row.source_type, row.source_id);
+              if (src) deliveries.push({ ...await dto(req, res, client, row, src),
+                reportDispatchedAt: dispatchTimes.get(id) ?? null });
+            }
+          }
+          return { deliveries, summary, page: filters.page, pageSize: filters.pageSize };
+        });
+        return res.json(result);
+      }
       const from = req.query.from ? z.string().date().parse(req.query.from) : null;
       const to = req.query.to ? z.string().date().parse(req.query.to) : null;
       const sourceBranchId = req.query.sourceBranchId ? z.string().min(1).max(100).parse(req.query.sourceBranchId) : null;
@@ -517,13 +673,42 @@ export function registerDeliveryRoutes(app: Express) {
         return result;
       });
       if (res.headersSent) return;
-      if (!reports) return res.json({ deliveries });
-       const summary: Record<string, number> = { total: deliveries.length, assigned: 0, in_transit: 0, awaiting_receipt: 0, receipt_approved: 0, completed: 0, failed: 0, cancelled: 0 };
-      deliveries.forEach(row => summary[row.status]++);
-      res.json({ deliveries, summary });
+      return res.json({ deliveries });
     } catch (e) { error(res, e); }
   }
    app.get("/api/deliveries/reports", isAuthenticated, (req, res) => list(req, res, true));
+   app.get("/api/deliveries/reports/export", isAuthenticated, async (req, res) => {
+     try {
+       await reportAccess(req, res, true);
+       const filters = reportFilters.parse(req.query);
+       await withClient(async client => {
+         res.setHeader("Content-Type", "text/csv; charset=utf-8");
+         res.setHeader("Content-Disposition", 'attachment; filename="delivery-report.csv"');
+         res.setHeader("Cache-Control", "private, no-store");
+         const write = async (text: string) => {
+           if (res.destroyed) throw new Error("Export disconnected");
+           if (!res.write(text)) await new Promise<void>((resolve, reject) => {
+             const drained = () => { res.off("close", closed); resolve(); };
+             const closed = () => { res.off("drain", drained); reject(new Error("Export disconnected")); };
+             res.once("drain", drained); res.once("close", closed);
+           });
+         };
+         await write("\uFEFF" + csvLine(["المصدر", "النوع", "شركة الشحن", "رقم البوليصة", "السائق الداخلي", "المركبة",
+           "المستلم", "الحالة", "الإنشاء (السعودية +03:00)", "الإرسال الفعلي من المصدر (السعودية +03:00)", "الإكمال (السعودية +03:00)"]));
+         await scanReport(req, res, client, filters, async rows => {
+           for (const row of rows) await write(csvLine([
+             row.source_label, reportSourceLabels[row.source_type],
+             row.transport_mode === "external" ? row.carrier === "other" ? row.carrier_name
+               : row.carrier === "road" ? "رود للوجيستك" : "ناقل" : "",
+             row.waybill, row.transport_mode === "internal" ? row.driver_name : "", row.vehicle_number,
+             row.receiver_name, reportStatusLabels[row.status],
+             reportTimestamp(row.created_at), reportTimestamp(row.dispatched_at), reportTimestamp(row.completed_at),
+           ]));
+         });
+       });
+       res.end();
+     } catch (e) { if (res.headersSent) res.destroy(e as Error); else error(res, e); }
+   });
    app.get("/api/deliveries", isAuthenticated, (req, res) => list(req, res));
   app.get("/api/deliveries/:id/proof", isAuthenticated, async (req, res) => {
     try {

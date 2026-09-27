@@ -27,7 +27,7 @@ const actors = {
   driver: { id: "fixture-driver", username: "fixture-driver", firstName: "سائق", lastName: "التوصيل", name: "سائق التوصيل", role: "employee", jobTitle: "delivery", branchId: "fixture_branch", activeBranchId: "fixture_branch", allowedBranches: [{ id: 2, userId: "fixture-driver", branchId: "fixture_branch", accessLevel: "employee", isDefault: true }] },
   admin: { id: "fixture-admin", username: "fixture-admin", firstName: "مدير", lastName: "النظام", name: "مدير النظام", role: "admin", branchId: null, activeBranchId: null, allowedBranches: [] },
 };
-const today = "2035-06-09T09:00:00.000Z";
+const today = new Date().toISOString();
 const evidenceUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } }).single("file");
 const evidenceBytes = new Map<number, Buffer>();
 let nextEvidenceId = 1;
@@ -184,6 +184,51 @@ app.get("/api/warehouse/notifications/unread-count", (req, res) => role(req) ===
 app.get("/api/deliveries/capabilities", (req, res) => res.json({
   canAssign: ["keeper", "admin"].includes(role(req)!), canReport: role(req) === "admin", canExport: role(req) === "admin",
 }));
+// Synthetic report contract for the existing admin delivery tab; never queries live data.
+function fixtureReport(query: Record<string, any>) {
+  const dateType = String(query.dateType || "created");
+  const carrier = String(query.carrier || "all");
+  const from = String(query.from || "");
+  const to = String(query.to || "");
+  return deliveries.map(item => {
+    const row = deliveryFor("admin", item);
+    return row ? { ...row, reportDispatchedAt: transfers.find(t => t.id === item.sourceId)?.departureTime || null } : null;
+  }).filter((item): item is NonNullable<typeof item> => !!item)
+    .filter(item => {
+      const time = dateType === "completed" ? item.completedAt : dateType === "dispatched" ? item.reportDispatchedAt : item.createdAt;
+      const day = time ? new Date(new Date(time).getTime() + 3 * 3600000).toISOString().slice(0, 10) : null;
+      return (!from || !!day && day >= from) && (!to || !!day && day <= to)
+        && (carrier === "all" || carrier === "internal" && item.transportMode === "internal"
+          || item.transportMode === "external" && item.carrier === carrier)
+        && (!query.carrierName || item.carrierName === query.carrierName)
+        && (!query.status || item.status === query.status)
+        && (!query.sourceBranchId || item.sourceBranchId === query.sourceBranchId)
+        && (!query.destinationBranchId || item.destinationBranchId === query.destinationBranchId);
+    });
+}
+app.get("/api/deliveries/reports", (req, res) => {
+  if (role(req) !== "admin") return deny(res);
+  const page = Math.max(1, Number(req.query.page) || 1);
+  const pageSize = Math.min(100, Math.max(1, Number(req.query.pageSize) || 25));
+  const selected = fixtureReport(req.query);
+  const summary = { total: selected.length, assigned: 0, in_transit: 0, awaiting_receipt: 0,
+    receipt_approved: 0, completed: 0, failed: 0, cancelled: 0 };
+  selected.forEach(item => { summary[item.status]++; });
+  res.json({ deliveries: selected.slice((page - 1) * pageSize, page * pageSize), summary, page, pageSize });
+});
+app.get("/api/deliveries/reports/export", (req, res) => {
+  if (role(req) !== "admin") return deny(res);
+  const csv = (value: unknown) => {
+    const text = String(value ?? "");
+    return `"${(/^[\s\x00-\x1f]*[=+\-@]/.test(text) ? "'" : "") + text.replaceAll('"', '""')}"`;
+  };
+  res.setHeader("Content-Type", "text/csv; charset=utf-8");
+  res.setHeader("Content-Disposition", 'attachment; filename="delivery-report.csv"');
+  res.send("\uFEFF" + [["المصدر", "شركة الشحن", "رقم البوليصة", "السائق الداخلي", "الإنشاء (السعودية +03:00)", "الإرسال من المصدر (السعودية +03:00)", "الإكمال (السعودية +03:00)"],
+    ...fixtureReport(req.query).map(item => [item.sourceLabel, item.carrier === "other" ? item.carrierName : item.carrier,
+      item.waybill, item.driverName, item.createdAt, item.reportDispatchedAt, item.completedAt])]
+    .map(row => row.map(csv).join(",")).join("\r\n"));
+});
 app.get("/api/deliveries/sources", (req, res) => {
   if (!["keeper", "admin"].includes(role(req)!)) return deny(res);
   const sources: DeliverySource[] = transfers.filter(x => x.status === "approved" && !deliveries.some(d => d.sourceId === x.id)).map(x => ({
