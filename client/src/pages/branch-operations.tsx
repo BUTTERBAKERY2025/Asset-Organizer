@@ -31,7 +31,7 @@ export default function BranchOperationsPage() {
   const [, navigate] = useLocation();
   const client = useQueryClient();
   const { user, activeBranch, activeBranchId, switchBranch, isSwitchingBranch } = useAuth();
-  const { branches, isLoading: branchesLoading } = useBranches();
+  const { branches, isLoading: branchesLoading, isError: branchesError, refetch: refetchBranches } = useBranches();
   const navigation = useBranchNavigation(branches, branchesLoading);
   const [switchError, setSwitchError] = useState<string | null>(null);
   const [requestedBranchId, setRequestedBranchId] = useState<string | null>(null);
@@ -159,11 +159,14 @@ export default function BranchOperationsPage() {
           {switchError && <p className="mt-2 text-sm font-semibold text-destructive" role="alert">{switchError}</p>}
         </section>
 
-        {scope.invalidScope && !branchesLoading && !requestedBranchId && !switchError && (
+         {branchesError && !branchesLoading && (
+           <EmptyState title="تعذر تحميل الفروع المسموح بها" text="لم نتمكن من التحقق من فروع هذا الحساب. حاول التحديث مرة أخرى." icon={AlertTriangle} action={() => refetchBranches()} />
+         )}
+         {scope.invalidScope && !branchesError && !branchesLoading && !requestedBranchId && !switchError && (
           <EmptyState title="الفرع المطلوب غير متاح" text="هذا الفرع غير موجود ضمن فروعك المسموح بها. اختر فرعًا من القائمة للمتابعة." icon={ShieldAlert} />
         )}
-        {!selectedBranchId && !scope.invalidScope && !branchesLoading && (
-          <EmptyState title="لا يوجد فرع محدد" text="تحتاج إلى فرع مسموح حتى تظهر أدوات يوم العمل." icon={Store} />
+         {!selectedBranchId && !scope.invalidScope && !branchesError && !branchesLoading && (
+           <EmptyState title={user?.role === "branch_manager" ? "الفرع الأساسي غير متاح" : "لا يوجد فرع محدد"} text={user?.role === "branch_manager" ? user.branchId ? "الفرع الأساسي للحساب غير موجود ضمن الفروع المسموح بها. راجع مسؤول الصلاحيات لتصحيح التعيين؛ لا يمكن عرض فرع آخر بدلًا منه." : "لم يُعيّن فرع أساسي لهذا الحساب. راجع مسؤول الصلاحيات." : "تحتاج إلى فرع مسموح حتى تظهر أدوات يوم العمل."} icon={Store} />
         )}
         {selectedBranchId && (board.isLoading || isSwitchingBranch) && <BoardSkeleton />}
         {selectedBranchId && !board.isLoading && isForbidden && (
