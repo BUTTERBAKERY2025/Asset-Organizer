@@ -36,13 +36,13 @@ export const deliverySourceLabel = (type: Delivery["sourceType"]) => ({
   reverse_movement: "إرجاع أو نقل بين المستودعات",
 })[type];
 export const deliverySourcePath = (delivery: Delivery, branchSupply = false) => delivery.sourceType === "kitchen"
-  ? `/central-kitchen-orders?orderId=${delivery.sourceId}`
+  ? `/central-kitchen-orders?orderId=${delivery.sourceId}&branchId=${encodeURIComponent(delivery.destinationBranchId || "")}`
   : delivery.sourceType === "material_transfer"
-    ? `/transfer-requests?transferId=${delivery.sourceId}${branchSupply ? "&from=branch-supply" : ""}`
+    ? `/transfer-requests?transferId=${delivery.sourceId}&branchId=${encodeURIComponent(delivery.destinationBranchId || "")}${branchSupply ? "&from=branch-supply" : ""}`
     : delivery.sourceType === "finished_goods_transfer"
       ? `/finished-goods-inventory?transferId=${delivery.sourceId}&branchId=${encodeURIComponent(delivery.destinationBranchId || "")}&deliveryId=${delivery.id}`
       : delivery.sourceType === "reverse_movement"
-        ? `/reverse-logistics?movementId=${delivery.sourceId}`
+        ? `/reverse-logistics?movementId=${delivery.sourceId}&branchId=${encodeURIComponent(delivery.sourceBranchId || "")}`
         : `/kitchen-warehouse-shipping?shipmentId=${delivery.sourceId}&deliveryId=${delivery.id}`;
 // The delivery DTO can be viewed by the assigned driver without access to the source page.
 // Match the actual route guards in App.tsx rather than treating delivery access as source access.
@@ -51,8 +51,8 @@ export function canOpenDeliverySource(type: Delivery["sourceType"], canView: (mo
     case "kitchen": return canView("central_kitchen_orders");
     case "material_transfer": return canView("branch_supply") || canView("warehouse");
     case "finished_goods_transfer": return canView("production");
-    case "reverse_movement":
-    case "kitchen_warehouse_shipment": return canView("warehouse") || canView(type === "reverse_movement" ? "central_kitchen_orders" : "production");
+    case "reverse_movement": return canView("warehouse") || canView("branch_supply") || canView("central_kitchen_orders");
+    case "kitchen_warehouse_shipment": return canView("warehouse") || canView("production");
   }
 }
 export function DeliveryItemLabel({ item }: { item: Delivery["items"][number] }) {

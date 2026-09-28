@@ -7956,8 +7956,7 @@ export async function registerRoutes(
           const [order] = await tx.select().from(centralKitchenOrders)
             .where(eq(centralKitchenOrders.id, id.data)).for("update");
           if (!order) throw new CentralKitchenLiveError("الطلب غير موجود", 404);
-          if (!(await canAccessBranch(req, order.requestBranchId))
-            || (actor.role === "branch_manager" && actor.branchId !== order.requestBranchId))
+          if (!(await canAccessBranch(req, order.requestBranchId)))
             throw new CentralKitchenLiveError("التعديل والإلغاء للفرع الطالب فقط", 403);
           const currentActor = await routingActor(tx, actor.id);
           if (!currentActor || !routingPersonEligible(currentActor, "edit")) {
@@ -8125,8 +8124,7 @@ export async function registerRoutes(
   }): Promise<boolean> => {
     if (isUserAdmin(req)) return true;
     if (req.currentUser?.role === "branch_manager")
-      return req.currentUser.branchId === order.requestBranchId
-        && await canAccessBranch(req, order.requestBranchId);
+      return await canAccessBranch(req, order.requestBranchId);
     return (await canAccessBranch(req, order.requestBranchId))
       || (await canAccessBranch(req, order.centralKitchenId));
   };
@@ -8149,9 +8147,9 @@ export async function registerRoutes(
         }
         const conditions: SQL[] = [];
         if (req.currentUser?.role === "branch_manager") {
-          if (!req.currentUser.branchId || !(await canAccessBranch(req, req.currentUser.branchId)))
-            return res.status(403).json({ error: "لا يوجد فرع طالب مفوض" });
-          conditions.push(eq(centralKitchenOrders.requestBranchId, req.currentUser.branchId));
+          const authorized = getAllowedBranchIds(req) ?? [];
+          if (!authorized.length) return res.status(403).json({ error: "لا يوجد فرع طالب مفوض" });
+          conditions.push(inArray(centralKitchenOrders.requestBranchId, authorized));
         }
         if (parsed.data.status) conditions.push(eq(centralKitchenOrders.status, parsed.data.status));
         if (branchFilter.singleBranchId) {
@@ -8352,9 +8350,9 @@ export async function registerRoutes(
           lt(centralKitchenOrders.createdAt, window.end),
         ];
         if (req.currentUser?.role === "branch_manager") {
-          if (!req.currentUser.branchId || !(await canAccessBranch(req, req.currentUser.branchId)))
-            return res.status(403).json({ error: "لا يوجد فرع طالب مفوض" });
-          conditions.push(eq(centralKitchenOrders.requestBranchId, req.currentUser.branchId));
+          const authorized = getAllowedBranchIds(req) ?? [];
+          if (!authorized.length) return res.status(403).json({ error: "لا يوجد فرع طالب مفوض" });
+          conditions.push(inArray(centralKitchenOrders.requestBranchId, authorized));
         }
         if (branchFilter.singleBranchId) {
           conditions.push(or(
@@ -9060,9 +9058,8 @@ export async function registerRoutes(
       };
       const payloadFingerprint = createCentralKitchenPayloadFingerprint(payload);
       try {
-        // The requesting branch is always the branch of the submitting user.
-        if (!(await canAccessBranch(req, payload.requestBranchId))
-          || (user.role === "branch_manager" && user.branchId !== payload.requestBranchId)) {
+        // The requesting branch must be authorized at submission time.
+        if (!(await canAccessBranch(req, payload.requestBranchId))) {
           return res.status(403).json({ error: "ليس لديك صلاحية لإنشاء طلب لهذا الفرع" });
         }
         const orderDay = saudiDate();
@@ -37090,9 +37087,6 @@ export async function registerRoutes(
       requirePermission(isBranchSupplyManager(req) ? "branch_supply" : "warehouse", action)(req, res, next);
   const branchSupplyDestination = async (req: any, branchId: string | null | undefined) =>
     !!branchId && branchId !== mainWarehouseBranchId
-      // A manager's additional branch grant does not make that branch their
-      // requesting/receiving desk; match kitchen and reverse primary scope.
-      && (!isBranchSupplyManager(req) || req.currentUser.branchId === branchId)
       && (getAllowedBranchIds(req) ?? []).includes(branchId)
       && await canAccessBranch(req, branchId);
   const keeperWarehouseScope = (req: any, branchId: string | null | undefined) =>

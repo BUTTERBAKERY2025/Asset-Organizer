@@ -25,6 +25,7 @@ type RoutingPerson = {
   username?: string | null;
   role: string;
   branchId?: string | null;
+  authorizedBranchIds?: string[];
   actions?: string[];
   _hasCustomPermissions?: boolean;
   _deniedActions?: string[];
@@ -51,6 +52,13 @@ export async function routingPeople(tx: RoutingExecutor, branchId?: string) {
     .where(and(eq(users.isActive, "active"), ...(branchId ? [or(eq(users.role, "production_development_manager"), eq(users.branchId, branchId), inArray(users.id, access))] : [])));
   if (!people.length) return people;
   const ids = people.map((p: any) => p.id);
+  const grants = await tx.select({ userId: userBranchAccess.userId, branchId: userBranchAccess.branchId })
+    .from(userBranchAccess).where(inArray(userBranchAccess.userId, ids));
+  for (const person of people as any[]) {
+    const explicit = grants.filter((grant: any) => grant.userId === person.id);
+    person.authorizedBranchIds = explicit.length ? explicit.map((grant: any) => grant.branchId)
+      : person.branchId ? [person.branchId] : [];
+  }
   const direct = await tx.select().from(userPermissions).where(inArray(userPermissions.userId, ids));
   const inherited = await tx.select({ userId: userAssignments.userId, action: permissions.action })
     .from(userAssignments).innerJoin(rolePermissions, eq(userAssignments.roleId, rolePermissions.roleId))
@@ -92,6 +100,7 @@ export async function routingCandidates(tx: RoutingExecutor, branchId: string) {
   return {
     kitchenCandidates: people.filter((p: any) => kitchenManagerEligible(p, "approve")).map(named),
     receiverCandidates: people.filter((p: any) => p.role !== "production_development_manager"
+      && (p.role !== "branch_manager" || p.authorizedBranchIds?.includes(branchId))
       && routingPersonEligible(p, "edit")).map(named),
   };
 }
@@ -104,14 +113,16 @@ export function resolveKitchenRouting(branchId: string, row: any, people: Routin
   const approvingManagers = people.filter(person => kitchenManagerEligible(person, "approve"));
   const manualReceiver = people.find(person =>
     person.id === row?.receiverUserId && person.role !== "production_development_manager"
+    && (person.role !== "branch_manager"
+      || (person.authorizedBranchIds ?? (person.branchId ? [person.branchId] : [])).includes(branchId))
     && routingPersonEligible(person, "edit"));
-  // A branch access grant is intentionally insufficient here: automatic assignment
-  // follows the user's authoritative primary branch assignment only.
-  const primaryManagers = manualReceiver ? [] : people.filter(person =>
+  // Explicit branch grants are authoritative; without them the canonical
+  // primary-branch fallback applies. Never infer scope from a null primary.
+  const eligibleManagers = manualReceiver ? [] : people.filter(person =>
     person.role === "branch_manager"
-    && person.branchId === branchId
+    && (person.authorizedBranchIds ?? (person.branchId ? [person.branchId] : [])).includes(branchId)
     && routingPersonEligible(person, "edit"));
-  const automaticReceiver = primaryManagers.length === 1 ? primaryManagers[0] : undefined;
+  const automaticReceiver = eligibleManagers.length === 1 ? eligibleManagers[0] : undefined;
   const receiver = manualReceiver || automaticReceiver;
   const receiverAssignmentSource = manualReceiver
     ? "manual" as const
@@ -127,7 +138,7 @@ export function resolveKitchenRouting(branchId: string, row: any, people: Routin
     hasKitchenResponsible: approvingManagers.length > 0,
     kitchenManagers: approvingManagers.map(person => ({ id: person.id, name: named(person) })),
     receiverAssignmentSource,
-    receiverAssignmentConflict: !manualReceiver && primaryManagers.length > 1,
+    receiverAssignmentConflict: !manualReceiver && eligibleManagers.length > 1,
   };
 }
 

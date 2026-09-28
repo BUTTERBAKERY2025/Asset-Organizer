@@ -142,18 +142,31 @@ describe("central-kitchen automatic branch-manager receiver", () => {
     });
   });
 
-  it("does not treat cross-branch access as a primary branch assignment", () => {
-    // routingPeople may include this manager because of userBranchAccess, but
-    // the resolver must use users.branchId for automatic assignment.
+  it("honors an explicitly authorized extra branch, including a null primary", () => {
     const result = resolveKitchenRouting(branchA, null, [
-      manager("cross-scope-manager", branchB),
+      manager("cross-scope-manager", branchB, { authorizedBranchIds: [branchA, branchB] }),
     ]);
+    expect(result.receiverUserId).toBe("cross-scope-manager");
+    expect(resolveKitchenRouting(branchA, null, [
+      manager("no-primary", null, { authorizedBranchIds: [branchA] }),
+    ]).receiverUserId).toBe("no-primary");
+  });
 
-    expect(result).toMatchObject({
+  it("fails closed on revoked/empty grants and refuses ambiguous auto assignment", () => {
+    expect(resolveKitchenRouting(branchA, null, [
+      manager("revoked", branchA, { authorizedBranchIds: [branchB] }),
+    ])).toMatchObject({
       receiverUserId: null,
       receiverAssignmentSource: "unassigned",
       receiverAssignmentConflict: false,
     });
+    expect(resolveKitchenRouting(branchA, null, [
+      manager("empty", null, { authorizedBranchIds: [] }),
+    ]).receiverUserId).toBeNull();
+    expect(resolveKitchenRouting(branchA, null, [
+      manager("primary", branchA),
+      manager("extra", branchB, { authorizedBranchIds: [branchA, branchB] }),
+    ])).toMatchObject({ receiverUserId: null, receiverAssignmentConflict: true });
   });
 
   it("uses one authoritative resolver contract for single and batch callers", async () => {

@@ -12,8 +12,9 @@ import { resolveNavigationBranch } from "../client/src/hooks/use-branch-navigati
 describe("warehouse branch supply navigation", () => {
   it("allows the exact-row receipt action only for an editable inbound transfer to the assigned branch", () => {
     const inbound = { status: "in_transit", sourceBranchId: "main_warehouse", destinationBranchId: "b1" };
-    const assigned = [{ id: "b1" }];
+    const assigned = [{ id: "b1" }, { id: "b2" }];
     expect(canReceiveBranchSupplyTransfer(inbound, true, true, assigned)).toBe(true);
+    expect(canReceiveBranchSupplyTransfer({ ...inbound, destinationBranchId: "b2" }, true, true, assigned)).toBe(true);
     expect(canReceiveBranchSupplyTransfer(inbound, true, false, assigned)).toBe(false);
     expect(canReceiveBranchSupplyTransfer(inbound, false, true, assigned)).toBe(false);
     expect(canReceiveBranchSupplyTransfer(inbound, true, true, [{ id: "b2" }])).toBe(false);

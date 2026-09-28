@@ -49,7 +49,7 @@ describe("delivery source access and receipt evidence", () => {
   it("opens the branch supply transfer receipt without granting warehouse source access", () => {
     const transfer = { ...delivery, sourceType: "material_transfer" as const };
     expect(canOpenDeliverySource("material_transfer", module => module === "branch_supply")).toBe(true);
-    expect(canOpenDeliverySource("reverse_movement", module => module === "branch_supply")).toBe(false);
+    expect(canOpenDeliverySource("reverse_movement", module => module === "branch_supply")).toBe(true);
     expect(deliverySourcePath(transfer, true)).toContain("from=branch-supply");
     expect(renderToStaticMarkup(createElement(DeliveryDetail, { delivery: transfer, canOpenSource: true, branchSupply: true })))
       .toContain("from=branch-supply");

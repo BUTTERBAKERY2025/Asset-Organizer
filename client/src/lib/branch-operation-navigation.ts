@@ -51,7 +51,7 @@ export function resolveBoardBranch(
       ? { branchId, invalidScope: false }
       : { branchId: null, invalidScope: true };
   }
-  return { branchId: allowed.find(branch => branch.id === activeId)?.id ?? allowed[0]?.id ?? null, invalidScope: false };
+  return { branchId: allowed.find(branch => branch.id === activeId)?.id ?? (allowed.length === 1 ? allowed[0].id : null), invalidScope: false };
 }
 
 export function branchDeskDate(value: string | null) {

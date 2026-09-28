@@ -39,13 +39,14 @@ export default function BranchOperationsPage() {
   const restoredReturnToken = useRef<string | null>(null);
   const requestedScope = navigation.hasBranchParam ? new URLSearchParams(window.location.search).get("branchId") ?? "" : null;
   const scope = resolveBoardBranch(requestedScope, branches, activeBranchId ?? activeBranch?.id);
-  const selectedBranchId = requestedBranchId ?? scope.branchId;
+  const selectedBranchId = requestedBranchId && branches.some(branch => branch.id === requestedBranchId)
+    ? requestedBranchId : scope.branchId;
   // useBranches is server-filtered; this selector intentionally never exposes an all-branches option.
   const allowedBranches = useMemo(() => branches, [branches]);
 
   const board = useQuery<BranchOperationsSummary>({
     queryKey: ["/api/branch-operations/summary", selectedBranchId],
-    enabled: Boolean(selectedBranchId) && !branchesLoading && !isSwitchingBranch,
+    enabled: Boolean(selectedBranchId) && !branchesError && !branchesLoading && !isSwitchingBranch,
     staleTime: 0,
     refetchOnWindowFocus: "always",
     refetchOnReconnect: "always",
@@ -60,7 +61,7 @@ export default function BranchOperationsPage() {
     },
   });
 
-  const validBoard = board.data?.branchId === selectedBranchId ? board.data : undefined;
+  const validBoard = !branchesError && !branchesLoading && board.data?.branchId === selectedBranchId ? board.data : undefined;
   const isForbidden = board.error instanceof Error && board.error.message === "403";
 
   useEffect(() => {
@@ -166,13 +167,13 @@ export default function BranchOperationsPage() {
           <EmptyState title="الفرع المطلوب غير متاح" text="هذا الفرع غير موجود ضمن فروعك المسموح بها. اختر فرعًا من القائمة للمتابعة." icon={ShieldAlert} />
         )}
          {!selectedBranchId && !scope.invalidScope && !branchesError && !branchesLoading && (
-           <EmptyState title={user?.role === "branch_manager" ? "الفرع الأساسي غير متاح" : "لا يوجد فرع محدد"} text={user?.role === "branch_manager" ? user.branchId ? "الفرع الأساسي للحساب غير موجود ضمن الفروع المسموح بها. راجع مسؤول الصلاحيات لتصحيح التعيين؛ لا يمكن عرض فرع آخر بدلًا منه." : "لم يُعيّن فرع أساسي لهذا الحساب. راجع مسؤول الصلاحيات." : "تحتاج إلى فرع مسموح حتى تظهر أدوات يوم العمل."} icon={Store} />
+           <EmptyState title="لا يوجد فرع محدد" text="تحتاج إلى فرع مسموح حتى تظهر أدوات يوم العمل. اختر فرعًا من القائمة إن توفر." icon={Store} />
         )}
-        {selectedBranchId && (board.isLoading || isSwitchingBranch) && <BoardSkeleton />}
-        {selectedBranchId && !board.isLoading && isForbidden && (
+        {selectedBranchId && !branchesError && (board.isLoading || isSwitchingBranch) && <BoardSkeleton />}
+        {selectedBranchId && !branchesError && !board.isLoading && isForbidden && (
           <EmptyState title="لا تملك صلاحية عرض لوحة هذا الفرع" text="تأكد من الفرع المحدد أو تواصل مع مسؤول الصلاحيات." icon={ShieldAlert} />
         )}
-        {selectedBranchId && !board.isLoading && board.isError && !isForbidden && (
+        {selectedBranchId && !branchesError && !board.isLoading && board.isError && !isForbidden && (
           <EmptyState title="تعذر تحميل لوحة الفرع" text="لم نعرض أي بيانات قديمة. حاول التحديث مرة أخرى." icon={AlertTriangle} action={() => board.refetch()} />
         )}
         {validBoard && !isSwitchingBranch && !board.isLoading && !board.isError && (

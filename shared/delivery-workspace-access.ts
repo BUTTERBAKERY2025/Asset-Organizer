@@ -11,13 +11,15 @@ export function canAccessDeliveryWorkspace(user: { role: string; jobTitle?: stri
 
 /** Branch desk is a recipient desk, not an alternate dispatch desk. */
 export function branchDeliveryScope(
-  branchId: string | null | undefined,
+  _branchId: string | null | undefined,
   allowedBranches: string[] | null,
   source: { sourceType: string; sourceBranchId: string | null; destinationBranchId: string | null; destinationWarehouseId: number | null },
 ): { view: boolean; receive: boolean } {
-  if (!branchId || !allowedBranches?.includes(branchId)) return { view: false, receive: false };
-  const receive = source.destinationWarehouseId == null && source.destinationBranchId === branchId;
-  const ownReturn = source.sourceType === "reverse_movement" && source.sourceBranchId === branchId
+  if (!allowedBranches?.length) return { view: false, receive: false };
+  const receive = source.destinationWarehouseId == null && !!source.destinationBranchId
+    && allowedBranches.includes(source.destinationBranchId);
+  const ownReturn = source.sourceType === "reverse_movement" && !!source.sourceBranchId
+    && allowedBranches.includes(source.sourceBranchId)
     && (source.destinationWarehouseId != null || source.destinationBranchId === "main_warehouse");
-  return { view: receive || ownReturn, receive };
+  return { view: receive || ownReturn, receive: !!receive };
 }

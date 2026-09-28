@@ -1067,13 +1067,12 @@ export function registerDeliveryRoutes(app: Express) {
             if (!row) throw new DeliveryError("Delivery not found", 404);
             const s = await source(client, row.source_type, row.source_id);
             if (!s) throw new DeliveryError("Linked source not found", 409);
-            // Authorize the immutable source against the manager's PRIMARY
-            // branch before any mutation, not only when building the response.
-            // Extra branch-access rows never confer receipt or dispatch rights.
+            // Authorize the immutable destination before mutation; branch
+            // managers remain receipt-only, even with multiple branch grants.
             if (req.currentUser?.role === "branch_manager"
               && (action !== "approve-receipt"
                 || !branchDeliveryScope(req.currentUser.branchId, getAllowedBranchIds(req), s).receive))
-              throw new DeliveryError("Branch delivery desk is receipt-only and limited to its primary branch", 403);
+              throw new DeliveryError("Branch delivery desk is receipt-only and limited to authorized branches", 403);
              const driver = isDriver(req, row)
                && await permitted(req, res, "delivery_tasks", "view")
                && await permitted(req, res, "delivery_tasks", "edit");

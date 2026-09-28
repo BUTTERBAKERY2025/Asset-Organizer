@@ -16,7 +16,7 @@ import { getOrderingPolicy } from "../shared/central-kitchen-ordering-policy";
 const app = express();
 app.disable("x-powered-by");
 app.use(express.json({ limit: "2mb" }));
-const roleNames = ["keeper", "branch", "driver", "admin"] as const;
+const roleNames = ["keeper", "branch", "branch-multi", "driver", "admin"] as const;
 type Role = typeof roleNames[number];
 const branches = [
   { id: "main_warehouse", name: "المستودع الرئيسي", nameAr: "المستودع الرئيسي", isCentralKitchen: false },
@@ -24,9 +24,14 @@ const branches = [
   { id: "other_branch", name: "فرع آخر", nameAr: "فرع آخر", isCentralKitchen: false },
   { id: "fixture_kitchen", name: "المطبخ الاصطناعي", nameAr: "المطبخ الاصطناعي", isCentralKitchen: true },
 ];
+const multiBranches = [
+  { id: "allowedA", name: "الفرع المسموح أ", nameAr: "الفرع المسموح أ", isCentralKitchen: false },
+  { id: "allowedB", name: "الفرع المسموح ب", nameAr: "الفرع المسموح ب", isCentralKitchen: false },
+];
 const actors = {
   keeper: { id: "fixture-keeper", username: "fixture-keeper", firstName: "أمين", lastName: "المستودع", name: "أمين المستودع", role: "warehouse_keeper", branchId: null, activeBranchId: null, allowedBranches: [] },
   branch: { id: "fixture-branch-manager", username: "fixture-branch-manager", firstName: "مدير", lastName: "الفرع", name: "مدير الفرع", role: "branch_manager", branchId: "fixture_branch", activeBranchId: "fixture_branch", allowedBranches: [{ id: 1, userId: "fixture-branch-manager", branchId: "fixture_branch", accessLevel: "manager", isDefault: true }] },
+  "branch-multi": { id: "fixture-multi-manager", username: "fixture-multi-manager", firstName: "مدير", lastName: "فرعين", name: "مدير فرعين", role: "branch_manager", branchId: null, activeBranchId: null as string | null, allowedBranches: multiBranches.map((branch, index) => ({ id: 3 + index, userId: "fixture-multi-manager", branchId: branch.id, accessLevel: "manager", isDefault: false })) },
   driver: { id: "fixture-driver", username: "fixture-driver", firstName: "سائق", lastName: "التوصيل", name: "سائق التوصيل", role: "employee", jobTitle: "delivery", branchId: "fixture_branch", activeBranchId: "fixture_branch", allowedBranches: [{ id: 2, userId: "fixture-driver", branchId: "fixture_branch", accessLevel: "employee", isDefault: true }] },
   admin: { id: "fixture-admin", username: "fixture-admin", firstName: "مدير", lastName: "النظام", name: "مدير النظام", role: "admin", branchId: null, activeBranchId: null, allowedBranches: [] },
 };
@@ -152,21 +157,23 @@ function deny(res: express.Response, message = "Synthetic fixture denies this op
   return res.status(403).json({ error: message });
 }
 function scopedBranches(actor: Role) {
+  if (actor === "branch-multi") return multiBranches;
   return actor === "branch" || actor === "driver" ? [branches[1]] : branches;
 }
 function perms(actor: Role) {
-  const warehouse = actor === "keeper" ? ["view", "create", "edit", "approve", "export"] : actor === "branch" || actor === "driver" ? [] : ["view", "create", "edit", "approve", "export", "delete"];
+  const warehouse = actor === "keeper" ? ["view", "create", "edit", "approve", "export"] : ["branch", "branch-multi", "driver"].includes(actor) ? [] : ["view", "create", "edit", "approve", "export", "delete"];
   return [
     { module: "warehouse", actions: warehouse },
-    { module: "branch_supply", actions: actor === "branch" ? ["view", "create", "edit", "export"] : [] },
+    { module: "branch_supply", actions: actor === "branch" || actor === "branch-multi" ? ["view", "create", "edit", "export"] : [] },
     { module: "central_kitchen_orders", actions: actor === "branch" ? ["view", "create", "edit", "export"] : [] },
-    { module: "delivery_tasks", actions: actor === "branch" ? ["view", "approve", "export"] : actor === "driver" ? ["view", "edit"] : ["view", "create", "edit"] },
+    { module: "delivery_tasks", actions: actor === "branch" || actor === "branch-multi" ? ["view", "approve", "export"] : actor === "driver" ? ["view", "edit"] : ["view", "create", "edit"] },
     { module: "dashboard", actions: ["view"] },
   ];
 }
 function visibleTransfer(actor: Role, transfer: Transfer) {
   return actor === "admin" || actor === "keeper" && transfer.sourceBranchId === "main_warehouse"
-    || actor === "branch" && transfer.destinationBranchId === "fixture_branch";
+    || actor === "branch" && transfer.destinationBranchId === "fixture_branch"
+    || actor === "branch-multi" && multiBranches.some(branch => branch.id === transfer.destinationBranchId);
 }
 function getTransfer(req: express.Request, res: express.Response): Transfer | null {
   const id = Number(req.params.id);
@@ -210,13 +217,31 @@ function deliveryFor(actor: Role, delivery: DeliveryDTO) {
 // Require an explicit role on EVERY API request. Cookies and live authentication are never consulted.
 app.use("/api", (req, res, next) => {
   res.setHeader("X-Synthetic-Warehouse-Fixture", "in-memory-only");
-  if (!role(req)) return res.status(400).json({ error: "Supply ?role=keeper|branch|driver|admin on every fixture request" });
+  if (!role(req)) return res.status(400).json({ error: "Supply ?role=keeper|branch|branch-multi|driver|admin on every fixture request" });
   next();
 });
 app.get("/api/auth/init", (req, res) => res.json({ user: actors[role(req)!], permissions: perms(role(req)!), branches: scopedBranches(role(req)!) }));
 app.get("/api/auth/me", (req, res) => res.json(actors[role(req)!]));
 app.get("/api/my-permissions", (req, res) => res.json(perms(role(req)!)));
 app.get("/api/branches", (req, res) => res.json(scopedBranches(role(req)!)));
+app.patch("/api/auth/active-branch", (req, res) => {
+  if (role(req) !== "branch-multi") return deny(res);
+  const branch = multiBranches.find(item => item.id === req.body?.branchId);
+  if (!branch) return deny(res, "Branch is not in the synthetic allowed list");
+  actors["branch-multi"].activeBranchId = branch.id;
+  return res.json({ activeBranchId: branch.id, activeBranch: branch });
+});
+app.get("/api/branch-operations/summary", (req, res) => {
+  if (role(req) !== "branch-multi") return deny(res);
+  const branch = multiBranches.find(item => item.id === req.query.branchId);
+  if (!branch) return deny(res, "Branch is not in the synthetic allowed list");
+  return res.json({ branchId: branch.id, generatedAt: today, businessDate: today.slice(0, 10), cards: [
+    { id: "warehouse", title: "طلبات المستودع", group: "orders",
+      href: `/transfer-requests?branchId=${branch.id}`, state: "ready",
+      metrics: [{ label: "طلبات الفرع", value: transfers.filter(item => item.destinationBranchId === branch.id).length }],
+      alerts: [], quickActions: [{ label: "إنشاء طلب", href: `/transfer-requests?branchId=${branch.id}`, kind: "create" }] },
+  ] });
+});
 // The kitchen is a discoverable source, not a branch to which a branch manager has been assigned.
 app.get("/api/central-kitchen-orders/kitchens", (req, res) => res.json([{ id: "fixture_kitchen", name: "المطبخ الاصطناعي" }]));
 app.get("/api/central-kitchen-orders/policy", (req, res) => res.json(getOrderingPolicy(new Date())));
@@ -324,17 +349,18 @@ app.get("/api/warehouse/items", (req, res) => role(req) === "driver" ? deny(res)
 app.post("/api/warehouse/material-transfers", (req, res) => {
   const actor = role(req)!;
   const body = req.body;
-  if (actor !== "branch" || body?.sourceBranchId !== "main_warehouse"
-    || body?.destinationBranchId !== "fixture_branch"
+  if (!(actor === "branch" && body?.destinationBranchId === "fixture_branch"
+    || actor === "branch-multi" && multiBranches.some(branch => branch.id === body?.destinationBranchId))
+    || body?.sourceBranchId !== "main_warehouse"
     || !Array.isArray(body?.items) || !body.items.length
     || body.items.some((line: { itemId: number; quantity: number }) =>
       !catalog.some(item => item.id === line.itemId) || !Number.isFinite(line.quantity) || line.quantity <= 0))
     return deny(res, "Only an assigned branch may request catalog materials for itself");
   const transfer: Transfer = { ...transfers[0], id: 5000 + transfers.length,
     requestId: 7000 + transfers.length, transferNumber: `FIX-NEW-${transfers.length}`,
-    destinationBranchId: "fixture_branch", destinationBranchName: branches[1].nameAr,
+    destinationBranchId: body.destinationBranchId, destinationBranchName: [...branches, ...multiBranches].find(branch => branch.id === body.destinationBranchId)!.nameAr,
     status: "pending", driverName: "", vehicleNumber: "", receivedBy: "", receivedByName: "",
-    createdBy: actors.branch.id, createdByName: actors.branch.name };
+    createdBy: actors[actor].id, createdByName: actors[actor].name };
   createdTransferItems.set(transfer.id, body.items.map((line: { itemId: number; quantity: number }, index: number) => {
     const item = catalog.find(item => item.id === line.itemId)!;
     return { id: transfer.id * 10 + index, transferId: transfer.id, itemId: item.id,
@@ -350,6 +376,8 @@ app.get("/api/warehouse/material-transfers", (req, res) => {
   if (actor === "driver") return deny(res);
   if (actor === "keeper" && req.query.branchId !== "main_warehouse") return deny(res, "Keeper scope is main_warehouse only");
   if (actor === "branch" && req.query.branchId !== "fixture_branch") return deny(res, "Branch scope is fixture_branch only");
+  if (actor === "branch-multi" && req.query.branchId && !multiBranches.some(branch => branch.id === req.query.branchId))
+    return deny(res, "Branch scope is allowedA or allowedB only");
   res.json(transfers.filter(x => visibleTransfer(actor, x))
     .filter(x => !req.query.status || req.query.status === x.status)
     .filter(x => !req.query.branchId || req.query.branchId === "main_warehouse" && x.sourceBranchId === "main_warehouse"
@@ -366,7 +394,8 @@ app.get("/api/warehouse/material-transfers/:id", (req, res) => {
 app.get("/api/warehouse/dashboard-stats", (req, res) => {
   const actor = role(req)!;
   if (actor === "driver" || actor === "keeper" && req.query.branchId !== "main_warehouse"
-    || actor === "branch" && req.query.branchId !== "fixture_branch") return deny(res);
+    || actor === "branch" && req.query.branchId !== "fixture_branch"
+    || actor === "branch-multi" && !multiBranches.some(branch => branch.id === req.query.branchId)) return deny(res);
   const rows = transfers.filter(x => visibleTransfer(actor, x));
   res.json({ pendingRequests: rows.filter(x => x.status === "pending").length,
     approvedRequests: rows.filter(x => x.status === "approved").length,
@@ -652,10 +681,10 @@ app.post("/api/deliveries/:id/:action", (req, res) => {
 });
 app.use("/api", (req, res) => res.status(404).json({ error: `No synthetic fixture for ${req.method} ${req.originalUrl}` }));
 
-app.get(["/users", "/transfer-requests", "/warehouse", "/driver-deliveries", "/central-kitchen-orders", "/reverse-logistics"], (req, res) => {
-  const saved = /(?:^|;\s*)fixture_role=(keeper|branch|driver|admin)(?:;|$)/.exec(req.headers.cookie || "")?.[1];
+app.get(["/users", "/transfer-requests", "/warehouse", "/driver-deliveries", "/central-kitchen-orders", "/reverse-logistics", "/branch-operations"], (req, res) => {
+  const saved = /(?:^|;\s*)fixture_role=(keeper|branch|branch-multi|driver|admin)(?:;|$)/.exec(req.headers.cookie || "")?.[1];
   const selected = role(req) || (saved as Role | undefined);
-  if (!selected) return res.status(400).send("Choose ?role=keeper|branch|driver|admin");
+  if (!selected) return res.status(400).send("Choose ?role=keeper|branch|branch-multi|driver|admin");
   res.cookie("fixture_role", selected, { sameSite: "strict", httpOnly: true });
   const entry = resolve(process.cwd(), "tests/fixtures/warehouse-role-entry.tsx");
   res.type("html").send(`<!doctype html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>SYNTHETIC Warehouse Role Fixture</title></head><body><div id="root"></div><script>const role=${JSON.stringify(selected)};const nativeFetch=window.fetch.bind(window);window.fetch=(input,init)=>{const url=new URL(typeof input==="string"?input:input.url,location.href);if(url.origin!==location.origin)return Promise.reject(new Error("Synthetic fixture prohibits external requests"));if(url.pathname.startsWith("/api/")){url.searchParams.set("role",role);return nativeFetch(url,init)}return nativeFetch(input,init)};const preserveFixtureRole=()=>{document.querySelectorAll('#root a[target="_blank"][href]').forEach(link=>{const url=new URL(link.getAttribute("href"),location.href);if(url.origin===location.origin&&["/transfer-requests","/central-kitchen-orders","/driver-deliveries","/reverse-logistics"].includes(url.pathname)&&url.searchParams.get("role")!==role){url.searchParams.set("role",role);link.setAttribute("href",url.pathname+url.search+url.hash)}})};new MutationObserver(preserveFixtureRole).observe(document.getElementById("root"),{childList:true,subtree:true,attributes:true,attributeFilter:["href"]});</script><script type="module">import RefreshRuntime from "/@react-refresh";RefreshRuntime.injectIntoGlobalHook(window);window.$RefreshReg$=()=>{};window.$RefreshSig$=()=>type=>type;window.__vite_plugin_react_preamble_installed__=true;</script><script type="module" src="/@vite/client"></script><script type="module" src="/@fs/${entry}"></script></body></html>`);
@@ -668,7 +697,7 @@ async function main() {
   const port = Number(process.env.WAREHOUSE_ROLE_FIXTURE_PORT || 5058);
   const server = app.listen(port, "127.0.0.1");
   await new Promise<void>(done => server.once("listening", done));
-  console.log(`SYNTHETIC in-memory warehouse fixture: http://127.0.0.1:${port}/transfer-requests?role=keeper`);
+  console.log(`SYNTHETIC in-memory warehouse fixture: http://127.0.0.1:${port}/transfer-requests?role=keeper · multi-branch: http://127.0.0.1:${port}/branch-operations?role=branch-multi`);
   const close = () => { server.close(); void vite.close(); };
   process.once("SIGINT", close); process.once("SIGTERM", close);
   if (process.argv.includes("--verify")) {
@@ -680,6 +709,17 @@ async function main() {
         return { status: response.status, json: await response.json() };
       };
       assert.equal((await call("/auth/init", "keeper")).json.user.branchId, null);
+      const multi = (await call("/auth/init", "branch-multi")).json;
+      assert.equal(multi.user.role, "branch_manager");
+      assert.equal(multi.user.branchId, null);
+      assert.equal(multi.user.activeBranchId, null);
+      assert.deepEqual(multi.branches.map((branch: { id: string }) => branch.id), ["allowedA", "allowedB"]);
+      assert.equal((await call("/branch-operations/summary?branchId=allowedA", "branch-multi")).json.branchId, "allowedA");
+      assert.equal((await call("/branch-operations/summary?branchId=allowedB", "branch-multi")).json.branchId, "allowedB");
+      assert.equal((await call("/branch-operations/summary?branchId=deniedC", "branch-multi")).status, 403);
+      assert.equal((await call("/auth/active-branch", "branch-multi", "PATCH", { branchId: "deniedC" })).status, 403);
+      assert.equal((await call("/auth/active-branch", "branch-multi", "PATCH", { branchId: "allowedB" })).json.activeBranchId, "allowedB");
+      assert.equal((await call("/warehouse/material-transfers?branchId=deniedC", "branch-multi")).status, 403);
       assert.equal((await call("/warehouse/material-transfers?branchId=main_warehouse", "keeper")).json.length, 66);
       assert.equal((await call("/warehouse/items", "keeper")).json.length, 65);
       const branchPermissions = (await call("/auth/init", "branch")).json.permissions as { module: string; actions: string[] }[];
@@ -717,6 +757,19 @@ async function main() {
       assert.equal((await call(`/reverse-logistics/${reverseDraft.id}/dispatch`, "branch", "POST")).status, 403);
       assert.equal((await call("/warehouse/material-transfers?branchId=fixture_branch", "keeper")).status, 403);
       assert.equal((await call("/warehouse/material-transfers?branchId=fixture_branch", "branch")).json.length, 51);
+      for (const branchId of ["allowedA", "allowedB"]) {
+        const created = await call("/warehouse/material-transfers", "branch-multi", "POST", {
+          sourceBranchId: "main_warehouse", destinationBranchId: branchId,
+          items: [{ itemId: catalog[0].id, quantity: 2 }],
+        });
+        assert.equal(created.status, 201);
+        assert.equal(created.json.destinationBranchId, branchId);
+        assert.equal((await call(`/warehouse/material-transfers?branchId=${branchId}`, "branch-multi")).json.length, 1);
+      }
+      assert.equal((await call("/warehouse/material-transfers", "branch-multi", "POST", {
+        sourceBranchId: "main_warehouse", destinationBranchId: "deniedC",
+        items: [{ itemId: catalog[0].id, quantity: 2 }],
+      })).status, 403);
       assert.equal((await call("/warehouse/material-transfers/10073", "branch")).json.transfer.status, "in_transit");
       assert.equal((await call("/deliveries/10073", "branch")).json.capabilities.canApproveReceipt, false);
       assert.equal((await call("/warehouse/material-transfers/10073/confirm-delivery", "branch", "POST", {

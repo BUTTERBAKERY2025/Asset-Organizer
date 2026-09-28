@@ -152,6 +152,9 @@ export default function TransferRequestsPage() {
   const kitchenRawMode = !isBranchManager && new URLSearchParams(search).get("kitchenRaw") === "1";
   const kitchenBranches = branches.filter(branch => branch.isCentralKitchen);
   const navigationBranch = useBranchNavigation(branches, branchesLoading, userBranchId);
+  const linkedBranchId = new URLSearchParams(search).get("branchId");
+  const invalidLinkedBranch = isBranchManager && linkedBranchId !== null
+    && !branches.some(branch => branch.id === linkedBranchId);
 
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isViewOpen, setIsViewOpen] = useState(false);
@@ -261,7 +264,7 @@ export default function TransferRequestsPage() {
   // Consume the cross-source create intent once. replaceState deliberately
   // preserves branchId/from and prevents close/rerender from reopening it.
   useEffect(() => {
-    if (isKeeper || createIntentConsumedRef.current || navigationBranch.isResolving || permissionsLoading) return;
+    if (isKeeper || invalidLinkedBranch || createIntentConsumedRef.current || navigationBranch.isResolving || permissionsLoading) return;
     const intent = parseWarehouseSupplyIntent(search);
     if (!intent.shouldCreate || !intent.fromBranchSupply) return;
     createIntentConsumedRef.current = true;
@@ -274,7 +277,7 @@ export default function TransferRequestsPage() {
     }
     const nextSearch = consumeWarehouseCreateIntent(search);
     window.history.replaceState(window.history.state, "", `${window.location.pathname}${nextSearch}${window.location.hash}`);
-  }, [canCreate, transferModule, navigationBranch, permissionsLoading, search, setDestinationBranch, isKeeper]);
+  }, [canCreate, transferModule, navigationBranch, permissionsLoading, search, setDestinationBranch, isKeeper, invalidLinkedBranch]);
 
   // Fetch warehouse items for selection
   const {
@@ -393,7 +396,7 @@ export default function TransferRequestsPage() {
     },
     staleTime: 1000 * 60 * 2, // 2 minutes - frequently changing
     placeholderData: undefined,
-    enabled: !navigationBranch.isResolving
+    enabled: !invalidLinkedBranch && !navigationBranch.isResolving
       && (isKeeper || !navigationBranch.hasBranchParam || (!!navigationBranch.branchId && filterBranch === navigationBranch.branchId)),
   });
 
@@ -401,7 +404,7 @@ export default function TransferRequestsPage() {
   // branch scope. Load the row through the server's branch-authorized endpoint;
   // never fall back to searching an unscoped list after a 403/404.
   useEffect(() => {
-    if (navigationBranch.isResolving || permissionsLoading || !canView(transferModule)) return;
+    if (navigationBranch.isResolving || invalidLinkedBranch || permissionsLoading || !canView(transferModule)) return;
     const params = new URLSearchParams(search);
     const rawTransferId = params.get("transferId");
     const transferId = Number(rawTransferId);
@@ -460,10 +463,11 @@ export default function TransferRequestsPage() {
         showUnavailable();
       })
       .finally(consumeIntent);
-  }, [canView, transferModule, isRTL, navigationBranch, permissionsLoading, search, toast, isKeeper]);
+  }, [canView, transferModule, isRTL, navigationBranch, permissionsLoading, search, toast, isKeeper, invalidLinkedBranch]);
 
   const createMutation = useMutation({
     mutationFn: async (data: typeof newTransfer) => {
+      if (!isKeeper && !branches.some(branch => branch.id === data.destinationBranchId)) throw new Error("الفرع الطالب غير متاح لهذا الحساب");
       const idempotencyKey = createIdempotencyKeyRef.current || crypto.randomUUID();
       createIdempotencyKeyRef.current = idempotencyKey;
       const destBranch = branches.find(b => b.id === data.destinationBranchId);
@@ -541,6 +545,9 @@ export default function TransferRequestsPage() {
       receiverSignature?: string | null;
       deliveryNotes?: string;
     }) => {
+      if (isBranchManager && (!selectedTransfer || selectedTransfer.id !== id
+        || !canReceiveBranchSupplyTransfer(selectedTransfer, true, canEdit(transferModule), branches)))
+        throw new Error("لم يعد الاستلام متاحًا لهذا الفرع");
       const response = await apiRequest("POST", `/api/warehouse/material-transfers/${id}/confirm-delivery`, {
         receivedItems,
         receiverSignature,
@@ -632,11 +639,18 @@ export default function TransferRequestsPage() {
     });
     setTransferType("to_warehouse");
   };
+  useEffect(() => {
+    if (isCreateOpen && !isKeeper && newTransfer.destinationBranchId
+      && !branches.some(branch => branch.id === newTransfer.destinationBranchId) && !createMutation.isPending) {
+      setIsCreateOpen(false);
+      resetForm();
+    }
+  }, [branches, isCreateOpen, newTransfer.destinationBranchId, isKeeper, createMutation.isPending]);
 
   const visibleBranchId = resolveVisibleBranchFilter(filterBranch, branches);
 
   const openCreateRequest = useCallback(() => {
-    if (isKeeper || !canCreate(transferModule)) return;
+    if (isKeeper || invalidLinkedBranch || !canCreate(transferModule)) return;
     const destinationBranchId = kitchenRawMode
       ? (kitchenBranches.find(branch => branch.id === filterBranch || branch.id === userBranchId)?.id || (kitchenBranches.length === 1 ? kitchenBranches[0].id : ""))
       : resolveWarehouseCreateDestination(filterBranch, branches, userBranchId);
@@ -652,10 +666,14 @@ export default function TransferRequestsPage() {
     }));
     createIdempotencyKeyRef.current = crypto.randomUUID();
     setIsCreateOpen(true);
-  }, [branches, canCreate, transferModule, filterBranch, isRTL, userBranchId, kitchenRawMode, isKeeper]);
+  }, [branches, canCreate, transferModule, filterBranch, isRTL, userBranchId, kitchenRawMode, isKeeper, invalidLinkedBranch]);
 
   const handleBranchFilterChange = useCallback((value: string) => {
     const branchId = resolveVisibleBranchFilter(value, branches);
+    if (isCreateOpen && !createMutation.isPending) {
+      setIsCreateOpen(false);
+      resetForm();
+    }
     setFilterBranch(branchId || "all");
     const params = new URLSearchParams(window.location.search);
     if (branchId) params.set("branchId", branchId);
@@ -667,10 +685,10 @@ export default function TransferRequestsPage() {
       `${window.location.pathname}${nextSearch ? `?${nextSearch}` : ""}${window.location.hash}`,
     );
     window.dispatchEvent(new PopStateEvent("popstate"));
-  }, [branches]);
+  }, [branches, isCreateOpen, createMutation.isPending, resetForm]);
 
   useBranchDeskIntent(navigationBranch.branchId,
-    !isKeeper && !navigationBranch.isResolving && !permissionsLoading && filterBranch === navigationBranch.branchId,
+     !isKeeper && !invalidLinkedBranch && !navigationBranch.isResolving && !permissionsLoading && filterBranch === navigationBranch.branchId,
     intent => {
       if (intent === "create" && !isKeeper && canCreate(transferModule)) openCreateRequest();
       if (intent === "receive") setFilterStatus("in_transit");
@@ -696,6 +714,7 @@ export default function TransferRequestsPage() {
 
   // Handle delivery confirmation with received quantities
   const handleConfirmDelivery = async (transfer: MaterialTransfer) => {
+    if (isBranchManager && !canReceiveBranchSupplyTransfer(transfer, true, canEdit(transferModule), branches)) return;
     setSelectedTransfer(transfer);
     // Fetch transfer items to populate received quantities
     try {
@@ -947,7 +966,7 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
     
     // Non-admin users: check if they are source (warehouse) or destination (branch)
     const isWarehouse = transfer.sourceBranchId === "main_warehouse" && operationalBranchId === "main_warehouse";
-    const isDestination = !isKeeper && transfer.destinationBranchId === userBranchId;
+    const isDestination = !isKeeper && branches.some(branch => branch.id === transfer.destinationBranchId);
     if (isKeeper && !isWarehouse) return [];
     
     switch (transfer.status) {
@@ -1309,7 +1328,7 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
                     }
                     createMutation.mutate(newTransfer);
                   }} 
-                  disabled={!newTransfer.destinationBranchId || !newTransfer.sourceBranchId || newTransfer.items.length === 0 || newTransfer.items.some(item => !isValidWarehouseDraftItem(item, !kitchenRawMode)) || createMutation.isPending}
+                  disabled={branchesLoading || (!isKeeper && !branches.some(branch => branch.id === newTransfer.destinationBranchId)) || !newTransfer.sourceBranchId || newTransfer.items.length === 0 || newTransfer.items.some(item => !isValidWarehouseDraftItem(item, !kitchenRawMode)) || createMutation.isPending}
                   data-testid="btn-submit-transfer"
                 >
                   {createMutation.isPending ? (isRTL ? "جاري الإرسال..." : "Submitting...") : (isRTL ? "إرسال الطلب" : "Submit Request")}
@@ -1321,6 +1340,7 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
           }
         />
 
+        {invalidLinkedBranch && !branchesLoading && <p role="alert" className="rounded border border-destructive/30 p-3 text-destructive">الفرع المطلوب غير متاح. اختر فرعًا مسموحًا من القائمة للمتابعة.</p>}
         {!isKeeper && <BranchSupplySources
           current="warehouse"
           branchId={visibleBranchId}
@@ -1809,7 +1829,7 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
                             <TableCell className="font-mono text-xs">{index + 1}</TableCell>
                             <TableCell className="font-medium">
                               {item.itemName}
-                              {selectedTransfer.status === "delivered" && <a className="mr-2 inline-block text-xs text-primary underline print:hidden" href={`/reverse-logistics?transferItemId=${item.id}`}>إرجاع مستلم</a>}
+                              {selectedTransfer.status === "delivered" && <a className="mr-2 inline-block text-xs text-primary underline print:hidden" href={`/reverse-logistics?transferItemId=${item.id}&branchId=${encodeURIComponent(selectedTransfer.destinationBranchId)}`}>إرجاع مستلم</a>}
                               {item.isModified && (
                                 <Badge variant="outline" className="mr-2 text-xs text-amber-600 border-amber-300">
                                   {isRTL ? "معدّل" : "Modified"}

@@ -227,6 +227,9 @@ export default function CentralKitchenOrdersPage() {
   const { user } = useAuth();
   const { branches, userBranchId, canSelectBranch, isLoading: branchesLoading } = useBranches();
   const navigationBranch = useBranchNavigation(branches, branchesLoading, userBranchId);
+  const linkedBranchId = new URLSearchParams(window.location.search).get("branchId");
+  const invalidLinkedBranch = user?.role === "branch_manager" && linkedBranchId !== null
+    && !branches.some(branch => branch.id === linkedBranchId);
   const { canView, canCreate, canEdit, canApprove, canExport, hasPermission } = usePermissions();
   const operationsView = isKitchenOperationsPresentation(user, canApprove("central_kitchen_orders"));
   const [desktop, setDesktop] = useState(() => typeof window !== "undefined" && window.matchMedia("(min-width: 1536px)").matches);
@@ -289,6 +292,7 @@ export default function CentralKitchenOrdersPage() {
   const [pilotDays, setPilotDays] = useState("30");
   const [metricsOpen, setMetricsOpen] = useState(false);
   const [draft, setDraft] = useState({ sourceBranchId: userBranchId || "", centralKitchenId: "", neededDate: "", neededTime: "", notes: "", items: [emptyLine()] });
+  const createScopeRef = useRef(branchFilter);
   const createSubmittingRef = useRef(false);
   const createSessionRef = useRef(0);
   const dateTouchedRef = useRef(false);
@@ -299,11 +303,15 @@ export default function CentralKitchenOrdersPage() {
     createdAt: orderingPolicy.serverNow,
   }, orderingPolicy.query.data) : null;
   const openCreate = async () => {
-    if (createSubmittingRef.current) return;
+    if (createSubmittingRef.current || invalidLinkedBranch || branchesLoading) return;
     const session = ++createSessionRef.current;
     dateTouchedRef.current = false;
     timeTouchedRef.current = false;
-    setDraft(current => ({ ...current, centralKitchenId: "" }));
+    const requested = navigationBranch.hasBranchParam ? navigationBranch.branchId : branchFilter;
+    createScopeRef.current = navigationBranch.hasBranchParam && navigationBranch.branchId ? navigationBranch.branchId : branchFilter;
+    const sourceBranchId = branches.some(branch => branch.id === requested)
+      ? requested! : branches.length === 1 ? branches[0].id : "";
+    setDraft({ sourceBranchId, centralKitchenId: "", neededDate: "", neededTime: "", notes: "", items: [emptyLine()] });
     setCreateStep(0);
     setItemMobileView("choose");
     setCreateStepError("");
@@ -316,9 +324,8 @@ export default function CentralKitchenOrdersPage() {
     }));
   };
   const createAttemptRef = useRef<{ signature: string; key: string } | null>(null);
-  useBranchDeskIntent(navigationBranch.branchId, !navigationBranch.isResolving && canCreate("central_kitchen_orders"), intent => {
+  useBranchDeskIntent(navigationBranch.branchId, !invalidLinkedBranch && !navigationBranch.isResolving && canCreate("central_kitchen_orders"), intent => {
     if (intent !== "create") return;
-    setDraft(current => ({ ...current, sourceBranchId: navigationBranch.branchId! }));
     void openCreate();
   });
   const transitionKeysRef = useRef(new Map<string, { signature: string; key: string }>());
@@ -343,6 +350,21 @@ export default function CentralKitchenOrdersPage() {
   useEffect(() => {
     if (userBranchId) setDraft(current => current.sourceBranchId ? current : { ...current, sourceBranchId: userBranchId });
   }, [userBranchId]);
+  useEffect(() => {
+    if (createOpen && createScopeRef.current !== branchFilter) {
+      setCreateOpen(false);
+      setDraft({ sourceBranchId: "", centralKitchenId: "", neededDate: "", neededTime: "", notes: "", items: [emptyLine()] });
+      createAttemptRef.current = null;
+    }
+  }, [branchFilter, createOpen]);
+  useEffect(() => {
+    if (!createOpen) return;
+    if (draft.sourceBranchId && !branches.some(branch => branch.id === draft.sourceBranchId)) {
+      setCreateOpen(false);
+      setDraft({ sourceBranchId: "", centralKitchenId: "", neededDate: "", neededTime: "", notes: "", items: [emptyLine()] });
+      setCreateStepError("لم يعد الفرع الطالب ضمن الفروع المسموح بها.");
+    }
+  }, [branches, createOpen, draft.sourceBranchId]);
   useEffect(() => {
     const syncUrlState = () => {
       const params = new URLSearchParams(window.location.search);
@@ -379,17 +401,17 @@ export default function CentralKitchenOrdersPage() {
   }, [branchFilter, page, pageSize, stage, sort, search, kitchenFilter, dateFilter, inventoryModeFilter, focus]);
   const ordersQuery = useQuery<KitchenOrderPage>({
     queryKey: [listUrl],
-    enabled: !navigationBranch.isResolving
+    enabled: !invalidLinkedBranch && !navigationBranch.isResolving
       && (!navigationBranch.hasBranchParam || (!!navigationBranch.branchId && branchFilter === navigationBranch.branchId)),
     refetchInterval: 30_000,
     placeholderData: undefined,
   });
   const metricsUrl = `/api/central-kitchen-orders/pilot-metrics?days=${pilotDays}${branchFilter !== "all" ? `&branchId=${encodeURIComponent(branchFilter)}` : ""}`;
-  const metricsQuery = useQuery<PilotMetrics>({ queryKey: [metricsUrl], enabled: metricsOpen && canView("central_kitchen_orders") && !navigationBranch.isResolving
+  const metricsQuery = useQuery<PilotMetrics>({ queryKey: [metricsUrl], enabled: metricsOpen && canView("central_kitchen_orders") && !invalidLinkedBranch && !navigationBranch.isResolving
     && (!navigationBranch.hasBranchParam || (!!navigationBranch.branchId && branchFilter === navigationBranch.branchId)) });
   const detailQuery = useQuery<KitchenOrder>({
     queryKey: [`/api/central-kitchen-orders/${detailId}`],
-    enabled: detailId !== null && canView("central_kitchen_orders"),
+    enabled: detailId !== null && !invalidLinkedBranch && canView("central_kitchen_orders"),
     staleTime: 0,
     refetchOnMount: "always",
     refetchInterval: 30_000,
@@ -539,6 +561,7 @@ export default function CentralKitchenOrdersPage() {
 
   const createMutation = useMutation({
     mutationFn: async () => {
+      if (branchesLoading || createScopeRef.current !== branchFilter || !branches.some(branch => branch.id === draft.sourceBranchId)) throw new Error("الفرع الطالب غير متاح لهذا الحساب.");
       const invalid = !validNewOrderLines();
       if (!draft.sourceBranchId || !draft.centralKitchenId || draft.centralKitchenId === draft.sourceBranchId || !centralKitchens.some(kitchen => kitchen.id === draft.centralKitchenId) || !draft.neededDate || invalid) throw new Error("أكمل الفروع وبنود الطلب بالكميات الصحيحة.");
       const payload = {
@@ -566,7 +589,7 @@ export default function CentralKitchenOrdersPage() {
       createAttemptRef.current = null;
       createSubmittingRef.current = false;
       createSessionRef.current++;
-        setCreateOpen(false); openFullDetail(order.id); setDraft({ sourceBranchId: userBranchId || "", centralKitchenId: "", neededDate: "", neededTime: "", notes: "", items: [emptyLine()] }); refresh(); refreshNotifications();
+        setCreateOpen(false); openFullDetail(order.id); setDraft({ sourceBranchId: "", centralKitchenId: "", neededDate: "", neededTime: "", notes: "", items: [emptyLine()] }); refresh(); refreshNotifications();
     },
     onError: (error) => {
       createSubmittingRef.current = false;
@@ -628,7 +651,9 @@ export default function CentralKitchenOrdersPage() {
     }),
   });
   // A failed refresh can leave the last successful result in React Query. Never render it after denial.
-  const detailDenied = !canView("central_kitchen_orders") || detailQuery.isError;
+  const detailDenied = invalidLinkedBranch || !canView("central_kitchen_orders") || detailQuery.isError
+    || !!(navigationBranch.hasBranchParam && detailQuery.data
+      && detailQuery.data.requestBranchId !== navigationBranch.branchId);
   const detailError = !canView("central_kitchen_orders") ? new Error("403: صلاحية عرض الطلب غير متاحة") : detailQuery.error;
   const selectedDetail = visibleKitchenDetail(detailQuery.data, detailId, detailDenied);
   const performDetailAction = (order: KitchenOrder, action: "approve" | "prepare" | "dispatch" | "receive" | "resolve-discrepancy", details?: Record<string, unknown>) => {
@@ -749,6 +774,7 @@ export default function CentralKitchenOrdersPage() {
 
   return <Layout>
     <main dir="rtl" className="page-container kitchen-workspace space-y-4 bg-background pb-10 text-foreground">
+      {invalidLinkedBranch && !branchesLoading && <p role="alert" className="rounded border border-destructive/30 p-3 text-destructive">الفرع المطلوب غير متاح. اختر فرعًا مسموحًا من القائمة للمتابعة.</p>}
       <PageHeader icon={Factory} tone="production" title={operationsView ? "تشغيل المطبخ اليومي" : "طلبات المطبخ"} description={operationsView ? "قائمة العمل والطلب المحدد في مساحة واحدة" : "رتّب ما يحتاج قراراً الآن، ثم افتح التفاصيل عند الحاجة"
       }
         className="kitchen-mobile-header"
@@ -1287,7 +1313,7 @@ export function OrderDetail({ showHeader = true, order, products, productsQuery,
     <div hidden={section !== "items"} className="space-y-3">
      <OrderItemsTable items={order.items || []} showPreparation={["prepared", "dispatched", "received"].includes(status)} showShipment={["dispatched", "received"].includes(status)} />
      {canReverseReturn && accessibleBranchIds.includes(order.requestBranchId) && status === "received" && order.inventoryMode === "real" && <div className="space-y-2 rounded border p-3 text-sm"><strong>إرجاع منتج مستلم إلى المطبخ</strong>{(order.items || []).filter(item => item.productId && item.receivedQuantity != null && Number(item.receivedQuantity) > 0).map(item =>
-       <a key={item.id} className="block text-primary underline" href={`/reverse-logistics?orderItemId=${item.id}`}>إنشاء إرجاع للبند #{item.id} · {item.productName}</a>)}</div>}
+       <a key={item.id} className="block text-primary underline" href={`/reverse-logistics?orderItemId=${item.id}&branchId=${encodeURIComponent(order.requestBranchId)}`}>إنشاء إرجاع للبند #{item.id} · {item.productName}</a>)}</div>}
     {showProduction && !!order.allocations?.length && <section className="rounded-lg border bg-emerald-50/30 p-4"><h3 className="font-semibold">الحجوزات والكميات المرحلة</h3><div className="mt-2 space-y-2 text-sm">{order.allocations.map(allocation => <div key={allocation.id} className="flex flex-wrap justify-between gap-2 rounded bg-background px-3 py-2"><span>بند #{allocation.orderItemId} · {allocation.component === "original" ? "الصنف الأصلي" : "بديل"} · {allocation.status}</span><span>محجوز {allocation.reservedQuantity} · مشحون {allocation.dispatchedQuantity} · محرر {allocation.releasedQuantity} {allocation.unit}</span></div>)}</div></section>}
     {showProduction && <details className="rounded-md bg-muted/20 px-3 py-2 text-sm"><summary className="cursor-pointer font-semibold">الإنتاج والدفعات المرتبطة ({order.linkedBatches?.length || 0})</summary><div className="mt-2"><LinkedBatches batches={order.linkedBatches || []} orderId={order.id} kitchenAccessible={accessibleBranchIds.includes(order.centralKitchenId)} productionVisible={showProduction} /></div></details>}
      {showProduction && !!order.shadowInventoryEntries?.length && <section className="rounded-lg border border-dashed border-violet-300 bg-violet-50/40 p-4"><div className="mb-3 flex items-center justify-between gap-3"><div><h3 className="font-semibold text-violet-950">سجل المخزون التجريبي</h3><p className="text-xs text-violet-700">للمراجعة فقط — لم تتغير أرصدة المخزون الفعلية.</p></div><Badge variant="outline" className="border-violet-300 text-violet-800">SHADOW</Badge></div><div className="overflow-x-auto"><Table><TableHeader><TableRow><TableHead className="text-right">الحركة المتوقعة</TableHead><TableHead className="text-right">الصنف</TableHead><TableHead className="text-right">المصدر</TableHead><TableHead className="text-right">الكمية</TableHead><TableHead className="text-right">النوع</TableHead></TableRow></TableHeader><TableBody>{order.shadowInventoryEntries.map(entry => <TableRow key={entry.id}><TableCell>{entry.direction === "projected_kitchen_out" ? "خصم متوقع من المطبخ" : "إضافة متوقعة للفرع"}</TableCell><TableCell>{entry.productName}</TableCell><TableCell><CatalogSourceBadge source={identitySource(entry)} /></TableCell><TableCell>{entry.quantity} {entry.unit}</TableCell><TableCell>{entry.component === "substitute" ? "بديل" : "أصلي"}</TableCell></TableRow>)}</TableBody></Table></div></section>}

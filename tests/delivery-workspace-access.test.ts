@@ -36,11 +36,13 @@ describe("standalone delivery desk eligibility", () => {
 describe("branch delivery recipient boundary", () => {
   const source = (sourceType: string, sourceBranchId: string | null, destinationBranchId: string | null, destinationWarehouseId: number | null = null) =>
     ({ sourceType, sourceBranchId, destinationBranchId, destinationWarehouseId });
-  it("sees only own destination shipments and can receive only at the assigned branch", () => {
+  it("sees and receives only authorized destinations, even when the primary is null", () => {
     expect(branchDeliveryScope("branch-a", ["branch-a"], source("material_transfer", "main_warehouse", "branch-a")))
       .toEqual({ view: true, receive: true });
     expect(branchDeliveryScope("branch-a", ["branch-a", "branch-b"], source("kitchen", "branch-kitchen", "branch-b")))
-      .toEqual({ view: false, receive: false });
+      .toEqual({ view: true, receive: true });
+    expect(branchDeliveryScope(null, ["branch-b"], source("kitchen", "branch-kitchen", "branch-b")))
+      .toEqual({ view: true, receive: true });
     expect(branchDeliveryScope("branch-a", ["branch-a"], source("material_transfer", "branch-a", "branch-b")))
       .toEqual({ view: false, receive: false });
   });
@@ -49,12 +51,14 @@ describe("branch delivery recipient boundary", () => {
       .toEqual({ view: true, receive: false });
     expect(branchDeliveryScope("branch-a", ["branch-a"], source("reverse_movement", "branch-b", null, 4)))
       .toEqual({ view: false, receive: false });
+    expect(branchDeliveryScope("branch-a", ["branch-a", "branch-b"], source("reverse_movement", "branch-b", null, 4)))
+      .toEqual({ view: true, receive: false });
     expect(branchDeliveryScope("branch-a", ["branch-a"], source("reverse_movement", "branch-a", "branch-b")))
       .toEqual({ view: false, receive: false });
   });
-  it("fails closed for unassigned identity, revoked/default branch and override-only access", () => {
+  it("fails closed for revoked/default branch and empty grants", () => {
     const incoming = source("kitchen", "kitchen", "branch-a");
-    expect(branchDeliveryScope(null, ["branch-a"], incoming).view).toBe(false);
+    expect(branchDeliveryScope(null, ["branch-a"], incoming).view).toBe(true);
     expect(branchDeliveryScope("branch-a", [], incoming).receive).toBe(false);
     expect(branchDeliveryScope("branch-a", ["branch-b"], incoming).view).toBe(false);
     expect(branchDeliveryScope("branch-a", null, incoming).view).toBe(false);

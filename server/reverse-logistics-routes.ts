@@ -34,9 +34,10 @@ const num = (v: bigint) => Number(v) / 1000000;
 class Reject extends Error { constructor(message: string, public status = 409) { super(message); } }
 const rows = async (c: PoolClient, text: string, values: unknown[] = []) => (await c.query(text, values)).rows;
 const scope = (req: Request, branch: string) => {
-  if (req.currentUser?.role === "branch_manager" && req.currentUser.branchId !== branch) return false;
   const allowed = getAllowedBranchIds(req);
-  return allowed === null || allowed.includes(branch);
+  return req.currentUser?.role === "branch_manager"
+    ? Array.isArray(allowed) && allowed.includes(branch)
+    : allowed === null || allowed.includes(branch);
 };
 const actor = (req: Request) => {
   if (!req.currentUser?.id) throw new Reject("Authentication required", 401);
@@ -263,7 +264,7 @@ export function registerReverseLogisticsRoutes(app: Express) {
   }));
   app.get("/api/reverse-logistics/sources", ...warehouseView, async (req,res) => run(req,res,async c => {
     const allowed = req.currentUser?.role === "branch_manager"
-      ? [req.currentUser.branchId].filter((branch): branch is string => !!branch && scope(req, branch))
+      ? getAllowedBranchIds(req) ?? []
       : getAllowedBranchIds(req);
     const materials = await rows(c,`SELECT i.id,t.transfer_number reference,t.destination_branch_id source_branch_id,
       i.item_name name,i.unit,i.received_quantity quantity
@@ -307,7 +308,7 @@ export function registerReverseLogisticsRoutes(app: Express) {
   }));
   app.get("/api/reverse-logistics", ...warehouseView, async (req,res) => run(req,res,async c => {
     const allowed = req.currentUser?.role === "branch_manager"
-      ? [req.currentUser.branchId].filter((branch): branch is string => !!branch && scope(req, branch))
+      ? getAllowedBranchIds(req) ?? []
       : getAllowedBranchIds(req);
     const movements = await rows(c,`SELECT m.*,m.shipped_quantity-m.received_quantity AS shortage_quantity,
       m.received_quantity-m.usable_quantity-m.written_off_quantity AS quarantine_quantity

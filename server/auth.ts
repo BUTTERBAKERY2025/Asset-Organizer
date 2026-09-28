@@ -1490,7 +1490,7 @@ export async function canAccessBranch(req: any, branchId: string): Promise<boole
   
   // Check if user has the required permission for the module linked to this branch
   // Users with event_pos permissions should access EVENT-BB branch
-  if (branchId === "EVENT-BB") {
+  if (branchId === "EVENT-BB" && user.role !== "branch_manager") {
     const hasEventPosAccess = await storage.hasPermission(user.id, "event_pos", "view");
     if (hasEventPosAccess) {
       return true;

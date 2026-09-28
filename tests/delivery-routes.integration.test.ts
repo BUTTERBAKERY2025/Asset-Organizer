@@ -246,7 +246,7 @@ describe("delivery routes against local PostgreSQL contracts", () => {
     expect((await invoke("GET", "/api/deliveries", fixture.manager!)).body.deliveries.some((d: any) => d.id === id)).toBe(true);
   });
 
-  it("isolates the branch recipient desk even with custom delivery edits and other-branch overrides", async () => {
+  it("scopes the recipient desk to authorized branches without granting dispatch or driver rights", async () => {
     const desk = { ...fixture.receiver!, role: "branch_manager", jobTitle: "delivery" };
     const previous = state.permissions.get(desk.id);
     grant(desk, {
@@ -272,24 +272,25 @@ describe("delivery routes against local PostgreSQL contracts", () => {
     const overrides = [fixture.destination, fixture.outsider];
     const own = await invoke("GET", "/api/deliveries/:id", desk, {}, { id });
     expect(own.statusCode).toBe(200);
-    expect((await invoke("GET", "/api/deliveries/:id", desk, {}, { id: foreignId }, {}, undefined, overrides)).statusCode).toBe(403);
+    expect((await invoke("GET", "/api/deliveries/:id", desk, {}, { id: foreignId }, {}, undefined, overrides)).statusCode).toBe(200);
     expect(own.body.destinationBranchId).toBe(fixture.destination);
     expect(Object.entries(own.body.capabilities).filter(([key, enabled]) =>
       enabled && key !== "canApproveReceipt")).toEqual([]);
     const workspace = await invoke("GET", "/api/deliveries/workspace", desk, {}, {}, { status: "all" }, undefined, overrides);
     expect(workspace.statusCode).toBe(200);
-    expect(workspace.body.total).toBe(1);
+    expect(workspace.body.total).toBe(2);
     expect(workspace.body.deliveries.some((item: any) => item.id === id)).toBe(true);
-    expect(workspace.body.counts.assigned).toBe(1);
-    expect(workspace.body.filters.destinations.every((branch: any) => branch.id === fixture.destination)).toBe(true);
+    expect(workspace.body.counts.assigned).toBe(2);
+    expect(workspace.body.filters.destinations.map((branch: any) => branch.id)).toEqual(
+      expect.arrayContaining([fixture.destination, fixture.outsider]));
     const reports = await invoke("GET", "/api/deliveries/reports", desk, {}, {}, {}, undefined, overrides);
     expect(reports.statusCode).toBe(200);
     expect(reports.body.deliveries.some((item: any) => item.id === id)).toBe(true);
-    expect(reports.body.deliveries.every((item: any) => item.destinationBranchId === fixture.destination)).toBe(true);
+    expect(reports.body.deliveries.some((item: any) => item.destinationBranchId === fixture.outsider)).toBe(true);
     const exportResult = await invoke("GET", "/api/deliveries/reports/export", desk, {}, {}, {}, undefined, overrides);
     expect(exportResult.statusCode).toBe(200);
     expect(exportResult.csv).toContain(`${fixture.prefix}`);
-    expect(exportResult.csv).not.toContain(`${fixture.prefix}-other-destination`);
+    expect(exportResult.csv).toContain(`${fixture.prefix}-other-destination`);
     const capabilities = await invoke("GET", "/api/deliveries/capabilities", desk);
     expect(capabilities.body).toMatchObject({ canAssign: false, canReport: true, canExport: true });
     expect((await invoke("GET", "/api/deliveries/sources", desk)).statusCode).toBe(403);
@@ -303,19 +304,22 @@ describe("delivery routes against local PostgreSQL contracts", () => {
     const otherDesk = await invoke("GET", "/api/deliveries/workspace", wrongBranch, {}, {}, { status: "all" });
     expect(otherDesk.body).toMatchObject({ total: 1, counts: { assigned: 1 } });
     expect(otherDesk.body.deliveries.map((item: any) => item.id)).toEqual([foreignId]);
-    // This receipt is otherwise ready and posted by the same identity: the
-    // only disqualifier is that its destination is not the user's primary branch.
+    // Only the actual authenticated source receipt actor can approve at B.
     await client.query("UPDATE central_kitchen_orders SET status='received',received_by=$1 WHERE id=$2",
       [desk.id, foreignSource]);
     await client.query(`UPDATE delivery_assignments SET
       status='awaiting_receipt',signature_data=$1,proof_at=now() WHERE id=$2`,
       [png, foreignId]);
     expect((await invoke("POST", "/api/deliveries/:id/approve-receipt", desk, {}, { id: foreignId },
-      {}, undefined, overrides)).statusCode).toBe(403);
+      {}, undefined, [fixture.destination])).statusCode).toBe(403);
     expect((await client.query("SELECT status,receipt_approved_by,receipt_approved_at FROM delivery_assignments WHERE id=$1",
       [foreignId])).rows[0]).toMatchObject({
       status: "awaiting_receipt", receipt_approved_by: null, receipt_approved_at: null,
     });
+    expect((await invoke("POST", "/api/deliveries/:id/approve-receipt", desk, {}, { id: foreignId },
+      {}, undefined, overrides)).statusCode).toBe(200);
+    expect((await client.query("SELECT status,receipt_approved_by FROM delivery_assignments WHERE id=$1",
+      [foreignId])).rows[0]).toMatchObject({ status: "receipt_approved", receipt_approved_by: desk.id });
     expect((await invoke("POST", "/api/deliveries/:id/approve-receipt", desk, {}, { id },
       {}, undefined, [fixture.outsider])).statusCode).toBe(403);
     expect((await client.query("SELECT status,receipt_approved_by FROM delivery_assignments WHERE id=$1",
@@ -327,6 +331,9 @@ describe("delivery routes against local PostgreSQL contracts", () => {
     state.permissions.set(desk.id, previous!);
     // The next case exercises a fresh assignment for this same source. These
     // fixtures run inside a single outer transaction, so release this probe.
+    await client.query(`DELETE FROM delivery_notification_outbox WHERE event_id IN
+      (SELECT id FROM delivery_assignment_events WHERE assignment_id=ANY($1::bigint[]))`, [[id, foreignId]]);
+    await client.query("DELETE FROM delivery_assignment_events WHERE assignment_id=ANY($1::bigint[])", [[id, foreignId]]);
     await client.query("DELETE FROM delivery_assignments WHERE id=$1", [id]);
     await client.query("DELETE FROM delivery_assignments WHERE id=$1", [foreignId]);
   });

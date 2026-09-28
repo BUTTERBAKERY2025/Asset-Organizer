@@ -2,17 +2,14 @@ import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "./useAuth";
 import type { Branch } from "@shared/schema";
 
-// A manager's desk is their primary branch, not an arbitrary extra grant.
-// The server's branch list is the authorization boundary: never synthesize
-// the primary branch when it is absent from that list.
+// The server's branch list is the authorization boundary. A primary branch
+// is only a preference, never a restriction on canonical allowed branches.
 export function visibleBranchesForUser<T extends { id: string }>(
   assigned: readonly T[],
   role: string | null | undefined,
   primaryBranchId: string | null | undefined,
 ): T[] {
-  return role === "branch_manager"
-    ? assigned.filter(branch => !!primaryBranchId && branch.id === primaryBranchId)
-    : [...assigned];
+  return [...assigned];
 }
 
 export function useBranches() {

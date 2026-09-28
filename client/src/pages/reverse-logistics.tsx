@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
+import { useBranches } from "@/hooks/useBranches";
 
 type Movement = {
   id: number; kind: string; status: string; item_name: string; unit: string; quantity: string;
@@ -19,7 +20,7 @@ type Movement = {
   carrier_name: string | null; vehicle_number: string | null;
 };
 type Warehouse = { id: number; name: string; active: boolean };
-type Material = { id: number; reference: string; name: string; unit: string; quantity: string };
+type Material = { id: number; reference: string; name: string; unit: string; quantity: string; source_branch_id: string };
 type Product = Material & { substitute_product_id: number | null; substitute_product_name: string | null; substitute_unit: string | null; receipt_attribution_basis: string | null; original_good_received_quantity: string | null; total_good_received_quantity: string | null };
 type Item = { id: number; name: string; unit: string; current_stock: number };
 const get = async <T,>(path: string): Promise<T> => {
@@ -44,12 +45,17 @@ const number = (value: string) => Number(value);
 export default function ReverseLogisticsPage() {
   const qc = useQueryClient();
   const { user } = useAuth();
+  const { branches, isLoading: branchesLoading, isError: branchesError, refetch: refetchBranches } = useBranches();
   const { canView, canCreate, canEdit } = usePermissions();
   const globalManager = user?.role === "admin" || (user?.role === "operations_manager" && !(user.allowedBranches?.length));
   const warehouseReturn = user?.role !== "branch_manager" && canView("warehouse") && canEdit("warehouse");
   const canMaterialReturn = warehouseReturn || (canView("branch_supply") && canCreate("branch_supply") && canEdit("branch_supply"));
   const canProductReturn = warehouseReturn || (canView("central_kitchen_orders") && canCreate("central_kitchen_orders") && canEdit("central_kitchen_orders"));
   const params = new URLSearchParams(window.location.search);
+  const requestedBranch = params.get("branchId");
+  const [selectedBranchId, setSelectedBranchId] = useState(() => requestedBranch || "");
+  const scopedBranchId = branches.some(branch => branch.id === selectedBranchId)
+    ? selectedBranchId : !requestedBranch && branches.length === 1 ? branches[0].id : "";
   const initialKind = params.has("orderItemId") ? "product_return" : params.has("transferItemId") ? "material_return" : "material_return";
   const [kind, setKind] = useState(initialKind === "material_return" && !canMaterialReturn && canProductReturn ? "product_return" : initialKind);
   useEffect(() => {
@@ -69,6 +75,11 @@ export default function ReverseLogisticsPage() {
   const draftAttempt = useRef<{ payload: string; key: string } | null>(null);
   const movements = useQuery<Movement[]>({ queryKey: ["/api/reverse-logistics"], queryFn: () => get("/api/reverse-logistics") });
   const sources = useQuery<{ materials: Material[]; products: Product[] }>({ queryKey: ["/api/reverse-logistics/sources"], queryFn: () => get("/api/reverse-logistics/sources") });
+  useEffect(() => {
+    if (!globalManager && !scopedBranchId && !params.has("orderItemId") && !params.has("transferItemId")) setLine("");
+    else if (line && sources.data && !(kind === "material_return" ? sources.data.materials : sources.data.products)
+      .some(row => String(row.id) === line && (globalManager || row.source_branch_id === scopedBranchId))) setLine("");
+  }, [scopedBranchId, branchesLoading, branchesError, kind, globalManager, sources.data]);
   const warehouses = useQuery<Warehouse[]>({ queryKey: ["/api/reverse-logistics/warehouses"], queryFn: () => get("/api/reverse-logistics/warehouses"), enabled: globalManager });
   const items = useQuery<Item[]>({ queryKey: ["/api/reverse-logistics/items"], queryFn: () => get("/api/reverse-logistics/items"), enabled: globalManager });
   const stock = useQuery<{warehouse_id:number; warehouse_name:string; item_id:number; item_name:string; unit:string; quantity:string; reserved_quantity:string}[]>({ queryKey: ["/api/reverse-logistics/stock"], queryFn: () => get("/api/reverse-logistics/stock"), enabled: globalManager });
@@ -88,6 +99,11 @@ export default function ReverseLogisticsPage() {
     } finally { setPending(false); }
   };
   const create = async () => {
+    if (!globalManager && (!scopedBranchId || branchesLoading || branchesError)) { setError("اختر فرعًا مسموحًا أولاً"); return; }
+    if (kind !== "warehouse_transfer" && (sources.isError || sources.isFetching || !(kind === "material_return" ? sources.data?.materials : sources.data?.products)
+      ?.some(row => String(row.id) === line && (globalManager || row.source_branch_id === scopedBranchId)))) {
+      setError("البند غير متاح في الفرع المحدد"); return;
+    }
     const q = Number(quantity);
     if (!quantity || !Number.isFinite(q) || q <= 0) { setError("أدخل كمية موجبة"); return; }
     const data = kind === "material_return"
@@ -133,6 +149,14 @@ export default function ReverseLogisticsPage() {
         <p className="text-sm text-muted-foreground">الكميات مرتبطة بالاستلام الأصلي؛ الحجر والتالف لا يدخلان المخزون المتاح. لا يُنشأ قيد مالي للشطب.</p></header>
       {error && <div role="alert" className="rounded border border-red-300 bg-red-50 p-3 text-red-800">{error}</div>}
       {success && <div role="status" className="rounded border border-green-300 bg-green-50 p-3 text-green-800">{success}</div>}
+      {!globalManager && <div className="max-w-xs space-y-2"><Label>الفرع المصدر</Label><Select value={scopedBranchId || undefined} onValueChange={value => {
+        setSelectedBranchId(value); setLine(""); setQuantity(""); draftAttempt.current = null;
+        const url = new URL(window.location.href);
+        url.searchParams.set("branchId", value);
+        url.searchParams.delete("orderItemId");
+        url.searchParams.delete("transferItemId");
+        window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
+      }} disabled={branchesLoading || branchesError}><SelectTrigger><SelectValue placeholder="اختر الفرع" /></SelectTrigger><SelectContent>{branches.map(branch => <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>)}</SelectContent></Select>{branchesError && <p role="alert" className="text-destructive">تعذر التحقق من الفروع. <Button variant="outline" onClick={() => void refetchBranches()}>إعادة المحاولة</Button></p>}</div>}
       {(canMaterialReturn || canProductReturn || globalManager) && <Card><CardHeader><CardTitle>إنشاء مسودة</CardTitle></CardHeader><CardContent className="space-y-4">
         <div className="max-w-lg space-y-2"><Label>نوع الحركة</Label><Select value={kind} onValueChange={v => { setKind(v); setLine(""); }}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>
           {canMaterialReturn && <SelectItem value="material_return">{labels.material_return}</SelectItem>}
@@ -140,8 +164,9 @@ export default function ReverseLogisticsPage() {
           {globalManager && <SelectItem value="warehouse_transfer">{labels.warehouse_transfer}</SelectItem>}
         </SelectContent></Select></div>
         {kind !== "warehouse_transfer" ? <div className="max-w-2xl space-y-2"><Label>البند الأصلي المستلم (لا تُخمن هوية المنتج أو تحويل الوحدة)</Label>
+          {sources.isError && <p role="alert" className="text-destructive">تعذر تحميل البنود المسموح بها. <Button variant="outline" onClick={() => void sources.refetch()}>إعادة المحاولة</Button></p>}
           <Select value={line} onValueChange={setLine}><SelectTrigger><SelectValue placeholder={sources.isLoading ? "تحميل البنود..." : "اختر بنداً من الوثيقة الأصلية"} /></SelectTrigger><SelectContent>
-            {(kind === "material_return" ? sources.data?.materials || [] : sources.data?.products || []).map(o =>
+            {(sources.isError || sources.isFetching ? [] : kind === "material_return" ? sources.data?.materials || [] : sources.data?.products || []).filter(o => globalManager || (!!scopedBranchId && o.source_branch_id === scopedBranchId)).map(o =>
               <SelectItem value={String(o.id)} key={o.id}>{o.reference} · {o.name} · {o.quantity} {o.unit} · بند #{o.id}</SelectItem>)}
           </SelectContent></Select>
           {params.has("transferItemId") || params.has("orderItemId") ? <p className="text-xs text-muted-foreground">تم اختيار البند من الوثيقة الأصلية؛ تحقق من الهوية والكمية قبل الطلب.</p> : null}
@@ -154,7 +179,7 @@ export default function ReverseLogisticsPage() {
           <div><Label>إلى مستودع</Label><Select value={destination} onValueChange={setDestination}><SelectTrigger><SelectValue placeholder="اختر الوجهة" /></SelectTrigger><SelectContent><SelectItem value="main">المستودع الرئيسي</SelectItem>{warehouses.data?.filter(w=>w.active).map(w=><SelectItem value={String(w.id)} key={w.id}>{w.name}</SelectItem>)}</SelectContent></Select></div>
         </div>}
         <div className="flex flex-wrap items-end gap-3"><div><Label htmlFor="return-quantity">الكمية {kind === "product_return" ? "(قطع صحيحة)" : "(نفس وحدة الأصل)"}</Label><Input id="return-quantity" type="number" min="0" step={kind === "product_return" ? "1" : "0.000001"} value={quantity} onChange={e=>setQuantity(e.target.value)} /></div>
-          <Button disabled={pending || (kind !== "warehouse_transfer" && !(kind === "material_return" ? canMaterialReturn : canProductReturn)) || (kind === "warehouse_transfer" ? !itemId : !line)} onClick={create}>إنشاء المسودة</Button></div>
+          <Button disabled={pending || (!globalManager && (!scopedBranchId || branchesLoading || branchesError)) || (kind !== "warehouse_transfer" && !(kind === "material_return" ? canMaterialReturn : canProductReturn)) || (kind === "warehouse_transfer" ? !itemId : !line)} onClick={create}>إنشاء المسودة</Button></div>
       </CardContent></Card>}
       {globalManager && <Card><CardHeader><CardTitle>إدارة المستودعات الفعلية</CardTitle></CardHeader><CardContent className="flex flex-wrap gap-3">
         <Input className="max-w-xs" placeholder="اسم المستودع الجديد" value={name} onChange={e=>setName(e.target.value)} />
@@ -168,7 +193,7 @@ export default function ReverseLogisticsPage() {
       <section className="space-y-3"><h2 className="text-xl font-semibold">الحركات والحجر</h2>
         {movements.isError && <p role="alert" className="text-red-700">{movements.error instanceof Error ? movements.error.message : "تعذر تحميل الحركات"}</p>}
         {movements.data?.length === 0 && <p className="text-muted-foreground">لا توجد حركات في نطاق صلاحياتك.</p>}
-        {movements.data?.map(row => <Card key={row.id}><CardContent className="space-y-3 p-4">
+        {!movements.isError && !movements.isFetching && movements.data?.filter(row => globalManager || (!!scopedBranchId && row.source_branch_id === scopedBranchId)).map(row => <Card key={row.id}><CardContent className="space-y-3 p-4">
           <div className="flex flex-wrap items-start justify-between gap-2"><div><strong>#{row.id} · {labels[row.kind]} · {row.item_name}</strong><p className="text-sm text-muted-foreground">{location(row.source_warehouse_id,row.source_branch_id)} ← {location(row.destination_warehouse_id,row.destination_branch_id)} · {labels[row.status]}</p></div><span className="rounded bg-muted px-2 py-1 text-sm">{row.quantity} {row.unit}</span></div>
           <div className="grid gap-2 text-sm sm:grid-cols-4"><span>شُحن: {row.shipped_quantity}</span><span>استُلم: {row.received_quantity}</span><span className={number(row.shortage_quantity)>0 ? "text-amber-700" : ""}>ناقص بالشحن: {row.shortage_quantity}</span><span>بالحجر: {row.quarantine_quantity} (تالف {number(row.damaged_quantity)-number(row.written_off_quantity)})</span></div>
           {row.carrier_name && <p className="text-sm">الناقل: {row.carrier_name} · المركبة: {row.vehicle_number || "غير مسجلة"}</p>}
