@@ -38,7 +38,7 @@ vi.mock("@/components/dashboard/page-header", () => ({ PageHeader: () => null })
 vi.mock("@/components/layout", () => ({ Layout: ({ children }: { children: unknown }) => children }));
 vi.mock("@/lib/queryClient", () => ({ apiRequest: vi.fn() }));
 
-import { DeliveryActionBar, DeliveryWorkspace } from "../client/src/pages/driver-deliveries";
+import { DeliveryActionBar, DeliveryWorkspace, ExternalMaterialNextAction, startExternalMaterialDelivery } from "../client/src/pages/driver-deliveries";
 
 const render = () => {
   const previousWindow = globalThis.window;
@@ -119,6 +119,56 @@ describe("delivery workspace permissions (synthetic read-only fixture)", () => {
     expect(html).not.toContain("بدء التوصيل");
     expect(html).not.toContain("إنهاء المهمة");
     expect(html).not.toContain("central-kitchen-orders");
+  });
+
+  it("shows already-dispatched carrier tracking to source editors without assignment-create rights", () => {
+    const delivery = { id: 4, sourceId: 5, sourceType: "material_transfer", transportMode: "external",
+      status: "assigned", sourceStatus: "in_transit", handoverRecordedAt: "2026-09-01T10:00:00Z",
+      capabilities: { canStart: true, canDispatchSource: false } } as Delivery;
+    fixture.caps.canAssign = false;
+    const html = renderToStaticMarkup(createElement(ExternalMaterialNextAction, {
+      delivery, pending: false, onStart: vi.fn(), onDispatch: vi.fn(),
+    }));
+    expect(html).toContain("بدء متابعة الناقل");
+    expect(html).not.toContain("إرسال الشحنة");
+    expect(renderToStaticMarkup(createElement(ExternalMaterialNextAction, {
+      delivery: { ...delivery, capabilities: { ...delivery.capabilities, canStart: false } },
+      pending: false, onStart: vi.fn(), onDispatch: vi.fn(),
+    }))).not.toContain("بدء متابعة الناقل");
+  });
+
+  it("does not repeat stock dispatch when the same delivery is already in transit", async () => {
+    const delivery = { id: 4, sourceId: 5, sourceType: "material_transfer", transportMode: "external",
+      status: "assigned", sourceStatus: "in_transit", handoverRecordedAt: "2026-09-01T10:00:00Z",
+      capabilities: { canStart: true, canDispatchSource: false } } as Delivery;
+    const read = vi.fn().mockResolvedValue(delivery);
+    const dispatch = vi.fn();
+    const start = vi.fn().mockResolvedValue({ ...delivery, status: "awaiting_receipt" });
+    const attempted = vi.fn();
+    expect((await startExternalMaterialDelivery(delivery, read, dispatch, start, attempted)).status).toBe("awaiting_receipt");
+    expect(read).toHaveBeenCalledOnce();
+    expect(dispatch).not.toHaveBeenCalled();
+    expect(attempted).not.toHaveBeenCalled();
+    expect(start).toHaveBeenCalledOnce();
+  });
+
+  it("dispatches approved source only with its edit-derived permission, then starts", async () => {
+    const delivery = { id: 4, sourceId: 5, sourceType: "material_transfer", transportMode: "external",
+      status: "assigned", sourceStatus: "approved", handoverRecordedAt: "2026-09-01T10:00:00Z",
+      capabilities: { canStart: false, canDispatchSource: true } } as Delivery;
+    const read = vi.fn().mockResolvedValueOnce(delivery).mockResolvedValueOnce({
+      ...delivery, sourceStatus: "in_transit", capabilities: { canStart: true, canDispatchSource: false },
+    });
+    const dispatch = vi.fn().mockResolvedValue(undefined);
+    const start = vi.fn().mockResolvedValue({ ...delivery, status: "awaiting_receipt" });
+    await startExternalMaterialDelivery(delivery, read, dispatch, start, vi.fn());
+    expect(dispatch).toHaveBeenCalledExactlyOnceWith(5);
+    expect(start).toHaveBeenCalledOnce();
+    await expect(startExternalMaterialDelivery(delivery, async () => ({
+      ...delivery, capabilities: { canStart: false, canDispatchSource: false },
+    }), dispatch, start, vi.fn()))
+      .rejects.toThrow("صلاحية إرسال المصدر");
+    expect(dispatch).toHaveBeenCalledOnce();
   });
 
   it("invalidates delivery drafts after reassignment or replacement proof, not ordinary refresh", () => {

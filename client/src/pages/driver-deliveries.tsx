@@ -48,6 +48,45 @@ type Driver = { id: string; name: string; jobTitle: string };
 type PortalCapabilities = { canAssign: boolean; canReport: boolean; canExport: boolean };
 type Proof = { signatureData: string | null; receiverName: string | null; proofAt: string | null; receiptApprovedBy: string | null; receiptApprovedAt: string | null };
 
+export function ExternalMaterialNextAction({ delivery, pending, onDispatch, onStart }: {
+  delivery: Delivery; pending: boolean; onDispatch: () => void; onStart: () => void;
+}) {
+  if (delivery.transportMode !== "external" || delivery.sourceType !== "material_transfer"
+    || delivery.status !== "assigned" || !delivery.handoverRecordedAt) return null;
+  if (delivery.sourceStatus === "in_transit" && delivery.capabilities.canStart)
+    return <Button className="min-h-12 w-full" disabled={pending} onClick={onStart}>بدء متابعة الناقل</Button>;
+  if (delivery.sourceStatus === "approved" && delivery.capabilities.canDispatchSource)
+    return <Button className="min-h-12 w-full" disabled={pending} onClick={onDispatch}>إرسال الشحنة وبدء المتابعة</Button>;
+  return null;
+}
+
+// Re-read the same assignment before a stock-writing request. A retry after an
+// ambiguous dispatch observes in_transit and calls only /start, never PUT again.
+export async function startExternalMaterialDelivery(
+  delivery: Delivery,
+  read: () => Promise<Delivery>,
+  dispatch: (sourceId: number) => Promise<void>,
+  start: () => Promise<Delivery>,
+  onDispatchAttempt: () => void,
+): Promise<Delivery> {
+  let fresh = await read();
+  if (fresh.sourceType !== "material_transfer" || fresh.sourceId !== delivery.sourceId || fresh.id !== delivery.id || fresh.transportMode !== "external")
+    throw new Error("لم تعد المهمة مطابقة للتحويل. حدّث التفاصيل قبل الإرسال.");
+  if (fresh.status !== "assigned" || !fresh.handoverRecordedAt)
+    throw new Error("وثّق محضر الناقل أولاً أو حدّث المهمة إن شُحنت بالفعل.");
+  if (fresh.sourceStatus === "approved") {
+    if (!fresh.capabilities.canDispatchSource) throw new Error("لا تملك صلاحية إرسال المصدر؛ حدّث المهمة أو اطلب من مسؤول المصدر تنفيذ الإرسال.");
+    onDispatchAttempt();
+    await dispatch(fresh.sourceId);
+    fresh = await read();
+  }
+  if (fresh.sourceStatus !== "in_transit")
+    throw new Error("لم يُؤكد إرسال التحويل من المصدر. حدّث المهمة قبل المحاولة مرة أخرى.");
+  if (fresh.id !== delivery.id || fresh.sourceId !== delivery.sourceId || fresh.status !== "assigned" || !fresh.capabilities.canStart)
+    throw new Error("لم تعد متابعة الناقل متاحة؛ حدّث المهمة وتحقق من صلاحيتك.");
+  return start();
+}
+
 const fetchJson = async <T,>(path: string): Promise<T> => { const response = await fetch(path, { credentials: "include" }); if (!response.ok) throw new Error(`${response.status}: تعذر تحميل البيانات`); return response.json() as Promise<T>; };
 const dateValue = (offset = 0) => { const value = new Date(Date.now() + offset * 86400000); return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Riyadh", year: "numeric", month: "2-digit", day: "2-digit" }).format(value); };
 const reportDate = (value?: string | null) => value
@@ -148,8 +187,9 @@ export function DeliveryWorkspace({ embedded = false, sourceType, sourceId, deli
     if (endpoint?.endsWith("/proof")) return "تم إرسال إثبات التسليم، بانتظار اعتماد المستلم المعتمد";
     if (endpoint?.endsWith("/approve-receipt")) return "تم اعتماد إيصال المصدر";
     if (endpoint?.endsWith("/complete")) return "تم إنهاء المهمة";
-    if (endpoint?.endsWith("/start")) return "بدأت مهمة التوصيل";
-    if (endpoint?.endsWith("/handover")) return "تم توثيق محضر التسليم";
+    if (endpoint?.endsWith("/start")) return detail?.transportMode === "external"
+      ? "بدأت متابعة الناقل؛ لم يُعد إرسال المصدر أو ترحيل المخزون" : "بدأت مهمة التوصيل";
+    if (endpoint?.endsWith("/handover")) return "تم توثيق محضر التسليم فقط؛ لم تبدأ متابعة الناقل ولم يُرسل المصدر";
     if (endpoint?.endsWith("/acknowledge-handover")) return "تم إقرار استلام الشحنة";
     if (endpoint?.endsWith("/reassign")) return "تمت إعادة إسناد المهمة";
     if (endpoint?.endsWith("/cancel")) return "تم إلغاء مهمة التوصيل دون إلغاء الشحنة";
@@ -208,32 +248,25 @@ export function DeliveryWorkspace({ embedded = false, sourceType, sourceId, deli
     finally { setUploading(null); }
   };
   const dispatchExternalMaterial = async (delivery: Delivery) => {
-    if (dispatchRef.current || pendingRef.current || delivery.transportMode !== "external" || delivery.sourceType !== "material_transfer") return;
+    if (dispatchRef.current || pendingRef.current || !delivery.capabilities.canDispatchSource
+      || delivery.transportMode !== "external" || delivery.sourceType !== "material_transfer") return;
     dispatchRef.current = true;
     setDispatchPending(true);
     setActionError(null);
     const request = ++selectionRef.current;
     let dispatchAttempted = false;
     try {
-      // Re-read the authoritative source before the stock-writing request. Never retry an
-      // ambiguous PUT: a subsequent click observes the source status first instead.
-      let fresh = await fetchJson<Delivery>(`/api/deliveries/${delivery.id}`);
-      if (fresh.sourceType !== "material_transfer" || fresh.sourceId !== delivery.sourceId || fresh.transportMode !== "external")
-        throw new Error("لم تعد المهمة مطابقة للتحويل. حدّث التفاصيل قبل الإرسال.");
-      if (fresh.status !== "assigned" || !fresh.handoverRecordedAt)
-        throw new Error("وثّق محضر الناقل أولاً أو حدّث المهمة إن شُحنت بالفعل.");
-      if (fresh.sourceStatus === "approved") {
-        dispatchAttempted = true;
-        await apiRequest("PUT", `/api/warehouse/material-transfers/${fresh.sourceId}/status`, { status: "in_transit" });
-        void client.invalidateQueries({ queryKey: ["/api/warehouse/material-transfers"] });
-        fresh = await fetchJson<Delivery>(`/api/deliveries/${delivery.id}`);
-      }
-      if (fresh.sourceStatus !== "in_transit")
-        throw new Error("لم يُؤكد إرسال التحويل من المصدر. حدّث المهمة قبل المحاولة مرة أخرى.");
-      const updated = await (await apiRequest("POST", `/api/deliveries/${delivery.id}/start`)).json() as Delivery;
+      const updated = await startExternalMaterialDelivery(delivery,
+        () => fetchJson<Delivery>(`/api/deliveries/${delivery.id}`),
+        async sourceId => {
+          await apiRequest("PUT", `/api/warehouse/material-transfers/${sourceId}/status`, { status: "in_transit" });
+          void client.invalidateQueries({ queryKey: ["/api/warehouse/material-transfers"] });
+        },
+        async () => (await apiRequest("POST", `/api/deliveries/${delivery.id}/start`)).json() as Promise<Delivery>,
+        () => { dispatchAttempted = true; });
       if (selectionRef.current === request) setDetail(current => current?.id === delivery.id ? updated : current);
       invalidate();
-      toast({ title: "تم إرسال الشحنة وبدأت متابعة الناقل" });
+      toast({ title: "بدأت متابعة الناقل", description: dispatchAttempted ? "تم إرسال التحويل من المصدر أولاً." : "كان التحويل مرسلاً مسبقاً؛ لم يُعد إرسال المصدر أو ترحيل المخزون." });
     } catch (error) {
       const message = error instanceof Error ? error.message : "تعذر إكمال إرسال الشحنة.";
       // A timed-out dispatch may have committed. Refresh before offering another attempt;
@@ -352,10 +385,10 @@ export function DeliveryWorkspace({ embedded = false, sourceType, sourceId, deli
          {detail.exceptionReason && !detail.exceptionResolvedAt && <div role="alert" className="space-y-2 rounded-lg border border-rose-300 bg-rose-50 p-3 text-rose-900"><p>استثناء مفتوح: {detail.exceptionReason}. يمنع إغلاق الشحنة حتى المعالجة.</p>{detail.capabilities.canResolveException && <><Label htmlFor="resolution">كيفية معالجة الاستثناء</Label><Textarea id="resolution" value={resolution} onChange={e => setResolution(e.target.value)} /><Button disabled={!resolution.trim() || action.isPending} onClick={() => submitAction(`/api/deliveries/${detail.id}/resolve-exception`, { resolution: resolution.trim() })}>توثيق المعالجة</Button></>}</div>}
          {detail.exceptionReason && detail.exceptionResolvedAt && <p className="text-emerald-800">تمت معالجة الاستثناء: {detail.exceptionReason}</p>}
          {detail.status === "assigned" && <>
-           <p>{detail.sourceType === "material_transfer" ? "ارفع صورة الشحنة وإيصال الناقل ثم وثّق محضر البنود؛ بعد ذلك أرسل التحويل وابدأ متابعة الناقل من هنا بزر واحد." : "١. ارفع صورة الشحنة وإيصال الناقل، ثم وثّق محضر تسليم البنود. ٢. نفّذ إرسال الشحنة من المصدر الأصلي. ٣. ابدأ المتابعة بعد خروج الشحنة."}</p>
-           <div className="grid gap-3 sm:grid-cols-2">{(["shipment_photo", "carrier_receipt"] as const).map(kind => <div key={kind} className="space-y-2 rounded-lg border bg-background p-3"><Label htmlFor={`${kind}-${detail.id}`}>{kind === "shipment_photo" ? "صورة الشحنة" : "إيصال الناقل (صورة أو PDF)"}</Label>{canAssign && !detail.handoverRecordedAt && <Input id={`${kind}-${detail.id}`} type="file" accept={kind === "carrier_receipt" ? "image/jpeg,image/png,image/webp,application/pdf" : "image/jpeg,image/png,image/webp"} disabled={!!uploading || action.isPending} onChange={event => { const file = event.target.files?.[0]; void uploadEvidence(detail, kind, file); event.target.value = ""; }} />}{uploading === kind && <p role="status">جارٍ رفع المرفق…</p>}{detail.attachments?.filter(file => file.kind === kind).map(file => <div key={file.id} className="space-y-1"><a href={file.downloadUrl} target="_blank" rel="noopener noreferrer" className="font-semibold text-primary underline">{file.originalName}</a>{file.mimeType.startsWith("image/") && <img className="max-h-32 max-w-full rounded border object-contain" src={file.downloadUrl} alt={kind === "shipment_photo" ? "معاينة صورة الشحنة" : "معاينة إيصال الناقل"} />}</div>)}</div>)}</div>
+           <p>{detail.sourceType === "material_transfer" ? detail.sourceStatus === "in_transit" ? "التحويل مرسل من المصدر بالفعل؛ بعد توثيق المحضر ابدأ متابعة الناقل دون إعادة إرسال الشحنة أو ترحيل المخزون." : "ارفع صورة الشحنة وإيصال الناقل ثم وثّق المحضر؛ بعد ذلك أرسل التحويل وابدأ متابعة الناقل." : "١. ارفع صورة الشحنة وإيصال الناقل، ثم وثّق محضر تسليم البنود. ٢. نفّذ إرسال الشحنة من المصدر الأصلي. ٣. ابدأ المتابعة بعد خروج الشحنة."}</p>
+           <div className="grid gap-3 sm:grid-cols-2">{(["shipment_photo", "carrier_receipt"] as const).map(kind => <div key={kind} className="space-y-2 rounded-lg border bg-background p-3"><Label htmlFor={`${kind}-${detail.id}`}>{kind === "shipment_photo" ? "صورة الشحنة" : "إيصال الناقل (صورة أو PDF)"}</Label>{detail.capabilities.canUploadEvidence && <Input id={`${kind}-${detail.id}`} type="file" accept={kind === "carrier_receipt" ? "image/jpeg,image/png,image/webp,application/pdf" : "image/jpeg,image/png,image/webp"} disabled={!!uploading || action.isPending} onChange={event => { const file = event.target.files?.[0]; void uploadEvidence(detail, kind, file); event.target.value = ""; }} />}{uploading === kind && <p role="status">جارٍ رفع المرفق…</p>}{detail.attachments?.filter(file => file.kind === kind).map(file => <div key={file.id} className="space-y-1"><a href={file.downloadUrl} target="_blank" rel="noopener noreferrer" className="font-semibold text-primary underline">{file.originalName}</a>{file.mimeType.startsWith("image/") && <img className="max-h-32 max-w-full rounded border object-contain" src={file.downloadUrl} alt={kind === "shipment_photo" ? "معاينة صورة الشحنة" : "معاينة إيصال الناقل"} />}</div>)}</div>)}</div>
            {uploadError && <p role="alert" className="text-destructive">تعذر رفع المرفق: {uploadError}</p>}
-           {detail.sourceType === "material_transfer" && detail.handoverRecordedAt && (detail.sourceStatus === "approved" || detail.sourceStatus === "in_transit") && canAssign && <Button className="min-h-12 w-full" disabled={dispatchPending || action.isPending} onClick={() => void dispatchExternalMaterial(detail)}>{dispatchPending ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : null}{detail.sourceStatus === "in_transit" ? "متابعة الشحنة بعد الإرسال" : "إرسال الشحنة وبدء المتابعة"}</Button>}
+           <ExternalMaterialNextAction delivery={detail} pending={dispatchPending || action.isPending} onDispatch={() => void dispatchExternalMaterial(detail)} onStart={() => submitAction(`/api/deliveries/${detail.id}/start`)} />
            {detail.handoverRecordedAt && detail.sourceType !== "material_transfer" && <p className="rounded-lg border border-sky-200 bg-sky-50 p-3">المحضر موثق. {canOpenDeliverySource(detail.sourceType, canView) ? <a className="font-bold underline" href={deliverySourcePath(detail)} target="_blank" rel="noopener noreferrer">افتح إجراء الإرسال من المصدر الأصلي</a> : "بانتظار مسؤول المصدر لتنفيذ الإرسال."}</p>}
          </>}
          {detail.capabilities.canStart && detail.sourceType !== "material_transfer" && <Button className="min-h-12 w-full" disabled={action.isPending} onClick={() => submitAction(`/api/deliveries/${detail.id}/start`)}>تأكيد خروج الشحنة وبدء متابعة الناقل</Button>}
@@ -392,6 +425,7 @@ function HandoverSection({ delivery, pending, onAction, canOpenSource }: { deliv
   const [quantities, setQuantities] = useState<Record<number, string>>(() => Object.fromEntries(delivery.items.map(item => [item.id, String(item.quantity)])));
   const [confirmed, setConfirmed] = useState(false);
   const [acknowledged, setAcknowledged] = useState(false);
+  const [editingHandover, setEditingHandover] = useState(false);
   const snapshot = delivery.handoverItems;
   const lines = delivery.items.map(item => ({ id: item.id, quantity: Number(quantities[item.id]) }));
   const validLines = lines.length > 0 && lines.some(line => line.quantity > 0) && lines.every((line, index) =>
@@ -405,7 +439,8 @@ function HandoverSection({ delivery, pending, onAction, canOpenSource }: { deliv
     {delivery.handoverInvalidated && <div role="status" className="rounded-lg border border-amber-300 bg-amber-50 p-3 font-medium text-amber-950">المحضر السابق وإقرار السائق السابق ملغيان بعد إعادة الإسناد. يلزم توثيق محضر جديد وإقرار السائق الحالي قبل بدء المهمة. {awaitingDispatch ? "شحن المصدر ينتظر إقرار السائق." : "المصدر شُحن بالفعل ولا يلزم إعادة صرف المخزون."}</div>}
     {delivery.capabilities.canRecordHandover && <p className="text-muted-foreground">راجع الكميات التي ستُسلّم فعلياً إلى {external ? `${delivery.carrierName || (delivery.carrier === "road" ? "رود للوجيستك" : "ناقل")}، بوليصة ${delivery.waybill}` : `${delivery.driverName} بالمركبة ${delivery.vehicleNumber}`}. {awaitingDispatch ? external ? "هذا المحضر لا يرحّل المخزون؛ الإرسال يتم من المصدر بعد توثيق المحضر." : "هذا المحضر لا يرحّل المخزون؛ الصرف يتم من إجراء المصدر بعد إقرار السائق." : "المصدر شُحن بالفعل؛ توثيق المحضر الجديد لا يعيد صرف المخزون."}</p>}
     {snapshot && <div className="rounded-lg border bg-background p-3"><p className="font-medium">{external ? `النسخة المسجلة للناقل ${delivery.carrierName || (delivery.carrier === "road" ? "رود للوجيستك" : "ناقل")}` : `النسخة المسجلة للسائق ${delivery.driverName} · المركبة ${delivery.vehicleNumber}`}</p><p className="text-xs text-muted-foreground">وثّق مسؤول المصدر المحضر: {deliveryDate(delivery.handoverRecordedAt)}{delivery.handoverAcknowledgedAt ? ` · أقر السائق: ${deliveryDate(delivery.handoverAcknowledgedAt)}` : ""}</p><ul className="mt-2 list-inside list-disc">{snapshot.map(item => <li key={item.id}><DeliveryItemLabel item={item} /> · الكمية المسلمة: {item.quantity} {item.unit || ""}</li>)}</ul></div>}
-    {delivery.capabilities.canRecordHandover && <div className="space-y-3"><p className="font-medium">{snapshot && !external ? "تعديل المحضر يلغي إقرار السائق السابق ويتطلب إقراراً جديداً." : "بنود المحضر للمراجعة قبل تسجيله:"}</p>{delivery.items.map(item => <div key={item.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-background px-3 py-2"><Label htmlFor={`handover-${delivery.id}-${item.id}`}><DeliveryItemLabel item={item} /> · الحد المتاح {item.quantity} {item.unit || ""}</Label><Input id={`handover-${delivery.id}-${item.id}`} type="number" min="0" max={item.quantity} step="any" inputMode="decimal" className="w-32" value={quantities[item.id] ?? ""} readOnly={delivery.sourceType !== "kitchen"} onChange={e => setQuantities(value => ({ ...value, [item.id]: e.target.value }))} /></div>)}<label className="flex items-start gap-2"><Checkbox checked={confirmed} onCheckedChange={value => setConfirmed(value === true)} /><span>أؤكد بصفتي مسؤول المصدر مطابقة الأصناف والكميات و{external ? "الناقل والبوليصة" : "السائق والمركبة"} أعلاه مع ما سُلّم فعلياً.</span></label><Button className="min-h-12 w-full" disabled={!validLines || !confirmed || pending || (external && (!delivery.attachments?.some(file => file.kind === "shipment_photo") || !delivery.attachments?.some(file => file.kind === "carrier_receipt")))} onClick={() => onAction(`/api/deliveries/${delivery.id}/handover`, { items: lines })}>توثيق محضر تسليم الشحنة {external ? "للناقل" : "للسائق"}</Button>{external && (!delivery.attachments?.some(file => file.kind === "shipment_photo") || !delivery.attachments?.some(file => file.kind === "carrier_receipt")) && <p className="text-amber-900">صورة الشحنة وإيصال الناقل مطلوبان قبل توثيق المحضر.</p>}</div>}
+    {external && snapshot && delivery.capabilities.canRecordHandover && !editingHandover && <Button variant="outline" disabled={pending} onClick={() => setEditingHandover(true)}>تعديل محضر الناقل</Button>}
+    {delivery.capabilities.canRecordHandover && (!external || !snapshot || editingHandover) && <div className="space-y-3"><p className="font-medium">{snapshot && !external ? "تعديل المحضر يلغي إقرار السائق السابق ويتطلب إقراراً جديداً." : "بنود المحضر للمراجعة قبل تسجيله:"}</p>{delivery.items.map(item => <div key={item.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-background px-3 py-2"><Label htmlFor={`handover-${delivery.id}-${item.id}`}><DeliveryItemLabel item={item} /> · الحد المتاح {item.quantity} {item.unit || ""}</Label><Input id={`handover-${delivery.id}-${item.id}`} type="number" min="0" max={item.quantity} step="any" inputMode="decimal" className="w-32" value={quantities[item.id] ?? ""} readOnly={delivery.sourceType !== "kitchen"} onChange={e => setQuantities(value => ({ ...value, [item.id]: e.target.value }))} /></div>)}<label className="flex items-start gap-2"><Checkbox checked={confirmed} onCheckedChange={value => setConfirmed(value === true)} /><span>أؤكد بصفتي مسؤول المصدر مطابقة الأصناف والكميات و{external ? "الناقل والبوليصة" : "السائق والمركبة"} أعلاه مع ما سُلّم فعلياً.</span></label><Button className="min-h-12 w-full" disabled={!validLines || !confirmed || pending || (external && (!delivery.attachments?.some(file => file.kind === "shipment_photo") || !delivery.attachments?.some(file => file.kind === "carrier_receipt")))} onClick={() => onAction(`/api/deliveries/${delivery.id}/handover`, { items: lines })}>توثيق محضر تسليم الشحنة {external ? "للناقل" : "للسائق"}</Button>{external && (!delivery.attachments?.some(file => file.kind === "shipment_photo") || !delivery.attachments?.some(file => file.kind === "carrier_receipt")) && <p className="text-amber-900">صورة الشحنة وإيصال الناقل مطلوبان قبل توثيق المحضر.</p>}</div>}
     {delivery.capabilities.canAcknowledgeHandover && snapshot && <div className="space-y-3 border-t pt-3"><p>راجع النسخة المسجلة أعلاه. هذا إقرار باستلام الشحنة من مسؤول المصدر، وليس توقيع المستلم النهائي أو ترحيلاً للمخزون.</p><label className="flex items-start gap-2"><Checkbox checked={acknowledged} onCheckedChange={value => setAcknowledged(value === true)} /><span>أنا السائق المكلّف، أؤكد استلام الأصناف والكميات الموضحة بالمحضر والمركبة المذكورة.</span></label><Button className="min-h-12 w-full" disabled={!acknowledged || pending} onClick={() => onAction(`/api/deliveries/${delivery.id}/acknowledge-handover`)}>تأكيد استلام الشحنة</Button></div>}
     {snapshot && !external && !delivery.handoverAcknowledgedAt && !delivery.capabilities.canAcknowledgeHandover && <p className="text-amber-900">إقرار السائق المكلّف الحالي مطلوب {awaitingDispatch ? "قبل صرف المصدر" : "قبل بدء المهمة" }.</p>}
      {(external ? !!delivery.handoverRecordedAt : !!delivery.handoverAcknowledgedAt) && awaitingDispatch && <div className="rounded-lg border border-sky-200 bg-sky-50 p-3 text-sky-900">{external ? "اكتمل محضر الناقل." : "اكتمل محضر التسليم والإقرار."} {external && delivery.sourceType === "material_transfer" ? "الخطوة التالية: استخدم زر إرسال الشحنة في أعلى التفاصيل؛ لا حاجة للانتقال إلى نافذة أخرى." : "الخطوة التالية: تنفيذ الصرف/الشحن من المصدر؛ لا تبدأ التوصيل إلا بعد خروج الشحنة فعلياً."} {canOpenSource && delivery.capabilities.canRecordHandover && !(external && delivery.sourceType === "material_transfer") && <a className="font-bold underline underline-offset-4" href={deliverySourcePath(delivery)} target="_blank" rel="noopener noreferrer">فتح إجراء الشحن من المصدر في تبويب جديد</a>}</div>}

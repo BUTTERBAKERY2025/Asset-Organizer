@@ -473,6 +473,10 @@ async function dto(req: Request, res: Response, client: PoolClient, row: Assignm
     handoverInvalidated: row.handover_revision > 0 && !row.handover_recorded_at,
     capabilities: {
       canRecordHandover: managerWrite && row.status === "assigned" && sourceHandoverReady(s) && !eligibleSourceReceipt(s) && (!external || evidenceReady),
+      canUploadEvidence: external && managerWrite && row.status === "assigned" && !row.handover_recorded_at
+        && sourceHandoverReady(s) && !eligibleSourceReceipt(s),
+      canDispatchSource: external && s.sourceType === "material_transfer" && managerWrite
+        && row.status === "assigned" && !!row.handover_recorded_at && evidenceReady && s.sourceStatus === "approved",
       canAcknowledgeHandover: !external && driverWrite && row.status === "assigned" && !!row.handover_recorded_at
         && !row.handover_acknowledged_at && row.handover_driver_id === row.driver_id
         && row.handover_vehicle_number === row.vehicle_number

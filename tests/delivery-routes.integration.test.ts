@@ -681,6 +681,47 @@ describe("delivery routes against local PostgreSQL contracts", () => {
     expect((await invoke("GET", "/api/deliveries/:id/proof", fixture.otherDriver!, {}, { id })).body.signatureData).toBeNull();
   });
 
+  it("starts an already-dispatched external transfer with edit but no assignment-create rights, without stock writes", async () => {
+    const transfer = await client.query(`INSERT INTO material_transfers
+      (transfer_number,source_type,source_branch_id,destination_branch_id,transfer_date,status,created_by)
+      VALUES ($1,'branch',$2,$3,current_date::text,'in_transit',$4) RETURNING id`,
+      [`${fixture.prefix}-external-tracking`, fixture.kitchen, fixture.destination, fixture.manager!.id]);
+    const sourceId = Number(transfer.rows[0].id);
+    const task = await client.query(`INSERT INTO delivery_assignments
+      (source_type,source_id,transport_mode,status,created_by,carrier,waybill,package_count,
+       handover_recorded_at,handover_revision)
+      VALUES ('material_transfer',$1,'external','assigned',$2,'road','tracking-waybill',1,now(),1) RETURNING id`,
+      [sourceId, fixture.manager!.id]);
+    const id = Number(task.rows[0].id);
+    for (const kind of ["shipment_photo", "carrier_receipt"]) {
+      await client.query(`INSERT INTO delivery_carrier_attachments
+        (assignment_id,kind,storage_path,original_name,mime_type,uploaded_by)
+        VALUES ($1,$2,$3,$4,'image/png',$5)`,
+        [id, kind, `${fixture.prefix}/${id}/${kind}`, `${kind}.png`, fixture.manager!.id]);
+    }
+    grant(fixture.manager!, { delivery_tasks: ["view", "edit"], warehouse: ["view", "edit"] });
+    try {
+      const portal = await invoke("GET", "/api/deliveries/capabilities", fixture.manager!);
+      expect(portal.body.canAssign).toBe(false);
+      const detail = await invoke("GET", "/api/deliveries/:id", fixture.manager!, {}, { id });
+      expect(detail.statusCode).toBe(200);
+      expect(detail.body.capabilities.canStart).toBe(true);
+      expect(detail.body.capabilities.canDispatchSource).toBe(false);
+      expect(detail.body.handoverRecordedAt).toBeTruthy();
+      const started = await invoke("POST", "/api/deliveries/:id/start", fixture.manager!, {}, { id });
+      expect(started.statusCode).toBe(200);
+      expect(started.body.status).toBe("awaiting_receipt");
+      expect(started.body.startedAt).toBeTruthy();
+      expect((await invoke("POST", "/api/deliveries/:id/start", fixture.manager!, {}, { id })).statusCode).toBe(409);
+      const unchanged = await client.query("SELECT status,departure_time FROM material_transfers WHERE id=$1", [sourceId]);
+      expect(unchanged.rows[0].status).toBe("in_transit");
+      expect(unchanged.rows[0].departure_time).toBeNull();
+    } finally {
+      grant(fixture.manager!, { delivery_tasks: ["create", "view", "edit"], central_kitchen_orders: ["edit", "view"],
+        warehouse: ["edit", "view"], production: ["edit", "view"] });
+    }
+  });
+
   it("cancels only metadata with reason, enqueues once and can reassign same unreceived source safely", async () => {
     const request = { sourceType: "material_transfer", sourceId: fixture.transfer,
       driverId: fixture.driver!.id, vehicleNumber: "V-4" };

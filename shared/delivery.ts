@@ -52,6 +52,8 @@ export interface DeliveryDTO extends DeliverySource {
   handoverInvalidated: boolean;
   capabilities: {
     canRecordHandover: boolean;
+    canUploadEvidence: boolean;
+    canDispatchSource: boolean;
     canAcknowledgeHandover: boolean;
     canStart: boolean;
     canSubmitProof: boolean;
