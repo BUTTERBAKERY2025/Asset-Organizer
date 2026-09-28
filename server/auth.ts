@@ -203,6 +203,57 @@ export const BRANCH_MANAGER_INTRINSIC_PERMISSIONS: Record<string, string[]> =
     ),
   );
 
+// Direct rows select a module's *complete* action set, including an empty row
+// (revocation). Other modules retain their ordinary effective grants. Overrides
+// are applied last, so explicit denies can also remove intrinsic role actions.
+export function resolveBranchManagerPermissions(
+  effective: { module: string; actions: string[] }[],
+  direct: { module: string; actions: string[] }[],
+  overrides: { module: string; action: string; allow: boolean }[] = [],
+): { module: string; actions: string[] }[] {
+  const result = new Map<string, Set<string>>(effective.map((p) => [p.module, new Set(p.actions)]));
+  for (const [module, actions] of Object.entries(BRANCH_MANAGER_INTRINSIC_PERMISSIONS)) {
+    const selected = result.get(module) ?? new Set<string>();
+    for (const action of actions) selected.add(action);
+    result.set(module, selected);
+  }
+  for (const row of direct) result.set(row.module, new Set(row.actions));
+  for (const { module, action, allow } of overrides) {
+    const actions = result.get(module) ?? new Set<string>();
+    if (allow) actions.add(action);
+    else actions.delete(action);
+    result.set(module, actions);
+  }
+  // requirePermission accepts these legacy module names only when the target
+  // has no explicit module entry. Never mirror across an empty revoked row.
+  for (const [source, target] of [
+    ["attendance", "attendance_check"],
+    ["pnl", "pnl_dashboard"],
+    ["pnl_dashboard", "pnl"],
+  ]) {
+    if (!result.has(target) && result.has(source)) {
+      result.set(target, new Set(result.get(source)));
+    }
+  }
+  return Array.from(result, ([module, actions]) => ({ module, actions: [...actions] }));
+}
+
+export async function getBranchManagerEffectivePermissions(
+  userId: string,
+  effective: { module: string; actions: string[] }[],
+) {
+  const [direct, overrides] = await Promise.all([
+    db.select({ module: userPermissions.module, actions: userPermissions.actions })
+      .from(userPermissions).where(eq(userPermissions.userId, userId)),
+    db.select({ module: permissionDefinitions.module, action: permissionDefinitions.action, allow: userPermissionOverrides.allow })
+      .from(userPermissionOverrides)
+      .innerJoin(permissionDefinitions, eq(userPermissionOverrides.permissionId, permissionDefinitions.id))
+      .where(and(eq(userPermissionOverrides.userId, userId),
+        or(isNull(userPermissionOverrides.expiresAt), gt(userPermissionOverrides.expiresAt, new Date())))),
+  ]);
+  return resolveBranchManagerPermissions(effective, direct, overrides);
+}
+
 // Existing delivery employees may predate the job-title template being applied
 // to user_permissions. Only this job title + module receives the template's
 // narrow view/edit actions; branch and task ownership are checked by the routes.
@@ -825,6 +876,9 @@ export async function setupAuth(app: Express) {
       if (user.role === "warehouse_keeper") {
         permissions = await getWarehouseKeeperEffectivePermissions(user.id, permissions);
       }
+      if (user.role === "branch_manager") {
+        permissions = await getBranchManagerEffectivePermissions(user.id, permissions);
+      }
       res.json({
         user: {
           ...user,
@@ -1071,6 +1125,9 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
   if (user.role === "warehouse_keeper") {
     (req as any).authPermissions = await getWarehouseKeeperEffectivePermissions(user.id, permissions);
   }
+  if (user.role === "branch_manager") {
+    (req as any).authPermissions = await getBranchManagerEffectivePermissions(user.id, permissions);
+  }
   
   // Update session activity throttled (only once per 60s per session)
   if (req.sessionID) {
@@ -1224,17 +1281,12 @@ export const requirePermission = (module: string, action?: string): RequestHandl
       }
     }
 
-    if (user.role === "branch_manager") {
-      const allowed = BRANCH_MANAGER_INTRINSIC_PERMISSIONS[module];
-      const methodActions: Record<string, string> = {
-        GET: "view", HEAD: "view", OPTIONS: "view", POST: "create",
-        PATCH: "edit", PUT: "edit", DELETE: "delete",
-      };
-      if (allowed?.includes(action ?? methodActions[req.method] ?? "edit")) return next();
-    }
-    
     // Only reuse permissions fetched by isAuthenticated for this request.
-    const permissions = (req as any).authPermissions ?? await storage.getUserPermissions(user.id, { bypassCache: true });
+    const permissions = (req as any).authPermissions ?? (
+      user.role === "branch_manager"
+        ? await getBranchManagerEffectivePermissions(user.id, await storage.getUserPermissions(user.id, { bypassCache: true }))
+        : await storage.getUserPermissions(user.id, { bypassCache: true })
+    );
     let modulePerm = permissions.find((p: any) => p.module === module);
     
     // Backward compatibility: attendance_check also accepts attendance permission
@@ -1368,7 +1420,11 @@ export const requireAnyPermission = (module: string, actions: string[]): Request
       }
     }
     
-    const permissions = (req as any).authPermissions ?? await storage.getUserPermissions(user.id, { bypassCache: true });
+    const permissions = (req as any).authPermissions ?? (
+      user.role === "branch_manager"
+        ? await getBranchManagerEffectivePermissions(user.id, await storage.getUserPermissions(user.id, { bypassCache: true }))
+        : await storage.getUserPermissions(user.id, { bypassCache: true })
+    );
     let modulePerm = permissions.find((p: any) => p.module === module);
 
     // Backward compatibility synonyms (mirrors requirePermission above).

@@ -44,6 +44,7 @@ vi.mock("../server/shareholder-security", () => ({
 }));
 
 import { csvCell, reportDateBounds, registerDeliveryRoutes } from "../server/delivery-routes";
+import { resolveBranchManagerPermissions } from "../server/auth";
 import { ObjectStorageService } from "../server/replit_integrations/object_storage/objectStorage";
 
 const handlers = new Map<string, any[]>();
@@ -80,12 +81,16 @@ const actor = (name: string, branchId: string, jobTitle = "employee"): Actor => 
 const grant = (user: Actor, modules: Record<string, string[]>) => {
   state.permissions.set(user.id, Object.entries(modules).map(([module, actions]) => ({ module, actions })));
 };
-async function invoke(method: string, path: string, user: Actor, body: any = {}, params: any = {}, query: any = {}, file?: any) {
+async function invoke(method: string, path: string, user: Actor, body: any = {}, params: any = {}, query: any = {}, file?: any,
+  branches: string[] = []) {
   const route = handlers.get(`${method} ${path}`);
   if (!route) throw Error(`Missing route ${method} ${path}`);
-  const req: any = { currentUser: user, method, body, params, query, file, userBranchAccess: [],
+  const req: any = { currentUser: user, method, body, params, query, file,
+    userBranchAccess: branches.map(branchId => ({ branchId })),
     headers: {}, originalUrl: path, ip: "127.0.0.1" };
   if (user.role === "warehouse_keeper") req.authPermissions = state.permissions.get(user.id) || [];
+  if (user.role === "branch_manager")
+    req.authPermissions = resolveBranchManagerPermissions([], state.permissions.get(user.id) || []);
   const res: any = {
     statusCode: 200, headersSent: false, body: null, csv: "",
     status(code: number) { this.statusCode = code; return this; },
@@ -143,11 +148,11 @@ describe("delivery routes against local PostgreSQL contracts", () => {
       await client.query("INSERT INTO branches (id,name,is_central_kitchen) VALUES ($1,$2,$3)",
         [fixture[key], key, key === "kitchen"]);
     }
-    fixture.manager = actor("manager", fixture.kitchen);
+    fixture.manager = actor("manager", fixture.kitchen, "delivery");
     fixture.driver = actor("driver", fixture.kitchen, "delivery");
     fixture.otherDriver = actor("other-driver", fixture.kitchen, "delivery");
-    fixture.receiver = actor("receiver", fixture.destination);
-    fixture.outsiderUser = actor("outsider", fixture.outsider);
+    fixture.receiver = actor("receiver", fixture.destination, "delivery");
+    fixture.outsiderUser = actor("outsider", fixture.outsider, "delivery");
     fixture.warehouseManager = { ...actor("warehouse-manager", fixture.kitchen), role: "admin" };
     for (const user of [fixture.manager, fixture.driver, fixture.otherDriver, fixture.receiver, fixture.outsiderUser, fixture.warehouseManager]) {
       await client.query("INSERT INTO users (id,first_name,role,branch_id,job_title,is_active) VALUES ($1,$2,$3,$4,$5,$6)",
@@ -241,6 +246,91 @@ describe("delivery routes against local PostgreSQL contracts", () => {
     expect((await invoke("GET", "/api/deliveries", fixture.manager!)).body.deliveries.some((d: any) => d.id === id)).toBe(true);
   });
 
+  it("isolates the branch recipient desk even with custom delivery edits and other-branch overrides", async () => {
+    const desk = { ...fixture.receiver!, role: "branch_manager", jobTitle: "delivery" };
+    const previous = state.permissions.get(desk.id);
+    grant(desk, {
+      delivery_tasks: ["view", "approve", "edit", "create", "export"],
+      branch_supply: ["view", "edit"],
+      central_kitchen_orders: ["view", "edit"],
+      warehouse: ["view", "edit"],
+    });
+    const assigned = (await client.query(
+      "SELECT id FROM delivery_assignments WHERE source_type='kitchen' AND source_id=$1 ORDER BY id DESC LIMIT 1",
+      [fixture.source])).rows[0];
+    expect(assigned).toBeDefined();
+    const id = Number(assigned.id);
+    const foreignSource = Number((await client.query(`INSERT INTO central_kitchen_orders
+      (order_number,request_branch_id,central_kitchen_id,order_date,status,idempotency_key,payload_fingerprint,created_by)
+      VALUES ($1,$2,$3,current_date,'dispatched',$4,$5,$6) RETURNING id`,
+      [`${fixture.prefix}-other-destination`, fixture.outsider, fixture.kitchen,
+        `${fixture.prefix}-other-destination-key`, "e".repeat(64), fixture.manager!.id])).rows[0].id);
+    const foreignId = Number((await client.query(`INSERT INTO delivery_assignments
+      (source_type,source_id,transport_mode,status,created_by,driver_id,vehicle_number)
+      VALUES ('kitchen',$1,'internal','assigned',$2,$3,'OTHER-1') RETURNING id`,
+      [foreignSource, fixture.manager!.id, fixture.driver!.id])).rows[0].id);
+    const overrides = [fixture.destination, fixture.outsider];
+    const own = await invoke("GET", "/api/deliveries/:id", desk, {}, { id });
+    expect(own.statusCode).toBe(200);
+    expect((await invoke("GET", "/api/deliveries/:id", desk, {}, { id: foreignId }, {}, undefined, overrides)).statusCode).toBe(403);
+    expect(own.body.destinationBranchId).toBe(fixture.destination);
+    expect(Object.entries(own.body.capabilities).filter(([key, enabled]) =>
+      enabled && key !== "canApproveReceipt")).toEqual([]);
+    const workspace = await invoke("GET", "/api/deliveries/workspace", desk, {}, {}, { status: "all" }, undefined, overrides);
+    expect(workspace.statusCode).toBe(200);
+    expect(workspace.body.total).toBe(1);
+    expect(workspace.body.deliveries.some((item: any) => item.id === id)).toBe(true);
+    expect(workspace.body.counts.assigned).toBe(1);
+    expect(workspace.body.filters.destinations.every((branch: any) => branch.id === fixture.destination)).toBe(true);
+    const reports = await invoke("GET", "/api/deliveries/reports", desk, {}, {}, {}, undefined, overrides);
+    expect(reports.statusCode).toBe(200);
+    expect(reports.body.deliveries.some((item: any) => item.id === id)).toBe(true);
+    expect(reports.body.deliveries.every((item: any) => item.destinationBranchId === fixture.destination)).toBe(true);
+    const exportResult = await invoke("GET", "/api/deliveries/reports/export", desk, {}, {}, {}, undefined, overrides);
+    expect(exportResult.statusCode).toBe(200);
+    expect(exportResult.csv).toContain(`${fixture.prefix}`);
+    expect(exportResult.csv).not.toContain(`${fixture.prefix}-other-destination`);
+    const capabilities = await invoke("GET", "/api/deliveries/capabilities", desk);
+    expect(capabilities.body).toMatchObject({ canAssign: false, canReport: true, canExport: true });
+    expect((await invoke("GET", "/api/deliveries/sources", desk)).statusCode).toBe(403);
+    expect((await invoke("GET", "/api/deliveries/drivers", desk)).statusCode).toBe(403);
+    expect((await invoke("POST", "/api/deliveries/:id/start", desk, {}, { id })).statusCode).toBe(403);
+    expect((await invoke("POST", "/api/deliveries/:id/complete", desk, {}, { id })).statusCode).toBe(403);
+    expect((await invoke("POST", "/api/deliveries/:id/approve-receipt", desk, {}, { id })).statusCode).toBe(409);
+    const wrongBranch = { ...desk, branchId: fixture.outsider };
+    const outsider = await invoke("GET", "/api/deliveries/:id", wrongBranch, {}, { id });
+    expect(outsider.statusCode).toBe(403);
+    const otherDesk = await invoke("GET", "/api/deliveries/workspace", wrongBranch, {}, {}, { status: "all" });
+    expect(otherDesk.body).toMatchObject({ total: 1, counts: { assigned: 1 } });
+    expect(otherDesk.body.deliveries.map((item: any) => item.id)).toEqual([foreignId]);
+    // This receipt is otherwise ready and posted by the same identity: the
+    // only disqualifier is that its destination is not the user's primary branch.
+    await client.query("UPDATE central_kitchen_orders SET status='received',received_by=$1 WHERE id=$2",
+      [desk.id, foreignSource]);
+    await client.query(`UPDATE delivery_assignments SET
+      status='awaiting_receipt',signature_data=$1,proof_at=now() WHERE id=$2`,
+      [png, foreignId]);
+    expect((await invoke("POST", "/api/deliveries/:id/approve-receipt", desk, {}, { id: foreignId },
+      {}, undefined, overrides)).statusCode).toBe(403);
+    expect((await client.query("SELECT status,receipt_approved_by,receipt_approved_at FROM delivery_assignments WHERE id=$1",
+      [foreignId])).rows[0]).toMatchObject({
+      status: "awaiting_receipt", receipt_approved_by: null, receipt_approved_at: null,
+    });
+    expect((await invoke("POST", "/api/deliveries/:id/approve-receipt", desk, {}, { id },
+      {}, undefined, [fixture.outsider])).statusCode).toBe(403);
+    expect((await client.query("SELECT status,receipt_approved_by FROM delivery_assignments WHERE id=$1",
+      [id])).rows[0]).toMatchObject({ status: "assigned", receipt_approved_by: null });
+    grant(desk, { delivery_tasks: [], central_kitchen_orders: ["view", "edit"], branch_supply: ["view", "edit"] });
+    expect((await invoke("GET", "/api/deliveries/workspace", desk)).statusCode).toBe(403);
+    expect((await invoke("GET", "/api/deliveries/:id", desk, {}, { id })).statusCode).toBe(403);
+    expect((await invoke("GET", "/api/deliveries/reports", desk)).statusCode).toBe(403);
+    state.permissions.set(desk.id, previous!);
+    // The next case exercises a fresh assignment for this same source. These
+    // fixtures run inside a single outer transaction, so release this probe.
+    await client.query("DELETE FROM delivery_assignments WHERE id=$1", [id]);
+    await client.query("DELETE FROM delivery_assignments WHERE id=$1", [foreignId]);
+  });
+
   it("fails storage safely, preserves insert errors on cleanup, and serves authorized private bytes", async () => {
     const id = Number((await client.query(`INSERT INTO delivery_assignments
       (source_type,source_id,transport_mode,status,created_by,carrier,waybill,package_count)
@@ -299,6 +389,8 @@ describe("delivery routes against local PostgreSQL contracts", () => {
     } finally {
       state.failAttachmentInsert = false;
       ready.mockRestore(); upload.mockRestore(); remove.mockRestore(); download.mockRestore();
+      await client.query("DELETE FROM delivery_carrier_attachments WHERE assignment_id=$1", [id]);
+      await client.query("DELETE FROM delivery_assignments WHERE id=$1", [id]);
     }
   });
 
@@ -326,7 +418,8 @@ describe("delivery routes against local PostgreSQL contracts", () => {
     expect(denied.statusCode).toBe(403);
     const previous = state.permissions.get(fixture.manager!.id);
     state.permissions.set(fixture.manager!.id, [{ module: "central_kitchen_orders", actions: ["edit", "view"] }]);
-    expect((await invoke("GET", "/api/deliveries/drivers", fixture.manager!)).statusCode).toBe(403);
+    expect((await invoke("GET", "/api/deliveries/drivers",
+      { ...fixture.manager!, role: "viewer" })).statusCode).toBe(403);
     state.permissions.set(fixture.manager!.id, previous!);
   });
 
@@ -340,7 +433,7 @@ describe("delivery routes against local PostgreSQL contracts", () => {
     const originalQuery = client.query.bind(client);
     const failure = new Error("simulated assignment projection failure");
     (client as any).query = (sql: string, values?: any[]) => {
-      if (sql.includes("SELECT a.*, concat_ws(")) return Promise.reject(failure);
+      if (sql.includes("SELECT a.*, CASE WHEN u.id IS NOT NULL THEN concat_ws(")) return Promise.reject(failure);
       return originalQuery(sql, values);
     };
     try {
@@ -563,37 +656,42 @@ describe("delivery routes against local PostgreSQL contracts", () => {
   it("requires export and source read scope for reports without exposing a driver's other tasks", async () => {
     expect((await invoke("GET", "/api/deliveries/reports", fixture.driver!)).statusCode).toBe(403);
     expect((await invoke("GET", "/api/deliveries/capabilities", fixture.driver!)).body.canReport).toBe(false);
-    const viewOnly = await invoke("GET", "/api/deliveries/reports", fixture.manager!);
+    const reporter = { ...fixture.receiver!, role: "branch_manager" };
+    const original = state.permissions.get(reporter.id)!;
+    grant(reporter, { delivery_tasks: ["view", "approve"], central_kitchen_orders: ["view", "edit"],
+      branch_supply: ["view", "edit"], production: ["view"] });
+    const viewOnly = await invoke("GET", "/api/deliveries/reports", reporter);
     expect(viewOnly.statusCode).toBe(200);
     expect(viewOnly.body.deliveries).toEqual(expect.arrayContaining([
       expect.objectContaining({ sourceType: "kitchen", sourceId: fixture.source }),
     ]));
-    expect((await invoke("GET", "/api/deliveries/capabilities", fixture.manager!)).body)
+    expect((await invoke("GET", "/api/deliveries/capabilities", reporter)).body)
       .toMatchObject({ canReport: true, canExport: false });
-    const original = state.permissions.get(fixture.manager!.id)!;
     try {
-      grant(fixture.manager!, { delivery_tasks: ["view", "edit", "create", "export"],
-        central_kitchen_orders: ["view", "edit"], warehouse: ["view", "edit"], production: ["view", "edit"] });
-      expect((await invoke("GET", "/api/deliveries/capabilities", fixture.manager!)).body)
+      grant(reporter, { delivery_tasks: ["view", "export"],
+        central_kitchen_orders: ["view", "edit"], branch_supply: ["view", "edit"], production: ["view"] });
+      expect((await invoke("GET", "/api/deliveries/capabilities", reporter)).body)
         .toMatchObject({ canReport: true, canExport: true });
-      const report = await invoke("GET", "/api/deliveries/reports", fixture.manager!);
+      const report = await invoke("GET", "/api/deliveries/reports", reporter);
       expect(report.statusCode).toBe(200);
       expect(report.body.deliveries).toEqual(expect.arrayContaining([
         expect.objectContaining({ sourceType: "kitchen", sourceId: fixture.source }),
       ]));
       expect(report.body.summary.total).toBe(report.body.deliveries.length);
-      grant(fixture.manager!, { delivery_tasks: ["view", "export"], warehouse: ["view"] });
-      const restricted = await invoke("GET", "/api/deliveries/reports", fixture.manager!);
+      grant(reporter, { delivery_tasks: ["view", "export"], branch_supply: ["view"],
+        central_kitchen_orders: [], production: [] });
+      const restricted = await invoke("GET", "/api/deliveries/reports", reporter);
       expect(restricted.statusCode).toBe(200);
       expect(restricted.body.deliveries.some((d: any) => d.sourceType === "kitchen")).toBe(false);
       expect(restricted.body.deliveries.every((d: any) => d.sourceType === "material_transfer"
-        || d.sourceType === "reverse_movement" || d.sourceType === "kitchen_warehouse_shipment")).toBe(true);
-      grant(fixture.manager!, { delivery_tasks: ["view"], central_kitchen_orders: ["edit"] });
-      expect((await invoke("GET", "/api/deliveries/capabilities", fixture.manager!)).body)
+        || d.sourceType === "reverse_movement")).toBe(true);
+      grant(reporter, { delivery_tasks: ["view"], central_kitchen_orders: ["edit"],
+        branch_supply: [], production: [], warehouse: [] });
+      expect((await invoke("GET", "/api/deliveries/capabilities", reporter)).body)
         .toMatchObject({ canReport: false, canExport: false });
-      expect((await invoke("GET", "/api/deliveries/reports", fixture.manager!)).statusCode).toBe(403);
+      expect((await invoke("GET", "/api/deliveries/reports", reporter)).statusCode).toBe(403);
     } finally {
-      state.permissions.set(fixture.manager!.id, original);
+      state.permissions.set(reporter.id, original);
     }
   });
 

@@ -767,10 +767,10 @@ export default function CentralKitchenOrdersPage() {
         current="kitchen"
         branchId={supplyBranchId}
         canKitchen={canView("central_kitchen_orders")}
-        canWarehouse={canView("warehouse")}
+        canWarehouse={canView(user?.role === "branch_manager" ? "branch_supply" : "warehouse")}
         compact
         onKitchenRequest={canCreate("central_kitchen_orders") ? () => void openCreate() : undefined}
-        onWarehouseRequest={canCreate("warehouse") && supplyBranchId
+        onWarehouseRequest={canCreate(user?.role === "branch_manager" ? "branch_supply" : "warehouse") && supplyBranchId
           ? () => navigateSupply(branchSupplyUrl("warehouse", supplyBranchId, true)) : undefined}
       />}
       {operationsView ? <details className="rounded-xl border border-border bg-card px-3" data-testid="kitchen-operations-schedule">

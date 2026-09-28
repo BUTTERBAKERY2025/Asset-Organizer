@@ -20,10 +20,10 @@ export function usePermissions() {
       return res.json();
     },
     enabled: !!user,
-    staleTime: 1000 * 60 * 60,
-    gcTime: 1000 * 60 * 120,
-    refetchOnWindowFocus: false,
-    refetchOnMount: false,
+    staleTime: 0,
+    gcTime: 1000 * 60 * 5,
+    refetchOnWindowFocus: true,
+    refetchOnMount: "always",
     refetchOnReconnect: true,
   });
 
@@ -47,6 +47,9 @@ export function usePermissions() {
       if (!perm && module === "attendance_check") {
         perm = permissions.find(p => p.module === "attendance");
       }
+      if (!perm && (module === "pnl" || module === "pnl_dashboard")) {
+        perm = permissions.find(p => p.module === (module === "pnl" ? "pnl_dashboard" : "pnl"));
+      }
       if (!perm) return false;
       return perm.actions.includes("view");
     }
@@ -56,6 +59,9 @@ export function usePermissions() {
     // Backward compatibility: attendance_check also accepts attendance permission
     if (!perm && module === "attendance_check") {
       perm = permissions.find(p => p.module === "attendance");
+    }
+    if (!perm && (module === "pnl" || module === "pnl_dashboard")) {
+      perm = permissions.find(p => p.module === (module === "pnl" ? "pnl_dashboard" : "pnl"));
     }
     if (!perm) return false;
     return perm.actions.includes(action);

@@ -8,6 +8,8 @@ import UsersPage from "@/pages/users";
 import TransferRequestsPage from "@/pages/transfer-requests";
 import WarehouseDashboardPage from "@/pages/warehouse-dashboard";
 import DriverDeliveriesPage, { DeliveryWorkspace } from "@/pages/driver-deliveries";
+import CentralKitchenOrdersPage from "@/pages/central-kitchen-orders";
+import ReverseLogisticsPage from "@/pages/reverse-logistics";
 import "@/lib/i18n";
 import "@/index.css";
 
@@ -23,6 +25,8 @@ async function mount() {
     : page === "/transfer-requests" ? TransferRequestsPage
     : page === "/warehouse" ? WarehouseDashboardPage
     : page === "/driver-deliveries" ? DriverDeliveriesPage
+    : page === "/central-kitchen-orders" ? CentralKitchenOrdersPage
+    : page === "/reverse-logistics" ? ReverseLogisticsPage
     : null;
   if (!Page) throw new Error(`No real fixture page for ${page}`);
   createRoot(document.getElementById("root")!).render(

@@ -34,6 +34,7 @@ const num = (v: bigint) => Number(v) / 1000000;
 class Reject extends Error { constructor(message: string, public status = 409) { super(message); } }
 const rows = async (c: PoolClient, text: string, values: unknown[] = []) => (await c.query(text, values)).rows;
 const scope = (req: Request, branch: string) => {
+  if (req.currentUser?.role === "branch_manager" && req.currentUser.branchId !== branch) return false;
   const allowed = getAllowedBranchIds(req);
   return allowed === null || allowed.includes(branch);
 };
@@ -219,11 +220,19 @@ async function recordStock(c: PoolClient, row: any, q: number, side: "source" | 
 }
 
 export function registerReverseLogisticsRoutes(app: Express) {
+  const branchGrant = (req: Request, kind: string, mode: "view" | "create" | "edit") => {
+    if (req.currentUser?.role !== "branch_manager") return true;
+    const module = kind === "material_return" ? "branch_supply" : "central_kitchen_orders";
+    const permissions = (req as any).authPermissions as { module: string; actions: string[] }[] | undefined;
+    return !!permissions?.some(p => p.module === module && p.actions.includes(mode));
+  };
   const permission = (mode: "view" | "edit"): RequestHandler => (req,res,next) => {
-    // Branch managers may manage their own returns without gaining access to
-    // the warehouse module's unrelated stock editing endpoints.
-    const module = req.currentUser?.role === "branch_manager" ? "central_kitchen_orders" : "warehouse";
-    return requirePermission(module,mode)(req,res,next);
+    if (req.currentUser?.role === "branch_manager") {
+      if (branchGrant(req, "material_return", mode) || branchGrant(req, "product_return", mode))
+        return next();
+      return res.status(403).json({ message: "Return permission denied" });
+    }
+    return requirePermission("warehouse",mode)(req,res,next);
   };
   const warehouseView = [isAuthenticated,permission("view")] as const;
   const warehouseEdit = [isAuthenticated,permission("edit")] as const;
@@ -253,7 +262,9 @@ export function registerReverseLogisticsRoutes(app: Express) {
     return rows(c,"SELECT id,name,active FROM managed_warehouses ORDER BY id");
   }));
   app.get("/api/reverse-logistics/sources", ...warehouseView, async (req,res) => run(req,res,async c => {
-    const allowed = getAllowedBranchIds(req);
+    const allowed = req.currentUser?.role === "branch_manager"
+      ? [req.currentUser.branchId].filter((branch): branch is string => !!branch && scope(req, branch))
+      : getAllowedBranchIds(req);
     const materials = await rows(c,`SELECT i.id,t.transfer_number reference,t.destination_branch_id source_branch_id,
       i.item_name name,i.unit,i.received_quantity quantity
       FROM material_transfer_items i JOIN material_transfers t ON t.id=i.transfer_id
@@ -273,7 +284,10 @@ export function registerReverseLogisticsRoutes(app: Express) {
       WHERE o.status='received' AND o.inventory_mode='real' AND i.product_id IS NOT NULL
         AND ($1::varchar[] IS NULL OR o.request_branch_id=ANY($1::varchar[]))
       ORDER BY i.id DESC LIMIT 250`,[allowed]);
-    return {materials,products};
+    return {
+      materials: branchGrant(req, "material_return", "view") ? materials : [],
+      products: branchGrant(req, "product_return", "view") ? products : [],
+    };
   }));
   app.get("/api/reverse-logistics/items", ...warehouseView, async (req,res) => run(req,res,async c => {
     if (!globalWarehouse(req)) throw new Reject("Global warehouse manager required",403);
@@ -292,18 +306,25 @@ export function registerReverseLogisticsRoutes(app: Express) {
     return (await rows(c,"INSERT INTO managed_warehouses(name) VALUES($1) RETURNING *",[name]))[0];
   }));
   app.get("/api/reverse-logistics", ...warehouseView, async (req,res) => run(req,res,async c => {
-    const allowed = getAllowedBranchIds(req);
-    return rows(c,`SELECT m.*,m.shipped_quantity-m.received_quantity AS shortage_quantity,
+    const allowed = req.currentUser?.role === "branch_manager"
+      ? [req.currentUser.branchId].filter((branch): branch is string => !!branch && scope(req, branch))
+      : getAllowedBranchIds(req);
+    const movements = await rows(c,`SELECT m.*,m.shipped_quantity-m.received_quantity AS shortage_quantity,
       m.received_quantity-m.usable_quantity-m.written_off_quantity AS quarantine_quantity
       FROM reverse_movements m WHERE ($1::varchar[] IS NULL OR
       source_branch_id=ANY($1::varchar[]) OR destination_branch_id=ANY($1::varchar[])
       OR ($3::boolean AND m.kind='material_return'))
       AND ($2::boolean = true OR m.kind <> 'warehouse_transfer')
-      ORDER BY m.id DESC LIMIT 250`,[allowed,globalWarehouse(req),mainWarehouseReceiver(req)]);
+       ORDER BY m.id DESC LIMIT 250`,[allowed,globalWarehouse(req),mainWarehouseReceiver(req)]);
+    return movements.filter(row => branchGrant(req, row.kind, "view")
+      && (req.currentUser?.role !== "branch_manager" || (row.source_branch_id && scope(req, row.source_branch_id))));
   }));
   app.get("/api/reverse-logistics/:id", ...warehouseView, async (req,res) => run(req,res,async c => {
     const row = (await rows(c,"SELECT * FROM reverse_movements WHERE id=$1",[id.parse(req.params.id)]))[0];
     if (!row) throw new Reject("Not found",404);
+    if (!branchGrant(req,row.kind,"view")) throw new Reject("Return permission denied",403);
+    if (req.currentUser?.role === "branch_manager" && (!row.source_branch_id || !scope(req,row.source_branch_id)))
+      throw new Reject("Branch access denied",403);
     if (row.kind === "warehouse_transfer" && !globalWarehouse(req)) throw new Reject("Global warehouse manager required",403);
     if (row.source_branch_id && !scope(req,row.source_branch_id) && !scope(req,row.destination_branch_id) &&
         !(row.kind === "material_return" && mainWarehouseReceiver(req))) throw new Reject("Branch access denied",403);
@@ -311,6 +332,7 @@ export function registerReverseLogisticsRoutes(app: Express) {
   }));
   app.post("/api/reverse-logistics", ...warehouseEdit, async (req,res) => run(req,res,async c => {
     const input = create.parse(req.body), userId = actor(req);
+    if (!branchGrant(req,input.kind,"create")) throw new Reject("Return creation permission denied",403);
     const { idempotencyKey, ...businessInput } = input;
     const fingerprint = createHash("sha256").update(reverseCanonical(businessInput)).digest("hex");
     const previous = (await rows(c,"SELECT * FROM reverse_movements WHERE created_by=$1 AND create_key=$2",[userId,idempotencyKey]))[0];
@@ -369,6 +391,9 @@ export function registerReverseLogisticsRoutes(app: Express) {
     // actions the movement lock serializes all transitions and retries.
     const head = (await rows(c,"SELECT * FROM reverse_movements WHERE id=$1",[movementId]))[0];
     if (!head) throw new Reject("Not found",404);
+    if (!branchGrant(req,head.kind,"edit")) throw new Reject("Return edit permission denied",403);
+    if (req.currentUser?.role === "branch_manager" && !["request","cancel"].includes(op))
+      throw new Reject("Source shipping, destination receipt and write-off require responsible operator authority",403);
     if (op === "request" && head.original_transfer_item_id)
       await c.query("SELECT id FROM material_transfer_items WHERE id=$1 FOR UPDATE",[head.original_transfer_item_id]);
     if (op === "request" && head.original_order_item_id)

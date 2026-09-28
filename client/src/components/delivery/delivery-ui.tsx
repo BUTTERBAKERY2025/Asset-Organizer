@@ -35,10 +35,10 @@ export const deliverySourceLabel = (type: Delivery["sourceType"]) => ({
   kitchen_warehouse_shipment: "شحنة مطبخ إلى مستودع",
   reverse_movement: "إرجاع أو نقل بين المستودعات",
 })[type];
-export const deliverySourcePath = (delivery: Delivery) => delivery.sourceType === "kitchen"
+export const deliverySourcePath = (delivery: Delivery, branchSupply = false) => delivery.sourceType === "kitchen"
   ? `/central-kitchen-orders?orderId=${delivery.sourceId}`
   : delivery.sourceType === "material_transfer"
-    ? `/transfer-requests?transferId=${delivery.sourceId}`
+    ? `/transfer-requests?transferId=${delivery.sourceId}${branchSupply ? "&from=branch-supply" : ""}`
     : delivery.sourceType === "finished_goods_transfer"
       ? `/finished-goods-inventory?transferId=${delivery.sourceId}&branchId=${encodeURIComponent(delivery.destinationBranchId || "")}&deliveryId=${delivery.id}`
       : delivery.sourceType === "reverse_movement"
@@ -46,10 +46,10 @@ export const deliverySourcePath = (delivery: Delivery) => delivery.sourceType ==
         : `/kitchen-warehouse-shipping?shipmentId=${delivery.sourceId}&deliveryId=${delivery.id}`;
 // The delivery DTO can be viewed by the assigned driver without access to the source page.
 // Match the actual route guards in App.tsx rather than treating delivery access as source access.
-export function canOpenDeliverySource(type: Delivery["sourceType"], canView: (module: "central_kitchen_orders" | "warehouse" | "production") => boolean): boolean {
+export function canOpenDeliverySource(type: Delivery["sourceType"], canView: (module: "central_kitchen_orders" | "warehouse" | "production" | "branch_supply") => boolean): boolean {
   switch (type) {
     case "kitchen": return canView("central_kitchen_orders");
-    case "material_transfer": return canView("warehouse");
+    case "material_transfer": return canView("branch_supply") || canView("warehouse");
     case "finished_goods_transfer": return canView("production");
     case "reverse_movement":
     case "kitchen_warehouse_shipment": return canView("warehouse") || canView(type === "reverse_movement" ? "central_kitchen_orders" : "production");
@@ -89,8 +89,8 @@ export function DeliveryCard({ delivery, onOpen, now = Date.now() }: { delivery:
   </Card>;
 }
 
-export function DeliveryDetail({ delivery, proof, canOpenSource = false, now = Date.now() }: { delivery: Delivery; now?: number; canOpenSource?: boolean; proof?: { signatureData: string | null; receiverName: string | null; proofAt: string | null; receiptApprovedBy: string | null; receiptApprovedAt: string | null } }) {
-  const receiptPath = deliverySourcePath(delivery);
+export function DeliveryDetail({ delivery, proof, canOpenSource = false, branchSupply = false, now = Date.now() }: { delivery: Delivery; now?: number; canOpenSource?: boolean; branchSupply?: boolean; proof?: { signatureData: string | null; receiverName: string | null; proofAt: string | null; receiptApprovedBy: string | null; receiptApprovedAt: string | null } }) {
+  const receiptPath = deliverySourcePath(delivery, branchSupply);
   const timing = deliveryTiming(delivery, now);
   return <div className="space-y-4" dir="rtl">
     {timing !== "on_time" && <div role="status" className="rounded-xl border border-rose-300 bg-rose-50 p-4 text-sm font-medium text-rose-900">{timing === "escalated" ? "تصعيد: تجاوزت المهمة موعد التسليم بساعة أو أكثر. تابع مع المسؤول فوراً." : "المهمة متأخرة عن موعد التسليم المحدد. تابع إجراء التسليم الآن."} الموعد: {deliveryDate(delivery.scheduledAt)}</div>}

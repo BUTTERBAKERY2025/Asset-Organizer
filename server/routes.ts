@@ -10,6 +10,7 @@ import { validateFinishedProductionTarget } from "./finished-production-target";
 import { registerBranchBarHandoffRoutes } from "./branch-bar-handoffs";
 import { registerCentralKitchenJourneyRoute } from "./central-kitchen-journey";
 import { InactiveBranchStockReferenceError } from "./catalogue-branch-stock";
+import { branchSupplyTransferAllowed } from "./branch-supply-transfer-policy";
 import {
   manualProductionOperations,
   ManualProductionOperationError,
@@ -205,7 +206,7 @@ import { recipientsSchema as reportRecipientsSchema } from "./scheduler";
 import { insertBranchSchema, insertInventoryItemSchema, insertSavedFilterSchema, insertUserSchema, insertConstructionProjectSchema, insertContractorSchema, insertProjectWorkItemSchema, insertProjectBudgetAllocationSchema, insertConstructionContractSchema, insertContractItemSchema, insertPaymentRequestSchema, insertContractPaymentSchema, insertContractMilestoneSchema, insertContractVariationSchema, insertContractGuaranteeSchema, insertContractTemplateSchema, insertProjectExpenseSchema, insertProjectDailyLogSchema, insertProjectDailyLogPhotoSchema, insertDailyLogActivitySchema, insertUserPermissionSchema, insertProductSchema, insertShiftSchema, insertShiftEmployeeSchema, insertProductionOrderSchema, insertQualityCheckSchema, insertTargetWeightProfileSchema, insertBranchMonthlyTargetSchema, insertIncentiveTierSchema, insertIncentiveAwardSchema, SYSTEM_MODULES, MODULE_ACTIONS, JOB_ROLE_PERMISSION_TEMPLATES, JOB_TITLE_LABELS, MODULE_LABELS, ACTION_LABELS, JOB_TITLES, insertDisplayBarReceiptSchema, insertDisplayBarDailySummarySchema, insertWasteReportSchema, insertWasteItemSchema, insertMarketingCampaignSchema, insertCampaignBudgetAllocationSchema, insertCampaignGoalSchema, insertCampaignExpenseSchema, insertMarketingCalendarEventSchema, insertMarketingInfluencerSchema, insertInfluencerCampaignLinkSchema, insertInfluencerContactSchema, insertInfluencerPaymentSchema, insertInfluencerContractSchema, insertMarketingTaskSchema, insertMarketingTaskActivitySchema, insertMarketingPerformanceReportSchema, insertMarketingAssetSchema, insertMarketingTeamMemberSchema, insertMarketingAlertSchema, insertScheduleTemplateSchema, insertSchedulePeriodSchema, insertEmployeeScheduleSchema, insertAttendanceRecordSchema, insertTimeEntrySchema, isMadeToOrderCategory, suggestCategoryFromProductName, userBranchAccess } from "@shared/schema";
 import { z } from "zod";
 import { registerKitchenRoutingRoutes, kitchenActionAllowed, getKitchenRouting, getKitchenRoutingBatch, routingActor, routingPersonEligible } from "./central-kitchen-routing";
-import { setupAuth, isAuthenticated, requirePermission, requireAnyPermission, getActiveBranchFilter, requireBranchAccess, canAccessBranch, isUserAdmin, getAllowedBranchIds, getEffectiveBranchFilter, getWarehouseKeeperEffectivePermissions, invalidateAuthCache, HR_MANAGER_MODULES, HR_SPECIALIST_PERMISSIONS, FINANCIAL_MANAGER_PERMISSIONS, OPERATIONS_MANAGER_PERMISSIONS, BRANCH_MANAGER_INTRINSIC_PERMISSIONS, hasCrossBranchHrReadAccess } from "./auth";
+import { setupAuth, isAuthenticated, requirePermission, requireAnyPermission, getActiveBranchFilter, requireBranchAccess, canAccessBranch, isUserAdmin, getAllowedBranchIds, getEffectiveBranchFilter, getWarehouseKeeperEffectivePermissions, getBranchManagerEffectivePermissions, invalidateAuthCache, HR_MANAGER_MODULES, HR_SPECIALIST_PERMISSIONS, FINANCIAL_MANAGER_PERMISSIONS, OPERATIONS_MANAGER_PERMISSIONS, BRANCH_MANAGER_INTRINSIC_PERMISSIONS, hasCrossBranchHrReadAccess } from "./auth";
 import { authRateLimiter, biometricRateLimiter, uploadRateLimiter, apiRateLimiter, validateFileUpload, sanitizeFilename, trackLoginAttempt } from "./security";
 import { registerGovernanceRoutes } from "./governance-routes";
 import { registerFinancialReviewRoutes } from "./financial-review-routes";
@@ -1485,19 +1486,11 @@ export async function registerRoutes(
       }
 
       if (currentUser.role === "branch_manager") {
-        const merged = new Map<string, Set<string>>();
-        for (const p of permissions) {
-          merged.set(p.module, new Set(p.actions || []));
-        }
-        for (const [module, intrinsicActions] of Object.entries(BRANCH_MANAGER_INTRINSIC_PERMISSIONS)) {
-          const set = merged.get(module) || new Set<string>();
-          for (const action of intrinsicActions) set.add(action);
-          merged.set(module, set);
-        }
-        permissions = Array.from(merged.entries()).map(([module, actions]) => ({
-          module,
-          actions: Array.from(actions),
-        }));
+        // The authenticated request already resolved direct module selections
+        // (including []) and active overrides. Never union role defaults back in.
+        permissions = (req as any).authPermissions
+          ?? await getBranchManagerEffectivePermissions(currentUser.id,
+            await storage.getUserPermissions(currentUser.id, { bypassCache: true }));
       }
 
       if (currentUser.role === "employee" && currentUser.jobTitle === "delivery" && currentUser.isActive === "active") {
@@ -1537,6 +1530,22 @@ export async function registerRoutes(
           note: "صلاحيات أمين المستودعات محصورة بالصلاحيات الفعلية للدور ونطاق المستودع الرئيسي",
           permissions: effective.map(({ module, actions }) => ({
             module, actions: actions.map((action) => ({ action, sources: ["role_auto"] })),
+          })),
+        });
+      }
+      if (targetUser.role === "branch_manager") {
+        const effective = await getBranchManagerEffectivePermissions(
+          targetUserId, await storage.getUserPermissions(targetUserId, { bypassCache: true }),
+        );
+        return res.json({
+          userId: targetUser.id, username: targetUser.username,
+          firstName: targetUser.firstName || null, role: targetUser.role,
+          note: "الصلاحيات الفعلية بعد المنح المباشرة والسحب والتجاوزات؛ نطاق الطلبات والاستلام للفرع فقط",
+          permissions: effective.filter(({ actions }) => actions.length > 0).map(({ module, actions }) => ({
+            module, actions: actions.map((action) => ({
+              action,
+              sources: [BRANCH_MANAGER_INTRINSIC_PERMISSIONS[module]?.includes(action) ? "role_auto" : "direct"],
+            })),
           })),
         });
       }
@@ -7947,7 +7956,9 @@ export async function registerRoutes(
           const [order] = await tx.select().from(centralKitchenOrders)
             .where(eq(centralKitchenOrders.id, id.data)).for("update");
           if (!order) throw new CentralKitchenLiveError("الطلب غير موجود", 404);
-          if (!(await canAccessBranch(req, order.requestBranchId))) throw new CentralKitchenLiveError("التعديل والإلغاء للفرع الطالب فقط", 403);
+          if (!(await canAccessBranch(req, order.requestBranchId))
+            || (actor.role === "branch_manager" && actor.branchId !== order.requestBranchId))
+            throw new CentralKitchenLiveError("التعديل والإلغاء للفرع الطالب فقط", 403);
           const currentActor = await routingActor(tx, actor.id);
           if (!currentActor || !routingPersonEligible(currentActor, "edit")) {
             throw new CentralKitchenLiveError("تم سحب صلاحية تعديل طلب المطبخ", 403);
@@ -8113,6 +8124,9 @@ export async function registerRoutes(
     centralKitchenId: string;
   }): Promise<boolean> => {
     if (isUserAdmin(req)) return true;
+    if (req.currentUser?.role === "branch_manager")
+      return req.currentUser.branchId === order.requestBranchId
+        && await canAccessBranch(req, order.requestBranchId);
     return (await canAccessBranch(req, order.requestBranchId))
       || (await canAccessBranch(req, order.centralKitchenId));
   };
@@ -8134,6 +8148,11 @@ export async function registerRoutes(
           return res.status(403).json({ error: "غير مصرح بالوصول لهذا الفرع" });
         }
         const conditions: SQL[] = [];
+        if (req.currentUser?.role === "branch_manager") {
+          if (!req.currentUser.branchId || !(await canAccessBranch(req, req.currentUser.branchId)))
+            return res.status(403).json({ error: "لا يوجد فرع طالب مفوض" });
+          conditions.push(eq(centralKitchenOrders.requestBranchId, req.currentUser.branchId));
+        }
         if (parsed.data.status) conditions.push(eq(centralKitchenOrders.status, parsed.data.status));
         if (branchFilter.singleBranchId) {
           conditions.push(or(
@@ -8332,6 +8351,11 @@ export async function registerRoutes(
           gte(centralKitchenOrders.createdAt, window.start),
           lt(centralKitchenOrders.createdAt, window.end),
         ];
+        if (req.currentUser?.role === "branch_manager") {
+          if (!req.currentUser.branchId || !(await canAccessBranch(req, req.currentUser.branchId)))
+            return res.status(403).json({ error: "لا يوجد فرع طالب مفوض" });
+          conditions.push(eq(centralKitchenOrders.requestBranchId, req.currentUser.branchId));
+        }
         if (branchFilter.singleBranchId) {
           conditions.push(or(
             eq(centralKitchenOrders.requestBranchId, branchFilter.singleBranchId),
@@ -9037,7 +9061,8 @@ export async function registerRoutes(
       const payloadFingerprint = createCentralKitchenPayloadFingerprint(payload);
       try {
         // The requesting branch is always the branch of the submitting user.
-        if (!(await canAccessBranch(req, payload.requestBranchId))) {
+        if (!(await canAccessBranch(req, payload.requestBranchId))
+          || (user.role === "branch_manager" && user.branchId !== payload.requestBranchId)) {
           return res.status(403).json({ error: "ليس لديك صلاحية لإنشاء طلب لهذا الفرع" });
         }
         const orderDay = saudiDate();
@@ -24641,6 +24666,18 @@ export async function registerRoutes(
           allowedBranches: ["main_warehouse"], allowedDepartments: [], primaryRole: null,
         });
       }
+      if (targetUser.role === "branch_manager") {
+        const [stored, effective] = await Promise.all([
+          storage.getUserEffectivePermissions(targetUserId),
+          getBranchManagerEffectivePermissions(targetUserId,
+            await storage.getUserPermissions(targetUserId, { bypassCache: true })),
+        ]);
+        return res.json({
+          ...stored,
+          permissions: effective.flatMap(({ module, actions }) =>
+            actions.map((action) => ({ module, action, allowed: true }))),
+        });
+      }
       const effectivePermissions = await storage.getUserEffectivePermissions(targetUserId);
       res.json(effectivePermissions);
     } catch (error) {
@@ -24664,6 +24701,17 @@ export async function registerRoutes(
           allowedBranches: ["main_warehouse"], allowedDepartments: [], primaryRole: null,
         });
       }
+      if (currentUser.role === "branch_manager") {
+        const effective = (req as any).authPermissions
+          ?? await getBranchManagerEffectivePermissions(currentUser.id,
+            await storage.getUserPermissions(currentUser.id, { bypassCache: true }));
+        const stored = await storage.getUserEffectivePermissions(currentUser.id);
+        return res.json({
+          ...stored,
+          permissions: effective.flatMap(({ module, actions }: { module: string; actions: string[] }) =>
+            actions.map((action) => ({ module, action, allowed: true }))),
+        });
+      }
       const effectivePermissions = await storage.getUserEffectivePermissions(currentUser.id);
       res.json(effectivePermissions);
     } catch (error) {
@@ -24684,7 +24732,16 @@ export async function registerRoutes(
         return res.status(400).json({ error: "الوحدة والإجراء مطلوبان" });
       }
       
-      const hasPermission = await storage.userHasPermission(currentUser.id, module, action, branchId);
+      const branchManagerPermissions = currentUser.role === "branch_manager"
+        ? ((req as any).authPermissions
+          ?? await getBranchManagerEffectivePermissions(currentUser.id,
+            await storage.getUserPermissions(currentUser.id, { bypassCache: true })))
+        : null;
+      const hasPermission = branchManagerPermissions
+        ? branchManagerPermissions.some((p: { module: string; actions: string[] }) =>
+            p.module === module && p.actions.includes(action))
+          && (!branchId || (branchId === currentUser.branchId && await canAccessBranch(req, branchId)))
+        : await storage.userHasPermission(currentUser.id, module, action, branchId);
       res.json({ hasPermission, module, action, branchId });
     } catch (error) {
       console.error("Error checking permission:", error);
@@ -37026,6 +37083,18 @@ export async function registerRoutes(
 
   const mainWarehouseBranchId = "main_warehouse";
   const isWarehouseKeeper = (req: any) => req.currentUser?.role === "warehouse_keeper";
+  const isBranchSupplyManager = (req: any) => req.currentUser?.role === "branch_manager";
+  // Branch requests use their own module, never a broad warehouse grant.
+  const transferPermission = (action: "view" | "create" | "edit") =>
+    (req: any, res: any, next: any) =>
+      requirePermission(isBranchSupplyManager(req) ? "branch_supply" : "warehouse", action)(req, res, next);
+  const branchSupplyDestination = async (req: any, branchId: string | null | undefined) =>
+    !!branchId && branchId !== mainWarehouseBranchId
+      // A manager's additional branch grant does not make that branch their
+      // requesting/receiving desk; match kitchen and reverse primary scope.
+      && (!isBranchSupplyManager(req) || req.currentUser.branchId === branchId)
+      && (getAllowedBranchIds(req) ?? []).includes(branchId)
+      && await canAccessBranch(req, branchId);
   const keeperWarehouseScope = (req: any, branchId: string | null | undefined) =>
     isWarehouseKeeper(req) && getAllowedBranchIds(req)?.includes(mainWarehouseBranchId)
       && branchId === mainWarehouseBranchId;
@@ -37090,6 +37159,7 @@ export async function registerRoutes(
     sourceBranchId: string | null | undefined,
   ): Promise<boolean> => {
     if (isUserAdmin(req)) return true;
+    if (isBranchSupplyManager(req)) return false;
     if (isWarehouseKeeper(req)) return keeperWarehouseScope(req, sourceBranchId);
     if (!sourceBranchId) return false;
     if (sourceBranchId === mainWarehouseBranchId) {
@@ -37103,6 +37173,7 @@ export async function registerRoutes(
     destinationBranchId: string | null | undefined,
   ): Promise<boolean> => {
     if (isUserAdmin(req)) return true;
+    if (isBranchSupplyManager(req)) return branchSupplyDestination(req, destinationBranchId);
     if (isWarehouseKeeper(req)) return false;
     if (!destinationBranchId) return false;
     return await canAccessBranch(req, destinationBranchId);
@@ -37127,6 +37198,7 @@ export async function registerRoutes(
   // Warehouse Dashboard Stats
   app.get("/api/warehouse/dashboard-stats", isAuthenticated, requirePermission("warehouse", "view"), async (req, res) => {
     try {
+      if (isBranchSupplyManager(req)) return res.status(403).json({ error: "لوحة المستودع ليست ضمن طلبات الفرع" });
       if (isWarehouseKeeper(req) && (!keeperWarehouseScope(req, mainWarehouseBranchId)
         || (req.query.branchId && req.query.branchId !== mainWarehouseBranchId)))
         return res.status(403).json({ error: "غير مصرح بالوصول" });
@@ -37169,6 +37241,7 @@ export async function registerRoutes(
   // Warehouse Bundle - consolidated data for warehouse reports page
   app.get("/api/warehouse/bundle", isAuthenticated, requirePermission("warehouse", "view"), async (req, res) => {
     try {
+      if (isBranchSupplyManager(req)) return res.status(403).json({ error: "بيانات المستودع الشاملة ليست ضمن طلبات الفرع" });
       if (isWarehouseKeeper(req) && (!keeperWarehouseScope(req, mainWarehouseBranchId)
         || (req.query.branchId && req.query.branchId !== mainWarehouseBranchId)))
         return res.status(403).json({ error: "غير مصرح بالوصول" });
@@ -37243,8 +37316,10 @@ export async function registerRoutes(
   });
 
   // Warehouse Items
-  app.get("/api/warehouse/items", isAuthenticated, requirePermission("warehouse", "view"), async (req, res) => {
+  app.get("/api/warehouse/items", isAuthenticated, transferPermission("view"), async (req, res) => {
     try {
+      if (isBranchSupplyManager(req) && !(getAllowedBranchIds(req) ?? []).some(id => id !== mainWarehouseBranchId))
+        return res.status(403).json({ error: "لا يوجد فرع مصرح به لعرض المواد" });
       if (isWarehouseKeeper(req) && !keeperWarehouseScope(req, mainWarehouseBranchId))
         return res.status(403).json({ error: "غير مصرح بالوصول" });
       // Selectors default to current catalogue identities. Historical identities
@@ -37253,26 +37328,40 @@ export async function registerRoutes(
       if (activity !== undefined && activity !== "true" && activity !== "false" && activity !== "all") {
         return res.status(400).json({ error: "مرشح حالة المادة غير صالح" });
       }
+      if (isBranchSupplyManager(req) && activity !== undefined && activity !== "true")
+        return res.status(403).json({ error: "قائمة الطلب تعرض المواد النشطة فقط" });
       const filters: { category?: string; isActive?: boolean } = { isActive: activity === "all" ? undefined : activity !== "false" };
       if (req.query.category) filters.category = req.query.category as string;
       
       const items = await storage.getWarehouseItems(filters);
-      res.json(items);
+      res.json(isBranchSupplyManager(req)
+        ? items.map(item => ({
+            id: item.id, name: item.name, nameEn: item.nameEn, sku: item.sku,
+            barcode: item.barcode, category: item.category, unit: item.unit, isActive: item.isActive,
+          }))
+        : items);
     } catch (error) {
       console.error("Error fetching warehouse items:", error);
       res.status(500).json({ error: "فشل في جلب المواد" });
     }
   });
 
-  app.get("/api/warehouse/items/:id", isAuthenticated, requirePermission("warehouse", "view"), async (req, res) => {
+  app.get("/api/warehouse/items/:id", isAuthenticated, transferPermission("view"), async (req, res) => {
     try {
+      if (isBranchSupplyManager(req) && !(getAllowedBranchIds(req) ?? []).some(id => id !== mainWarehouseBranchId))
+        return res.status(403).json({ error: "لا يوجد فرع مصرح به لعرض المواد" });
       if (isWarehouseKeeper(req) && !keeperWarehouseScope(req, mainWarehouseBranchId))
         return res.status(403).json({ error: "غير مصرح بالوصول" });
       const item = await storage.getWarehouseItem(parseInt(req.params.id));
       if (!item) {
         return res.status(404).json({ error: "المادة غير موجودة" });
       }
-      res.json(item);
+      if (isBranchSupplyManager(req) && item.isActive !== true)
+        return res.status(404).json({ error: "المادة غير متاحة للطلب" });
+      res.json(isBranchSupplyManager(req)
+        ? { id: item.id, name: item.name, nameEn: item.nameEn, sku: item.sku,
+            barcode: item.barcode, category: item.category, unit: item.unit, isActive: item.isActive }
+        : item);
     } catch (error) {
       console.error("Error fetching warehouse item:", error);
       res.status(500).json({ error: "فشل في جلب المادة" });
@@ -37281,6 +37370,7 @@ export async function registerRoutes(
 
   app.post("/api/warehouse/items", isAuthenticated, requirePermission("warehouse", "create"), async (req, res) => {
     try {
+      if (isBranchSupplyManager(req)) return res.status(403).json({ error: "غير مصرح بتعديل أصناف المستودع" });
       if (isWarehouseKeeper(req) && !keeperWarehouseScope(req, mainWarehouseBranchId))
         return res.status(403).json({ error: "غير مصرح بالوصول" });
       const user = req.currentUser;
@@ -37309,6 +37399,7 @@ export async function registerRoutes(
 
   app.put("/api/warehouse/items/:id", isAuthenticated, requirePermission("warehouse", "edit"), async (req, res) => {
     try {
+      if (isBranchSupplyManager(req)) return res.status(403).json({ error: "غير مصرح بتعديل أصناف المستودع" });
       if (isWarehouseKeeper(req) && !keeperWarehouseScope(req, mainWarehouseBranchId))
         return res.status(403).json({ error: "غير مصرح بالوصول" });
       if (!req.body || typeof req.body !== "object" || Array.isArray(req.body)) {
@@ -37356,6 +37447,7 @@ export async function registerRoutes(
 
   app.delete("/api/warehouse/items/:id", isAuthenticated, requirePermission("warehouse", "delete"), async (req, res) => {
     try {
+      if (isBranchSupplyManager(req)) return res.status(403).json({ error: "غير مصرح بتعديل أصناف المستودع" });
       if (isWarehouseKeeper(req) && !keeperWarehouseScope(req, mainWarehouseBranchId))
         return res.status(403).json({ error: "غير مصرح بالوصول" });
       const id = Number(req.params.id);
@@ -37376,10 +37468,12 @@ export async function registerRoutes(
   });
 
   // Branch Stock
-  app.get("/api/warehouse/branch-stock/:branchId", isAuthenticated, requirePermission("warehouse", "view"), async (req, res) => {
+  app.get("/api/warehouse/branch-stock/:branchId", isAuthenticated, transferPermission("view"), async (req, res) => {
     try {
       const { branchId } = req.params;
       if (isWarehouseKeeper(req)) return res.status(403).json({ error: "مخزون الفروع ليس ضمن نطاق المستودع الرئيسي" });
+      if (isBranchSupplyManager(req) && !await branchSupplyDestination(req, branchId))
+        return res.status(403).json({ error: "غير مصرح بالوصول لمخزون هذا الفرع" });
       
       // SECURITY: Verify branch access for non-admin users
       if (!isUserAdmin(req)) {
@@ -37399,6 +37493,7 @@ export async function registerRoutes(
 
   app.put("/api/warehouse/branch-stock/:branchId/:itemId", isAuthenticated, requirePermission("warehouse", "edit"), async (req, res) => {
     try {
+      if (isBranchSupplyManager(req)) return res.status(403).json({ error: "لا يمكن تعديل المخزون يدوياً" });
       const { branchId } = req.params;
       if (isWarehouseKeeper(req)) return res.status(403).json({ error: "مخزون الفروع ليس ضمن نطاق المستودع الرئيسي" });
       
@@ -37451,8 +37546,32 @@ export async function registerRoutes(
   });
 
   // Material Transfers
-  app.get("/api/warehouse/material-transfers", isAuthenticated, requirePermission("warehouse", "view"), async (req, res) => {
+  app.get("/api/warehouse/material-transfers", isAuthenticated, transferPermission("view"), async (req, res) => {
     try {
+      if (isBranchSupplyManager(req)) {
+        const allowed = (getAllowedBranchIds(req) ?? []).filter(id => id !== mainWarehouseBranchId);
+        const requested = req.query.branchId || req.query.destinationBranchId;
+        if (typeof requested === "string" && requested !== "all" && !allowed.includes(requested))
+          return res.status(403).json({ error: "غير مصرح بالوصول لهذا الفرع" });
+        if (allowed.length === 0) return res.json([]);
+        if (req.query.sourceBranchId && req.query.sourceBranchId !== mainWarehouseBranchId)
+          return res.status(403).json({ error: "غير مصرح بالوصول لهذا المصدر" });
+        const transfers = await storage.getMaterialTransfers({
+          sourceBranchId: mainWarehouseBranchId,
+          ...(typeof requested === "string" && requested !== "all" ? { destinationBranchId: requested } : {}),
+          ...(typeof req.query.status === "string" ? { status: req.query.status } : {}),
+          ...(typeof req.query.startDate === "string" ? { startDate: req.query.startDate } : {}),
+          ...(typeof req.query.endDate === "string" ? { endDate: req.query.endDate } : {}),
+        });
+        const branches = await storage.getAllBranches();
+        const names = new Map(branches.map(branch => [branch.id, branch.name]));
+        return res.json(transfers.filter(t =>
+          branchSupplyTransferAllowed("view", t, !!t.destinationBranchId && allowed.includes(t.destinationBranchId))
+        ).map(t => ({
+          ...t, sourceBranchName: "المستودع الرئيسي",
+          destinationBranchName: names.get(t.destinationBranchId) || t.destinationBranchId,
+        })));
+      }
       if (isWarehouseKeeper(req) && (!keeperWarehouseScope(req, mainWarehouseBranchId)
         || (req.query.branchId && req.query.branchId !== mainWarehouseBranchId)))
         return res.status(403).json({ error: "غير مصرح بالوصول" });
@@ -37516,12 +37635,15 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/warehouse/material-transfers/:id", isAuthenticated, requirePermission("warehouse", "view"), async (req, res) => {
+  app.get("/api/warehouse/material-transfers/:id", isAuthenticated, transferPermission("view"), async (req, res) => {
     try {
       const result = await storage.getMaterialTransferWithItems(parseInt(req.params.id));
       if (!result) {
         return res.status(404).json({ error: "التحويل غير موجود" });
       }
+      if (isBranchSupplyManager(req) && !branchSupplyTransferAllowed("view", result.transfer,
+        await branchSupplyDestination(req, result.transfer.destinationBranchId)))
+        return res.status(403).json({ error: "غير مصرح بالوصول لهذا التحويل" });
       if (isWarehouseKeeper(req) && !keeperWarehouseScope(req, result.transfer.sourceBranchId))
         return res.status(403).json({ error: "غير مصرح بالوصول لهذا التحويل" });
       
@@ -37551,12 +37673,15 @@ export async function registerRoutes(
   });
 
   // Get transfer items only
-  app.get("/api/warehouse/material-transfers/:id/items", isAuthenticated, requirePermission("warehouse", "view"), async (req, res) => {
+  app.get("/api/warehouse/material-transfers/:id/items", isAuthenticated, transferPermission("view"), async (req, res) => {
     try {
       const result = await storage.getMaterialTransferWithItems(parseInt(req.params.id));
       if (!result) {
         return res.status(404).json({ error: "التحويل غير موجود" });
       }
+      if (isBranchSupplyManager(req) && !branchSupplyTransferAllowed("view", result.transfer,
+        await branchSupplyDestination(req, result.transfer.destinationBranchId)))
+        return res.status(403).json({ error: "غير مصرح بالوصول لبنود هذا التحويل" });
       if (isWarehouseKeeper(req) && !keeperWarehouseScope(req, result.transfer.sourceBranchId))
         return res.status(403).json({ error: "غير مصرح بالوصول لبنود هذا التحويل" });
       
@@ -37610,6 +37735,7 @@ export async function registerRoutes(
         return res.status(400).json({ error: "يجب تحديد مصدر ووجهة تحويل صالحين" });
       }
       if (kitchenRawRequest) {
+        if (isBranchSupplyManager(req)) return res.status(403).json({ error: "طلبات المطبخ ليست من صلاحيات مسار الفرع" });
         if (requestedSourceBranchId !== mainWarehouseBranchId || requestId != null) {
           return res.status(400).json({ error: "طلب مواد المطبخ يجب أن يكون من المستودع الرئيسي دون ربطه بطلب منتجات" });
         }
@@ -37626,6 +37752,10 @@ export async function registerRoutes(
       // warehouse debit.
       const sourceIsWarehouse = requestedSourceBranchId === mainWarehouseBranchId;
       const sourceType = sourceIsWarehouse ? "warehouse" : "branch";
+      if (isBranchSupplyManager(req) && (requestId != null || !branchSupplyTransferAllowed("create",
+        { sourceBranchId: requestedSourceBranchId, destinationBranchId: requestedDestinationBranchId },
+        await branchSupplyDestination(req, requestedDestinationBranchId))))
+        return res.status(403).json({ error: "يمكن طلب مواد المستودع الرئيسي للفرع المصرح به فقط" });
       const sourceAccess = await canAccessWarehouseTransferSource(req, requestedSourceBranchId);
       const destinationAccess = await canAccessWarehouseTransferDestination(req, requestedDestinationBranchId);
       if (!isUserAdmin(req)) {
@@ -37751,6 +37881,9 @@ export async function registerRoutes(
       // This prevents an old key from returning a transfer whose branch scope
       // was changed after it was originally created.
       if (creation.replayed && !isUserAdmin(req)) {
+        if (isBranchSupplyManager(req) && !branchSupplyTransferAllowed("create", creation.transfer,
+          await branchSupplyDestination(req, creation.transfer.destinationBranchId)))
+          return res.status(403).json({ error: "غير مصرح بهذا التحويل" });
         if (kitchenRawRequest && creation.transfer.stockPostingPolicy !== "on_dispatch") {
           return res.status(409).json({ error: "سياسة خصم المخزون لا تطابق طلب المطبخ" });
         }
@@ -37783,10 +37916,10 @@ export async function registerRoutes(
       res.status(500).json({ error: "فشل في إنشاء التحويل" });
     }
   };
-  app.post("/api/warehouse/material-transfers", isAuthenticated, requirePermission("warehouse", "create"), createWarehouseMaterialTransfer);
+  app.post("/api/warehouse/material-transfers", isAuthenticated, transferPermission("create"), createWarehouseMaterialTransfer);
   app.post("/api/warehouse/kitchen-raw-requests", isAuthenticated, requirePermission("warehouse", "create"), createWarehouseMaterialTransfer);
 
-  app.put("/api/warehouse/material-transfers/:id/status", isAuthenticated, requirePermission("warehouse", "edit"), async (req, res) => {
+  app.put("/api/warehouse/material-transfers/:id/status", isAuthenticated, transferPermission("edit"), async (req, res) => {
     try {
       const user = req.currentUser;
       const body = req.body && typeof req.body === "object" ? req.body : {};
@@ -37810,6 +37943,10 @@ export async function registerRoutes(
       if (!existingTransfer) {
         return res.status(404).json({ error: "التحويل غير موجود" });
       }
+      if (isBranchSupplyManager(req) && (status !== "cancelled"
+        || !branchSupplyTransferAllowed("cancel", existingTransfer.transfer,
+          await branchSupplyDestination(req, existingTransfer.transfer.destinationBranchId))))
+        return res.status(403).json({ error: "يُسمح فقط بإلغاء الطلب المعلّق للفرع المصرح به" });
 
       const currentStatus = existingTransfer.transfer.status;
       const sourceAccess = await canAccessWarehouseTransferSource(
@@ -37975,7 +38112,7 @@ export async function registerRoutes(
   });
 
   // Modify transfer quantities by warehouse manager (before dispatch only)
-  app.post("/api/warehouse/material-transfers/:id/modify-quantities", isAuthenticated, requirePermission("warehouse", "edit"), async (req, res) => {
+  app.post("/api/warehouse/material-transfers/:id/modify-quantities", isAuthenticated, transferPermission("edit"), async (req, res) => {
     try {
       const user = req.currentUser;
       const { modifications } = req.body;
@@ -37983,6 +38120,9 @@ export async function registerRoutes(
       if (!existingTransfer) {
         return res.status(404).json({ error: "التحويل غير موجود" });
       }
+      if (isBranchSupplyManager(req) && !branchSupplyTransferAllowed("modify", existingTransfer.transfer,
+        await branchSupplyDestination(req, existingTransfer.transfer.destinationBranchId)))
+        return res.status(403).json({ error: "لا يمكن تعديل طلب هذا الفرع بعد إرساله" });
       
       // modifications: [{ itemId: number, newQuantity: number, modificationNotes?: string }]
       if (!modifications || !Array.isArray(modifications)) {
@@ -37990,7 +38130,7 @@ export async function registerRoutes(
       }
       
       // SECURITY: Verify branch access for non-admin users
-      if (!isUserAdmin(req)) {
+      if (!isUserAdmin(req) && !isBranchSupplyManager(req)) {
         const hasAccess = await canAccessWarehouseTransferSource(
           req,
           existingTransfer.transfer.sourceBranchId,
@@ -38046,8 +38186,8 @@ export async function registerRoutes(
           type: "transfer_modified",
           title: `تم تعديل كميات: ${transfer.transferNumber}`,
           titleEn: `Quantities Modified: ${transfer.transferNumber}`,
-          body: `تم تعديل بعض الكميات من قبل مسؤول المستودع: ${[user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.username}`,
-          bodyEn: `Some quantities were modified by warehouse manager: ${[user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.username}`,
+          body: `تم تعديل بعض الكميات من قبل ${isBranchSupplyManager(req) ? "مسؤول الفرع" : "مسؤول المستودع"}: ${[user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.username}`,
+          bodyEn: `Some quantities were modified by ${isBranchSupplyManager(req) ? "branch manager" : "warehouse manager"}: ${[user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.username}`,
           branchId: transfer.sourceBranchId || undefined,
           targetBranchId: transfer.destinationBranchId,
           entityType: "transfer",
@@ -38074,7 +38214,7 @@ export async function registerRoutes(
   });
 
   // Confirm delivery with received quantities for each item
-  app.post("/api/warehouse/material-transfers/:id/confirm-delivery", isAuthenticated, requirePermission("warehouse", "edit"), async (req, res) => {
+  app.post("/api/warehouse/material-transfers/:id/confirm-delivery", isAuthenticated, transferPermission("edit"), async (req, res) => {
     try {
       const user = req.currentUser;
       const { receivedItems, receiverSignature, deliveryNotes } = req.body;
@@ -38106,6 +38246,9 @@ export async function registerRoutes(
       if (!existingTransfer) {
         return res.status(404).json({ error: "التحويل غير موجود" });
       }
+      if (isBranchSupplyManager(req) && !branchSupplyTransferAllowed("receive", existingTransfer.transfer,
+        await branchSupplyDestination(req, existingTransfer.transfer.destinationBranchId)))
+        return res.status(403).json({ error: "غير مصرح باستلام هذا التحويل" });
       if (
         existingTransfer.transfer.status !== "in_transit"
         && existingTransfer.transfer.status !== "delivered"

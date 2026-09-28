@@ -37,6 +37,7 @@ import { generateTransferPdf, generateQuickTransferPdf } from "@/lib/pdf-utils";
 import { TransferDocument } from "@/components/transfer-document";
 import { buildTransferListWorkbook, buildTransferWorkbook } from "@/lib/transfer-export";
 import {
+  canReceiveBranchSupplyTransfer,
   consumeWarehouseCreateIntent,
   parseWarehouseSupplyIntent,
   resolveVisibleBranchFilter,
@@ -141,12 +142,14 @@ export default function TransferRequestsPage() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const isKeeper = user?.role === "warehouse_keeper";
+  const isBranchManager = user?.role === "branch_manager";
+  const transferModule = isBranchManager ? "branch_supply" : "warehouse";
   const { branches, isLoading: branchesLoading, userBranchId, canSelectBranch } = useBranches();
   const operationalBranchId = isKeeper ? "main_warehouse" : userBranchId;
   const permissions = usePermissions();
   const { canView, canCreate, canEdit, isLoading: permissionsLoading } = permissions;
   const search = useSearch();
-  const kitchenRawMode = new URLSearchParams(search).get("kitchenRaw") === "1";
+  const kitchenRawMode = !isBranchManager && new URLSearchParams(search).get("kitchenRaw") === "1";
   const kitchenBranches = branches.filter(branch => branch.isCentralKitchen);
   const navigationBranch = useBranchNavigation(branches, branchesLoading, userBranchId);
 
@@ -262,7 +265,7 @@ export default function TransferRequestsPage() {
     const intent = parseWarehouseSupplyIntent(search);
     if (!intent.shouldCreate || !intent.fromBranchSupply) return;
     createIntentConsumedRef.current = true;
-    const canOpen = canCreate("warehouse")
+    const canOpen = canCreate(transferModule)
       && !!navigationBranch.branchId
       && setDestinationBranch(navigationBranch.branchId);
     if (canOpen) {
@@ -271,7 +274,7 @@ export default function TransferRequestsPage() {
     }
     const nextSearch = consumeWarehouseCreateIntent(search);
     window.history.replaceState(window.history.state, "", `${window.location.pathname}${nextSearch}${window.location.hash}`);
-  }, [canCreate, navigationBranch, permissionsLoading, search, setDestinationBranch, isKeeper]);
+  }, [canCreate, transferModule, navigationBranch, permissionsLoading, search, setDestinationBranch, isKeeper]);
 
   // Fetch warehouse items for selection
   const {
@@ -319,8 +322,8 @@ export default function TransferRequestsPage() {
         notes: "احتياج مواد وصفة إنتاج",
       }],
     }));
-    if (!isKeeper && canCreate("warehouse")) setIsCreateOpen(true);
-  }, [branches, canCreate, isRTL, warehouseItems, isKeeper]);
+    if (!isKeeper && canCreate(transferModule)) setIsCreateOpen(true);
+  }, [branches, canCreate, transferModule, isRTL, warehouseItems, isKeeper]);
 
 
   // Initialize transfer form: source = warehouse, destination = user's branch
@@ -398,7 +401,7 @@ export default function TransferRequestsPage() {
   // branch scope. Load the row through the server's branch-authorized endpoint;
   // never fall back to searching an unscoped list after a 403/404.
   useEffect(() => {
-    if (navigationBranch.isResolving || permissionsLoading || !canView("warehouse")) return;
+    if (navigationBranch.isResolving || permissionsLoading || !canView(transferModule)) return;
     const params = new URLSearchParams(search);
     const rawTransferId = params.get("transferId");
     const transferId = Number(rawTransferId);
@@ -457,7 +460,7 @@ export default function TransferRequestsPage() {
         showUnavailable();
       })
       .finally(consumeIntent);
-  }, [canView, isRTL, navigationBranch, permissionsLoading, search, toast, isKeeper]);
+  }, [canView, transferModule, isRTL, navigationBranch, permissionsLoading, search, toast, isKeeper]);
 
   const createMutation = useMutation({
     mutationFn: async (data: typeof newTransfer) => {
@@ -633,7 +636,7 @@ export default function TransferRequestsPage() {
   const visibleBranchId = resolveVisibleBranchFilter(filterBranch, branches);
 
   const openCreateRequest = useCallback(() => {
-    if (isKeeper || !canCreate("warehouse")) return;
+    if (isKeeper || !canCreate(transferModule)) return;
     const destinationBranchId = kitchenRawMode
       ? (kitchenBranches.find(branch => branch.id === filterBranch || branch.id === userBranchId)?.id || (kitchenBranches.length === 1 ? kitchenBranches[0].id : ""))
       : resolveWarehouseCreateDestination(filterBranch, branches, userBranchId);
@@ -649,7 +652,7 @@ export default function TransferRequestsPage() {
     }));
     createIdempotencyKeyRef.current = crypto.randomUUID();
     setIsCreateOpen(true);
-  }, [branches, canCreate, filterBranch, isRTL, userBranchId, kitchenRawMode, isKeeper]);
+  }, [branches, canCreate, transferModule, filterBranch, isRTL, userBranchId, kitchenRawMode, isKeeper]);
 
   const handleBranchFilterChange = useCallback((value: string) => {
     const branchId = resolveVisibleBranchFilter(value, branches);
@@ -669,7 +672,7 @@ export default function TransferRequestsPage() {
   useBranchDeskIntent(navigationBranch.branchId,
     !isKeeper && !navigationBranch.isResolving && !permissionsLoading && filterBranch === navigationBranch.branchId,
     intent => {
-      if (intent === "create" && !isKeeper && canCreate("warehouse")) openCreateRequest();
+      if (intent === "create" && !isKeeper && canCreate(transferModule)) openCreateRequest();
       if (intent === "receive") setFilterStatus("in_transit");
     });
 
@@ -930,6 +933,7 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
 
   // Status workflow: Warehouse (source) approves → dispatches → Branch (destination) confirms delivery
   const getNextStatus = (transfer: MaterialTransfer): string[] => {
+    if (isBranchManager) return [];
     const permitted = (statuses: string[]) => canEdit("warehouse") ? statuses : [];
     // Admins can manage all transfers
     if (canSelectBranch && !isKeeper) {
@@ -982,10 +986,10 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
           tone="money"
           title={kitchenRawMode ? "طلبات مواد المطبخ من المستودع الرئيسي" : (isKeeper ? (isRTL ? "مكتب تشغيل المستودع" : "Warehouse operations desk") : (isRTL ? "طلبات التحويل" : "Transfer Requests"))}
           description={kitchenRawMode ? "مواد خام من كتالوج المستودع → اعتماد وتجهيز وإرسال → استلام فعلي في مخزون المطبخ. لا تُستهلك المواد تلقائياً." : (isKeeper ? (isRTL ? "طلبات صادرة من المستودع الرئيسي إلى الفروع والمطبخ المركزي" : "Main warehouse requests to branches and the central kitchen") : (isRTL ? "إدارة طلبات الأصناف من المستودع الرئيسي" : "Manage item requests from main warehouse"))}
-          backHref={kitchenRawMode ? "/central-kitchen-orders" : (visibleBranchId ? `/warehouse?branchId=${encodeURIComponent(visibleBranchId)}` : "/warehouse")}
+          backHref={isBranchManager ? "/branch-operations" : kitchenRawMode ? "/central-kitchen-orders" : (visibleBranchId ? `/warehouse?branchId=${encodeURIComponent(visibleBranchId)}` : "/warehouse")}
           actions={
             <div className="flex items-center gap-2">
-            {!isKeeper && permissions.canExport("warehouse") && <div className="hidden md:block">
+            {!isKeeper && permissions.canExport(transferModule) && <div className="hidden md:block">
               <ExportButtons
                 data={exportData}
                 columns={exportColumns}
@@ -994,7 +998,7 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
                 sheetName={isRTL ? "التحويلات" : "Transfers"}
               />
             </div>}
-            {!isKeeper && canCreate("warehouse") && <Dialog open={isCreateOpen} onOpenChange={(open) => {
+            {!isKeeper && canCreate(transferModule) && <Dialog open={isCreateOpen} onOpenChange={(open) => {
               if (open && !isCreateOpen) createIdempotencyKeyRef.current = crypto.randomUUID();
               if (!open && !createMutation.isPending) createIdempotencyKeyRef.current = null;
               setIsCreateOpen(open);
@@ -1321,8 +1325,8 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
           current="warehouse"
           branchId={visibleBranchId}
           canKitchen={canView("central_kitchen_orders")}
-          canWarehouse={canView("warehouse")}
-          onWarehouseRequest={canCreate("warehouse") ? openCreateRequest : undefined}
+          canWarehouse={canView(transferModule)}
+          onWarehouseRequest={canCreate(transferModule) ? openCreateRequest : undefined}
         />}
 
         {!isKeeper && <Card className="border-border bg-card">
@@ -1414,7 +1418,7 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
                 ))}
               </SelectContent>
             </Select>
-            {permissions.canExport("warehouse") && <Button
+            {permissions.canExport(transferModule) && <Button
               variant="outline" 
               onClick={handleExportExcel}
               className="hidden sm:flex bg-green-50 hover:bg-green-100 text-green-700 border-green-200 h-9 sm:h-10"
@@ -1514,7 +1518,7 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
                               <FileText className={`w-3 h-3 sm:w-4 sm:h-4 ${isRTL ? "ml-1" : "mr-1"}`} />
                               <span className="hidden sm:inline">{isRTL ? "عرض" : "View"}</span>
                             </Button>
-                            {nextStatuses.length > 0 && (
+                            {(nextStatuses.length > 0 || canReceiveBranchSupplyTransfer(transfer, isBranchManager, canEdit(transferModule), branches)) && (
                               <Button 
                                 variant="default" 
                                 size="sm"
@@ -1524,13 +1528,14 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
                                   nextStatuses.includes("delivered") ? "bg-green-600 hover:bg-green-700" :
                                   ""
                                 }`}
-                                onClick={() => nextStatuses.includes("delivered") ? handleConfirmDelivery(transfer) : handleUpdateStatus(transfer)}
+                                onClick={() => nextStatuses.includes("delivered") || isBranchManager ? handleConfirmDelivery(transfer) : handleUpdateStatus(transfer)}
                                 data-testid={`btn-update-${transfer.id}`}
                               >
                                 {nextStatuses.includes("approved") && (isRTL ? "موافقة" : "OK")}
                                 {nextStatuses.includes("in_transit") && (isRTL ? "إرسال" : "Send")}
                                 {nextStatuses.includes("delivered") && (isRTL ? "تأكيد" : "Confirm")}
-                                {!nextStatuses.includes("approved") && !nextStatuses.includes("in_transit") && !nextStatuses.includes("delivered") && (isRTL ? "تحديث" : "Update")}
+                                {isBranchManager && transfer.status === "in_transit" && (isRTL ? "استلام" : "Receive")}
+                                {!isBranchManager && !nextStatuses.includes("approved") && !nextStatuses.includes("in_transit") && !nextStatuses.includes("delivered") && (isRTL ? "تحديث" : "Update")}
                               </Button>
                             )}
                             <DropdownMenu>
@@ -1540,19 +1545,19 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
                                 </Button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align={isRTL ? "start" : "end"}>
-                                {permissions.canExport("warehouse") && <DropdownMenuItem onClick={() => handleQuickWhatsApp(transfer)} data-testid={`btn-whatsapp-${transfer.id}`}>
+                                {permissions.canExport(transferModule) && <DropdownMenuItem onClick={() => handleQuickWhatsApp(transfer)} data-testid={`btn-whatsapp-${transfer.id}`}>
                                   <MessageCircle className={`w-4 h-4 ${isRTL ? "ml-2" : "mr-2"} text-green-600`} />
                                   {isRTL ? "مشاركة واتساب" : "Share WhatsApp"}
                                 </DropdownMenuItem>}
-                                {permissions.canExport("warehouse") && <DropdownMenuItem onClick={() => handleViewDetails(transfer)} data-testid={`btn-print-${transfer.id}`}>
+                                {permissions.canExport(transferModule) && <DropdownMenuItem onClick={() => handleViewDetails(transfer)} data-testid={`btn-print-${transfer.id}`}>
                                   <Printer className={`w-4 h-4 ${isRTL ? "ml-2" : "mr-2"}`} />
                                   {isRTL ? "طباعة" : "Print"}
                                 </DropdownMenuItem>}
-                                {permissions.canExport("warehouse") && <DropdownMenuItem onClick={() => handleQuickPdf(transfer)} data-testid={`btn-pdf-${transfer.id}`}>
+                                {permissions.canExport(transferModule) && <DropdownMenuItem onClick={() => handleQuickPdf(transfer)} data-testid={`btn-pdf-${transfer.id}`}>
                                   <Download className={`w-4 h-4 ${isRTL ? "ml-2" : "mr-2"} text-red-600`} />
                                   {isRTL ? "تحميل PDF" : "Download PDF"}
                                 </DropdownMenuItem>}
-                                {(['pending', 'approved'].includes(transfer.status) && (canSelectBranch || isKeeper) && canEdit("warehouse") && (!isKeeper || transfer.sourceBranchId === "main_warehouse")) && (
+                                {(['pending', 'approved'].includes(transfer.status) && (!isBranchManager || transfer.status === "pending") && (canSelectBranch || isKeeper || isBranchManager) && canEdit(transferModule) && (!isKeeper || transfer.sourceBranchId === "main_warehouse") && (!isBranchManager || (transfer.sourceBranchId === "main_warehouse" && branches.some(branch => branch.id === transfer.destinationBranchId)))) && (
                                   <>
                                     <DropdownMenuSeparator />
                                     <DropdownMenuItem 
@@ -1565,7 +1570,7 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
                                     </DropdownMenuItem>
                                   </>
                                 )}
-                                {(transfer.status === 'pending' && canEdit("warehouse") && !isKeeper && (canSelectBranch || transfer.destinationBranchId === userBranchId)) && (
+                                {(transfer.status === 'pending' && canEdit(transferModule) && !isKeeper && (isBranchManager ? (transfer.sourceBranchId === "main_warehouse" && branches.some(branch => branch.id === transfer.destinationBranchId)) : (canSelectBranch || transfer.destinationBranchId === userBranchId))) && (
                                   <>
                                     <DropdownMenuSeparator />
                                     <DropdownMenuItem 
@@ -1609,11 +1614,11 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
                   {isRTL ? "تفاصيل طلب التحويل" : "Transfer Request Details"}
                 </DialogTitle>
                 <div className="flex flex-wrap gap-2">
-                  {permissions.canExport("warehouse") && <Button variant="outline" size="sm" onClick={() => handlePrint()} disabled={isLoadingItems || isTransferItemsError || !transferItems.length} data-testid="btn-print">
+                  {permissions.canExport(transferModule) && <Button variant="outline" size="sm" onClick={() => handlePrint()} disabled={isLoadingItems || isTransferItemsError || !transferItems.length} data-testid="btn-print">
                     <Printer className="w-4 h-4 mr-1" />
                     {isRTL ? "طباعة" : "Print"}
                   </Button>}
-                  {permissions.canExport("warehouse") && <Button
+                  {permissions.canExport(transferModule) && <Button
                     variant="outline" 
                     size="sm" 
                     onClick={handleDownloadPdf}
@@ -1624,7 +1629,7 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
                     <Download className="w-4 h-4 mr-1" />
                     PDF
                   </Button>}
-                  {permissions.canExport("warehouse") && <Button
+                  {permissions.canExport(transferModule) && <Button
                     variant="outline" 
                     size="sm" 
                     onClick={handleDownloadTransferExcel}
@@ -1635,7 +1640,7 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
                     <FileSpreadsheet className="w-4 h-4 mr-1" />
                     Excel
                   </Button>}
-                  {permissions.canExport("warehouse") && <Button
+                  {permissions.canExport(transferModule) && <Button
                     variant="outline" 
                     size="sm" 
                     onClick={handleWhatsAppShare}
@@ -1655,6 +1660,19 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
             </DialogHeader>
             {selectedTransfer && (
               <>
+                {canReceiveBranchSupplyTransfer(selectedTransfer, isBranchManager, canEdit(transferModule), branches) && (
+                    <Button
+                      type="button"
+                      className="min-h-11 w-full"
+                      data-testid={`btn-receive-detail-${selectedTransfer.id}`}
+                      onClick={() => {
+                        setIsViewOpen(false);
+                        void handleConfirmDelivery(selectedTransfer);
+                      }}
+                    >
+                      {isRTL ? "تسجيل الاستلام الفعلي وتوقيع المستلم" : "Record receipt and receiver signature"}
+                    </Button>
+                  )}
                 {isLoadingItems ? (
                   <div className="space-y-3 py-4">{[0, 1, 2, 3].map(index => <Skeleton key={index} className="h-12 w-full" />)}</div>
                 ) : isTransferItemsError ? (
@@ -1679,7 +1697,7 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
                         <TableBody>{transferItems.map(item => <TableRow key={item.id}><TableCell className="font-medium">{item.itemName}</TableCell><TableCell className="font-mono tabular-nums">{quantityText(item.quantity)}</TableCell><TableCell>{item.unit}</TableCell>{selectedTransfer.status === "delivered" && <TableCell className="font-mono tabular-nums">{quantityText(item.receivedQuantity ?? item.quantity)}</TableCell>}</TableRow>)}</TableBody>
                       </Table>
                     </div>
-                    {permissions.canExport("warehouse") && <div className="sr-only"><TransferDocument ref={printRef} transfer={selectedTransfer} items={transferItems} /></div>}
+                    {permissions.canExport(transferModule) && <div className="sr-only"><TransferDocument ref={printRef} transfer={selectedTransfer} items={transferItems} /></div>}
                     {isKeeper && selectedTransfer.sourceBranchId === "main_warehouse" && canView("delivery_tasks") && (
                       <div className="border-t border-border pt-4">
                         <Button type="button" variant="outline" className="h-auto min-h-11 max-w-full whitespace-normal text-center" onClick={() => setDeliveryWorkspaceId(current => current === selectedTransfer.id ? null : selectedTransfer.id)}>

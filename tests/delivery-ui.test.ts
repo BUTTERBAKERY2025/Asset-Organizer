@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { canOpenDeliverySource, DeliveryDetail, deliveryTiming } from "../client/src/components/delivery/delivery-ui";
+import { canOpenDeliverySource, DeliveryDetail, deliverySourcePath, deliveryTiming } from "../client/src/components/delivery/delivery-ui";
 import type { Delivery } from "../client/src/pages/driver-deliveries";
 
 const scheduled = Date.parse("2026-01-01T10:00:00Z");
@@ -44,6 +44,15 @@ describe("delivery source access and receipt evidence", () => {
     expect(html).not.toContain("/central-kitchen-orders");
     expect(html).toContain("مستخدم مخوّل");
     expect(renderToStaticMarkup(createElement(DeliveryDetail, { delivery, canOpenSource: true, proof }))).toContain("/central-kitchen-orders");
+  });
+
+  it("opens the branch supply transfer receipt without granting warehouse source access", () => {
+    const transfer = { ...delivery, sourceType: "material_transfer" as const };
+    expect(canOpenDeliverySource("material_transfer", module => module === "branch_supply")).toBe(true);
+    expect(canOpenDeliverySource("reverse_movement", module => module === "branch_supply")).toBe(false);
+    expect(deliverySourcePath(transfer, true)).toContain("from=branch-supply");
+    expect(renderToStaticMarkup(createElement(DeliveryDetail, { delivery: transfer, canOpenSource: true, branchSupply: true })))
+      .toContain("from=branch-supply");
   });
 
   it("does not display cached proof from before reassignment or a new submission", () => {

@@ -10,13 +10,15 @@ describe("routing authorization", () => {
   it("never promotes view or branch-manager blanket rights into approval", () => {
     expect(routingPermission("employee", ["view"], "approve")).toBe(false);
     expect(routingPermission("branch_manager", [], "approve")).toBe(false);
-    expect(routingPermission("branch_manager", ["approve"], "approve")).toBe(true);
+    expect(routingPermission("branch_manager", ["approve"], "approve")).toBe(false);
     expect(routingSchema.safeParse({ responsibleUserId: "a", deputyUserId: "a", receiverUserId: null }).success).toBe(false);
     expect(routingSchema.safeParse({ responsibleUserId: null, deputyUserId: null, receiverUserId: null }).success).toBe(true);
   });
 
   it("rechecks routing, branch access, permission revocation and exact notification targets transactionally", async () => {
-    if (!process.env.DATABASE_URL) throw new Error("Development DATABASE_URL required");
+    const url = new URL(process.env.DATABASE_URL || "postgres://invalid/invalid");
+    if (process.env.USE_SUPABASE === "true" || url.hostname !== "helium" || url.pathname !== "/heliumdb")
+      throw new Error("Refusing routing integration test outside local heliumdb");
     const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL, max: 1 });
     const db = drizzle(pool, { schema });
     const rollback = new Error("ROLLBACK_ROUTING_TEST");
@@ -50,6 +52,11 @@ describe("routing authorization", () => {
         }).returning();
         expect(await kitchenActionAllowed(tx, lead, order, "approve")).toBe(true);
         expect(await kitchenActionAllowed(tx, lead, order, "prepare")).toBe(true);
+        await tx.insert(schema.userPermissions).values({
+          userId: manager, module: "central_kitchen_orders", actions: ["view", "edit", "approve"],
+        });
+        for (const sourceAction of ["approve", "prepare", "dispatch"])
+          expect(await kitchenActionAllowed(tx, manager, order, sourceAction)).toBe(false);
         expect(await kitchenActionAllowed(tx, creator, order, "approve")).toBe(false);
         expect(await kitchenActionAllowed(tx, creator, order, "receive")).toBe(false);
         expect(await kitchenActionAllowed(tx, creator, order, "resolve_discrepancy")).toBe(false);

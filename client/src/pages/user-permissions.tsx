@@ -149,22 +149,6 @@ const CUSTOM_TEMPLATES: Record<string, { module: string; actions: string[] }[]> 
     { module: "quality_control", actions: ["view"] },
     { module: "inventory", actions: ["view"] },
   ],
-  branch_manager: [
-    { module: "dashboard", actions: ["view", "export", "print"] },
-    { module: "platform_home", actions: ["view"] },
-    { module: "cashier_journal", actions: ["view", "view_list", "view_details", "create", "edit", "approve", "reject", "reopen", "print", "export", "sign", "view_signatures"] },
-    { module: "cashier_performance", actions: ["view", "view_list", "view_details", "export", "print"] },
-    { module: "operations", actions: ["view", "create", "edit", "delete"] },
-    { module: "production", actions: ["view", "create", "edit"] },
-    { module: "shifts", actions: ["view", "create", "edit", "delete"] },
-    { module: "quality_control", actions: ["view", "create", "edit"] },
-    { module: "inventory", actions: ["view", "create", "edit"] },
-    { module: "asset_transfers", actions: ["view", "create", "edit", "approve"] },
-    { module: "branch_employees", actions: ["view", "create", "edit"] },
-    { module: "employee_reports", actions: ["view", "export", "print"] },
-    { module: "reports", actions: ["view", "export", "print"] },
-    { module: "event_pos", actions: ["view", "create", "edit", "delete"] },
-  ],
   // Recipe-book access is an explicit grant, not part of the broad viewer
   // template. The matrix still exposes the module for deliberate selection.
   viewer: getGroupedModules().flatMap((g) => g.modules)
@@ -419,7 +403,9 @@ export default function UserPermissionsPage() {
     // permissions editor cannot drift from the job-title template.
     const template = templateId === "production_manager"
       ? JOB_ROLE_PERMISSION_TEMPLATES.production_manager
-      : CUSTOM_TEMPLATES[templateId];
+      : templateId === "branch_manager"
+        ? ROLE_PERMISSION_TEMPLATES.branch_manager
+        : CUSTOM_TEMPLATES[templateId];
     if (!template) return;
     const newState: PermissionState = {};
     for (const perm of template) newState[perm.module] = [...perm.actions];

@@ -8,7 +8,7 @@ export function useBranches() {
   const isWarehouseKeeper = user?.role === "warehouse_keeper";
 
   // Server now filters branches based on user role, so we get pre-filtered data
-  const { data: branches = [], isLoading } = useQuery<Branch[]>({
+  const { data: assignedBranches = [], isLoading } = useQuery<Branch[]>({
     queryKey: ["/api/branches"],
     queryFn: async () => {
       const res = await fetch("/api/branches", { credentials: "include" });
@@ -20,6 +20,11 @@ export function useBranches() {
     refetchOnWindowFocus: false,
     refetchOnMount: false,
   });
+  // The branch manager's active desk is the primary assigned branch. Extra
+  // RBAC branch grants must not offer a second request/receiving destination.
+  const branches = user?.role === "branch_manager"
+    ? assignedBranches.filter(branch => !!user.branchId && branch.id === user.branchId)
+    : assignedBranches;
 
   // For non-admins with single branch access, use that branch
   // For non-admins with multiple branches, userBranchId should be null to allow selection

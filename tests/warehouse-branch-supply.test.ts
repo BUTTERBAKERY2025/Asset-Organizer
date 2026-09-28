@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import {
+  canReceiveBranchSupplyTransfer,
   consumeWarehouseCreateIntent,
   parseWarehouseSupplyIntent,
   resolveVisibleBranchFilter,
@@ -9,6 +10,20 @@ import {
 import { resolveNavigationBranch } from "../client/src/hooks/use-branch-navigation";
 
 describe("warehouse branch supply navigation", () => {
+  it("allows the exact-row receipt action only for an editable inbound transfer to the assigned branch", () => {
+    const inbound = { status: "in_transit", sourceBranchId: "main_warehouse", destinationBranchId: "b1" };
+    const assigned = [{ id: "b1" }];
+    expect(canReceiveBranchSupplyTransfer(inbound, true, true, assigned)).toBe(true);
+    expect(canReceiveBranchSupplyTransfer(inbound, true, false, assigned)).toBe(false);
+    expect(canReceiveBranchSupplyTransfer(inbound, false, true, assigned)).toBe(false);
+    expect(canReceiveBranchSupplyTransfer(inbound, true, true, [{ id: "b2" }])).toBe(false);
+    expect(canReceiveBranchSupplyTransfer({ ...inbound, status: "delivered" }, true, true, assigned)).toBe(false);
+    expect(canReceiveBranchSupplyTransfer({ ...inbound, sourceBranchId: "other_branch" }, true, true, assigned)).toBe(false);
+    const page = readFileSync(new URL("../client/src/pages/transfer-requests.tsx", import.meta.url), "utf8");
+    expect(page).toContain("btn-receive-detail-");
+    expect(page).toContain("void handleConfirmDelivery(selectedTransfer)");
+    expect(page).toContain("canReceiveBranchSupplyTransfer(selectedTransfer, isBranchManager, canEdit(transferModule), branches)");
+  });
   it("only accepts the explicit create intent", () => {
     expect(parseWarehouseSupplyIntent("?branchId=b1&create=1&from=branch-supply")).toEqual({
       shouldCreate: true,
@@ -58,9 +73,11 @@ describe("warehouse branch supply navigation", () => {
     expect(resolveWarehouseCreateDestination("all", branches, "stale")).toBeNull();
   });
 
-  it("gates mutation controls with the warehouse route actions", () => {
+  it("gates branch mutations with branch_supply while retaining warehouse controls for custodians", () => {
     const page = readFileSync(new URL("../client/src/pages/transfer-requests.tsx", import.meta.url), "utf8");
-    expect(page).toContain('canCreate("warehouse")');
+    expect(page).toContain('isBranchManager ? "branch_supply" : "warehouse"');
+    expect(page).toContain("canCreate(transferModule)");
+    expect(page).toContain("canEdit(transferModule)");
     expect(page).toContain('canEdit("warehouse")');
     expect(page).not.toMatch(/can(?:Create|Edit|Approve)\("transfer_requests"\)/);
     expect(page).not.toContain('<SelectItem value="main_warehouse">');

@@ -1154,6 +1154,7 @@ export const SYSTEM_MODULES = [
   "products",
   "operations",
   "branch_complaints",
+  "branch_supply",
   "delivery_tasks",
   "central_kitchen_orders",
   "central_kitchen_recipes",
@@ -1372,6 +1373,7 @@ export const MODULE_LABELS: Record<SystemModule, string> = {
   products: "المنتجات",
   operations: "التشغيل",
   branch_complaints: "شكاوى الفروع",
+  branch_supply: "طلبات مواد الفروع واستلامها",
   delivery_tasks: "مهام التوصيل",
   central_kitchen_orders: "طلبات المطبخ المركزي",
   central_kitchen_recipes: "وصفات المطبخ المركزي",
@@ -1586,6 +1588,7 @@ export const MODULE_GROUPS: { label: string; modules: SystemModule[] }[] = [
       "quality_control",
       "products",
       "operations",
+      "branch_supply",
       "central_kitchen_orders",
       "central_kitchen_recipes",
       "ai_production_planner",
@@ -1941,6 +1944,7 @@ export const ROLE_PERMISSION_TEMPLATES: Record<
     { module: "operations", actions: ["view", "create", "edit", "export"] },
     { module: "branch_complaints", actions: ["view", "create", "edit"] },
     { module: "maintenance", actions: ["view", "create", "edit"] },
+    { module: "branch_supply", actions: ["view", "create", "edit", "export"] },
     { module: "central_kitchen_orders", actions: ["view", "create", "edit", "export"] },
     { module: "delivery_tasks", actions: ["view", "approve", "export"] },
     { module: "waste_tracking", actions: ["view", "create", "edit", "export"] },
@@ -1951,7 +1955,7 @@ export const ROLE_PERMISSION_TEMPLATES: Record<
   // Recipe-book permissions are intentionally explicit.  In particular, do
   // not let the broad view-only template silently grant the new module to
   // every viewer when the catalog is extended.
-  viewer: SYSTEM_MODULES.filter((m) => m !== "users" && m !== "central_kitchen_recipes" && m !== "delivery_tasks").map((module) => ({
+  viewer: SYSTEM_MODULES.filter((m) => m !== "users" && m !== "central_kitchen_recipes" && m !== "delivery_tasks" && m !== "branch_supply").map((module) => ({
     module,
     actions: ["view"] as ModuleAction[],
   })),
@@ -2024,25 +2028,10 @@ export const JOB_ROLE_PERMISSION_TEMPLATES: Record<
     { module: "inventory", actions: ["view"] },
   ],
 
-  // مدير فرع - صلاحيات واسعة على فرعه
-  branch_manager: [
-    { module: "dashboard", actions: ["view", "export"] },
-    { module: "operations", actions: ["view", "create", "edit", "delete"] },
-    { module: "production", actions: ["view", "create", "edit"] },
-    { module: "shifts", actions: ["view", "create", "edit", "delete"] },
-    { module: "quality_control", actions: ["view", "create", "edit"] },
-    {
-      module: "cashier_journal",
-      actions: ["view", "create", "edit", "approve"],
-    },
-    {
-      module: "daily_closures",
-      actions: ["view", "create", "edit", "approve", "export"],
-    },
-    { module: "inventory", actions: ["view", "create", "edit"] },
-    { module: "asset_transfers", actions: ["view", "create", "edit"] },
-    { module: "reports", actions: ["view", "export"] },
-  ],
+  // Keep job-title provisioning aligned with the role's branch-only template.
+  branch_manager: ROLE_PERMISSION_TEMPLATES.branch_manager.map(({ module, actions }) => ({
+    module, actions: [...actions],
+  })),
 
   // مدير إنتاج - الإنتاج والورديات ومراقبة الجودة
   production_manager: [

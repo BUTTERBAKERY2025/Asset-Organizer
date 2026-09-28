@@ -30,6 +30,9 @@ const app: any = {
   post(path: string, ...handlers: any[]) { routes.set(`POST ${path}`, handlers); },
 };
 let pool: pg.Pool;
+let fixtureClient: pg.PoolClient | undefined;
+let nextTransaction = Promise.resolve();
+let savepointSequence = 0;
 let branch: string, other: string, kitchen: string;
 let admin: Actor, receiver: Actor, outsider: Actor;
 let driver: Actor;
@@ -37,13 +40,17 @@ let item: number, transferItem: number, product: number, substitute: number, ord
 let wh1: string, wh2: string;
 let seq = 0;
 const key = () => `${prefix}-${++seq}`;
-const q = (sql: string, args: unknown[] = []) => pool.query(sql, args);
+const q = (sql: string, args: unknown[] = []) => {
+  if (!fixtureClient) throw Error("Local rollback fixture is not open");
+  return fixtureClient.query(sql, args);
+};
 const number = (x: unknown) => Number(x);
 
 async function invoke(method: "GET" | "POST", path: string, user: Actor, body: any = {}, params: any = {}) {
   const handlers = routes.get(`${method} ${path}`);
   if (!handlers) throw Error(`Route missing: ${method} ${path}`);
   const req: any = { currentUser: user, userBranchAccess: user.allowedBranches.map(branchId => ({ branchId })),
+    authPermissions: Object.entries(user.permissions).map(([module, actions]) => ({ module, actions })),
     body, params, query: {}, headers: {}, method };
   const res: any = {
     statusCode: 200, body: undefined,
@@ -93,21 +100,36 @@ describe("reverse logistics routes against local PostgreSQL", () => {
     const url = new URL(process.env.DATABASE_URL || "postgres://invalid/invalid");
     if (process.env.USE_SUPABASE === "true" || url.hostname !== "helium" || url.pathname !== "/heliumdb")
       throw Error("Refusing reverse logistics integration test outside local heliumdb");
-    pool = new pg.Pool({ connectionString: process.env.DATABASE_URL, max: 8 });
-    state.pool = { connect: async () => {
-      const client = await pool.connect();
-      return { query: async (...args: any[]) => {
-        try { return await (client.query as any)(...args); }
-        catch (error) { throw error; }
-      }, release: () => client.release() };
-    } };
+    pool = new pg.Pool({ connectionString: process.env.DATABASE_URL, max: 1 });
+    fixtureClient = await pool.connect();
     expect((await q("SELECT current_database() db")).rows[0].db).toBe("heliumdb");
+    await q("BEGIN");
+    // Every route gets a savepoint inside the one fixture transaction. Serialize
+    // route clients so concurrent-request tests still observe each committed
+    // savepoint's writes without ever committing them to the local database.
+    state.pool = { connect: async () => {
+      const prior = nextTransaction;
+      let unlock!: () => void;
+      nextTransaction = new Promise<void>(resolve => { unlock = resolve; });
+      await prior;
+      const savepoint = `reverse_route_${++savepointSequence}`;
+      return { query: async (...args: any[]) => {
+        const command = typeof args[0] === "string" ? args[0].trim().toUpperCase() : "";
+        if (command === "BEGIN") return fixtureClient!.query(`SAVEPOINT ${savepoint}`);
+        if (command === "COMMIT") return fixtureClient!.query(`RELEASE SAVEPOINT ${savepoint}`);
+        if (command === "ROLLBACK") {
+          await fixtureClient!.query(`ROLLBACK TO SAVEPOINT ${savepoint}`);
+          return fixtureClient!.query(`RELEASE SAVEPOINT ${savepoint}`);
+        }
+        return (fixtureClient!.query as any)(...args);
+      }, release: unlock };
+    } };
     branch = `${prefix}-branch`; other = `${prefix}-other`; kitchen = `${prefix}-kitchen`;
     admin = { id: `${prefix}-admin`, role: "admin", allowedBranches: [], permissions: {} };
     receiver = { id: `${prefix}-receiver`, role: "branch_manager", allowedBranches: [branch],
-      permissions: { central_kitchen_orders: ["view", "edit"] } };
+      branchId: branch, permissions: { central_kitchen_orders: ["view", "create", "edit"], branch_supply: ["view", "create", "edit"] } };
     outsider = { id: `${prefix}-outsider`, role: "branch_manager", allowedBranches: [other],
-      permissions: { central_kitchen_orders: ["view", "edit"] } };
+      branchId: other, permissions: { central_kitchen_orders: ["view", "create", "edit"], branch_supply: ["view", "create", "edit"] } };
     driver = { id: `${prefix}-driver`, role: "employee", allowedBranches: [branch], permissions: {} };
     try {
       for (const id of [branch, other, kitchen])
@@ -151,39 +173,15 @@ describe("reverse logistics routes against local PostgreSQL", () => {
     }
   });
   async function cleanup() {
-    if (!pool || state.pool === null) return;
-    // Only prefix-owned rows; no production connection and no persisted fixtures.
+    if (!pool) return;
     try {
-      await q("DELETE FROM production_inventory_logs WHERE reference_type='reverse_movement' AND reference_id IN (SELECT id FROM reverse_movements WHERE created_by LIKE $1)",[`${prefix}%`]);
-      await q("DELETE FROM warehouse_movement_logs WHERE reference_type='reverse_movement' AND reference_id IN (SELECT id FROM reverse_movements WHERE created_by LIKE $1)",[`${prefix}%`]);
-      await q("DELETE FROM managed_warehouse_movement_logs WHERE movement_id IN (SELECT id FROM reverse_movements WHERE created_by LIKE $1)",[`${prefix}%`]);
-      await q("DELETE FROM reverse_product_reservations WHERE movement_id IN (SELECT id FROM reverse_movements WHERE created_by LIKE $1)",[`${prefix}%`]);
-      await q(`DELETE FROM system_notifications WHERE dedupe_key IN
-        (SELECT 'delivery:' || o.id || ':' || u.id FROM delivery_notification_outbox o
-         JOIN delivery_assignments a ON a.id=o.assignment_id
-         JOIN users u ON u.id=a.driver_id
-         WHERE a.source_type='reverse_movement' AND a.created_by LIKE $1)`,[`${prefix}%`]);
-      await q(`DELETE FROM delivery_notification_outbox WHERE assignment_id IN
-        (SELECT id FROM delivery_assignments WHERE source_type='reverse_movement' AND created_by LIKE $1)`,[`${prefix}%`]);
-      await q(`DELETE FROM delivery_assignment_events WHERE assignment_id IN
-        (SELECT id FROM delivery_assignments WHERE source_type='reverse_movement' AND created_by LIKE $1)`,[`${prefix}%`]);
-      await q(`DELETE FROM delivery_assignments
-        WHERE source_type='reverse_movement' AND created_by LIKE $1`,[`${prefix}%`]);
-      await q("DELETE FROM reverse_movement_events WHERE movement_id IN (SELECT id FROM reverse_movements WHERE created_by LIKE $1)",[`${prefix}%`]);
-      await q("DELETE FROM reverse_movements WHERE created_by LIKE $1",[`${prefix}%`]);
-      await q("DELETE FROM managed_warehouse_stock WHERE warehouse_id IN (SELECT id FROM managed_warehouses WHERE name LIKE $1)",[`${prefix}%`]);
-      await q("DELETE FROM managed_warehouses WHERE name LIKE $1",[`${prefix}%`]);
-      await q("DELETE FROM finished_goods_inventory WHERE branch_id IN ($1,$2) AND product_id IN ($3,$4)",[branch,kitchen,product,substitute]);
-      await q("DELETE FROM central_kitchen_order_items WHERE order_id IN (SELECT id FROM central_kitchen_orders WHERE order_number=$1)",[prefix]);
-      await q("DELETE FROM central_kitchen_orders WHERE order_number=$1",[prefix]);
-      await q("DELETE FROM products WHERE id IN ($1,$2)",[product,substitute]);
-      await q("DELETE FROM material_transfer_items WHERE transfer_id IN (SELECT id FROM material_transfers WHERE transfer_number=$1)",[prefix]);
-      await q("DELETE FROM material_transfers WHERE transfer_number=$1",[prefix]);
-      await q("DELETE FROM branch_stock WHERE branch_id=$1 AND item_id=$2",[branch,item]);
-      await q("DELETE FROM warehouse_items WHERE id=$1",[item]);
-      await q("DELETE FROM users WHERE id LIKE $1",[`${prefix}%`]);
-      await q("DELETE FROM branches WHERE id IN ($1,$2,$3)",[branch,other,kitchen]);
-    } finally { await pool.end(); state.pool = null; }
+      if (fixtureClient) await fixtureClient.query("ROLLBACK");
+    } finally {
+      fixtureClient?.release();
+      fixtureClient = undefined;
+      await pool.end();
+      state.pool = null;
+    }
   }
   afterAll(cleanup);
 
@@ -197,13 +195,34 @@ describe("reverse logistics routes against local PostgreSQL", () => {
     expect(ok(await invoke("GET","/api/reverse-logistics/warehouses",admin)).map((x: any) => x.id)).toContain(wh1);
   });
 
+  it("keeps material and kitchen return grants independent, and honors revocation", async () => {
+    const productOnly = { ...receiver, permissions: { central_kitchen_orders: ["view", "create", "edit"] } };
+    const productSources = ok(await invoke("GET","/api/reverse-logistics/sources",productOnly));
+    expect(productSources.materials).toEqual([]);
+    expect(productSources.products.some((source: any) => Number(source.id) === orderItem)).toBe(true);
+    expect((await create(productOnly,material(1))).status).toBe(403);
+    const materialOnly = { ...receiver, permissions: { branch_supply: ["view", "create", "edit"] } };
+    const materialSources = ok(await invoke("GET","/api/reverse-logistics/sources",materialOnly));
+    expect(materialSources.products).toEqual([]);
+    expect(materialSources.materials.some((source: any) => Number(source.id) === transferItem)).toBe(true);
+    expect((await create(materialOnly,{kind:"product_return",originalOrderItemId:orderItem,
+      component:"original",quantity:1,idempotencyKey:key()})).status).toBe(403);
+    const revoked = { ...receiver, permissions: { branch_supply: [], central_kitchen_orders: [] } };
+    expect((await invoke("GET","/api/reverse-logistics/sources",revoked)).status).toBe(403);
+    expect((await create(revoked,material(1))).status).toBe(403);
+  });
+
   it("reserves, dispatches, receives shortage, inspects partial usable and writes off damaged without financial posting", async () => {
     const created = ok(await create(receiver,material(6)));
     expect(created.status).toBe("draft");
     expect(ok(await act(created.id,"request",receiver)).status).toBe("requested");
     expect(await stock("SELECT reserved_quantity quantity FROM branch_stock WHERE branch_id=$1 AND item_id=$2",[branch,item])).toBe(6);
+    expect((await act(created.id,"dispatch",receiver,{carrierName:"Courier"})).status).toBe(403);
     await acknowledgeHandover(created.id);
-    expect(ok(await act(created.id,"dispatch",receiver,{carrierName:"Courier"})).status).toBe("dispatched");
+    expect((await act(created.id,"dispatch",receiver,{carrierName:"Courier"})).status).toBe(403);
+    expect(await stock("SELECT current_quantity quantity FROM branch_stock WHERE branch_id=$1 AND item_id=$2",[branch,item])).toBe(20);
+    expect((await q("SELECT count(*)::int n FROM reverse_movement_events WHERE movement_id=$1 AND action='dispatch'",[created.id])).rows[0].n).toBe(0);
+    expect(ok(await act(created.id,"dispatch",admin,{carrierName:"Courier"})).status).toBe("dispatched");
     expect(await stock("SELECT current_quantity quantity FROM branch_stock WHERE branch_id=$1 AND item_id=$2",[branch,item])).toBe(14);
     expect((await act(created.id,"receive",receiver,{receivedQuantity:5})).status).toBe(403);
     expect(ok(await act(created.id,"receive",admin,{receivedQuantity:5})).status).toBe("received");
@@ -223,12 +242,12 @@ describe("reverse logistics routes against local PostgreSQL", () => {
   });
 
   it("lets a main-warehouse custodian receive and inspect, but never write off or replay approval", async () => {
-    const custodian: Actor = { ...admin, role: "branch_manager", branchId: "main_warehouse",
-      allowedBranches: ["main_warehouse"], permissions: { central_kitchen_orders: ["view", "edit"] } };
+    const custodian: Actor = { ...admin, role: "warehouse_keeper", branchId: "main_warehouse",
+      allowedBranches: ["main_warehouse"], permissions: { warehouse: ["view", "edit"] } };
     const movement = ok(await create(receiver,material(1)));
     ok(await act(movement.id,"request",receiver));
     await acknowledgeHandover(movement.id);
-    ok(await act(movement.id,"dispatch",receiver,{carrierName:"Courier"}));
+    ok(await act(movement.id,"dispatch",admin,{carrierName:"Courier"}));
     expect(ok(await invoke("GET","/api/reverse-logistics",custodian)).map((x: any) => x.id)).toContain(movement.id);
     expect(ok(await invoke("GET","/api/reverse-logistics/:id",custodian,{}, {id:movement.id})).id).toBe(movement.id);
     expect((await invoke("GET","/api/reverse-logistics/:id",outsider,{}, {id:movement.id})).status).toBe(403);
@@ -257,7 +276,7 @@ describe("reverse logistics routes against local PostgreSQL", () => {
     expect(ok(await act(movement.id,"request",receiver,{idempotencyKey})).status).toBe("requested");
     expect(ok(await act(movement.id,"request",receiver,{idempotencyKey})).status).toBe("requested");
     expect((await act(movement.id,"request",receiver,{idempotencyKey,notes:"changed"})).status).toBe(409);
-    expect((await act(movement.id,"dispatch",receiver,{idempotencyKey,carrierName:"Courier"})).status).toBe(409);
+    expect((await act(movement.id,"dispatch",receiver,{idempotencyKey,carrierName:"Courier"})).status).toBe(403);
     expect((await q("SELECT count(*)::int n FROM reverse_movement_events WHERE movement_id=$1",[movement.id])).rows[0].n).toBe(1);
     expect(ok(await act(movement.id,"cancel",receiver)).status).toBe("cancelled");
   });
@@ -299,7 +318,8 @@ describe("reverse logistics routes against local PostgreSQL", () => {
     ok(await act(movement.id,"request",receiver));
     expect(await stock("SELECT reserved_quantity quantity FROM finished_goods_inventory WHERE branch_id=$1 AND product_id=$2",[branch,product])).toBe(3);
     await acknowledgeHandover(movement.id);
-    ok(await act(movement.id,"dispatch",receiver,{carrierName:"Courier"}));
+    expect((await act(movement.id,"dispatch",receiver,{carrierName:"Courier"})).status).toBe(403);
+    ok(await act(movement.id,"dispatch",admin,{carrierName:"Courier"}));
     ok(await act(movement.id,"receive",admin,{receivedQuantity:2}));
     ok(await act(movement.id,"inspect",admin,{usableQuantity:1,damagedQuantity:1}));
     expect(await stock("SELECT quantity FROM finished_goods_inventory WHERE branch_id=$1 AND product_id=$2",[branch,product])).toBe(7);

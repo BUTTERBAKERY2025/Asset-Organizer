@@ -3,6 +3,18 @@ export type WarehouseSupplyIntent = {
   fromBranchSupply: boolean;
 };
 
+/** Both the list action and an exact-row deep link use the same receiving scope. */
+export function canReceiveBranchSupplyTransfer(
+  transfer: { status: string; sourceBranchId: string; destinationBranchId: string },
+  isBranchManager: boolean,
+  canEditSupply: boolean,
+  branches: Array<{ id: string }>,
+): boolean {
+  return isBranchManager && canEditSupply && transfer.status === "in_transit"
+    && transfer.sourceBranchId === "main_warehouse"
+    && branches.some(branch => branch.id === transfer.destinationBranchId);
+}
+
 export function parseWarehouseSupplyIntent(search: string): WarehouseSupplyIntent {
   const params = new URLSearchParams(search);
   return {

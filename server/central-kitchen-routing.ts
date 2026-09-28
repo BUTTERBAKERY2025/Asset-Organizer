@@ -11,6 +11,7 @@ export const routingSchema = z.object({
 }).strict();
 
 export function routingPermission(role: string, actions: string[], action: string) {
+  if (role === "branch_manager" && action === "approve") return false;
   return role === "admin" || actions.includes(action)
     || (role === "production_development_manager" && ROLE_PERMISSION_TEMPLATES.production_development_manager
       .some(entry => entry.module === "central_kitchen_orders" && entry.actions.some(allowed => allowed === action)))
@@ -62,7 +63,7 @@ export async function routingPeople(tx: RoutingExecutor, branchId?: string) {
   for (const person of people as any[]) {
     // Unrelated module overrides must not erase kitchen role permissions.
     const hasCustom = direct.some((p: any) => p.userId === person.id
-      && p.module === "central_kitchen_orders" && p.actions.length > 0);
+      && p.module === "central_kitchen_orders");
     person._hasCustomPermissions = hasCustom;
     const actions = new Set<string>(hasCustom ? person.actions || []
       : inherited.filter((p: any) => p.userId === person.id).map((p: any) => p.action));
@@ -154,6 +155,9 @@ export async function kitchenActionAllowed(tx: RoutingExecutor, userId: string, 
   const receiving = action === "receive" || action === "resolve_discrepancy";
   const branchId = receiving ? order.requestBranchId : order.centralKitchenId;
   const actor = await routingActor(tx, userId);
+  // A requesting-branch manager is never a source-side approver/operator,
+  // even when a custom permission includes approve or edit.
+  if (actor?.role === "branch_manager" && !receiving) return false;
   if (!actor || !routingPersonEligible(actor, action === "approve" ? "approve" : "edit")) return false;
   // Administration may intervene, but a revoked action is never restored by role.
   if (["admin", "operations_manager"].includes(actor.role)) return true;

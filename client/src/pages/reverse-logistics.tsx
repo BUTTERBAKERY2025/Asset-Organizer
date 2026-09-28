@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { Layout } from "@/components/layout";
@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/hooks/useAuth";
+import { usePermissions } from "@/hooks/usePermissions";
 
 type Movement = {
   id: number; kind: string; status: string; item_name: string; unit: string; quantity: string;
@@ -43,10 +44,18 @@ const number = (value: string) => Number(value);
 export default function ReverseLogisticsPage() {
   const qc = useQueryClient();
   const { user } = useAuth();
+  const { canView, canCreate, canEdit } = usePermissions();
   const globalManager = user?.role === "admin" || (user?.role === "operations_manager" && !(user.allowedBranches?.length));
+  const warehouseReturn = user?.role !== "branch_manager" && canView("warehouse") && canEdit("warehouse");
+  const canMaterialReturn = warehouseReturn || (canView("branch_supply") && canCreate("branch_supply") && canEdit("branch_supply"));
+  const canProductReturn = warehouseReturn || (canView("central_kitchen_orders") && canCreate("central_kitchen_orders") && canEdit("central_kitchen_orders"));
   const params = new URLSearchParams(window.location.search);
   const initialKind = params.has("orderItemId") ? "product_return" : params.has("transferItemId") ? "material_return" : "material_return";
-  const [kind, setKind] = useState(initialKind);
+  const [kind, setKind] = useState(initialKind === "material_return" && !canMaterialReturn && canProductReturn ? "product_return" : initialKind);
+  useEffect(() => {
+    if (kind === "material_return" && !canMaterialReturn && canProductReturn) setKind("product_return");
+    else if (kind === "product_return" && !canProductReturn && canMaterialReturn) setKind("material_return");
+  }, [kind, canMaterialReturn, canProductReturn]);
   const [line, setLine] = useState(params.get("orderItemId") || params.get("transferItemId") || "");
   const [component, setComponent] = useState("original");
   const [itemId, setItemId] = useState("");
@@ -124,10 +133,10 @@ export default function ReverseLogisticsPage() {
         <p className="text-sm text-muted-foreground">الكميات مرتبطة بالاستلام الأصلي؛ الحجر والتالف لا يدخلان المخزون المتاح. لا يُنشأ قيد مالي للشطب.</p></header>
       {error && <div role="alert" className="rounded border border-red-300 bg-red-50 p-3 text-red-800">{error}</div>}
       {success && <div role="status" className="rounded border border-green-300 bg-green-50 p-3 text-green-800">{success}</div>}
-      <Card><CardHeader><CardTitle>إنشاء مسودة</CardTitle></CardHeader><CardContent className="space-y-4">
+      {(canMaterialReturn || canProductReturn || globalManager) && <Card><CardHeader><CardTitle>إنشاء مسودة</CardTitle></CardHeader><CardContent className="space-y-4">
         <div className="max-w-lg space-y-2"><Label>نوع الحركة</Label><Select value={kind} onValueChange={v => { setKind(v); setLine(""); }}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>
-          <SelectItem value="material_return">{labels.material_return}</SelectItem>
-          <SelectItem value="product_return">{labels.product_return}</SelectItem>
+          {canMaterialReturn && <SelectItem value="material_return">{labels.material_return}</SelectItem>}
+          {canProductReturn && <SelectItem value="product_return">{labels.product_return}</SelectItem>}
           {globalManager && <SelectItem value="warehouse_transfer">{labels.warehouse_transfer}</SelectItem>}
         </SelectContent></Select></div>
         {kind !== "warehouse_transfer" ? <div className="max-w-2xl space-y-2"><Label>البند الأصلي المستلم (لا تُخمن هوية المنتج أو تحويل الوحدة)</Label>
@@ -145,8 +154,8 @@ export default function ReverseLogisticsPage() {
           <div><Label>إلى مستودع</Label><Select value={destination} onValueChange={setDestination}><SelectTrigger><SelectValue placeholder="اختر الوجهة" /></SelectTrigger><SelectContent><SelectItem value="main">المستودع الرئيسي</SelectItem>{warehouses.data?.filter(w=>w.active).map(w=><SelectItem value={String(w.id)} key={w.id}>{w.name}</SelectItem>)}</SelectContent></Select></div>
         </div>}
         <div className="flex flex-wrap items-end gap-3"><div><Label htmlFor="return-quantity">الكمية {kind === "product_return" ? "(قطع صحيحة)" : "(نفس وحدة الأصل)"}</Label><Input id="return-quantity" type="number" min="0" step={kind === "product_return" ? "1" : "0.000001"} value={quantity} onChange={e=>setQuantity(e.target.value)} /></div>
-          <Button disabled={pending || (kind === "warehouse_transfer" ? !itemId : !line)} onClick={create}>إنشاء المسودة</Button></div>
-      </CardContent></Card>
+          <Button disabled={pending || (kind !== "warehouse_transfer" && !(kind === "material_return" ? canMaterialReturn : canProductReturn)) || (kind === "warehouse_transfer" ? !itemId : !line)} onClick={create}>إنشاء المسودة</Button></div>
+      </CardContent></Card>}
       {globalManager && <Card><CardHeader><CardTitle>إدارة المستودعات الفعلية</CardTitle></CardHeader><CardContent className="flex flex-wrap gap-3">
         <Input className="max-w-xs" placeholder="اسم المستودع الجديد" value={name} onChange={e=>setName(e.target.value)} />
         <Button disabled={pending || name.trim().length < 2} onClick={async()=>{ if(await act("/api/reverse-logistics/warehouses",{name:name.trim()},false)){setName("");await qc.invalidateQueries({queryKey:["/api/reverse-logistics/warehouses"]});}}}>إضافة مستودع</Button>
@@ -164,10 +173,10 @@ export default function ReverseLogisticsPage() {
           <div className="grid gap-2 text-sm sm:grid-cols-4"><span>شُحن: {row.shipped_quantity}</span><span>استُلم: {row.received_quantity}</span><span className={number(row.shortage_quantity)>0 ? "text-amber-700" : ""}>ناقص بالشحن: {row.shortage_quantity}</span><span>بالحجر: {row.quarantine_quantity} (تالف {number(row.damaged_quantity)-number(row.written_off_quantity)})</span></div>
           {row.carrier_name && <p className="text-sm">الناقل: {row.carrier_name} · المركبة: {row.vehicle_number || "غير مسجلة"}</p>}
           <div className="flex flex-wrap gap-2">
-            {row.status === "draft" && <Button disabled={pending} onClick={()=>perform(row,"request")}>طلب وحجز المصدر</Button>}
-            {row.status === "requested" && <><Link href={`/driver-deliveries?sourceType=reverse_movement&sourceId=${row.id}`}><Button variant="outline" size="sm">إسناد السائق وتوثيق التسليم</Button></Link><span className="text-xs text-amber-800">الإرسال بعد توثيق البنود وتأكيد السائق فقط</span><Button disabled={pending} onClick={()=>perform(row,"dispatch")}>إرسال وخصم المصدر</Button><Button variant="outline" disabled={pending} onClick={()=>perform(row,"cancel")}>إلغاء وإطلاق الحجز</Button></>}
-            {row.status === "dispatched" && <Button disabled={pending} onClick={()=>perform(row,"receive")}>تسجيل الاستلام الفعلي</Button>}
-            {row.status === "received" && <Button disabled={pending} onClick={()=>perform(row,"inspect")}>فحص وإتاحة الصالح</Button>}
+            {row.status === "draft" && (row.kind === "warehouse_transfer" ? globalManager : row.kind === "material_return" ? canMaterialReturn : canProductReturn) && <Button disabled={pending} onClick={()=>perform(row,"request")}>طلب وحجز المصدر</Button>}
+            {row.status === "requested" && (row.kind === "warehouse_transfer" ? globalManager : row.kind === "material_return" ? canMaterialReturn : canProductReturn) && <>{user?.role === "branch_manager" ? <span className="text-xs text-amber-800">بانتظار مسؤول الشحن لتوثيق التسليم وإرسال الإرجاع</span> : <><Link href={`/driver-deliveries?sourceType=reverse_movement&sourceId=${row.id}`}><Button variant="outline" size="sm">إسناد السائق وتوثيق التسليم</Button></Link><span className="text-xs text-amber-800">الإرسال بعد توثيق البنود وتأكيد السائق فقط</span><Button disabled={pending} onClick={()=>perform(row,"dispatch")}>إرسال وخصم المصدر</Button></>}<Button variant="outline" disabled={pending} onClick={()=>perform(row,"cancel")}>إلغاء وإطلاق الحجز</Button></>}
+            {row.status === "dispatched" && user?.role !== "branch_manager" && <Button disabled={pending} onClick={()=>perform(row,"receive")}>تسجيل الاستلام الفعلي</Button>}
+            {row.status === "received" && user?.role !== "branch_manager" && <Button disabled={pending} onClick={()=>perform(row,"inspect")}>فحص وإتاحة الصالح</Button>}
             {row.status === "inspected" && number(row.damaged_quantity)>number(row.written_off_quantity) && globalManager && <Button variant="destructive" disabled={pending} onClick={()=>perform(row,"writeoff")}>اعتماد شطب التالف</Button>}
           </div>
         </CardContent></Card>)}

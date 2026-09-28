@@ -324,7 +324,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
         items: [
           { href: "/operations", label: t("sidebar.operationsDashboard"), icon: LayoutDashboard, module: "operations", isHeader: true, hideIfNoPermission: true },
           { href: "/central-kitchen-orders", label: "طلبات المطبخ المركزي", icon: ClipboardList, module: "central_kitchen_orders", indent: true },
-          { href: "/reverse-logistics", label: "الإرجاع والنقل بين المستودعات", icon: Warehouse, module: "central_kitchen_orders", indent: true },
+          { href: "/transfer-requests", label: "طلب مواد المستودع واستلامها", icon: Send, module: "branch_supply", indent: true },
+          { href: "/reverse-logistics", label: "الإرجاع والنقل بين المستودعات", icon: Warehouse, modules: ["central_kitchen_orders", "branch_supply"], indent: true },
           { href: "/branch-shifts", label: t("sidebar.branchShifts"), icon: DoorOpen, module: "branch_closure", indent: true },
           { href: "/products", label: t("sidebar.products"), icon: Package, modules: PRODUCT_CATALOG_READ_MODULES, indent: true },
           { href: "/quality-control", label: t("sidebar.qualityControl"), icon: CheckCircle, module: "quality_control", indent: true },

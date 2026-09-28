@@ -6,7 +6,7 @@ Warehouse keeper authority is limited to the main warehouse, including its outbo
 
 **Why:** The user explicitly requested a warehouse operator who fulfills requests from all branches; the requester being elsewhere must not grant authority over that branch's stock or unrelated transfers.
 
-**How to apply:** Check source ownership for approve/dispatch/assignment and destination ownership for receipt. Retain branch receipt inside its source request while keeping the standalone delivery workspace for drivers, warehouse keepers and explicit admin intervention.
+**How to apply:** Check source ownership for approve/dispatch/assignment and destination ownership for receipt. Retain branch receipt inside its source request. Branch managers now also use the standalone delivery workspace for branch-only tracking and receipt approval, not warehouse or driver management; see branch-request-cycle-boundary.md.
 
 The main warehouse is a virtual scope, not a persisted primary branch. Store a keeper's primary branch as null and derive the operational warehouse scope from the role; do not create a synthetic branch row or write the sentinel into the user's branch foreign key.
 

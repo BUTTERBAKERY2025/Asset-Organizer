@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   resolveKitchenRouting,
+  routingPermission,
   routingPersonEligible,
 } from "../server/central-kitchen-routing";
 
@@ -85,6 +86,19 @@ describe("central-kitchen automatic branch-manager receiver", () => {
 
     expect(routingPersonEligible(noEdit, "edit")).toBe(false);
     expect(resolveKitchenRouting(branchA, null, [noEdit]).receiverUserId).toBeNull();
+  });
+
+  it("an explicit empty kitchen override revokes the branch manager's receiver eligibility", () => {
+    const revoked = manager("revoked", branchA, { _hasCustomPermissions: true, actions: [] });
+    expect(routingPersonEligible(revoked, "view")).toBe(false);
+    expect(routingPersonEligible(revoked, "edit")).toBe(false);
+    expect(resolveKitchenRouting(branchA, null, [revoked]).receiverUserId).toBeNull();
+  });
+
+  it("never grants a source approval to branch managers with a custom approve action", () => {
+    expect(routingPermission("branch_manager", ["approve", "edit"], "approve")).toBe(false);
+    expect(routingPersonEligible(manager("source-approver", branchA,
+      { _hasCustomPermissions: true, actions: ["approve", "edit"] }), "approve")).toBe(false);
   });
 
   it("keeps an eligible explicit manual receiver higher priority", () => {

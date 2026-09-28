@@ -10,7 +10,7 @@ import { deliverySourceFingerprint } from "./delivery-dispatch-guard";
 import { isAuthenticated, requirePermission, getAllowedBranchIds, canAccessBranch } from "./auth";
 import { activeDeliveryStatuses, deliveryTransitionAllowed, receiptMatchesSource, type DeliveryDTO, type DeliverySource, type DeliverySourceType, type DeliveryStatus } from "@shared/delivery";
 import type { DeliveryWorkspaceQuery, DeliveryWorkspaceResponse } from "@shared/delivery-workspace-list";
-import { canAccessDeliveryWorkspace } from "@shared/delivery-workspace-access";
+import { branchDeliveryScope, canAccessDeliveryWorkspace } from "@shared/delivery-workspace-access";
 import { ObjectStorageService } from "./replit_integrations/object_storage/objectStorage";
 import { newPrivateAttachmentPath, PrivateAttachmentUnavailableError } from "./private-supabase-storage";
 const objects = new ObjectStorageService();
@@ -139,6 +139,9 @@ function requireUser(req: Request) {
   return req.currentUser;
 }
 function managerScope(req: Request, source: SourceRow, action: "view" | "create" | "edit") {
+  if (req.currentUser?.role === "branch_manager") {
+    return action === "view" && branchDeliveryScope(req.currentUser.branchId, getAllowedBranchIds(req), source).view;
+  }
   if (req.currentUser?.role === "warehouse_keeper") {
     return (getAllowedBranchIds(req)?.includes("main_warehouse") ?? false)
       && source.sourceType === "material_transfer" && source.sourceBranchId === "main_warehouse";
@@ -169,6 +172,10 @@ function permitted(req: Request, _res: Response, module: string, action: string)
 const sourceModule = (type: DeliverySourceType) =>
   type === "kitchen" ? "central_kitchen_orders"
     : type === "material_transfer" || type === "reverse_movement" || type === "kitchen_warehouse_shipment" ? "warehouse" : "production";
+const scopedSourceModule = (req: Request, s: Pick<SourceRow, "sourceType" | "sourceBranchId">) =>
+  req.currentUser?.role === "branch_manager" && (s.sourceType === "material_transfer"
+    || s.sourceType === "reverse_movement")
+    ? "branch_supply" : sourceModule(s.sourceType);
 const sourceTable = (type: DeliverySourceType) => ({
   kitchen: "central_kitchen_orders", material_transfer: "material_transfers",
    finished_goods_transfer: "finished_goods_transfers", kitchen_warehouse_shipment: "kitchen_warehouse_shipments",
@@ -201,10 +208,12 @@ const mainWarehouseAuthority = (req: Request) => warehouseReceiver(req)
   || (req.currentUser?.branchId === "main_warehouse" && (getAllowedBranchIds(req)?.includes("main_warehouse") ?? false));
 const receiverScope = async (req: Request, s: SourceRow) =>
   req.currentUser?.role === "warehouse_keeper" ? false :
+  req.currentUser?.role === "branch_manager"
+    ? branchDeliveryScope(req.currentUser.branchId, getAllowedBranchIds(req), s).receive :
   s.sourceType === "reverse_movement" && s.destinationBranchId === null
     ? s.destinationWarehouseId != null ? warehouseReceiver(req) : mainWarehouseAuthority(req)
     : s.destinationWarehouseId != null ? warehouseReceiver(req) : s.destinationBranchId !== null && await canAccessBranch(req, s.destinationBranchId);
-const isDriver = (req: Request, row: Assignment) => req.currentUser?.role !== "warehouse_keeper"
+const isDriver = (req: Request, row: Assignment) => req.currentUser?.role === "employee"
   && req.currentUser?.id === row.driver_id && req.currentUser?.jobTitle === "delivery" && req.currentUser?.isActive === "active";
 export function carrierClosureReady(
   receipt: { sourceType: DeliverySourceType; sourceStatus: string; receivedBy: string | null },
@@ -464,10 +473,11 @@ export async function collectDeliveryWorkspace(
   return { ids, total, counts, filters: { sources: options(sources), destinations: options(destinations) } };
 }
 async function reportAccess(req: Request, res: Response, exporting: boolean) {
-  if (!canAccessDeliveryWorkspace(req.currentUser) || req.currentUser?.jobTitle === "delivery"
+  if (!canAccessDeliveryWorkspace(req.currentUser) || req.currentUser?.role === "employee" && req.currentUser.jobTitle === "delivery"
     || getAllowedBranchIds(req)?.length === 0
     || !(await permitted(req, res, "delivery_tasks", "view"))
-    || !(await permitted(req, res, "warehouse", "view")
+     || !(await permitted(req, res, "warehouse", "view")
+       || await permitted(req, res, "branch_supply", "view")
       || await permitted(req, res, "central_kitchen_orders", "view")
       || await permitted(req, res, "production", "view"))
     || (exporting && !(await permitted(req, res, "delivery_tasks", "export"))))
@@ -504,7 +514,7 @@ async function scanReport(req: Request, res: Response, client: PoolClient,
       if ((filters.sourceBranchId && src.sourceBranchId !== filters.sourceBranchId)
         || (filters.destinationBranchId && src.destinationBranchId !== filters.destinationBranchId)
         || !managerScope(req, src, "view")) continue;
-      const module = sourceModule(row.source_type);
+       const module = scopedSourceModule(req, src);
       if (!permissions.has(module)) permissions.set(module, await permitted(req, res, module, "view"));
       if (permissions.get(module)) scoped.push(row);
     }
@@ -520,15 +530,15 @@ async function dto(req: Request, res: Response, client: PoolClient, row: Assignm
   const s = src || await source(client, row.source_type, row.source_id);
   if (!s) throw new DeliveryError("Linked source no longer exists", 409);
   const driver = isDriver(req, row) && await permitted(req, res, "delivery_tasks", "view");
-  const manager = !driver && managerScope(req, s, "view") && await permitted(req, res, sourceModule(s.sourceType), "view")
+   const manager = !driver && managerScope(req, s, "view") && await permitted(req, res, scopedSourceModule(req, s), "view")
     && await permitted(req, res, "delivery_tasks", "view");
   // Receipt rights are destination-specific and must grant a write action.
   const destination = await receiverScope(req, s);
-  const receiver = !driver && destination && await permitted(req, res, s.destinationWarehouseId != null ? "warehouse" : sourceModule(s.sourceType), "edit")
+   const receiver = !driver && destination && await permitted(req, res, s.destinationWarehouseId != null ? "warehouse" : scopedSourceModule(req, s), "edit")
     && await permitted(req, res, "delivery_tasks", "approve");
   if (!driver && !manager && !receiver) throw new DeliveryError("Delivery is outside your scope", 403);
   const driverWrite = driver && await permitted(req, res, "delivery_tasks", "edit");
-  const managerWrite = manager && await permitted(req, res, "delivery_tasks", "edit")
+   const managerWrite = manager && req.currentUser?.role !== "branch_manager" && await permitted(req, res, "delivery_tasks", "edit")
     && await permitted(req, res, sourceModule(s.sourceType), "edit");
   const eligibleReceipt = receiptMatchesSource(s.sourceType, s.sourceStatus, s.receivedBy, requireUser(req).id);
   const iso = (v: Date | null) => v ? new Date(v).toISOString() : null;
@@ -576,7 +586,7 @@ async function dto(req: Request, res: Response, client: PoolClient, row: Assignm
            && receiptMatchesSource(s.sourceType, s.sourceStatus, s.receivedBy, row.receipt_approved_by))
         && deliveryTransitionAllowed(row.status, "complete"),
        canFail: external
-         ? (managerWrite || receiver) && carrierExceptionAllowed(row.status,
+          ? (managerWrite || receiver && req.currentUser?.role !== "branch_manager") && carrierExceptionAllowed(row.status,
            sourceDispatched(s) || eligibleSourceReceipt(s), row.exception_reason)
          : (driverWrite || managerWrite) && sourceDispatched(s) && deliveryTransitionAllowed(row.status, "fail"),
        canReassign: !external && managerWrite && sourceAssignable(s) && !eligibleSourceReceipt(s) && deliveryTransitionAllowed(row.status, "reassign"),
@@ -638,7 +648,7 @@ export async function registerDeliverySchemaGate(app: Express) {
 export function registerDeliveryRoutes(app: Express) {
   app.get("/api/deliveries/sources", isAuthenticated, async (req, res) => {
     try {
-      if (!canAccessDeliveryWorkspace(req.currentUser)) throw new DeliveryError("Delivery workspace access denied", 403);
+      if (!canAccessDeliveryWorkspace(req.currentUser) || req.currentUser?.role === "branch_manager") throw new DeliveryError("Delivery workspace access denied", 403);
       const sources = await withClient(async client => {
         const list: DeliverySource[] = [];
          for (const type of ["kitchen", "material_transfer", "finished_goods_transfer", "kitchen_warehouse_shipment", "reverse_movement"] as const) {
@@ -672,7 +682,7 @@ export function registerDeliveryRoutes(app: Express) {
 
   app.get("/api/deliveries/drivers", isAuthenticated, async (req, res) => {
     try {
-      if (!canAccessDeliveryWorkspace(req.currentUser)) throw new DeliveryError("Delivery workspace access denied", 403);
+      if (!canAccessDeliveryWorkspace(req.currentUser) || req.currentUser?.role === "branch_manager") throw new DeliveryError("Delivery workspace access denied", 403);
       // The same picker serves new assignments and edits to existing tasks.
       // Reassignment needs edit rights, not permission to create a new task.
       if (!(await permitted(req, res, "delivery_tasks", "create"))
@@ -688,16 +698,16 @@ export function registerDeliveryRoutes(app: Express) {
 
   app.get("/api/deliveries/capabilities", isAuthenticated, async (req, res) => {
     try {
-      if (!canAccessDeliveryWorkspace(req.currentUser)) throw new DeliveryError("Delivery workspace access denied", 403);
+         if (!canAccessDeliveryWorkspace(req.currentUser)) throw new DeliveryError("Delivery workspace access denied", 403);
       const create = await permitted(req, res, "delivery_tasks", "create");
       const branchScope = getAllowedBranchIds(req);
       const hasBranch = branchScope === null || branchScope.length > 0;
-      const canAssign = hasBranch && create && (await permitted(req, res, "warehouse", "edit")
+       const canAssign = req.currentUser?.role !== "branch_manager" && hasBranch && create && (await permitted(req, res, "warehouse", "edit")
         || await permitted(req, res, "central_kitchen_orders", "edit")
         || await permitted(req, res, "production", "edit"));
-      const canReport = hasBranch && req.currentUser?.jobTitle !== "delivery"
+      const canReport = hasBranch && !(req.currentUser?.role === "employee" && req.currentUser.jobTitle === "delivery")
         && await permitted(req, res, "delivery_tasks", "view")
-        && (await permitted(req, res, "warehouse", "view") || await permitted(req, res, "central_kitchen_orders", "view")
+         && (await permitted(req, res, "warehouse", "view") || await permitted(req, res, "branch_supply", "view") || await permitted(req, res, "central_kitchen_orders", "view")
           || await permitted(req, res, "production", "view"));
       const canExport = canReport && await permitted(req, res, "delivery_tasks", "export");
       res.json({ canAssign, canReport, canExport });
@@ -706,6 +716,7 @@ export function registerDeliveryRoutes(app: Express) {
 
   async function list(req: Request, res: Response, reports = false) {
     try {
+      if (!canAccessDeliveryWorkspace(req.currentUser)) throw new DeliveryError("Delivery workspace access denied", 403);
       if (reports) {
         await reportAccess(req, res, false);
         const filters = reportFilters.parse(req.query);
@@ -758,7 +769,7 @@ export function registerDeliveryRoutes(app: Express) {
           if (sourceBranchId && s.sourceBranchId !== sourceBranchId) continue;
           if (destinationBranchId && s.destinationBranchId !== destinationBranchId) continue;
            if (reports ? !managerScope(req, s, "view")
-               || !(await permitted(req, res, sourceModule(s.sourceType), "view"))
+                || !(await permitted(req, res, scopedSourceModule(req, s), "view"))
              : !isDriver(req, row) && !(managerScope(req, s, "view") || await receiverScope(req, s))) continue;
           try { result.push(await dto(req, res, client, row, s)); }
           catch (e) { if (!(e instanceof DeliveryError) || e.status !== 403) throw e; }
@@ -771,6 +782,7 @@ export function registerDeliveryRoutes(app: Express) {
   }
   app.get("/api/deliveries/workspace", isAuthenticated, async (req, res) => {
     try {
+      if (!canAccessDeliveryWorkspace(req.currentUser)) throw new DeliveryError("Delivery workspace access denied", 403);
       const filters = workspaceFilters.parse(req.query);
       const result = await withClient(async client => {
         const permissions = new Map<string, boolean>();
@@ -779,9 +791,16 @@ export function registerDeliveryRoutes(app: Express) {
           if (!permissions.has(key)) permissions.set(key, await permitted(req, res, module, action));
           return permissions.get(key)!;
         };
-        const receiverBranches = new Map<string, boolean>();
+         if (req.currentUser?.role === "branch_manager" && !(await has("delivery_tasks", "view")))
+           throw new DeliveryError("Delivery workspace access denied", 403);
+         const receiverBranches = new Map<string, boolean>();
         const canReceive = async (row: WorkspaceScanRow) => {
           if (req.currentUser?.role === "warehouse_keeper") return false;
+           if (req.currentUser?.role === "branch_manager")
+             return branchDeliveryScope(req.currentUser.branchId, getAllowedBranchIds(req), {
+               sourceType: row.source_type, sourceBranchId: row.source_branch_id,
+               destinationBranchId: row.destination_branch_id, destinationWarehouseId: row.destination_warehouse_id,
+             }).receive;
           if (row.destination_warehouse_id != null)
             return warehouseReceiver(req);
           if (row.source_type === "reverse_movement" && row.destination_branch_id === null)
@@ -792,7 +811,7 @@ export function registerDeliveryRoutes(app: Express) {
           return receiverBranches.get(row.destination_branch_id)!;
         };
         const authorized = async (row: WorkspaceScanRow) => {
-          const driver = req.currentUser?.role !== "warehouse_keeper"
+           const driver = req.currentUser?.role === "employee"
             && req.currentUser?.id === row.driver_id && req.currentUser?.jobTitle === "delivery"
             && req.currentUser?.isActive === "active" && await has("delivery_tasks", "view");
           if (driver) return true;
@@ -802,10 +821,10 @@ export function registerDeliveryRoutes(app: Express) {
             sourceWarehouseId: row.source_warehouse_id,
             destinationWarehouseId: row.destination_warehouse_id,
           } as SourceRow;
-          if (managerScope(req, src, "view") && await has(sourceModule(row.source_type), "view")
+           if (managerScope(req, src, "view") && await has(scopedSourceModule(req, src), "view")
             && await has("delivery_tasks", "view")) return true;
           return await canReceive(row)
-            && await has(row.destination_warehouse_id != null ? "warehouse" : sourceModule(row.source_type), "edit")
+             && await has(row.destination_warehouse_id != null ? "warehouse" : scopedSourceModule(req, src), "edit")
             && await has("delivery_tasks", "approve");
         };
         async function* scan(): AsyncGenerator<WorkspaceScanRow> {
@@ -910,7 +929,7 @@ export function registerDeliveryRoutes(app: Express) {
 
   app.post("/api/deliveries", isAuthenticated, async (req, res) => {
     try {
-      if (!canAccessDeliveryWorkspace(req.currentUser)) throw new DeliveryError("Delivery workspace access denied", 403);
+       if (!canAccessDeliveryWorkspace(req.currentUser) || req.currentUser?.role === "branch_manager") throw new DeliveryError("Delivery workspace access denied", 403);
       const payload = deliveryAssignmentCreateSchema.parse(req.body);
       validateTransport(payload);
       if (!(await permitted(req, res, "delivery_tasks", "create"))
@@ -1048,19 +1067,27 @@ export function registerDeliveryRoutes(app: Express) {
             if (!row) throw new DeliveryError("Delivery not found", 404);
             const s = await source(client, row.source_type, row.source_id);
             if (!s) throw new DeliveryError("Linked source not found", 409);
+            // Authorize the immutable source against the manager's PRIMARY
+            // branch before any mutation, not only when building the response.
+            // Extra branch-access rows never confer receipt or dispatch rights.
+            if (req.currentUser?.role === "branch_manager"
+              && (action !== "approve-receipt"
+                || !branchDeliveryScope(req.currentUser.branchId, getAllowedBranchIds(req), s).receive))
+              throw new DeliveryError("Branch delivery desk is receipt-only and limited to its primary branch", 403);
              const driver = isDriver(req, row)
                && await permitted(req, res, "delivery_tasks", "view")
                && await permitted(req, res, "delivery_tasks", "edit");
             const external = row.transport_mode === "external";
             const sourceManager = managerScope(req, s, "edit");
-              const manager = (external || action === "handover" || action === "fail" || action === "reassign" || action === "cancel") && sourceManager
+               const manager = req.currentUser?.role !== "branch_manager"
+                && (external || action === "handover" || action === "fail" || action === "reassign" || action === "cancel") && sourceManager
               && await permitted(req, res, "delivery_tasks", "edit")
                && await permitted(req, res, sourceModule(s.sourceType), "edit")
                && await permitted(req, res, "delivery_tasks", "view")
                && await permitted(req, res, sourceModule(s.sourceType), "view");
              const receiver = (action === "approve-receipt" || external && action === "fail") && await receiverScope(req, s)
               && await permitted(req, res, "delivery_tasks", "approve")
-               && await permitted(req, res, s.destinationWarehouseId != null ? "warehouse" : sourceModule(s.sourceType), "edit");
+                && await permitted(req, res, s.destinationWarehouseId != null ? "warehouse" : scopedSourceModule(req, s), "edit");
             if (res.headersSent) throw new DeliveryError("Permission denied", 403);
              if (external && ["acknowledge-handover","proof","reassign"].includes(action))
                throw new DeliveryError("External shipment has no driver acknowledgement or driver proof",403);
