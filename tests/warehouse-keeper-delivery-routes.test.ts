@@ -69,7 +69,7 @@ vi.mock("../server/auth", () => ({
   canAccessBranch: async (req: any, id: string) => req.currentUser.role === "admin" || req.currentUser.branchId === id,
 }));
 
-import { registerDeliveryRoutes } from "../server/delivery-routes";
+import { collectDeliveryWorkspace, registerDeliveryRoutes, type WorkspaceScanRow } from "../server/delivery-routes";
 
 const handlers = new Map<string, any[]>();
 registerDeliveryRoutes({
@@ -152,5 +152,67 @@ describe("warehouse keeper delivery source and destination boundaries (mocked da
     expect((await call("POST", "/api/deliveries/:id/fail", keeper, { reason: "too late" }, { id })).statusCode).toBe(409);
     state.assignments.get(id).status = "cancelled";
     expect((await call("POST", "/api/deliveries/:id/fail", receiver, { reason: "too late" }, { id })).statusCode).toBe(409);
+  });
+});
+
+describe("standalone workspace selection", () => {
+  const row = (id: number, branch = "main_warehouse", status = "assigned"): WorkspaceScanRow => ({
+    id: String(id), source_type: "material_transfer", source_id: id, status,
+    source_label: `Transfer #${id}`, source_branch_id: branch,
+    source_branch_name: branch, destination_branch_id: "receiver_branch",
+    destination_branch_name: "Receiver", source_warehouse_id: null,
+    destination_warehouse_id: null, waybill: id === 1 ? "MATCH-1" : null,
+    carrier: id === 1 ? "road" : null, carrier_name: null,
+    transport_mode: id === 1 ? "external" : "internal",
+    driver_name: null, vehicle_number: null,
+  } as WorkspaceScanRow);
+  async function* records(rows: WorkspaceScanRow[]) {
+    // Mirrors the 250-row server cursor: unauthorized records may fill early batches.
+    for (let i = 0; i < rows.length; i += 250)
+      for (const value of rows.slice(i, i + 250)) yield value;
+  }
+  it("authorizes before paging, counts and facets, including after 500 inaccessible records", async () => {
+    const rows = Array.from({ length: 550 }, (_, i) => row(550 - i, "other_branch"));
+    rows.push(row(3), row(2, "main_warehouse", "completed"), row(1));
+    const query = { status: "active" as const, carrier: "all" as const, page: 1, pageSize: 25 as const };
+    const selected = await collectDeliveryWorkspace(records(rows), query,
+      async item => item.source_branch_id === "main_warehouse");
+    expect(selected.ids).toEqual([3, 1]);
+    expect(selected.total).toBe(2);
+    expect(selected.counts).toEqual({
+      active: 2, assigned: 2, in_transit: 0, awaiting_receipt: 0,
+      receipt_approved: 0, failed: 0, completed: 1, cancelled: 0,
+    });
+    expect(selected.filters).toEqual({
+      sources: [{ id: "main_warehouse", name: "main_warehouse" }],
+      destinations: [{ id: "receiver_branch", name: "Receiver" }],
+    });
+    expect((await collectDeliveryWorkspace(records(rows), { ...query, page: 2 },
+      async item => item.source_branch_id === "main_warehouse")).ids).toEqual([]);
+  });
+  it("searches carrier details without leaking unauthorized matches into counts or facets", async () => {
+    const rows = [row(4, "other_branch"), row(3), row(2, "main_warehouse", "failed"), row(1)];
+    const selected = await collectDeliveryWorkspace(records(rows),
+      { status: "all", carrier: "road", q: "match-1", page: 1, pageSize: 25 },
+      async item => item.source_branch_id === "main_warehouse");
+    expect(selected.ids).toEqual([1]);
+    expect(selected.total).toBe(1);
+    expect(selected.counts.active).toBe(1);
+    expect(selected.counts.failed).toBe(0);
+    expect(selected.filters.sources.map(source => source.id)).toEqual(["main_warehouse"]);
+  });
+  it("narrows a source deeplink before paging and counts, never including unauthorized matches", async () => {
+    const rows = Array.from({ length: 520 }, (_, i) => row(525 - i, "other_branch"));
+    rows.push(row(5), row(4, "other_branch"), row(3));
+    const selected = await collectDeliveryWorkspace(records(rows),
+      { status: "all", carrier: "all", sourceType: "material_transfer", sourceId: 3, page: 1, pageSize: 25 },
+      async item => item.source_branch_id === "main_warehouse");
+    expect(selected.ids).toEqual([3]);
+    expect(selected.total).toBe(1);
+    expect(selected.counts.assigned).toBe(1);
+    const inaccessible = await collectDeliveryWorkspace(records(rows),
+      { status: "all", carrier: "all", sourceType: "material_transfer", sourceId: 4, page: 1, pageSize: 25 },
+      async item => item.source_branch_id === "main_warehouse");
+    expect(inaccessible).toMatchObject({ ids: [], total: 0, counts: { assigned: 0 } });
   });
 });

@@ -8,7 +8,8 @@ import { pool } from "./db";
 import { enqueueDeliveryNotice, type DeliveryNoticeEvent } from "./delivery-notifications";
 import { deliverySourceFingerprint } from "./delivery-dispatch-guard";
 import { isAuthenticated, requirePermission, getAllowedBranchIds, canAccessBranch } from "./auth";
-import { deliveryTransitionAllowed, receiptMatchesSource, type DeliveryDTO, type DeliverySource, type DeliverySourceType, type DeliveryStatus } from "@shared/delivery";
+import { activeDeliveryStatuses, deliveryTransitionAllowed, receiptMatchesSource, type DeliveryDTO, type DeliverySource, type DeliverySourceType, type DeliveryStatus } from "@shared/delivery";
+import type { DeliveryWorkspaceQuery, DeliveryWorkspaceResponse } from "@shared/delivery-workspace-list";
 import { canAccessDeliveryWorkspace } from "@shared/delivery-workspace-access";
 import { ObjectStorageService } from "./replit_integrations/object_storage/objectStorage";
 import { newPrivateAttachmentPath, PrivateAttachmentUnavailableError } from "./private-supabase-storage";
@@ -340,6 +341,46 @@ const reportQuery = `SELECT a.id,a.source_type,a.source_id,a.status,a.transport_
   LEFT JOIN reverse_movements rm ON a.source_type='reverse_movement' AND rm.id=a.source_id
   LEFT JOIN LATERAL (SELECT e.created_at FROM reverse_movement_events e
     WHERE e.movement_id=rm.id AND e.action='dispatch' ORDER BY e.id DESC LIMIT 1) re ON true`;
+// Keep the report unchanged. The workspace scans a lightweight projection (never
+// a.*, signatures, source items or attachment blobs) before hydrating its page.
+const workspaceQuery = reportQuery.replace(
+  reportDispatchSql, "NULL::timestamptz",
+).replace(
+  "COALESCE(k.status,mt.status,fg.status,ks.status,rm.status) source_status",
+  `COALESCE(k.status,mt.status,fg.status,ks.status,rm.status) source_status,
+   COALESCE(sb.name,sw.name,'المستودع الرئيسي') source_branch_name,
+   COALESCE(db.name,dw.name,'المستودع الرئيسي') destination_branch_name`,
+).replace(
+  `LEFT JOIN LATERAL (SELECT e.created_at FROM reverse_movement_events e
+    WHERE e.movement_id=rm.id AND e.action='dispatch' ORDER BY e.id DESC LIMIT 1) re ON true`, "",
+) + `
+  LEFT JOIN branches sb ON sb.id=CASE a.source_type
+    WHEN 'kitchen' THEN k.central_kitchen_id WHEN 'material_transfer' THEN mt.source_branch_id
+    WHEN 'finished_goods_transfer' THEN fg.source_branch_id
+    WHEN 'kitchen_warehouse_shipment' THEN ks.source_branch_id
+    WHEN 'reverse_movement' THEN rm.source_branch_id END
+  LEFT JOIN branches db ON db.id=CASE a.source_type
+    WHEN 'kitchen' THEN k.request_branch_id WHEN 'material_transfer' THEN mt.destination_branch_id
+    WHEN 'finished_goods_transfer' THEN fg.destination_branch_id
+    WHEN 'reverse_movement' THEN rm.destination_branch_id END
+  LEFT JOIN managed_warehouses sw ON sw.id=rm.source_warehouse_id
+  LEFT JOIN managed_warehouses dw ON dw.id=COALESCE(ks.destination_warehouse_id,rm.destination_warehouse_id)`;
+const workspaceFilters = z.object({
+  q: z.string().trim().max(160).optional(),
+  status: z.enum(["active", "all", "assigned", "in_transit", "awaiting_receipt",
+    "receipt_approved", "failed", "completed", "cancelled"]).default("active"),
+  carrier: z.enum(["all", "internal", "road", "naqel", "other"]).default("all"),
+  sourceType: z.enum(["kitchen", "material_transfer", "finished_goods_transfer",
+    "kitchen_warehouse_shipment", "reverse_movement"]).optional(),
+  sourceId: z.coerce.number().int().positive().optional(),
+  sourceBranchId: z.string().min(1).max(100).optional(),
+  destinationBranchId: z.string().min(1).max(100).optional(),
+  page: z.coerce.number().int().min(1).max(1000000).default(1),
+  pageSize: z.coerce.number().pipe(z.union([z.literal(25), z.literal(50), z.literal(100)])).default(25),
+}).strict().superRefine((value, ctx) => {
+  if ((value.sourceType === undefined) !== (value.sourceId === undefined))
+    ctx.addIssue({ code: "custom", message: "sourceType and sourceId must be provided together" });
+});
 const reportFilters = z.object({
   from: z.string().date().optional(), to: z.string().date().optional(),
   dateType: z.enum(["created", "dispatched", "completed"]).default("created"),
@@ -381,6 +422,47 @@ type ReportRow = Assignment & {
   source_warehouse_id: number | null; destination_warehouse_id: number | null;
   source_label: string | null; source_status: string | null; dispatched_at: Date | null;
 };
+export type WorkspaceScanRow = ReportRow & {
+  source_branch_name: string; destination_branch_name: string;
+};
+// Authorization is deliberately the first operation for each row. In particular,
+// neither pagination nor facets may be computed from the first 500 raw records.
+export async function collectDeliveryWorkspace(
+  rows: AsyncIterable<WorkspaceScanRow>, filters: DeliveryWorkspaceQuery,
+  authorized: (row: WorkspaceScanRow) => Promise<boolean>,
+): Promise<{ ids: number[]; total: number; counts: DeliveryWorkspaceResponse["counts"]; filters: DeliveryWorkspaceResponse["filters"] }> {
+  const counts: DeliveryWorkspaceResponse["counts"] = {
+    active: 0, assigned: 0, in_transit: 0, awaiting_receipt: 0,
+    receipt_approved: 0, failed: 0, completed: 0, cancelled: 0,
+  };
+  const sources = new Map<string, string>(), destinations = new Map<string, string>();
+  const ids: number[] = [];
+  const term = filters.q?.toLocaleLowerCase();
+  let total = 0;
+  for await (const row of rows) {
+    if (!row.source_label || !(await authorized(row))) continue;
+    if (row.source_branch_id) sources.set(row.source_branch_id, row.source_branch_name);
+    if (row.destination_branch_id) destinations.set(row.destination_branch_id, row.destination_branch_name);
+    if (filters.sourceType && (row.source_type !== filters.sourceType || Number(row.source_id) !== filters.sourceId)) continue;
+    if (filters.carrier !== "all" && (filters.carrier === "internal"
+      ? row.transport_mode !== "internal"
+      : row.transport_mode !== "external" || row.carrier !== filters.carrier)) continue;
+    if (filters.sourceBranchId && row.source_branch_id !== filters.sourceBranchId) continue;
+    if (filters.destinationBranchId && row.destination_branch_id !== filters.destinationBranchId) continue;
+    if (term && ![row.source_label, row.source_id, row.waybill, row.carrier, row.carrier_name,
+      row.driver_name, row.vehicle_number].some(value => String(value ?? "").toLocaleLowerCase().includes(term))) continue;
+    counts[row.status]++;
+    if (activeDeliveryStatuses.includes(row.status as typeof activeDeliveryStatuses[number])) counts.active++;
+    if (filters.status !== "all" && (filters.status === "active"
+      ? !activeDeliveryStatuses.includes(row.status as typeof activeDeliveryStatuses[number])
+      : row.status !== filters.status)) continue;
+    if (total >= (filters.page - 1) * filters.pageSize && ids.length < filters.pageSize) ids.push(Number(row.id));
+    total++;
+  }
+  const options = (map: Map<string, string>) => [...map].map(([id, name]) => ({ id, name }))
+    .sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
+  return { ids, total, counts, filters: { sources: options(sources), destinations: options(destinations) } };
+}
 async function reportAccess(req: Request, res: Response, exporting: boolean) {
   if (!canAccessDeliveryWorkspace(req.currentUser) || req.currentUser?.jobTitle === "delivery"
     || getAllowedBranchIds(req)?.length === 0
@@ -687,6 +769,76 @@ export function registerDeliveryRoutes(app: Express) {
       return res.json({ deliveries });
     } catch (e) { error(res, e); }
   }
+  app.get("/api/deliveries/workspace", isAuthenticated, async (req, res) => {
+    try {
+      const filters = workspaceFilters.parse(req.query);
+      const result = await withClient(async client => {
+        const permissions = new Map<string, boolean>();
+        const has = async (module: string, action: string) => {
+          const key = `${module}:${action}`;
+          if (!permissions.has(key)) permissions.set(key, await permitted(req, res, module, action));
+          return permissions.get(key)!;
+        };
+        const receiverBranches = new Map<string, boolean>();
+        const canReceive = async (row: WorkspaceScanRow) => {
+          if (req.currentUser?.role === "warehouse_keeper") return false;
+          if (row.destination_warehouse_id != null)
+            return warehouseReceiver(req);
+          if (row.source_type === "reverse_movement" && row.destination_branch_id === null)
+            return mainWarehouseAuthority(req);
+          if (row.destination_branch_id === null) return false;
+          if (!receiverBranches.has(row.destination_branch_id))
+            receiverBranches.set(row.destination_branch_id, await canAccessBranch(req, row.destination_branch_id));
+          return receiverBranches.get(row.destination_branch_id)!;
+        };
+        const authorized = async (row: WorkspaceScanRow) => {
+          const driver = req.currentUser?.role !== "warehouse_keeper"
+            && req.currentUser?.id === row.driver_id && req.currentUser?.jobTitle === "delivery"
+            && req.currentUser?.isActive === "active" && await has("delivery_tasks", "view");
+          if (driver) return true;
+          const src = {
+            sourceType: row.source_type, sourceBranchId: row.source_branch_id,
+            destinationBranchId: row.destination_branch_id,
+            sourceWarehouseId: row.source_warehouse_id,
+            destinationWarehouseId: row.destination_warehouse_id,
+          } as SourceRow;
+          if (managerScope(req, src, "view") && await has(sourceModule(row.source_type), "view")
+            && await has("delivery_tasks", "view")) return true;
+          return await canReceive(row)
+            && await has(row.destination_warehouse_id != null ? "warehouse" : sourceModule(row.source_type), "edit")
+            && await has("delivery_tasks", "approve");
+        };
+        async function* scan(): AsyncGenerator<WorkspaceScanRow> {
+          let cursor: number | null = null;
+          for (;;) {
+            const rows = (await client.query(`${workspaceQuery}
+              WHERE ($1::bigint IS NULL OR a.id < $1) ORDER BY a.id DESC LIMIT 250`,
+              [cursor])).rows as WorkspaceScanRow[];
+            if (!rows.length) break;
+            for (const row of rows) yield row;
+            cursor = Number(rows[rows.length - 1].id);
+            if (rows.length < 250) break;
+          }
+        }
+        const { ids, total, counts, filters: options } = await collectDeliveryWorkspace(scan(), filters, authorized);
+        const deliveries: DeliveryDTO[] = [];
+        if (ids.length) {
+          const selected = (await client.query(`${assignmentQuery} WHERE a.id=ANY($1::bigint[])`, [ids])).rows as Assignment[];
+          const byId = new Map(selected.map(row => [Number(row.id), row]));
+          for (const id of ids) {
+            const row = byId.get(id);
+            if (!row) continue;
+            const src = await source(client, row.source_type, row.source_id);
+            if (src) deliveries.push(await dto(req, res, client, row, src));
+          }
+        }
+        return { deliveries, total, page: filters.page, pageSize: filters.pageSize,
+          counts, filters: options } satisfies DeliveryWorkspaceResponse;
+      });
+      res.setHeader("Cache-Control", "private, no-store");
+      return res.json(result);
+    } catch (e) { error(res, e); }
+  });
    app.get("/api/deliveries/reports", isAuthenticated, (req, res) => list(req, res, true));
    app.get("/api/deliveries/reports/export", isAuthenticated, async (req, res) => {
      try {

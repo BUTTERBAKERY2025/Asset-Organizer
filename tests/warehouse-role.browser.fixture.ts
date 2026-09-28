@@ -10,6 +10,7 @@ import { createServer as createViteServer } from "vite";
 import { resolve } from "node:path";
 import assert from "node:assert/strict";
 import type { DeliveryDTO, DeliverySource } from "../shared/delivery";
+import type { DeliveryWorkspaceQuery, DeliveryWorkspaceResponse } from "../shared/delivery-workspace-list";
 
 const app = express();
 app.disable("x-powered-by");
@@ -97,6 +98,31 @@ deliveries.push({
     { id: 9002, kind: "carrier_receipt", mimeType: "application/pdf", originalName: "synthetic-carrier.pdf", downloadUrl: "/api/deliveries/9301/attachments/9002" },
   ],
 });
+// A separate, read-only population exercises the paged workspace without changing
+// the legacy mutation scenarios above (or creating real transfer assignments).
+const workspaceDeliveries: DeliveryDTO[] = Array.from({ length: 84 }, (_, i) => {
+  const external = i % 3 !== 0;
+  const carrier = external ? (["road", "naqel", "other"] as const)[i % 3 === 1 ? (Math.floor(i / 3) % 2) : 2] : null;
+  const status = (["assigned", "in_transit", "awaiting_receipt", "receipt_approved", "failed", "completed", "cancelled"] as const)[i % 7];
+  const destination = i % 4 === 3 ? branches[2] : branches[1];
+  const source = i % 5 === 0 ? branches[2] : branches[0];
+  return {
+    ...deliveries[0], id: 10001 + i, sourceId: 10001 + i,
+    sourceLabel: `FIX-DEL-${String(i + 1).padStart(3, "0")}`,
+    sourceBranchId: source.id, sourceBranchName: source.nameAr,
+    destinationBranchId: destination.id, destinationBranchName: destination.nameAr,
+    sourceStatus: "in_transit", status, transportMode: external ? "external" : "internal",
+    driverId: external ? null : actors.driver.id, driverName: external ? null : actors.driver.name,
+    vehicleNumber: external ? null : `FIX-${i + 1}`,
+    carrier, carrierName: carrier === "other" ? "شركة الشحن التجريبية" : null,
+    waybill: external ? `FIX-WAY-${String(i + 1).padStart(3, "0")}` : null,
+    scheduledAt: new Date(Date.now() + ((i % 5) - 2) * 3600_000).toISOString(),
+    packageCount: external ? 1 + i % 4 : null,
+    completedAt: status === "completed" ? today : null,
+    failureReason: status === "failed" ? "تعذر الوصول" : null,
+    cancellationReason: status === "cancelled" ? "ألغيت المهمة" : null,
+  };
+});
 function role(req: express.Request): Role | null {
   const selected = req.query.role;
   return typeof selected === "string" && (roleNames as readonly string[]).includes(selected) ? selected as Role : null;
@@ -127,7 +153,7 @@ function getTransfer(req: express.Request, res: express.Response): Transfer | nu
 function deliveryFor(actor: Role, delivery: DeliveryDTO) {
   const external = delivery.transportMode === "external";
   const own = !external && actor === "driver" && delivery.driverId === actors.driver.id;
-  const source = actor === "keeper" || actor === "admin";
+   const source = actor === "admin" || actor === "keeper" && delivery.sourceBranchId === "main_warehouse";
   const receiver = actor === "branch" && delivery.destinationBranchId === "fixture_branch";
   if (!own && !source && !receiver) return null;
   const transfer = transfers.find(x => x.id === delivery.sourceId);
@@ -204,6 +230,54 @@ app.get("/api/warehouse/notifications/unread-count", (req, res) => role(req) ===
 app.get("/api/deliveries/capabilities", (req, res) => res.json({
   canAssign: ["keeper", "admin"].includes(role(req)!), canReport: role(req) === "admin", canExport: role(req) === "admin",
 }));
+app.get("/api/deliveries/workspace", (req, res) => {
+  const status = String(req.query.status || "active");
+  const carrier = String(req.query.carrier || "all");
+  const page = Number(req.query.page || 1);
+  const pageSize = Number(req.query.pageSize || 25);
+  const q = String(req.query.q || "").trim().toLocaleLowerCase();
+  const statuses = ["active", "all", "assigned", "in_transit", "awaiting_receipt", "receipt_approved", "failed", "completed", "cancelled"];
+  if (!statuses.includes(status) || !["all", "internal", "road", "naqel", "other"].includes(carrier)
+    || !Number.isSafeInteger(page) || page < 1 || ![25, 50, 100].includes(pageSize) || q.length > 160)
+    return res.status(400).json({ error: "Invalid workspace filters" });
+  const filters: DeliveryWorkspaceQuery = {
+    q, status: status as DeliveryWorkspaceQuery["status"], carrier: carrier as DeliveryWorkspaceQuery["carrier"],
+    sourceBranchId: typeof req.query.sourceBranchId === "string" ? req.query.sourceBranchId : undefined,
+    destinationBranchId: typeof req.query.destinationBranchId === "string" ? req.query.destinationBranchId : undefined,
+    page, pageSize: pageSize as DeliveryWorkspaceQuery["pageSize"],
+  };
+  const visible = [...deliveries, ...workspaceDeliveries].map(item => deliveryFor(role(req)!, item))
+    .filter((item): item is NonNullable<typeof item> => !!item)
+    .sort((a, b) => b.id - a.id);
+  const options = (key: "source" | "destination") => {
+    const values = new Map<string, string>();
+    for (const item of visible) values.set(key === "source" ? item.sourceBranchId : item.destinationBranchId,
+      key === "source" ? item.sourceBranchName : item.destinationBranchName);
+    return [...values].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
+  };
+  const counts: DeliveryWorkspaceResponse["counts"] = {
+    active: 0, assigned: 0, in_transit: 0, awaiting_receipt: 0,
+    receipt_approved: 0, failed: 0, completed: 0, cancelled: 0,
+  };
+  const selected = visible.filter(item => {
+    if (filters.carrier !== "all" && (filters.carrier === "internal" ? item.transportMode !== "internal"
+      : item.transportMode !== "external" || item.carrier !== filters.carrier)) return false;
+    if (filters.sourceBranchId && item.sourceBranchId !== filters.sourceBranchId) return false;
+    if (filters.destinationBranchId && item.destinationBranchId !== filters.destinationBranchId) return false;
+    if (q && ![item.sourceLabel, item.sourceId, item.waybill, item.carrier, item.carrierName, item.driverName,
+      item.vehicleNumber].some(value => String(value ?? "").toLocaleLowerCase().includes(q))) return false;
+    counts[item.status]++;
+    if (item.status !== "completed" && item.status !== "cancelled") counts.active++;
+    return true;
+  }).filter(item => filters.status === "all" || (filters.status === "active"
+    ? item.status !== "completed" && item.status !== "cancelled" : item.status === filters.status));
+  res.setHeader("Cache-Control", "private, no-store");
+  res.json({
+    deliveries: selected.slice((page - 1) * pageSize, page * pageSize),
+    total: selected.length, page, pageSize, counts,
+    filters: { sources: options("source"), destinations: options("destination") },
+  } satisfies DeliveryWorkspaceResponse);
+});
 // Synthetic report contract for the existing admin delivery tab; never queries live data.
 function fixtureReport(query: Record<string, any>) {
   const dateType = String(query.dateType || "created");
@@ -264,7 +338,7 @@ app.get("/api/deliveries/drivers", (req, res) => ["keeper", "admin"].includes(ro
   ? res.json({ drivers: [{ id: actors.driver.id, name: actors.driver.name, jobTitle: "delivery" }] }) : deny(res));
 app.get("/api/deliveries", (req, res) => res.json({ deliveries: deliveries.map(x => deliveryFor(role(req)!, x)).filter(Boolean) }));
 app.get("/api/deliveries/:id", (req, res) => {
-  const item = deliveries.find(x => x.id === Number(req.params.id));
+  const item = [...deliveries, ...workspaceDeliveries].find(x => x.id === Number(req.params.id));
   const result = item && deliveryFor(role(req)!, item);
   return result ? res.json(result) : res.status(404).json({ error: "Delivery unavailable" });
 });
@@ -522,6 +596,28 @@ async function main() {
       assert.equal((await call(`/deliveries/${externalId}/resolve-exception`, "keeper", "POST", { resolution: "Carrier delivered and branch received" })).status, 200);
       assert.equal((await call(`/deliveries/${externalId}/complete`, "keeper", "POST")).json.status, "completed");
       assert.equal((await call(`/deliveries/${externalId}/attachments/1`, "driver")).status, 404);
+      const workspace = (await call("/deliveries/workspace", "admin")).json as DeliveryWorkspaceResponse;
+      assert.equal(workspace.pageSize, 25);
+      assert.ok(workspace.total > 50);
+      assert.equal(workspace.deliveries.length, 25);
+      assert.equal(workspace.counts.active, workspace.total);
+      const second = (await call("/deliveries/workspace?page=2", "admin")).json as DeliveryWorkspaceResponse;
+      assert.equal(second.deliveries.length, 25);
+      assert.ok(!workspace.deliveries.some(item => second.deliveries.some(other => other.id === item.id)));
+      const waybill = (await call("/deliveries/workspace?q=FIX-WAY-002&status=all", "admin")).json as DeliveryWorkspaceResponse;
+      assert.equal(waybill.total, 1);
+      assert.equal(waybill.deliveries[0].waybill, "FIX-WAY-002");
+      const completed = (await call("/deliveries/workspace?status=completed", "admin")).json as DeliveryWorkspaceResponse;
+      assert.equal(completed.total, completed.counts.completed);
+      assert.ok(completed.total > 0);
+      const branch = (await call("/deliveries/workspace?status=all&destinationBranchId=fixture_branch&carrier=internal", "branch")).json as DeliveryWorkspaceResponse;
+      assert.ok(branch.total > 0);
+      assert.ok(branch.deliveries.every(item => item.destinationBranchId === "fixture_branch" && item.transportMode === "internal"));
+      assert.equal((await call("/deliveries/workspace?status=all&destinationBranchId=other_branch", "branch")).json.total, 0);
+      assert.equal((await call("/deliveries/workspace?status=all", "driver")).json.deliveries.every((item: DeliveryDTO) => item.driverId === actors.driver.id), true);
+      assert.equal((await call(`/deliveries/${waybill.deliveries[0].id}`, "admin")).json.waybill, "FIX-WAY-002");
+      assert.equal((await call(`/deliveries/${waybill.deliveries[0].id}`, "driver")).status, 404);
+      assert.equal((await call("/deliveries/workspace?pageSize=20", "admin")).status, 400);
       console.log("Synthetic internal and external API assertions passed. Browser UI not launched.");
     } finally { close(); }
   }

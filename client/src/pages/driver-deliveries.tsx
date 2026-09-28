@@ -1,13 +1,15 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import type { Dispatch, ReactNode, SetStateAction } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { BarChart3, CircleAlert, ClipboardList, Loader2, Plus, RefreshCw, Truck } from "lucide-react";
+import { BarChart3, CircleAlert, ClipboardList, Loader2, Plus, Truck } from "lucide-react";
 import { Layout } from "@/components/layout";
 import { AccessDeniedPage } from "@/components/protected-route";
 import { useAuth } from "@/hooks/useAuth";
 import { canAccessDeliveryWorkspace } from "@shared/delivery-workspace-access";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { DeliveryCard, DeliveryDetail, DeliveryItemLabel, canOpenDeliverySource, deliveryDate, deliveryDraftChanged, deliveryMatchesContext, deliverySourceLabel, deliverySourcePath, deliveryStatus, deliveryTransportLabel } from "@/components/delivery/delivery-ui";
+import { WorkspaceList } from "@/components/delivery/workspace-list";
+import { useDeliveryWorkspace } from "@/hooks/use-delivery-workspace";
 import { SignatureCapture } from "@/components/delivery/signature-capture";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -117,7 +119,7 @@ export function DeliveryWorkspace({ embedded = false, sourceType, sourceId, deli
   const contextSource = sourceType && sourceId ? `${sourceType}:${sourceId}` : null;
   const hasAuthoritativeId = embedded && deliveryId != null;
   const validDeliveryId = deliveryId != null && Number.isSafeInteger(deliveryId) && deliveryId > 0;
-   const [tab, setTab] = useState<"tasks" | "reports">("tasks"); const [status, setStatus] = useState<"active" | "all" | "completed" | "cancelled">("active");
+   const [tab, setTab] = useState<"tasks" | "reports">("tasks");
    const [detail, setDetail] = useState<Delivery | null>(null); const [createOpen, setCreateOpen] = useState(false); const [assignOpen, setAssignOpen] = useState(false); const [assignmentMode, setAssignmentMode] = useState<"create" | "reassign">("create");
    const [form, setForm] = useState({ sourceKey: contextSource || (!embedded ? (() => { const p = new URLSearchParams(window.location.search); return p.has("sourceType") && p.has("sourceId") ? `${p.get("sourceType")}:${p.get("sourceId")}` : ""; })() : ""), transportMode: "internal" as "internal" | "external", driverId: "", vehicleNumber: "", scheduledAt: "", carrier: "" as "" | "road" | "naqel" | "other", carrierName: "", waybill: "", packageCount: "1", trackingUrl: "" });
   const [proof, setProof] = useState({ signatureData: null as string | null, hasInk: false, receiverName: "", notes: "" });
@@ -160,7 +162,22 @@ export function DeliveryWorkspace({ embedded = false, sourceType, sourceId, deli
        toast({ title: "تعذر فتح المهمة", description: "المهمة غير موجودة أو لا تملك صلاحية الوصول إليها.", variant: "destructive" });
      });
    }, [toast, embedded]);
-  const list = useQuery({ queryKey: ["/api/deliveries"], queryFn: () => fetchJson<{ deliveries: Delivery[] }>("/api/deliveries"), enabled: !hasAuthoritativeId });
+   // Embedded views retain the legacy collection. Standalone source links use
+   // the paired exact-source workspace lookup, not a full legacy collection.
+   const linkParams = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : new URLSearchParams();
+   const sourceLinkRequested = !embedded && !linkParams.has("deliveryId") && (linkParams.has("sourceType") || linkParams.has("sourceId"));
+   const linkedSourceType = linkParams.get("sourceType");
+   const linkedSourceIdRaw = linkParams.get("sourceId");
+   const linkedSourceId = Number(linkedSourceIdRaw);
+   const validSourceLink = sourceLinkRequested
+     && ["kitchen", "material_transfer", "finished_goods_transfer", "kitchen_warehouse_shipment", "reverse_movement"].includes(linkedSourceType || "")
+     && !!linkedSourceIdRaw && /^[1-9]\d*$/.test(linkedSourceIdRaw) && Number.isSafeInteger(linkedSourceId);
+   const list = useQuery({ queryKey: ["/api/deliveries"], queryFn: () => fetchJson<{ deliveries: Delivery[] }>("/api/deliveries"), enabled: embedded && !hasAuthoritativeId });
+   const sourceLookup = useDeliveryWorkspace({
+     q: "", status: "all", carrier: "all", sourceBranchId: "all", destinationBranchId: "all", page: 1, pageSize: 25,
+     ...(validSourceLink ? { sourceType: linkedSourceType as Delivery["sourceType"], sourceId: linkedSourceId } : {}),
+   }, validSourceLink);
+   const reportBranches = useDeliveryWorkspace({ q: "", status: "all", carrier: "all", sourceBranchId: "all", destinationBranchId: "all", page: 1, pageSize: 25 }, !embedded && tab === "reports");
   const authoritativeDetail = useQuery({
     queryKey: ["/api/deliveries", deliveryId, "workspace", contextSource],
     queryFn: () => fetchJson<Delivery>(`/api/deliveries/${deliveryId}`),
@@ -183,6 +200,7 @@ export function DeliveryWorkspace({ embedded = false, sourceType, sourceId, deli
    const proofQuery = useQuery({ queryKey: ["/api/deliveries", detail?.id, "proof", detail?.proofAt], queryFn: () => fetchJson<Proof>(`/api/deliveries/${detail!.id}/proof`), enabled: !!detail?.proofPresent, retry: false });
   const invalidate = () => {
     void client.invalidateQueries({ queryKey: ["/api/deliveries"] });
+     void client.invalidateQueries({ queryKey: ["/api/deliveries/workspace"] });
     void client.invalidateQueries({ predicate: query => typeof query.queryKey[0] === "string" && query.queryKey[0].startsWith("/api/central-kitchen-orders") });
     void client.invalidateQueries({ queryKey: ["/api/central-kitchen-order-journey"] });
     if (detail?.sourceType === "material_transfer" || detail?.sourceType === "reverse_movement") {
@@ -208,8 +226,7 @@ export function DeliveryWorkspace({ embedded = false, sourceType, sourceId, deli
   };
    const action = useMutation({ mutationFn: async ({ endpoint, body }: { endpoint: string; body?: unknown }) => (await apiRequest("POST", endpoint, body)).json() as Promise<Delivery>, onSuccess: updated => { const endpoint = pendingRef.current; pendingRef.current = null; setActionError(null); if (endpoint === "/api/deliveries") setCreateOpen(false); if (endpoint?.endsWith("/reassign")) setAssignOpen(false); if (endpoint?.endsWith("/cancel")) setCancelOpen(false); if (endpoint?.endsWith("/fail")) setFailureOpen(false); if (endpoint?.endsWith("/resolve-exception")) setResolution(""); if (endpoint?.endsWith("/proof")) { setEditingProof(false); setProof({ signatureData: null, hasInk: false, receiverName: "", notes: "" }); } ++selectionRef.current; setDetail(updated); if (hasAuthoritativeId && updated.id === deliveryId) client.setQueryData(["/api/deliveries", deliveryId, "workspace", contextSource], updated); invalidate(); toast({ title: successCopy(endpoint) }); }, onError: error => { pendingRef.current = null; const message = error instanceof Error ? error.message : "أعد المحاولة، بيانات النموذج محفوظة."; setActionError(message); toast({ title: "لم يكتمل الإجراء", description: message, variant: "destructive" }); } });
    const submitAction = (endpoint: string, body?: unknown) => { if (pendingRef.current || action.isPending || dispatchRef.current || uploadRef.current) return; ++selectionRef.current; setActionError(null); pendingRef.current = endpoint; action.mutate({ endpoint, body }); };
-    const filtered = useMemo(() => (list.isError ? [] : list.data?.deliveries || []).filter(item => (!contextSource || `${item.sourceType}:${item.sourceId}` === contextSource) && deliveryVisibleInTab(item.status, status)), [list.data, list.isError, status, contextSource]);
-  const counts = useMemo(() => { const records = list.data?.deliveries || []; return { pickup: records.filter(x => x.status === "assigned").length, transit: records.filter(x => x.status === "in_transit").length, receipt: records.filter(x => x.status === "awaiting_receipt").length }; }, [list.data]);
+   const filtered = useMemo(() => (list.isError ? [] : list.data?.deliveries || []).filter(item => !contextSource || `${item.sourceType}:${item.sourceId}` === contextSource), [list.data, list.isError, contextSource]);
   const selectedSource = (sources.data?.sources || []).find(source => `${source.sourceType}:${source.sourceId}` === form.sourceKey);
   const selectedDriver = (drivers.data?.drivers || []).find(driver => driver.id === form.driverId);
   const sendAssignment = () => {
@@ -313,10 +330,10 @@ export function DeliveryWorkspace({ embedded = false, sourceType, sourceId, deli
       clearTaskDrafts();
     }, [detail?.id, detail?.driverId, detail?.proofAt, detail?.status, detail?.sourceStatus, detail?.handoverRecordedAt]);
   useEffect(() => {
-    if (hasAuthoritativeId || !list.isError) return;
+     if (!embedded || hasAuthoritativeId || !list.isError) return;
     ++selectionRef.current;
     setDetail(null);
-  }, [hasAuthoritativeId, list.isError]);
+   }, [embedded, hasAuthoritativeId, list.isError]);
   useEffect(() => {
     if (!contextSource) return;
     ++selectionRef.current;
@@ -349,15 +366,19 @@ export function DeliveryWorkspace({ embedded = false, sourceType, sourceId, deli
     if (match && detail?.id !== match.id) void openDetail(match);
     if (!match && detail && `${detail.sourceType}:${detail.sourceId}` === contextSource) setDetail(null);
   }, [embedded, hasAuthoritativeId, contextSource, list.data, list.isSuccess]);
-  useEffect(() => {
-    if (embedded || sourceLinkConsumed.current || !list.isSuccess) return;
-    sourceLinkConsumed.current = true;
-    const params = new URLSearchParams(window.location.search);
-    if (params.has("deliveryId") || !params.has("sourceType") || !params.has("sourceId")) return;
-    const source = `${params.get("sourceType")}:${params.get("sourceId")}`;
-    const match = list.data.deliveries.find(item => `${item.sourceType}:${item.sourceId}` === source);
-    if (match) void openDetail(match);
-  }, [embedded, list.data, list.isSuccess]);
+   useEffect(() => {
+     if (!sourceLinkRequested || sourceLinkConsumed.current) return;
+     if (!validSourceLink) {
+       sourceLinkConsumed.current = true;
+       toast({ title: "رابط مصدر التوصيل غير صالح", variant: "destructive" });
+       return;
+     }
+     if (!sourceLookup.isSuccess && !sourceLookup.isError) return;
+     sourceLinkConsumed.current = true;
+     const match = sourceLookup.data?.deliveries.find(item => item.sourceType === linkedSourceType && item.sourceId === linkedSourceId);
+     if (match) void openDetail(match);
+     else toast({ title: "تعذر فتح مهمة المصدر", description: sourceLookup.isError ? "تعذر البحث عن المهمة؛ حدّث الصفحة وأعد المحاولة." : "لا توجد مهمة لهذا المصدر أو لا تملك صلاحية الوصول إليها.", variant: "destructive" });
+   }, [sourceLinkRequested, validSourceLink, sourceLookup.data, sourceLookup.isSuccess, sourceLookup.isError, linkedSourceType, linkedSourceId, toast]);
    useEffect(() => {
       if (!detail || !["assigned", "in_transit", "awaiting_receipt", "receipt_approved"].includes(detail.status)) return;
      const id = detail.id;
@@ -375,21 +396,28 @@ export function DeliveryWorkspace({ embedded = false, sourceType, sourceId, deli
          });
      };
      const focusRefresh = () => {
-       void client.invalidateQueries({ queryKey: ["/api/deliveries"], exact: true });
+       void client.invalidateQueries({ queryKey: ["/api/deliveries/workspace"] });
+       if (embedded) void client.invalidateQueries({ queryKey: ["/api/deliveries"], exact: true });
        refresh();
      };
      document.addEventListener("visibilitychange", refresh);
      window.addEventListener("focus", focusRefresh);
      const timer = window.setInterval(refresh, 30_000);
      return () => { document.removeEventListener("visibilitychange", refresh); window.removeEventListener("focus", focusRefresh); window.clearInterval(timer); };
-   }, [detail?.id, detail?.status, toast, client]);
-  return <main className={embedded ? "space-y-4" : "mx-auto min-h-[100dvh] max-w-6xl space-y-5 px-4 pb-10 pt-5 md:px-7"} dir="rtl">
-    {!embedded && <PageHeader title="بوابة التوصيل" description="التوصيل الداخلي والشحن الخارجي من المصدر نفسه، ثم الاستلام والاعتماد." />}
+   }, [detail?.id, detail?.status, toast, client, embedded]);
+   useEffect(() => {
+     if (embedded) return;
+     const refresh = () => { if (!document.hidden) void client.invalidateQueries({ queryKey: ["/api/deliveries/workspace"] }); };
+     document.addEventListener("visibilitychange", refresh);
+     return () => document.removeEventListener("visibilitychange", refresh);
+   }, [embedded, client]);
+  return <main className={embedded ? "space-y-4" : "mx-auto min-h-[100dvh] max-w-[1560px] space-y-5 px-3 pb-10 pt-5 sm:px-5 xl:px-8"} dir="rtl">
+    {!embedded && <PageHeader title="بوابة التوصيل" description="متابعة المهام من الإسناد إلى اعتماد الاستلام." />}
     {embedded && <h2 className="text-lg font-bold">توصيل الطلب</h2>}
      <div className="flex flex-col justify-between gap-3 md:flex-row md:items-center">{!embedded && <Tabs value={tab === "reports" && canReport ? "reports" : "tasks"} onValueChange={value => setTab(value as "tasks" | "reports")}><TabsList className="h-12"><TabsTrigger value="tasks" className="min-h-10 gap-2"><Truck className="h-4 w-4" />المهام</TabsTrigger>{canReport && <TabsTrigger value="reports" className="min-h-10 gap-2"><BarChart3 className="h-4 w-4" />التقارير</TabsTrigger>}</TabsList></Tabs>}{canAssign && (!embedded || (!hasAuthoritativeId && list.isSuccess && !list.data.deliveries.some(item => `${item.sourceType}:${item.sourceId}` === contextSource))) && <Button className="min-h-12 gap-2" disabled={action.isPending} onClick={() => { setAssignmentMode("create"); setForm(value => ({ ...value, sourceKey: contextSource || value.sourceKey })); setCreateOpen(true); }}><Plus className="h-5 w-5" />إسناد توصيل</Button>}</div>
-      {tab !== "reports" || !canReport ? <>{!embedded && <section className="grid grid-cols-3 gap-2 md:gap-4">{[["pickup", "بانتظار البدء", counts.pickup], ["transit", "في الطريق", counts.transit], ["receipt", "بانتظار الإيصال", counts.receipt]].map(([key, label, count]) => <Card key={String(key)} className="border-primary/15"><CardContent className="p-3 md:p-4"><p className="text-xs text-muted-foreground">{label}</p><p className="mt-1 text-2xl font-bold text-primary">{count}</p></CardContent></Card>)}</section>}{!embedded && <div className="flex flex-wrap items-center justify-between gap-3"><Tabs value={status} onValueChange={value => setStatus(value as typeof status)}><TabsList><TabsTrigger value="active">النشطة</TabsTrigger><TabsTrigger value="all">الكل</TabsTrigger><TabsTrigger value="completed">المكتملة</TabsTrigger><TabsTrigger value="cancelled">الملغاة</TabsTrigger></TabsList></Tabs><Button variant="ghost" className="min-h-11 gap-2" onClick={() => list.refetch()}><RefreshCw className="h-4 w-4" />تحديث</Button></div>}
-       {hasAuthoritativeId ? (!validDeliveryId ? <State icon={<CircleAlert />} title="معرّف مهمة التوصيل غير صالح" /> : authoritativeDetail.isError ? <State icon={<CircleAlert />} title="تعذر فتح مهمة التوصيل أو سُحبت صلاحية الوصول" action={() => authoritativeDetail.refetch()} /> : authoritativeMismatch ? <State icon={<CircleAlert />} title="مهمة التوصيل لا تتبع هذا الطلب" /> : !authoritativeDetail.isSuccess || !detail || detail.id !== deliveryId ? <Skeleton className="h-40 w-full" /> : null) : list.isLoading ? <div className="space-y-3">{[1, 2, 3].map(i => <Skeleton key={i} className="h-40 w-full" />)}</div> : list.isError ? <State icon={<CircleAlert />} title="تعذر تحميل مهام التوصيل" action={() => list.refetch()} /> : embedded && detail ? null : filtered.length === 0 ? <State icon={<ClipboardList />} title={embedded ? "لا توجد مهمة توصيل لهذا الطلب" : "لا توجد مهام ضمن هذا العرض"} text={embedded ? "يمكن إسناد مهمة عندما يصبح المصدر مؤهلاً وتتوفر الصلاحية." : "ستظهر المهام المسندة لك أو ضمن نطاق إدارتك هنا."} /> : <div className="grid gap-3 lg:grid-cols-2">{filtered.map(item => <DeliveryCard key={item.id} delivery={item} now={clock} onOpen={() => void openDetail(item)} />)}</div>}
-      </> : <Reports range={range} setRange={setRange} reports={validRange && reports.isSuccess && !reports.isFetching ? reports.data : undefined} loading={validRange && (reports.isLoading || reports.isFetching)} error={!validRange || reports.isError} onRetry={() => void reports.refetch()} canExport={portalCapabilities.data.canExport} knownDeliveries={list.data?.deliveries || []} onExport={() => void exportCsv()} exporting={exporting} exportError={exportError} page={reportPage} setPage={setReportPage} />}
+      {tab !== "reports" || !canReport ? embedded ? <>
+       {hasAuthoritativeId ? (!validDeliveryId ? <State icon={<CircleAlert />} title="معرّف مهمة التوصيل غير صالح" /> : authoritativeDetail.isError ? <State icon={<CircleAlert />} title="تعذر فتح مهمة التوصيل أو سُحبت صلاحية الوصول" action={() => authoritativeDetail.refetch()} /> : authoritativeMismatch ? <State icon={<CircleAlert />} title="مهمة التوصيل لا تتبع هذا الطلب" /> : !authoritativeDetail.isSuccess || !detail || detail.id !== deliveryId ? <Skeleton className="h-40 w-full" /> : null) : list.isLoading ? <div className="space-y-3">{[1, 2, 3].map(i => <Skeleton key={i} className="h-40 w-full" />)}</div> : list.isError ? <State icon={<CircleAlert />} title="تعذر تحميل مهام التوصيل" action={() => list.refetch()} /> : detail ? null : filtered.length === 0 ? <State icon={<ClipboardList />} title="لا توجد مهمة توصيل لهذا الطلب" text="يمكن إسناد مهمة عندما يصبح المصدر مؤهلاً وتتوفر الصلاحية." /> : <div className="grid gap-3 lg:grid-cols-2">{filtered.map(item => <DeliveryCard key={item.id} delivery={item} now={clock} onOpen={() => void openDetail(item)} />)}</div>}
+      </> : <WorkspaceList onOpen={item => void openDetail(item)} now={clock} /> : <Reports range={range} setRange={setRange} reports={validRange && reports.isSuccess && !reports.isFetching ? reports.data : undefined} loading={validRange && (reports.isLoading || reports.isFetching)} error={!validRange || reports.isError} onRetry={() => void reports.refetch()} canExport={portalCapabilities.data.canExport} knownDeliveries={[]} branchOptions={reportBranches.data?.filters} onExport={() => void exportCsv()} exporting={exporting} exportError={exportError} page={reportPage} setPage={setReportPage} />}
       <AssignmentDialog embedded={embedded} open={(createOpen || assignOpen) && assignmentDialogAllowed(assignmentMode, canAssign, detail)} onOpenChange={open => { if (action.isPending) return; if (!open) { setCreateOpen(false); setAssignOpen(false); } }} mode={assignmentMode} sources={sources.data?.sources || []} drivers={drivers.data?.drivers || []} loading={assignmentMode === "create" ? sources.isFetching || (form.transportMode === "internal" && drivers.isFetching) : drivers.isFetching} error={(assignmentMode === "create" && sources.isError) || ((assignmentMode === "reassign" || form.transportMode === "internal") && drivers.isError)} actionError={actionError} form={form} setForm={setForm} selectedSource={selectedSource} selectedDriver={selectedDriver} currentDriverId={assignmentMode === "reassign" ? detail?.driverId : null} onSubmit={sendAssignment} pending={action.isPending} />
       {detail && (!embedded || (!authoritativeMismatch && !authoritativeDetail.isError && (!hasAuthoritativeId || authoritativeDetail.isSuccess && validDeliveryId) && deliveryMatchesContext(detail, sourceType, sourceId, hasAuthoritativeId ? deliveryId : undefined))) && (embedded ? <section className="space-y-4 rounded-xl border bg-card p-4" aria-label="تفاصيل التوصيل">{renderDetail()}</section> : <Dialog open={!!detail} onOpenChange={open => { if (!open && !action.isPending) { ++selectionRef.current; setDetail(null); setProof({ signatureData: null, hasInk: false, receiverName: "", notes: "" }); } }}><DialogContent className="max-h-[94dvh] overflow-y-auto sm:max-w-3xl" dir="rtl">{renderDetail()}</DialogContent></Dialog>)}
   </main>;
@@ -489,7 +517,7 @@ function AssignmentDialog({ embedded, open, onOpenChange, mode, sources, drivers
     : <Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="max-h-[92dvh] overflow-y-auto sm:max-w-xl" dir="rtl">{content}</DialogContent></Dialog>;
 }
 
-function Reports({ range, setRange, reports, loading, error, onRetry, canExport, knownDeliveries, onExport, exporting, exportError, page, setPage }: { range: { from: string; to: string; dateType: string; carrier: string; carrierName: string; sourceBranchId: string; destinationBranchId: string; status: string }; setRange: Dispatch<SetStateAction<{ from: string; to: string; dateType: string; carrier: string; carrierName: string; sourceBranchId: string; destinationBranchId: string; status: string }>>; reports?: Report; loading: boolean; error: boolean; onRetry: () => void; canExport: boolean; knownDeliveries: Delivery[]; onExport: () => void; exporting: boolean; exportError: string | null; page: number; setPage: Dispatch<SetStateAction<number>> }) {
+function Reports({ range, setRange, reports, loading, error, onRetry, canExport, knownDeliveries, branchOptions, onExport, exporting, exportError, page, setPage }: { range: { from: string; to: string; dateType: string; carrier: string; carrierName: string; sourceBranchId: string; destinationBranchId: string; status: string }; setRange: Dispatch<SetStateAction<{ from: string; to: string; dateType: string; carrier: string; carrierName: string; sourceBranchId: string; destinationBranchId: string; status: string }>>; reports?: Report; loading: boolean; error: boolean; onRetry: () => void; canExport: boolean; knownDeliveries: Delivery[]; branchOptions?: { sources: Array<{ id: string; name: string }>; destinations: Array<{ id: string; name: string }> }; onExport: () => void; exporting: boolean; exportError: string | null; page: number; setPage: Dispatch<SetStateAction<number>> }) {
   const branches = Array.from(new Map<string, string>(knownDeliveries.flatMap(item => [[item.sourceBranchId || "", item.sourceBranchName] as [string, string], [item.destinationBranchId, item.destinationBranchName] as [string, string]])).entries()).filter(([id]) => !!id);
   const options = <div className="grid gap-3 md:grid-cols-3">
     <div className="space-y-1"><Label>التاريخ حسب</Label><Select value={range.dateType} onValueChange={dateType => setRange(v => ({ ...v, dateType }))}><SelectTrigger className="min-h-12"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="created">إنشاء المهمة</SelectItem><SelectItem value="dispatched">الإرسال الفعلي من المصدر</SelectItem><SelectItem value="completed">إكمال المهمة</SelectItem></SelectContent></Select></div>
@@ -501,8 +529,8 @@ function Reports({ range, setRange, reports, loading, error, onRetry, canExport,
       <Card><CardContent className="space-y-3 p-4">{options}<div className="grid gap-3 md:grid-cols-5 md:items-end">
         <div><Label htmlFor="from">من</Label><Input id="from" type="date" className="mt-1 min-h-12" value={range.from} onChange={e => setRange(v => ({ ...v, from: e.target.value }))} /></div>
         <div><Label htmlFor="to">إلى</Label><Input id="to" type="date" className="mt-1 min-h-12" value={range.to} onChange={e => setRange(v => ({ ...v, to: e.target.value }))} /></div>
-        <Select value={range.sourceBranchId} onValueChange={sourceBranchId => setRange(v => ({ ...v, sourceBranchId }))}><SelectTrigger className="min-h-12"><SelectValue placeholder="فرع المصدر" /></SelectTrigger><SelectContent><SelectItem value="all">كل المصادر</SelectItem>{branches.map(([id, name]) => <SelectItem key={id} value={id}>{name}</SelectItem>)}</SelectContent></Select>
-        <Select value={range.destinationBranchId} onValueChange={destinationBranchId => setRange(v => ({ ...v, destinationBranchId }))}><SelectTrigger className="min-h-12"><SelectValue placeholder="فرع الوجهة" /></SelectTrigger><SelectContent><SelectItem value="all">كل الوجهات</SelectItem>{branches.map(([id, name]) => <SelectItem key={id} value={id}>{name}</SelectItem>)}</SelectContent></Select>
+        <Select value={range.sourceBranchId} onValueChange={sourceBranchId => setRange(v => ({ ...v, sourceBranchId }))}><SelectTrigger className="min-h-12"><SelectValue placeholder="فرع المصدر" /></SelectTrigger><SelectContent><SelectItem value="all">كل المصادر</SelectItem>{(branchOptions?.sources || branches.map(([id, name]) => ({ id, name }))).map(({ id, name }) => <SelectItem key={id} value={id}>{name}</SelectItem>)}</SelectContent></Select>
+        <Select value={range.destinationBranchId} onValueChange={destinationBranchId => setRange(v => ({ ...v, destinationBranchId }))}><SelectTrigger className="min-h-12"><SelectValue placeholder="فرع الوجهة" /></SelectTrigger><SelectContent><SelectItem value="all">كل الوجهات</SelectItem>{(branchOptions?.destinations || branches.map(([id, name]) => ({ id, name }))).map(({ id, name }) => <SelectItem key={id} value={id}>{name}</SelectItem>)}</SelectContent></Select>
         <Select value={range.status} onValueChange={status => setRange(v => ({ ...v, status }))}><SelectTrigger className="min-h-12"><SelectValue placeholder="الحالة" /></SelectTrigger><SelectContent><SelectItem value="all">كل الحالات</SelectItem>{(["assigned", "in_transit", "awaiting_receipt", "receipt_approved", "completed", "failed", "cancelled"] as DeliveryStatus[]).map(status => <SelectItem value={status} key={status}>{deliveryStatus(status).label}</SelectItem>)}</SelectContent></Select>
       </div>{canExport && <Button variant="outline" className="min-h-12" onClick={onExport} disabled={loading || error || exporting || !reports?.summary.total}>{exporting ? "جارٍ تصدير جميع النتائج…" : "تصدير جميع النتائج CSV"}</Button>}
       {exportError && <p role="alert" className="text-destructive">{exportError}</p>}</CardContent></Card>

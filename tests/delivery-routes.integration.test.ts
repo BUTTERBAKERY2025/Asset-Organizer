@@ -197,6 +197,50 @@ describe("delivery routes against local PostgreSQL contracts", () => {
     state.client = null;
   });
 
+  it("serves the standalone authorized workspace contract without changing the legacy list", async () => {
+    const id = Number((await client.query(`INSERT INTO delivery_assignments
+      (source_type,source_id,transport_mode,status,created_by,carrier,waybill,package_count)
+      VALUES ('kitchen',$1,'external','assigned',$2,'road',$3,1) RETURNING id`,
+      [fixture.source, fixture.manager!.id, `${fixture.prefix}-workspace-waybill`])).rows[0].id);
+    const query = { q: `${fixture.prefix}-workspace-waybill`, carrier: "road", page: "1", pageSize: "25" };
+    const manager = await invoke("GET", "/api/deliveries/workspace", fixture.manager!, {}, {}, query);
+    expect(manager.statusCode).toBe(200);
+    expect(manager.body).toMatchObject({
+      total: 1, page: 1, pageSize: 25,
+      counts: { active: 1, assigned: 1, failed: 0, completed: 0 },
+      filters: {
+        sources: [{ id: fixture.kitchen, name: "kitchen" }],
+        destinations: [{ id: fixture.destination, name: "destination" }],
+      },
+    });
+    expect(manager.body.deliveries.map((d: any) => d.id)).toEqual([id]);
+    const deeplink = await invoke("GET", "/api/deliveries/workspace", fixture.manager!, {}, {},
+      { sourceType: "kitchen", sourceId: String(fixture.source), status: "all" });
+    expect(deeplink.body.deliveries.map((d: any) => d.id)).toEqual([id]);
+    expect(deeplink.body.total).toBe(1);
+    expect((await invoke("GET", "/api/deliveries/workspace", fixture.outsiderUser!, {}, {},
+      { sourceType: "kitchen", sourceId: String(fixture.source) })).body).toMatchObject({
+      deliveries: [], total: 0, counts: { assigned: 0 },
+    });
+    for (const invalid of [
+      { sourceType: "kitchen" }, { sourceId: String(fixture.source) },
+      { sourceType: "unknown", sourceId: "1" }, { sourceType: "kitchen", sourceId: "0" },
+    ]) {
+      expect((await invoke("GET", "/api/deliveries/workspace", fixture.manager!, {}, {}, invalid)).statusCode).toBe(400);
+    }
+    const receiver = await invoke("GET", "/api/deliveries/workspace", fixture.receiver!, {}, {}, query);
+    expect(receiver.body.deliveries.map((d: any) => d.id)).toEqual([id]);
+    const outsider = await invoke("GET", "/api/deliveries/workspace", fixture.outsiderUser!, {}, {}, query);
+    expect(outsider.body).toMatchObject({ deliveries: [], total: 0, filters: { sources: [], destinations: [] } });
+    expect((await invoke("GET", "/api/deliveries/workspace", fixture.manager!, {}, {},
+      { ...query, status: "completed" })).body).toMatchObject({
+        deliveries: [], total: 0, counts: { assigned: 1, active: 1 },
+      });
+    expect((await invoke("GET", "/api/deliveries/workspace", fixture.manager!, {}, {},
+      { ...query, pageSize: "500" })).statusCode).toBe(400);
+    expect((await invoke("GET", "/api/deliveries", fixture.manager!)).body.deliveries.some((d: any) => d.id === id)).toBe(true);
+  });
+
   it("fails storage safely, preserves insert errors on cleanup, and serves authorized private bytes", async () => {
     const id = Number((await client.query(`INSERT INTO delivery_assignments
       (source_type,source_id,transport_mode,status,created_by,carrier,waybill,package_count)
