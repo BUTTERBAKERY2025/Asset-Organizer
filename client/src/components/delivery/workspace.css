@@ -1,10 +1,10 @@
 .delivery-workspace {
-  --dw-ink: #23363b;
-  --dw-subtle: #627378;
-  --dw-line: #dce5e1;
-  --dw-canvas: #f3f7f4;
-  --dw-panel: #fcfdfb;
-  --dw-accent: #146b68;
+  --dw-ink: var(--color-foreground);
+  --dw-subtle: var(--color-muted-foreground);
+  --dw-line: var(--color-border);
+  --dw-canvas: color-mix(in srgb, var(--color-primary) 3%, var(--color-background));
+  --dw-panel: var(--color-card);
+  --dw-accent: var(--color-primary);
   color: var(--dw-ink);
 }
 .delivery-workspace.dw-shell {
@@ -23,16 +23,18 @@
   transition: transform .18s ease;
 }
 .delivery-workspace .dw-stat:hover { transform: translateY(-2px); border-color: var(--dw-accent); }
-.delivery-workspace .dw-stat[data-selected="true"] { border-color: var(--dw-accent); background: #e5f2ee; }
+.delivery-workspace .dw-stat[data-selected="true"] { border-color: var(--dw-accent); background: color-mix(in srgb, var(--dw-accent) 9%, var(--dw-panel)); color: var(--dw-accent); }
 .delivery-workspace .dw-surface {
   background: var(--dw-panel);
   border: 1px solid var(--dw-line);
   border-radius: 1rem;
 }
 .delivery-workspace .dw-table { width: 100%; border-collapse: collapse; text-align: right; }
-.delivery-workspace .dw-table th { background: #eaf0ed; color: #52666a; font-size: .72rem; font-weight: 700; white-space: nowrap; padding: .8rem .75rem; }
+.delivery-workspace .dw-table th { background: color-mix(in srgb, var(--dw-accent) 6%, var(--dw-panel)); color: var(--dw-subtle); font-size: .72rem; font-weight: 700; white-space: nowrap; padding: .8rem .75rem; }
 .delivery-workspace .dw-table td { border-top: 1px solid var(--dw-line); padding: .75rem; font-size: .82rem; vertical-align: middle; }
-.delivery-workspace .dw-table tbody tr:hover { background: #f1f7f3; }
+.delivery-workspace .dw-table tbody tr:hover { background: color-mix(in srgb, var(--dw-accent) 4%, var(--dw-panel)); }
+.delivery-workspace .text-teal-700,
+.delivery-workspace .text-teal-800 { color: var(--dw-accent); }
 .delivery-workspace .dw-mobile-card { background: var(--dw-panel); border: 1px solid var(--dw-line); border-radius: .9rem; padding: 1rem; }
 @media (prefers-reduced-motion: reduce) {
   .delivery-workspace .dw-stat { transition: none; }

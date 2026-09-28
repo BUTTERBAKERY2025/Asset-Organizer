@@ -18,7 +18,7 @@ const statusOptions: Array<{ value: WorkspaceStatus; label: string }> = [
   { value: "failed", label: "المتعذرة" }, { value: "completed", label: "المكتملة" }, { value: "cancelled", label: "الملغاة" },
 ];
 const initialFilters: WorkspaceFilters = { q: "", status: "active", carrier: "all", sourceBranchId: "all", destinationBranchId: "all", page: 1, pageSize: 25 };
-const countText = (value: number) => new Intl.NumberFormat("ar-SA").format(value);
+const countText = (value: number) => new Intl.NumberFormat("en-US").format(value);
 
 export function WorkspaceList({ onOpen, now }: { onOpen: (delivery: Delivery) => void; now: number }) {
   const [search, setSearch] = useState("");

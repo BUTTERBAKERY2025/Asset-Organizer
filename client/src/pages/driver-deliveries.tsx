@@ -102,7 +102,7 @@ export async function startExternalMaterialDelivery(
 const fetchJson = async <T,>(path: string): Promise<T> => { const response = await fetch(path, { credentials: "include" }); if (!response.ok) throw new Error(`${response.status}: تعذر تحميل البيانات`); return response.json() as Promise<T>; };
 const dateValue = (offset = 0) => { const value = new Date(Date.now() + offset * 86400000); return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Riyadh", year: "numeric", month: "2-digit", day: "2-digit" }).format(value); };
 const reportDate = (value?: string | null) => value
-  ? new Intl.DateTimeFormat("ar-SA", { timeZone: "Asia/Riyadh", dateStyle: "medium", timeStyle: "short" }).format(new Date(value))
+  ? new Intl.DateTimeFormat("ar-SA", { numberingSystem: "latn", timeZone: "Asia/Riyadh", dateStyle: "medium", timeStyle: "short" }).format(new Date(value))
   : "—";
 
 export default function DriverDeliveriesPage() {

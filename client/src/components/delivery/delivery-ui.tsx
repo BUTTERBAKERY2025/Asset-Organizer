@@ -58,7 +58,7 @@ export function canOpenDeliverySource(type: Delivery["sourceType"], canView: (mo
 export function DeliveryItemLabel({ item }: { item: Delivery["items"][number] }) {
   return <span>{item.name}{!!item.substituteQuantity && <span className="mt-1 block text-xs text-muted-foreground">تفصيل التجهيز: أصلي {item.originalQuantity || 0} {item.unit || ""} · بديل {item.substituteName || "بديل"} {item.substituteQuantity} {item.substituteUnit || item.unit || ""}</span>}</span>;
 }
-export const deliveryDate = (date?: string | null) => date ? new Intl.DateTimeFormat("ar-SA", { dateStyle: "medium", timeStyle: "short" }).format(new Date(date)) : "غير محدد";
+export const deliveryDate = (date?: string | null) => date ? new Intl.DateTimeFormat("ar-SA", { numberingSystem: "latn", dateStyle: "medium", timeStyle: "short" }).format(new Date(date)) : "غير محدد";
 export const deliveryTransportLabel = (delivery: Delivery) => delivery.transportMode === "external"
   ? `${delivery.carrierName || (delivery.carrier === "road" ? "رود للوجيستك" : delivery.carrier === "naqel" ? "ناقل" : "شركة شحن")} · بوليصة ${delivery.waybill || "—"}`
   : `${delivery.driverName || "سائق داخلي"} · ${delivery.vehicleNumber || "—"}`;
