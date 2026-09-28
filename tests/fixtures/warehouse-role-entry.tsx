@@ -34,8 +34,8 @@ async function mount() {
             <h2 className="mb-4 text-lg font-bold">استلام المهمة ضمن صفحة مصدر الفرع (بيانات اصطناعية)</h2>
             {createElement(DeliveryWorkspace as ComponentType<any>, {
               embedded: true, sourceType: "material_transfer",
-              sourceId: new URLSearchParams(location.search).get("carrier") === "1" ? 4106 : 4102,
-              deliveryId: new URLSearchParams(location.search).get("carrier") === "1" ? 9202 : 9201,
+               sourceId: new URLSearchParams(location.search).get("carrier") === "1" ? 4103 : 4102,
+               deliveryId: new URLSearchParams(location.search).get("carrier") === "1" ? 9301 : 9201,
             })}
           </section>}
         <Toaster />

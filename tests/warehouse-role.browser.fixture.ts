@@ -79,6 +79,24 @@ const deliveries: DeliveryDTO[] = [
       canStart: false, canSubmitProof: false, canApproveReceipt: false, canComplete: false,
       canFail: false, canReassign: false, canCancel: false, canResolveException: false } },
 ];
+// Synthetic counterpart of the awaiting-receipt carrier dialog. The underlying
+// transfer stays in_transit: no independent destination receipt has occurred.
+const receiptPhoto = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9n1xZIoAAAAASUVORK5CYII=", "base64");
+const receiptPdf = Buffer.from("%PDF-1.4\n%%EOF");
+evidenceBytes.set(9001, receiptPhoto);
+evidenceBytes.set(9002, receiptPdf);
+deliveries.push({
+  ...deliveries[0], id: 9301, sourceId: 4103, sourceStatus: "in_transit",
+  sourceLabel: "MT-202609-0001", items: transferItems(4103).map(x => ({ id: x.itemId, name: x.itemName, quantity: x.quantity, unit: x.unit })),
+  transportMode: "external", driverId: null, driverName: null, vehicleNumber: null,
+  carrier: "other", carrierName: "ناقل اصطناعي", waybill: "FIX-RECEIPT-9301", packageCount: 2,
+  trackingUrl: null, status: "awaiting_receipt", startedAt: today,
+  handoverRecordedAt: today, handoverItems: transferItems(4103).map(x => ({ id: x.itemId, name: x.itemName, quantity: x.quantity, unit: x.unit })),
+  attachments: [
+    { id: 9001, kind: "shipment_photo", mimeType: "image/png", originalName: "synthetic-shipment.png", downloadUrl: "/api/deliveries/9301/attachments/9001" },
+    { id: 9002, kind: "carrier_receipt", mimeType: "application/pdf", originalName: "synthetic-carrier.pdf", downloadUrl: "/api/deliveries/9301/attachments/9002" },
+  ],
+});
 function role(req: express.Request): Role | null {
   const selected = req.query.role;
   return typeof selected === "string" && (roleNames as readonly string[]).includes(selected) ? selected as Role : null;
@@ -114,7 +132,9 @@ function deliveryFor(actor: Role, delivery: DeliveryDTO) {
   if (!own && !source && !receiver) return null;
   const transfer = transfers.find(x => x.id === delivery.sourceId);
   const evidence = ["shipment_photo", "carrier_receipt"].every(kind => delivery.attachments.some(file => file.kind === kind));
-  return { ...delivery, sourceStatus: transfer?.status || delivery.sourceStatus, capabilities: {
+   return { ...delivery, sourceStatus: transfer?.status || delivery.sourceStatus,
+     attachments: delivery.attachments.map(file => ({ ...file, downloadUrl: `${file.downloadUrl}?role=${actor}` })),
+     capabilities: {
     canRecordHandover: source && delivery.status === "assigned" && transfer?.status === "approved"
       && (external ? evidence : !delivery.handoverRecordedAt),
     canAcknowledgeHandover: !external && own && delivery.status === "assigned" && !!delivery.handoverRecordedAt && !delivery.handoverAcknowledgedAt,
