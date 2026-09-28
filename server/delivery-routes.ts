@@ -591,7 +591,11 @@ export function registerDeliveryRoutes(app: Express) {
   app.get("/api/deliveries/drivers", isAuthenticated, async (req, res) => {
     try {
       if (!canAccessDeliveryWorkspace(req.currentUser)) throw new DeliveryError("Delivery workspace access denied", 403);
-      if (!(await permitted(req, res, "delivery_tasks", "create"))) throw new DeliveryError("Permission denied", 403);
+      // The same picker serves new assignments and edits to existing tasks.
+      // Reassignment needs edit rights, not permission to create a new task.
+      if (!(await permitted(req, res, "delivery_tasks", "create"))
+        && !(await permitted(req, res, "delivery_tasks", "edit")))
+        throw new DeliveryError("Permission denied", 403);
       const allowed = req.currentUser?.role === "warehouse_keeper" ? null : getAllowedBranchIds(req);
       const drivers = await pool.query(`SELECT id, concat_ws(' ',first_name,last_name) name, job_title "jobTitle"
         FROM users WHERE job_title='delivery' AND is_active='active'

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -20,11 +20,10 @@ const hasInk = (canvas: HTMLCanvasElement) => {
 
 export function SignatureCapture({ disabled, onChange }: SignatureCaptureProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const snapshotRef = useRef<string | null>(null);
   const drawingRef = useRef(false);
   const [drawn, setDrawn] = useState(false);
 
-  const paintBackground = useCallback((canvas: HTMLCanvasElement) => {
+  const paintBackground = (canvas: HTMLCanvasElement) => {
     const context = canvas.getContext("2d");
     if (!context) return;
     context.fillStyle = "#fbfaf7";
@@ -33,30 +32,13 @@ export function SignatureCapture({ disabled, onChange }: SignatureCaptureProps) 
     context.lineWidth = 3;
     context.lineCap = "round";
     context.lineJoin = "round";
-  }, []);
-
-  const restore = useCallback(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const data = snapshotRef.current;
-    paintBackground(canvas);
-    if (!data) return;
-    const image = new Image();
-    image.onload = () => canvas.getContext("2d")?.drawImage(image, 0, 0, canvas.width, canvas.height);
-    image.src = data;
-  }, [paintBackground]);
+  };
 
   useEffect(() => {
-    restore();
-    const preserve = () => {
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-      snapshotRef.current = canvas.toDataURL("image/png");
-      requestAnimationFrame(restore);
-    };
-    window.addEventListener("resize", preserve);
-    return () => window.removeEventListener("resize", preserve);
-  }, [restore]);
+    // CSS resizing scales the fixed-size bitmap; repainting it asynchronously
+    // on window resize could erase a signature drawn while the image loads.
+    if (canvasRef.current) paintBackground(canvasRef.current);
+  }, []);
 
   const coordinate = (event: React.PointerEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current!;
@@ -68,8 +50,7 @@ export function SignatureCapture({ disabled, onChange }: SignatureCaptureProps) 
     if (!canvas) return;
     const ink = hasInk(canvas);
     setDrawn(ink);
-    snapshotRef.current = canvas.toDataURL("image/png");
-    onChange(ink ? snapshotRef.current : null, ink);
+    onChange(ink ? canvas.toDataURL("image/png") : null, ink);
   };
   const begin = (event: React.PointerEvent<HTMLCanvasElement>) => {
     if (disabled) return;
@@ -96,8 +77,8 @@ export function SignatureCapture({ disabled, onChange }: SignatureCaptureProps) 
     commit();
   };
   const clear = () => {
-    snapshotRef.current = null;
-    restore();
+    const canvas = canvasRef.current;
+    if (canvas) paintBackground(canvas);
     setDrawn(false);
     onChange(null, false);
   };

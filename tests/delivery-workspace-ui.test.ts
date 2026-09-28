@@ -38,7 +38,7 @@ vi.mock("@/components/dashboard/page-header", () => ({ PageHeader: () => null })
 vi.mock("@/components/layout", () => ({ Layout: ({ children }: { children: unknown }) => children }));
 vi.mock("@/lib/queryClient", () => ({ apiRequest: vi.fn() }));
 
-import { DeliveryActionBar, DeliveryWorkspace, ExternalMaterialNextAction, startExternalMaterialDelivery } from "../client/src/pages/driver-deliveries";
+import { DeliveryActionBar, DeliveryWorkspace, ExternalMaterialNextAction, assignmentDialogAllowed, deliveryVisibleInTab, startExternalMaterialDelivery } from "../client/src/pages/driver-deliveries";
 
 const render = () => {
   const previousWindow = globalThis.window;
@@ -131,10 +131,26 @@ describe("delivery workspace permissions (synthetic read-only fixture)", () => {
     }));
     expect(html).toContain("بدء متابعة الناقل");
     expect(html).not.toContain("إرسال الشحنة");
-    expect(renderToStaticMarkup(createElement(ExternalMaterialNextAction, {
+    const waiting = renderToStaticMarkup(createElement(ExternalMaterialNextAction, {
       delivery: { ...delivery, capabilities: { ...delivery.capabilities, canStart: false } },
       pending: false, onStart: vi.fn(), onDispatch: vi.fn(),
-    }))).not.toContain("بدء متابعة الناقل");
+    }));
+    expect(waiting).not.toContain("<button");
+    expect(waiting).toContain("بانتظار مسؤول المصدر");
+  });
+
+  it("opens an existing task's reassignment using task edit capability, not global create capability", () => {
+    const task = { capabilities: { canReassign: true } } as Delivery;
+    expect(assignmentDialogAllowed("reassign", false, task)).toBe(true);
+    expect(assignmentDialogAllowed("create", false, task)).toBe(false);
+    expect(assignmentDialogAllowed("reassign", true, { capabilities: { canReassign: false } } as Delivery)).toBe(false);
+    expect(assignmentDialogAllowed("reassign", true, null)).toBe(false);
+  });
+
+  it("keeps failed deliveries visible in active tasks for corrective reassignment", () => {
+    expect(deliveryVisibleInTab("failed", "active")).toBe(true);
+    expect(deliveryVisibleInTab("completed", "active")).toBe(false);
+    expect(deliveryVisibleInTab("cancelled", "all")).toBe(true);
   });
 
   it("does not repeat stock dispatch when the same delivery is already in transit", async () => {
