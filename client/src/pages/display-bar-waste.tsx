@@ -555,7 +555,7 @@ export default function DisplayBarWastePage() {
       });
       if (!res.ok) throw new Error((await res.json()).error || "فشل المقارنة");
       const result = await res.json();
-      toast({ title: "تمت المقارنة بنجاح", description: `${result.comparisonsCreated} مقارنة` });
+      toast({ title: "نتيجة المقارنة الموثقة", description: `${result.comparisonsCreated} مقارنة. ${result.warning || "الفرق ليس هدراً معتمداً."}` });
       refetchComparisons();
       refetchComparisonSummary();
     } catch (err: any) {
@@ -2790,7 +2790,23 @@ export default function DisplayBarWastePage() {
               </CardContent>
             </Card>
 
-            {comparisonSummary && (
+            {comparisonSummary?.available === false && (
+              <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg text-right" role="status">
+                <p className="font-medium text-amber-900">مقارنة الإنتاج والمبيعات غير متاحة، والفروقات القديمة ليست هدراً معتمداً.</p>
+                <p className="text-sm text-amber-800 mt-1">{comparisonSummary.reason}</p>
+                <p className="text-xs text-amber-800 mt-1">
+                  دفعات مكتملة: {comparisonSummary.coverage?.finishedBatches ?? "—"} ·
+                  دفعات بمعرف ووحدة: {comparisonSummary.coverage?.canonicalBatches ?? "—"} ·
+                  صفوف مبيعات تحتاج ربطاً: {comparisonSummary.coverage?.salesRows ?? "—"}
+                </p>
+              </div>
+            )}
+            {comparisonSummary?.available === true && (
+              <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg text-right" role="status">
+                هذه مقارنة جزئية لصفوف مبيعات وإنتاج ذات معرف ووحدة موثقين؛ غياب أي مصدر غير معروف، والفرق ليس هدراً فعلياً.
+              </div>
+            )}
+            {comparisonSummary && comparisonSummary.available !== false && (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
                 <Card data-testid="card-total-produced">
                   <CardContent className="p-4 text-right">
@@ -2806,14 +2822,14 @@ export default function DisplayBarWastePage() {
                 </Card>
                 <Card data-testid="card-total-waste">
                   <CardContent className="p-4 text-right">
-                    <p className="text-sm text-muted-foreground">إجمالي الهدر</p>
-                    <p className="text-2xl font-bold text-red-600">{(comparisonSummary.totalWaste || 0).toLocaleString()}</p>
+                    <p className="text-sm text-muted-foreground">الهدر الفعلي (غير مثبت بالمقارنة)</p>
+                    <p className="text-2xl font-bold text-red-600">—</p>
                   </CardContent>
                 </Card>
                 <Card data-testid="card-total-shortage">
                   <CardContent className="p-4 text-right">
-                    <p className="text-sm text-muted-foreground">إجمالي العجز</p>
-                    <p className="text-2xl font-bold text-orange-600">{(comparisonSummary.totalShortage || 0).toLocaleString()}</p>
+                    <p className="text-sm text-muted-foreground">فرق الإنتاج − المبيعات</p>
+                    <p className="text-2xl font-bold text-orange-600">{comparisonSummary.totalVariance?.toLocaleString() ?? "—"}</p>
                   </CardContent>
                 </Card>
               </div>
@@ -2843,7 +2859,7 @@ export default function DisplayBarWastePage() {
                   <div className="text-center py-8 text-muted-foreground">
                     <BarChart3 className="w-12 h-12 mx-auto mb-3 opacity-50" />
                     <p>لا توجد نتائج مقارنة</p>
-                    <p className="text-sm mt-1">قم برفع بيانات المبيعات ثم تشغيل المقارنة</p>
+                    <p className="text-sm mt-1">لا يمكن إجراء مقارنة كمية موثوقة قبل ربط أصناف المبيعات بمعرف المنتج والوحدة.</p>
                   </div>
                 ) : (
                   <div className="overflow-x-auto">
@@ -2866,7 +2882,7 @@ export default function DisplayBarWastePage() {
                           const diffColor = diff === 0 ? "text-green-600" : diff > 0 ? "text-red-600" : "text-orange-600";
                           const statusMap: Record<string, { label: string; className: string }> = {
                             normal: { label: "طبيعي", className: "bg-green-100 text-green-700" },
-                            waste: { label: "هدر", className: "bg-red-100 text-red-700" },
+                            variance: { label: "فرق كمي", className: "bg-amber-100 text-amber-700" },
                             shortage: { label: "عجز", className: "bg-orange-100 text-orange-700" },
                             stored: { label: "مخزون", className: "bg-blue-100 text-blue-700" },
                           };

@@ -34,7 +34,7 @@ export default function ProductionComparisonReports() {
     queryKey: ["/api/branches"],
   });
 
-  const { data: monthlyReport, isLoading: loadingMonthly, refetch: refetchMonthly } = useQuery<any>({
+  const { data: monthlyReport, isLoading: loadingMonthly, error: monthlyError, refetch: refetchMonthly } = useQuery<any>({
     queryKey: ["/api/production-comparison-reports/monthly-waste", selectedYear, selectedMonth, selectedBranch],
     queryFn: async () => {
       const params = new URLSearchParams({
@@ -43,7 +43,7 @@ export default function ProductionComparisonReports() {
       });
       if (selectedBranch !== "all") params.append("branchId", selectedBranch);
       const res = await fetch(`/api/production-comparison-reports/monthly-waste?${params}`);
-      if (!res.ok) throw new Error("Failed to fetch");
+      if (!res.ok) throw new Error((await res.json()).error || "تعذر قراءة التقرير");
       return res.json();
     },
   });
@@ -103,17 +103,20 @@ export default function ProductionComparisonReports() {
     return branch?.name || branchId;
   };
 
-  const formatCurrency = (value: number) => {
+  const formatCurrency = (value: number | null) => {
+    if (value == null) return "—";
     return new Intl.NumberFormat("en-US", {
       maximumFractionDigits: 0,
     }).format(value) + " ر.س";
   };
 
-  const formatNumber = (value: number) => {
+  const formatNumber = (value: number | null) => {
+    if (value == null) return "—";
     return new Intl.NumberFormat("en-US").format(Math.round(value));
   };
 
-  const formatPercent = (value: number) => {
+  const formatPercent = (value: number | null) => {
+    if (value == null) return "—";
     return `${value.toFixed(1)}%`;
   };
 
@@ -122,7 +125,7 @@ export default function ProductionComparisonReports() {
     { header: "الفئة", key: "category", width: 20 },
     { header: "الإنتاج", key: "produced", width: 15 },
     { header: "المبيعات", key: "sold", width: 15 },
-    { header: "الهدر", key: "waste", width: 15 },
+    { header: "الفرق الكمي (ليس هدراً)", key: "variance", width: 22 },
     { header: "نسبة الهدر %", key: "wastePercentage", width: 15 },
     { header: "قيمة الهدر", key: "wasteValue", width: 18 },
   ];
@@ -140,7 +143,7 @@ export default function ProductionComparisonReports() {
     { header: "التاريخ", key: "date", width: 15 },
     { header: "الإنتاج", key: "produced", width: 15 },
     { header: "المبيعات", key: "sold", width: 15 },
-    { header: "الهدر", key: "waste", width: 15 },
+    { header: "الفرق الكمي (ليس هدراً)", key: "variance", width: 22 },
     { header: "الكفاءة %", key: "efficiency", width: 15 },
   ];
 
@@ -148,7 +151,7 @@ export default function ProductionComparisonReports() {
     { header: "المنتج", key: "productName", width: 30 },
     { header: "الفئة", key: "category", width: 20 },
     { header: "الإنتاج", key: "totalProduced", width: 15 },
-    { header: "الهدر", key: "totalWaste", width: 15 },
+    { header: "الفرق الكمي (ليس هدراً)", key: "totalVariance", width: 22 },
     { header: "نسبة الهدر %", key: "wastePercentage", width: 15 },
     { header: "قيمة الهدر", key: "totalWasteValue", width: 18 },
   ];
@@ -158,8 +161,8 @@ export default function ProductionComparisonReports() {
     if (!monthlyReport?.byCategory) return [];
     return monthlyReport.byCategory.map((item: any) => ({
       ...item,
-      wastePercentage: item.wastePercentage?.toFixed(1) || "0.0",
-      wasteValue: item.wasteValue?.toFixed(0) || "0",
+      wastePercentage: item.wastePercentage?.toFixed(1) ?? "—",
+      wasteValue: item.wasteValue?.toFixed(0) ?? "—",
     }));
   }, [monthlyReport]);
 
@@ -168,8 +171,8 @@ export default function ProductionComparisonReports() {
     return branchPerformance.branches.map((branch: any) => ({
       ...branch,
       branchName: getBranchName(branch.branchId),
-      efficiency: branch.efficiency?.toFixed(1) || "0.0",
-      wasteValue: branch.wasteValue?.toFixed(0) || "0",
+      efficiency: branch.efficiency?.toFixed(1) ?? "—",
+      wasteValue: branch.wasteValue?.toFixed(0) ?? "—",
     }));
   }, [branchPerformance, branches]);
 
@@ -177,7 +180,7 @@ export default function ProductionComparisonReports() {
     if (!trends?.data) return [];
     return trends.data.map((item: any) => ({
       ...item,
-      efficiency: item.efficiency?.toFixed(1) || "0.0",
+      efficiency: item.efficiency?.toFixed(1) ?? "—",
     }));
   }, [trends]);
 
@@ -185,14 +188,19 @@ export default function ProductionComparisonReports() {
     if (!topWaste?.products) return [];
     return topWaste.products.map((product: any) => ({
       ...product,
-      wastePercentage: product.wastePercentage?.toFixed(1) || "0.0",
-      totalWasteValue: product.totalWasteValue?.toFixed(0) || "0",
+      wastePercentage: product.wastePercentage?.toFixed(1) ?? "—",
+      totalWasteValue: product.totalWasteValue?.toFixed(0) ?? "—",
     }));
   }, [topWaste]);
 
   return (
     <Layout>
       <div className="page-container space-y-4" dir="rtl">
+        {monthlyError && (
+          <div role="alert" className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-amber-900">
+            <strong>التقرير الكمي غير متاح.</strong> {monthlyError.message}
+          </div>
+        )}
         <div className="space-y-6">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div className="flex items-center gap-3">
@@ -294,6 +302,10 @@ export default function ProductionComparisonReports() {
               </div>
             ) : monthlyReport ? (
               <div className="space-y-6">
+                <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-amber-900" role="status">
+                  {monthlyReport.available === false ? monthlyReport.reason :
+                    "الأرقام المعروضة تخص فقط دفعات الإنتاج المكتملة والمبيعات ذات هوية ووحدة مثبتتين. الفروقات ليست هدراً فعلياً؛ لا تشمل الصفوف غير القابلة للمقارنة."}
+                </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
                   <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
                     <CardHeader className="pb-2">
@@ -301,7 +313,7 @@ export default function ProductionComparisonReports() {
                     </CardHeader>
                     <CardContent>
                       <div className="text-2xl font-bold text-blue-900" data-testid="text-total-produced">
-                        {formatNumber(monthlyReport.summary.totalProduced)}
+                        {monthlyReport.summary.totalProduced == null ? "—" : formatNumber(monthlyReport.summary.totalProduced)}
                       </div>
                       <p className="text-xs text-blue-600 mt-1">وحدة</p>
                     </CardContent>
@@ -313,7 +325,7 @@ export default function ProductionComparisonReports() {
                     </CardHeader>
                     <CardContent>
                       <div className="text-2xl font-bold text-green-900" data-testid="text-total-sold">
-                        {formatNumber(monthlyReport.summary.totalSold)}
+                        {monthlyReport.summary.totalSold == null ? "—" : formatNumber(monthlyReport.summary.totalSold)}
                       </div>
                       <p className="text-xs text-green-600 mt-1">وحدة</p>
                     </CardContent>
@@ -321,16 +333,16 @@ export default function ProductionComparisonReports() {
 
                   <Card className="bg-gradient-to-br from-red-50 to-red-100 border-red-200">
                     <CardHeader className="pb-2">
-                      <CardTitle className="text-sm font-medium text-red-700">إجمالي الهدر</CardTitle>
+                      <CardTitle className="text-sm font-medium text-red-700">الفرق الكمي (ليس هدراً)</CardTitle>
                     </CardHeader>
                     <CardContent>
                       <div className="text-2xl font-bold text-red-900" data-testid="text-total-waste">
-                        {formatNumber(monthlyReport.summary.totalWasteQuantity)}
+                        {monthlyReport.summary.totalVariance == null ? "—" : formatNumber(monthlyReport.summary.totalVariance)}
                       </div>
                       <div className="flex items-center gap-2 mt-1">
                         <span className="text-xs text-red-600">وحدة</span>
                         <Badge variant="destructive" className="text-xs">
-                          {formatPercent(monthlyReport.summary.wastePercentage)}
+                          الهدر الفعلي غير متاح
                         </Badge>
                       </div>
                     </CardContent>
@@ -338,11 +350,11 @@ export default function ProductionComparisonReports() {
 
                   <Card className="bg-gradient-to-br from-amber-50 to-amber-100 border-amber-200">
                     <CardHeader className="pb-2">
-                      <CardTitle className="text-sm font-medium text-amber-700">قيمة الهدر</CardTitle>
+                      <CardTitle className="text-sm font-medium text-amber-700">قيمة الهدر الفعلي</CardTitle>
                     </CardHeader>
                     <CardContent>
                       <div className="text-2xl font-bold text-amber-900" data-testid="text-waste-value">
-                        {formatCurrency(monthlyReport.summary.totalWasteValue)}
+                        —
                       </div>
                       <p className="text-xs text-amber-600 mt-1">ريال سعودي</p>
                     </CardContent>
@@ -354,11 +366,11 @@ export default function ProductionComparisonReports() {
                     <CardHeader>
                       <CardTitle className="flex items-center gap-2">
                         <PieChart className="h-5 w-5 text-amber-600" />
-                        الهدر حسب الفئة
+                        الفروقات حسب الفئة (ليس هدراً معتمداً)
                       </CardTitle>
                     </CardHeader>
                     <CardContent>
-                      {monthlyReport.byCategory?.length > 0 ? (
+                      {monthlyReport.byCategory?.length > 0 && monthlyReport.byCategory[0]?.waste != null ? (
                         <div className="h-[300px]">
                           <ResponsiveContainer width="100%" height="100%">
                             <RechartsPie>
@@ -380,6 +392,14 @@ export default function ProductionComparisonReports() {
                               <Tooltip formatter={(value: number) => formatNumber(value)} />
                             </RechartsPie>
                           </ResponsiveContainer>
+                        </div>
+                      ) : monthlyReport.byCategory?.length ? (
+                        <div className="space-y-2">
+                          {monthlyReport.byCategory.map((category: any) => (
+                            <div key={category.category} className="flex justify-between border-b py-2">
+                              <span>{category.category}</span><span>الفرق {formatNumber(category.variance)} · الهدر المعتمد —</span>
+                            </div>
+                          ))}
                         </div>
                       ) : (
                         <div className="flex items-center justify-center h-[300px] text-gray-500">
@@ -472,6 +492,17 @@ export default function ProductionComparisonReports() {
               <div className="flex items-center justify-center p-12">
                 <RefreshCw className="h-8 w-8 animate-spin text-amber-600" />
               </div>
+            ) : branchPerformance?.branches?.length > 0 && branchPerformance.branches[0]?.efficiency == null ? (
+              <Card><CardHeader><CardTitle>الفروقات الكمية الموثقة حسب الفرع</CardTitle>
+                <CardDescription>الكفاءة والهدر غير متاحين من إنتاج اليوم ومبيعات اليوم وحدهما؛ التغطية جزئية.</CardDescription>
+              </CardHeader><CardContent className="space-y-2">
+                {branchPerformance.branches.map((branch: any) => (
+                  <div key={branch.branchId} className="flex justify-between border-b py-2">
+                    <span>{getBranchName(branch.branchId)}</span>
+                    <span>الإنتاج {formatNumber(branch.totalProduced)} · المبيعات {formatNumber(branch.totalSold)} · الفرق {formatNumber(branch.totalVariance)}</span>
+                  </div>
+                ))}
+              </CardContent></Card>
             ) : branchPerformance?.branches?.length > 0 ? (
               <div className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -739,14 +770,14 @@ export default function ProductionComparisonReports() {
 
                   <Card>
                     <CardHeader className="pb-2">
-                      <CardTitle className="text-sm font-medium text-red-700">منتجات بها هدر</CardTitle>
+                      <CardTitle className="text-sm font-medium text-red-700">منتجات بها هدر معتمد</CardTitle>
                     </CardHeader>
                     <CardContent>
                       <div className="text-2xl font-bold text-red-600" data-testid="text-products-with-waste">
-                        {topWaste.productsWithWaste}
+                        {topWaste.productsWithWaste ?? "—"}
                       </div>
                       <p className="text-xs text-red-500 mt-1">
-                        {topWaste.totalUniqueProducts > 0 
+                        {topWaste.productsWithWaste != null && topWaste.totalUniqueProducts > 0
                           ? formatPercent((topWaste.productsWithWaste / topWaste.totalUniqueProducts) * 100)
                           : "0%"
                         }
@@ -760,7 +791,7 @@ export default function ProductionComparisonReports() {
                     </CardHeader>
                     <CardContent>
                       <div className="text-2xl font-bold text-amber-600" data-testid="text-total-waste-value">
-                        {formatCurrency(topWaste.topProducts.reduce((sum: number, p: any) => sum + p.totalWasteValue, 0))}
+                        —
                       </div>
                       <p className="text-xs text-amber-500 mt-1">لأعلى 10 منتجات</p>
                     </CardContent>
@@ -771,9 +802,9 @@ export default function ProductionComparisonReports() {
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                       <AlertTriangle className="h-5 w-5 text-red-500" />
-                      أعلى 10 منتجات هدراً بالقيمة
+                      أعلى 10 منتجات ذات فرق كمي (ليس هدراً معتمداً)
                     </CardTitle>
-                    <CardDescription>المنتجات الأكثر خسارة مالية</CardDescription>
+                    <CardDescription>الفروق اليومية لا تثبت خسارة مالية أو هدر مخزون</CardDescription>
                   </CardHeader>
                   <CardContent>
                     <div className="overflow-x-auto">
@@ -783,7 +814,7 @@ export default function ProductionComparisonReports() {
                             <th className="text-right py-3 px-2 text-sm font-medium text-gray-500">#</th>
                             <th className="text-right py-3 px-2 text-sm font-medium text-gray-500">المنتج</th>
                             <th className="text-right py-3 px-2 text-sm font-medium text-gray-500">الفئة</th>
-                            <th className="text-right py-3 px-2 text-sm font-medium text-gray-500">الكمية المهدرة</th>
+                            <th className="text-right py-3 px-2 text-sm font-medium text-gray-500">الفرق الكمي</th>
                             <th className="text-right py-3 px-2 text-sm font-medium text-gray-500">قيمة الهدر</th>
                             <th className="text-right py-3 px-2 text-sm font-medium text-gray-500">نسبة الهدر</th>
                             <th className="text-right py-3 px-2 text-sm font-medium text-gray-500">التكرار</th>
@@ -797,7 +828,7 @@ export default function ProductionComparisonReports() {
                               </td>
                               <td className="py-3 px-2 font-medium">{product.productName}</td>
                               <td className="py-3 px-2 text-gray-500">{product.category}</td>
-                              <td className="py-3 px-2">{formatNumber(product.totalWaste)}</td>
+                              <td className="py-3 px-2">{formatNumber(product.totalVariance)}</td>
                               <td className="py-3 px-2 text-red-600 font-bold">{formatCurrency(product.totalWasteValue)}</td>
                               <td className="py-3 px-2">
                                 <Badge variant={product.wastePercentage > 20 ? "destructive" : "secondary"}>

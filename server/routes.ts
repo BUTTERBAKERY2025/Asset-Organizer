@@ -23,7 +23,7 @@ import * as NotificationService from "./notification-service";
 import { computeBranchIssues, formatBranchIssuesMessage } from "./branch-issues";
 import { evaluateWasteGovernance, checkApprovalGate } from "./waste-governance";
 import type { AuthenticatedRequest } from "./types/express";
-import { eq, and, desc, inArray, gte, lte, lt, gt, sql, or, isNull, type SQL } from "drizzle-orm";
+import { eq, and, desc, inArray, gte, lte, lt, gt, sql, or, isNull, like, notLike, type SQL } from "drizzle-orm";
 import type { User } from "@shared/schema";
 import { groupPreparationSheet, invalidPreparationSheetOrderIds } from "@shared/central-kitchen-preparation-sheet";
 import { matchesCentralKitchenCatalogIdentity } from "@shared/central-kitchen-catalog";
@@ -37,6 +37,7 @@ import {
   productUpdateSchema,
 } from "@shared/product-mutations";
 import { createHash, randomInt, randomUUID } from "crypto";
+import { comparisonSalesFingerprint, comparisonSalesMetadata, parseComparisonSalesRows, resolveComparisonSalesRows, SALES_EVIDENCE_PREFIX, SalesFileValidationError } from "./comparison-sales-parser";
 import {
   MaterialTransferCreationError,
   databaseErrorCode,
@@ -207,6 +208,7 @@ import { insertBranchSchema, insertInventoryItemSchema, insertSavedFilterSchema,
 import { z } from "zod";
 import { registerKitchenRoutingRoutes, kitchenActionAllowed, getKitchenRouting, getKitchenRoutingBatch, routingActor, routingPersonEligible } from "./central-kitchen-routing";
 import { setupAuth, isAuthenticated, requirePermission, requireAnyPermission, getActiveBranchFilter, requireBranchAccess, canAccessBranch, isUserAdmin, getAllowedBranchIds, getEffectiveBranchFilter, getWarehouseKeeperEffectivePermissions, getBranchManagerEffectivePermissions, invalidateAuthCache, HR_MANAGER_MODULES, HR_SPECIALIST_PERMISSIONS, FINANCIAL_MANAGER_PERMISSIONS, OPERATIONS_MANAGER_PERMISSIONS, BRANCH_MANAGER_INTRINSIC_PERMISSIONS, hasCrossBranchHrReadAccess } from "./auth";
+import { comparisonBranchIds, comparisonDate, comparisonEvidence, comparisonRange, buildCanonicalComparisons, COMPARISON_REASON_PREFIX, COMPARISON_UNAVAILABLE } from "./production-comparison-evidence";
 import { authRateLimiter, biometricRateLimiter, uploadRateLimiter, apiRateLimiter, validateFileUpload, sanitizeFilename, trackLoginAttempt } from "./security";
 import { registerGovernanceRoutes } from "./governance-routes";
 import { registerFinancialReviewRoutes } from "./financial-review-routes";
@@ -19435,585 +19437,189 @@ export async function registerRoutes(
   });
 
   // ==================== Production vs Sales Comparisons ====================
-  
-  // Get all comparisons with filters
+  // Legacy daily_comparisons rows have no product ID, unit or source provenance.
+  // Do not publish their inferred difference as actual waste or comparable sales.
   app.get("/api/production-comparisons", isAuthenticated, requirePermission("production", "view"), async (req, res) => {
+    const { startDate, endDate, branchId } = req.query;
+    if (branchId !== undefined && typeof branchId !== "string") return res.status(400).json({ error: "معرف الفرع غير صالح" });
+    if ((startDate !== undefined && !comparisonDate(startDate)) ||
+        (endDate !== undefined && !comparisonDate(endDate)) ||
+        (startDate && endDate && !comparisonRange(startDate, endDate))) {
+      return res.status(400).json({ error: "نطاق التاريخ غير صالح" });
+    }
+    const scope = getEffectiveBranchFilter(req, branchId === "all" ? undefined : branchId as string | undefined);
+    if (!scope.hasAccess) return res.status(403).json({ error: "غير مصرح بالوصول" });
     try {
-      const { branchId, startDate, endDate, category } = req.query;
-      
-      // SECURITY: Use getEffectiveBranchFilter for multi-branch support
-      const queryBranchId = branchId as string | undefined;
-      const branchFilter = getEffectiveBranchFilter(req, queryBranchId !== "all" ? queryBranchId : undefined);
-      
-      if (!branchFilter.hasAccess) {
-        return res.status(403).json({ error: "غير مصرح بالوصول" });
+      const ids = await comparisonBranchIds(scope.branchIds);
+      if (!ids.length) return res.json([]);
+      const filters: SQL[] = [inArray(dailyComparisons.branchId, ids),
+        like(dailyComparisons.statusReason, `${COMPARISON_REASON_PREFIX}%`)];
+      if (startDate) filters.push(gte(dailyComparisons.comparisonDate, startDate as string));
+      if (endDate) filters.push(lte(dailyComparisons.comparisonDate, endDate as string));
+      if (req.query.category && req.query.category !== "all" && typeof req.query.category === "string") {
+        filters.push(eq(dailyComparisons.productCategory, req.query.category));
       }
-      
-      const conditions: SQL[] = [];
-      if (branchFilter.singleBranchId) {
-        conditions.push(eq(dailyComparisons.branchId, branchFilter.singleBranchId));
-      } else if (branchFilter.branchIds) {
-        conditions.push(inArray(dailyComparisons.branchId, branchFilter.branchIds));
-      }
-      if (startDate) {
-        conditions.push(gte(dailyComparisons.comparisonDate, startDate as string));
-      }
-      if (endDate) {
-        conditions.push(lte(dailyComparisons.comparisonDate, endDate as string));
-      }
-      if (category && category !== "all") {
-        conditions.push(eq(dailyComparisons.productCategory, category as string));
-      }
-      
-      let query = db.select().from(dailyComparisons);
-      if (conditions.length > 0) {
-        query = query.where(and(...conditions)) as typeof query;
-      }
-      const comparisons = await query.orderBy(desc(dailyComparisons.comparisonDate));
-      
-      res.json(comparisons);
+      res.json(await db.select().from(dailyComparisons).where(and(...filters)).orderBy(desc(dailyComparisons.comparisonDate)));
     } catch (error) {
-      console.error("Error fetching comparisons:", error);
-      res.status(500).json({ error: "Failed to fetch comparisons" });
+      console.error("Comparison read failed:", error);
+      res.status(500).json({ error: "تعذر قراءة المقارنات" });
     }
   });
-
-  // Get comparison summary
   app.get("/api/production-comparisons/summary", isAuthenticated, requirePermission("production", "view"), async (req, res) => {
+    const { startDate, endDate, branchId } = req.query;
+    if (branchId !== undefined && typeof branchId !== "string") return res.status(400).json({ error: "معرف الفرع غير صالح" });
+    if ((startDate !== undefined && !comparisonDate(startDate)) ||
+        (endDate !== undefined && !comparisonDate(endDate)) ||
+        (startDate && endDate && !comparisonRange(startDate, endDate))) {
+      return res.status(400).json({ error: "نطاق التاريخ غير صالح" });
+    }
+    const scope = getEffectiveBranchFilter(req, branchId === "all" ? undefined : branchId as string | undefined);
+    if (!scope.hasAccess) return res.status(403).json({ error: "غير مصرح بالوصول" });
     try {
-      const { branchId, startDate, endDate } = req.query;
-      
-      // SECURITY: Use getEffectiveBranchFilter for multi-branch support
-      const queryBranchId = branchId as string | undefined;
-      const branchFilter = getEffectiveBranchFilter(req, queryBranchId !== "all" ? queryBranchId : undefined);
-      
-      if (!branchFilter.hasAccess) {
-        return res.status(403).json({ error: "غير مصرح بالوصول" });
-      }
-      
-      const conditions: SQL[] = [];
-      if (branchFilter.singleBranchId) {
-        conditions.push(eq(dailyComparisons.branchId, branchFilter.singleBranchId));
-      } else if (branchFilter.branchIds) {
-        conditions.push(inArray(dailyComparisons.branchId, branchFilter.branchIds));
-      }
-      if (startDate) {
-        conditions.push(gte(dailyComparisons.comparisonDate, startDate as string));
-      }
-      if (endDate) {
-        conditions.push(lte(dailyComparisons.comparisonDate, endDate as string));
-      }
-      
-      let query = db.select().from(dailyComparisons);
-      if (conditions.length > 0) {
-        query = query.where(and(...conditions)) as typeof query;
-      }
-      const comparisons = await query;
-      
-      const summary = {
-        totalProduced: comparisons.reduce((sum, c) => sum + (c.producedQuantity || 0), 0),
-        totalSold: comparisons.reduce((sum, c) => sum + (c.soldQuantity || 0), 0),
-        totalWaste: comparisons.filter(c => (c.difference || 0) > 0).reduce((sum, c) => sum + (c.difference || 0), 0),
-        totalShortage: comparisons.filter(c => (c.difference || 0) < 0).reduce((sum, c) => sum + Math.abs(c.difference || 0), 0),
-        productionValue: comparisons.reduce((sum, c) => sum + (c.productionValue || 0), 0),
-        salesValue: comparisons.reduce((sum, c) => sum + (c.salesValue || 0), 0),
-        recordCount: comparisons.length,
-      };
-      
-      res.json(summary);
+      const branchIds = await comparisonBranchIds(scope.branchIds);
+      const coverage = startDate && endDate ? await comparisonEvidence(branchIds, startDate as string, endDate as string) : null;
+      const filters: SQL[] = [inArray(dailyComparisons.branchId, branchIds),
+        like(dailyComparisons.statusReason, `${COMPARISON_REASON_PREFIX}%`)];
+      if (startDate) filters.push(gte(dailyComparisons.comparisonDate, startDate as string));
+      if (endDate) filters.push(lte(dailyComparisons.comparisonDate, endDate as string));
+      const rows = branchIds.length ? await db.select().from(dailyComparisons).where(and(...filters)) : [];
+      res.json({ available: rows.length > 0, reason: rows.length ? null : COMPARISON_UNAVAILABLE, coverage,
+        totalProduced: rows.length ? rows.reduce((n, r) => n + (r.producedQuantity ?? 0), 0) : null,
+        totalSold: rows.length ? rows.reduce((n, r) => n + (r.soldQuantity ?? 0), 0) : null,
+        // Variance is not approved waste or stock shortage.
+        totalVariance: rows.length ? rows.reduce((n, r) => n + (r.difference ?? 0), 0) : null,
+        totalWaste: null, totalShortage: null, productionValue: null,
+        salesValue: rows.length ? rows.reduce((n, r) => n + (r.salesValue ?? 0), 0) : null,
+        recordCount: rows.length });
     } catch (error) {
-      console.error("Error fetching comparison summary:", error);
-      res.status(500).json({ error: "Failed to fetch summary" });
+      console.error("Comparison evidence failed:", error);
+      res.status(500).json({ error: "تعذر قراءة أدلة المقارنة" });
     }
   });
-
-  // ========== Production Comparison Reports API ==========
-  
-  // Monthly Waste Report - comprehensive waste analysis
-  app.get("/api/production-comparison-reports/monthly-waste", isAuthenticated, requirePermission("production", "view"), async (req, res) => {
-    try {
-      const { year, month, branchId } = req.query;
-      
-      // SECURITY: Use getEffectiveBranchFilter for multi-branch support
-      const queryBranchId = branchId as string | undefined;
-      const branchFilter = getEffectiveBranchFilter(req, queryBranchId !== "all" ? queryBranchId : undefined);
-      
-      if (!branchFilter.hasAccess) {
-        return res.status(403).json({ error: "غير مصرح بالوصول" });
-      }
-      
-      // Validate year and month with sensible defaults
-      const currentDate = new Date();
-      let targetYear = parseInt(year as string);
-      let targetMonth = parseInt(month as string);
-      
-      if (isNaN(targetYear) || targetYear < 2020 || targetYear > 2030) {
-        targetYear = currentDate.getFullYear();
-      }
-      if (isNaN(targetMonth) || targetMonth < 1 || targetMonth > 12) {
-        targetMonth = currentDate.getMonth() + 1;
-      }
-      
-      // Calculate date range for the month
-      const startDate = `${targetYear}-${String(targetMonth).padStart(2, '0')}-01`;
-      const endDate = new Date(targetYear, targetMonth, 0).toISOString().split('T')[0];
-      
-      const conditions: any[] = [
-        gte(dailyComparisons.comparisonDate, startDate),
-        lte(dailyComparisons.comparisonDate, endDate),
-      ];
-      
-      if (branchFilter.singleBranchId) {
-        conditions.push(eq(dailyComparisons.branchId, branchFilter.singleBranchId));
-      } else if (branchFilter.branchIds) {
-        conditions.push(inArray(dailyComparisons.branchId, branchFilter.branchIds));
-      }
-      
-      const comparisons = await db
-        .select()
-        .from(dailyComparisons)
-        .where(and(...conditions));
-      
-      // Calculate totals
-      const totalProduced = comparisons.reduce((sum, c) => sum + (c.producedQuantity || 0), 0);
-      const totalSold = comparisons.reduce((sum, c) => sum + (c.soldQuantity || 0), 0);
-      const wasteRecords = comparisons.filter(c => c.status === "waste" || (c.difference || 0) > 0);
-      const totalWasteQuantity = wasteRecords.reduce((sum, c) => sum + Math.max(0, c.difference || 0), 0);
-      const totalWasteValue = comparisons.reduce((sum, c) => sum + (c.wasteValue || 0), 0);
-      const totalProductionValue = comparisons.reduce((sum, c) => sum + (c.productionValue || 0), 0);
-      const totalSalesValue = comparisons.reduce((sum, c) => sum + (c.salesValue || 0), 0);
-      
-      // Group by category
-      const categoryStats: Record<string, { produced: number; sold: number; waste: number; wasteValue: number }> = {};
-      comparisons.forEach(c => {
-        const cat = c.productCategory || "أخرى";
-        if (!categoryStats[cat]) {
-          categoryStats[cat] = { produced: 0, sold: 0, waste: 0, wasteValue: 0 };
-        }
-        categoryStats[cat].produced += c.producedQuantity || 0;
-        categoryStats[cat].sold += c.soldQuantity || 0;
-        categoryStats[cat].waste += Math.max(0, c.difference || 0);
-        categoryStats[cat].wasteValue += c.wasteValue || 0;
-      });
-      
-      // Group by branch
-      const branchStats: Record<string, { produced: number; sold: number; waste: number; wasteValue: number; efficiency: number }> = {};
-      comparisons.forEach(c => {
-        const branch = c.branchId;
-        if (!branchStats[branch]) {
-          branchStats[branch] = { produced: 0, sold: 0, waste: 0, wasteValue: 0, efficiency: 0 };
-        }
-        branchStats[branch].produced += c.producedQuantity || 0;
-        branchStats[branch].sold += c.soldQuantity || 0;
-        branchStats[branch].waste += Math.max(0, c.difference || 0);
-        branchStats[branch].wasteValue += c.wasteValue || 0;
-      });
-      
-      // Calculate efficiency for each branch
-      Object.keys(branchStats).forEach(branch => {
-        const stats = branchStats[branch];
-        stats.efficiency = stats.produced > 0 ? (stats.sold / stats.produced) * 100 : 0;
-      });
-      
-      // Top 10 waste products
-      const productWaste: Record<string, { name: string; category: string; waste: number; wasteValue: number }> = {};
-      comparisons.forEach(c => {
-        const key = c.productName;
-        if (!productWaste[key]) {
-          productWaste[key] = { name: c.productName, category: c.productCategory || "أخرى", waste: 0, wasteValue: 0 };
-        }
-        productWaste[key].waste += Math.max(0, c.difference || 0);
-        productWaste[key].wasteValue += c.wasteValue || 0;
-      });
-      
-      const topWasteProducts = Object.values(productWaste)
-        .sort((a, b) => b.wasteValue - a.wasteValue)
-        .slice(0, 10);
-      
-      res.json({
-        period: { year: targetYear, month: targetMonth, startDate, endDate },
-        summary: {
-          totalProduced,
-          totalSold,
-          totalWasteQuantity,
-          totalWasteValue,
-          totalProductionValue,
-          totalSalesValue,
-          efficiency: totalProduced > 0 ? (totalSold / totalProduced) * 100 : 0,
-          wastePercentage: totalProduced > 0 ? (totalWasteQuantity / totalProduced) * 100 : 0,
-          recordCount: comparisons.length,
-        },
-        byCategory: Object.entries(categoryStats).map(([category, stats]) => ({
-          category,
-          ...stats,
-          wastePercentage: stats.produced > 0 ? (stats.waste / stats.produced) * 100 : 0,
-        })),
-        byBranch: Object.entries(branchStats).map(([branchId, stats]) => ({
-          branchId,
-          ...stats,
-        })),
-        topWasteProducts,
-      });
-    } catch (error) {
-      console.error("Error generating monthly waste report:", error);
-      res.status(500).json({ error: "فشل إنشاء التقرير الشهري" });
+  // Historical inferred waste must not leak through aggregate/export endpoints.
+  app.get([
+    "/api/production-comparison-reports/monthly-waste",
+    "/api/production-comparison-reports/branch-performance",
+    "/api/production-comparison-reports/trends",
+    "/api/production-comparison-reports/top-waste-products",
+    "/api/production-comparisons/export",
+  ], isAuthenticated, requirePermission("production", "view"), async (req, res) => {
+    const branchId = req.query.branchId;
+    if (branchId !== undefined && typeof branchId !== "string") return res.status(400).json({ error: "معرف الفرع غير صالح" });
+    const scope = getEffectiveBranchFilter(req, branchId === "all" ? undefined : branchId as string | undefined);
+    if (!scope.hasAccess) return res.status(403).json({ error: "غير مصرح بالوصول" });
+    const { startDate, endDate, year, month } = req.query;
+    if ((startDate !== undefined && !comparisonDate(startDate)) || (endDate !== undefined && !comparisonDate(endDate)) ||
+        (startDate && endDate && !comparisonRange(startDate, endDate)) ||
+        (year !== undefined && (typeof year !== "string" || !/^\d{4}$/.test(year) || Number(year) < 1)) ||
+        (month !== undefined && (typeof month !== "string" || !/^(?:0?[1-9]|1[0-2])$/.test(month)))) {
+      return res.status(400).json({ error: "نطاق التاريخ غير صالح" });
     }
-  });
-
-  // Branch Performance Comparison Report
-  app.get("/api/production-comparison-reports/branch-performance", isAuthenticated, requirePermission("production", "view"), async (req, res) => {
     try {
-      const { startDate, endDate, branchId } = req.query;
-      
-      // SECURITY: Use getEffectiveBranchFilter for multi-branch support
-      const queryBranchId = branchId as string | undefined;
-      const branchFilter = getEffectiveBranchFilter(req, queryBranchId !== "all" ? queryBranchId : undefined);
-      
-      if (!branchFilter.hasAccess) {
-        return res.status(403).json({ error: "غير مصرح بالوصول" });
+      const ids = await comparisonBranchIds(scope.branchIds);
+      const current = new Date();
+      const targetYear = year === undefined ? current.getFullYear() : Number(year);
+      const targetMonth = month === undefined ? current.getMonth() + 1 : Number(month);
+      const from = req.path.endsWith("/monthly-waste")
+        ? `${targetYear}-${String(targetMonth).padStart(2, "0")}-01` : startDate as string | undefined;
+      const to = req.path.endsWith("/monthly-waste")
+        ? new Date(Date.UTC(targetYear, targetMonth, 0)).toISOString().slice(0, 10) : endDate as string | undefined;
+      const filters: SQL[] = [inArray(dailyComparisons.branchId, ids),
+        like(dailyComparisons.statusReason, `${COMPARISON_REASON_PREFIX}%`)];
+      if (from) filters.push(gte(dailyComparisons.comparisonDate, from));
+      if (to) filters.push(lte(dailyComparisons.comparisonDate, to));
+      if (req.path.endsWith("/export") && req.query.category && req.query.category !== "all" &&
+          typeof req.query.category === "string") {
+        filters.push(eq(dailyComparisons.productCategory, req.query.category));
       }
-      
-      const conditions: SQL[] = [];
-      if (startDate) conditions.push(gte(dailyComparisons.comparisonDate, startDate as string));
-      if (endDate) conditions.push(lte(dailyComparisons.comparisonDate, endDate as string));
-      if (branchFilter.singleBranchId) {
-        conditions.push(eq(dailyComparisons.branchId, branchFilter.singleBranchId));
-      } else if (branchFilter.branchIds) {
-        conditions.push(inArray(dailyComparisons.branchId, branchFilter.branchIds));
-      }
-      
-      const comparisons = await db
-        .select()
-        .from(dailyComparisons)
-        .where(conditions.length > 0 ? and(...conditions) : sql`true`);
-      
-      // Group by branch
-      const branchStats: Record<string, {
-        branchId: string;
-        totalProduced: number;
-        totalSold: number;
-        totalWaste: number;
-        totalWasteValue: number;
-        recordCount: number;
-        daysActive: Set<string>;
-      }> = {};
-      
-      comparisons.forEach(c => {
-        const branch = c.branchId;
-        if (!branchStats[branch]) {
-          branchStats[branch] = {
-            branchId: branch,
-            totalProduced: 0,
-            totalSold: 0,
-            totalWaste: 0,
-            totalWasteValue: 0,
-            recordCount: 0,
-            daysActive: new Set(),
-          };
+      const rows = ids.length ? await db.select().from(dailyComparisons).where(and(...filters)) : [];
+      if (req.path.endsWith("/export")) {
+        const XLSX = (await import("xlsx")).default;
+        const data = rows.map(r => ({ "التاريخ": r.comparisonDate, "الفرع": r.branchId,
+          "المنتج": r.productName, "الإنتاج الفعلي": r.producedQuantity, "المبيعات الموثقة": r.soldQuantity,
+          "الفرق (ليس هدراً)": r.difference, "قيمة المبيعات": r.salesValue }));
+        const sheet = XLSX.utils.json_to_sheet(data);
+        if (req.query.format === "csv") {
+          res.setHeader("Content-Type", "text/csv; charset=utf-8");
+          return res.send("\uFEFF" + XLSX.utils.sheet_to_csv(sheet));
         }
-        branchStats[branch].totalProduced += c.producedQuantity || 0;
-        branchStats[branch].totalSold += c.soldQuantity || 0;
-        branchStats[branch].totalWaste += Math.max(0, c.difference || 0);
-        branchStats[branch].totalWasteValue += c.wasteValue || 0;
-        branchStats[branch].recordCount++;
-        branchStats[branch].daysActive.add(c.comparisonDate);
-      });
-      
-      const branchPerformance = Object.values(branchStats).map(stats => ({
-        branchId: stats.branchId,
-        totalProduced: stats.totalProduced,
-        totalSold: stats.totalSold,
-        totalWaste: stats.totalWaste,
-        totalWasteValue: stats.totalWasteValue,
-        efficiency: stats.totalProduced > 0 ? (stats.totalSold / stats.totalProduced) * 100 : 0,
-        wastePercentage: stats.totalProduced > 0 ? (stats.totalWaste / stats.totalProduced) * 100 : 0,
-        recordCount: stats.recordCount,
-        daysActive: stats.daysActive.size,
-        avgDailyProduction: stats.daysActive.size > 0 ? stats.totalProduced / stats.daysActive.size : 0,
-        avgDailyWaste: stats.daysActive.size > 0 ? stats.totalWaste / stats.daysActive.size : 0,
-      }));
-      
-      // Sort by efficiency (best first)
-      branchPerformance.sort((a, b) => b.efficiency - a.efficiency);
-      
-      res.json({
-        period: { startDate, endDate },
-        branches: branchPerformance,
-        overallStats: {
-          totalBranches: branchPerformance.length,
-          bestBranch: branchPerformance[0]?.branchId || null,
-          worstBranch: branchPerformance[branchPerformance.length - 1]?.branchId || null,
-          avgEfficiency: branchPerformance.length > 0 
-            ? branchPerformance.reduce((sum, b) => sum + b.efficiency, 0) / branchPerformance.length 
-            : 0,
-        },
-      });
-    } catch (error) {
-      console.error("Error generating branch performance report:", error);
-      res.status(500).json({ error: "فشل إنشاء تقرير أداء الفروع" });
-    }
-  });
-
-  // Trend Analysis Report - daily/weekly trends
-  app.get("/api/production-comparison-reports/trends", isAuthenticated, requirePermission("production", "view"), async (req, res) => {
-    try {
-      const { startDate, endDate, branchId, groupBy: rawGroupBy } = req.query;
-      
-      // SECURITY: Use getEffectiveBranchFilter for multi-branch support
-      const queryBranchId = branchId as string | undefined;
-      const branchFilter = getEffectiveBranchFilter(req, queryBranchId !== "all" ? queryBranchId : undefined);
-      
-      if (!branchFilter.hasAccess) {
-        return res.status(403).json({ error: "غير مصرح بالوصول" });
-      }
-      
-      // Validate groupBy parameter
-      const validGroupByOptions = ["daily", "weekly", "monthly"];
-      const groupBy = validGroupByOptions.includes(rawGroupBy as string) ? rawGroupBy : "daily";
-      
-      const conditions: SQL[] = [];
-      if (startDate) conditions.push(gte(dailyComparisons.comparisonDate, startDate as string));
-      if (endDate) conditions.push(lte(dailyComparisons.comparisonDate, endDate as string));
-      if (branchFilter.singleBranchId) {
-        conditions.push(eq(dailyComparisons.branchId, branchFilter.singleBranchId));
-      } else if (branchFilter.branchIds) {
-        conditions.push(inArray(dailyComparisons.branchId, branchFilter.branchIds));
-      }
-      
-      const comparisons = await db
-        .select()
-        .from(dailyComparisons)
-        .where(conditions.length > 0 ? and(...conditions) : sql`true`)
-        .orderBy(dailyComparisons.comparisonDate);
-      
-      // Group by period
-      const trendData: Record<string, {
-        period: string;
-        produced: number;
-        sold: number;
-        waste: number;
-        wasteValue: number;
-        recordCount: number;
-      }> = {};
-      
-      comparisons.forEach(c => {
-        let periodKey: string;
-        const date = new Date(c.comparisonDate);
-        
-        if (groupBy === "weekly") {
-          // Get week number
-          const weekStart = new Date(date);
-          weekStart.setDate(date.getDate() - date.getDay());
-          periodKey = weekStart.toISOString().split('T')[0];
-        } else if (groupBy === "monthly") {
-          periodKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-        } else {
-          periodKey = c.comparisonDate;
-        }
-        
-        if (!trendData[periodKey]) {
-          trendData[periodKey] = { period: periodKey, produced: 0, sold: 0, waste: 0, wasteValue: 0, recordCount: 0 };
-        }
-        trendData[periodKey].produced += c.producedQuantity || 0;
-        trendData[periodKey].sold += c.soldQuantity || 0;
-        trendData[periodKey].waste += Math.max(0, c.difference || 0);
-        trendData[periodKey].wasteValue += c.wasteValue || 0;
-        trendData[periodKey].recordCount++;
-      });
-      
-      const trends = Object.values(trendData)
-        .sort((a, b) => a.period.localeCompare(b.period))
-        .map(t => ({
-          ...t,
-          efficiency: t.produced > 0 ? (t.sold / t.produced) * 100 : 0,
-          wastePercentage: t.produced > 0 ? (t.waste / t.produced) * 100 : 0,
-        }));
-      
-      res.json({
-        period: { startDate, endDate },
-        groupBy,
-        trends,
-      });
-    } catch (error) {
-      console.error("Error generating trends report:", error);
-      res.status(500).json({ error: "فشل إنشاء تقرير الاتجاهات" });
-    }
-  });
-
-  // Top Waste Products Report
-  app.get("/api/production-comparison-reports/top-waste-products", isAuthenticated, requirePermission("production", "view"), async (req, res) => {
-    try {
-      const { startDate, endDate, branchId, limit: rawLimit } = req.query;
-      
-      // SECURITY: Use getEffectiveBranchFilter for multi-branch support
-      const queryBranchId = branchId as string | undefined;
-      const branchFilter = getEffectiveBranchFilter(req, queryBranchId !== "all" ? queryBranchId : undefined);
-      
-      if (!branchFilter.hasAccess) {
-        return res.status(403).json({ error: "غير مصرح بالوصول" });
-      }
-      
-      // Validate limit parameter (1-100, default 10)
-      let limit = parseInt(rawLimit as string);
-      if (isNaN(limit) || limit < 1) limit = 10;
-      if (limit > 100) limit = 100;
-      
-      const conditions: SQL[] = [];
-      if (startDate) conditions.push(gte(dailyComparisons.comparisonDate, startDate as string));
-      if (endDate) conditions.push(lte(dailyComparisons.comparisonDate, endDate as string));
-      if (branchFilter.singleBranchId) {
-        conditions.push(eq(dailyComparisons.branchId, branchFilter.singleBranchId));
-      } else if (branchFilter.branchIds) {
-        conditions.push(inArray(dailyComparisons.branchId, branchFilter.branchIds));
-      }
-      
-      const comparisons = await db
-        .select()
-        .from(dailyComparisons)
-        .where(conditions.length > 0 ? and(...conditions) : sql`true`);
-      
-      // Group by product
-      const productStats: Record<string, {
-        productName: string;
-        category: string;
-        totalProduced: number;
-        totalSold: number;
-        totalWaste: number;
-        totalWasteValue: number;
-        occurrences: number;
-      }> = {};
-      
-      comparisons.forEach(c => {
-        const key = c.productName;
-        if (!productStats[key]) {
-          productStats[key] = {
-            productName: c.productName,
-            category: c.productCategory || "أخرى",
-            totalProduced: 0,
-            totalSold: 0,
-            totalWaste: 0,
-            totalWasteValue: 0,
-            occurrences: 0,
-          };
-        }
-        productStats[key].totalProduced += c.producedQuantity || 0;
-        productStats[key].totalSold += c.soldQuantity || 0;
-        productStats[key].totalWaste += Math.max(0, c.difference || 0);
-        productStats[key].totalWasteValue += c.wasteValue || 0;
-        productStats[key].occurrences++;
-      });
-      
-      const topProducts = Object.values(productStats)
-        .filter(p => p.totalWaste > 0 || p.totalWasteValue > 0)
-        .sort((a, b) => b.totalWasteValue - a.totalWasteValue)
-        .slice(0, limit)
-        .map(p => ({
-          ...p,
-          avgWastePerOccurrence: p.occurrences > 0 ? p.totalWaste / p.occurrences : 0,
-          wastePercentage: p.totalProduced > 0 ? (p.totalWaste / p.totalProduced) * 100 : 0,
-        }));
-      
-      res.json({
-        period: { startDate, endDate },
-        branchId: branchFilter.singleBranchId || "all",
-        topProducts,
-        totalUniqueProducts: Object.keys(productStats).length,
-        productsWithWaste: Object.values(productStats).filter(p => p.totalWaste > 0).length,
-      });
-    } catch (error) {
-      console.error("Error generating top waste products report:", error);
-      res.status(500).json({ error: "فشل إنشاء تقرير المنتجات الأكثر هدراً" });
-    }
-  });
-
-  // Export comparisons to Excel/CSV (with branch isolation)
-  app.get("/api/production-comparisons/export", isAuthenticated, requirePermission("production", "view"), async (req, res) => {
-    try {
-      const XLSX = (await import("xlsx")).default;
-      const { branchId, startDate, endDate, category, format: exportFormat = "xlsx" } = req.query;
-      
-      // SECURITY: Apply branch filter
-      const queryBranchId = parseQueryString(branchId !== "all" ? branchId : undefined);
-      const branchFilter = getEffectiveBranchFilter(req, queryBranchId);
-
-      if (!branchFilter.hasAccess) {
-        return res.status(403).json({ error: "غير مصرح بالوصول" });
-      }
-      
-      const conditions: SQL[] = [];
-      if (branchFilter.singleBranchId) {
-        conditions.push(eq(dailyComparisons.branchId, branchFilter.singleBranchId));
-      } else if (branchFilter.branchIds) {
-        conditions.push(inArray(dailyComparisons.branchId, branchFilter.branchIds));
-      }
-      if (startDate) {
-        conditions.push(gte(dailyComparisons.comparisonDate, startDate as string));
-      }
-      if (endDate) {
-        conditions.push(lte(dailyComparisons.comparisonDate, endDate as string));
-      }
-      if (category && category !== "all") {
-        conditions.push(eq(dailyComparisons.productCategory, category as string));
-      }
-      
-      let query = db.select().from(dailyComparisons);
-      if (conditions.length > 0) {
-        query = query.where(and(...conditions)) as typeof query;
-      }
-      const comparisons = await query.orderBy(desc(dailyComparisons.comparisonDate));
-      
-      // Prepare data for export
-      const exportData = comparisons.map((c) => ({
-        "التاريخ": c.comparisonDate,
-        "الفرع": c.branchId,
-        "المنتج": c.productName,
-        "الفئة": c.productCategory || "أخرى",
-        "الإنتاج": c.producedQuantity || 0,
-        "المبيعات": c.soldQuantity || 0,
-        "الفرق": c.difference || 0,
-        "نسبة الفرق %": c.differencePercent || 0,
-        "قيمة الإنتاج": c.productionValue || 0,
-        "قيمة المبيعات": c.salesValue || 0,
-        "قيمة الهدر": c.wasteValue || 0,
-        "الحالة": c.status,
-        "قابل للتخزين": c.isStorable ? "نعم" : "لا",
-      }));
-      
-      const wb = XLSX.utils.book_new();
-      const ws = XLSX.utils.json_to_sheet(exportData);
-      XLSX.utils.book_append_sheet(wb, ws, "المقارنات");
-      
-      // Add summary sheet
-      const totalProduced = comparisons.reduce((sum, c) => sum + (c.producedQuantity || 0), 0);
-      const totalSold = comparisons.reduce((sum, c) => sum + (c.soldQuantity || 0), 0);
-      const totalWaste = comparisons.filter(c => (c.difference || 0) > 0).reduce((sum, c) => sum + (c.difference || 0), 0);
-      const totalWasteValue = comparisons.reduce((sum, c) => sum + (c.wasteValue || 0), 0);
-      
-      const summaryData = [
-        { "البند": "إجمالي الإنتاج", "القيمة": totalProduced },
-        { "البند": "إجمالي المبيعات", "القيمة": totalSold },
-        { "البند": "إجمالي الهدر (كمية)", "القيمة": totalWaste },
-        { "البند": "إجمالي قيمة الهدر (ر.س)", "القيمة": totalWasteValue },
-        { "البند": "عدد السجلات", "القيمة": comparisons.length },
-        { "البند": "نسبة الكفاءة %", "القيمة": totalProduced > 0 ? ((totalSold / totalProduced) * 100).toFixed(2) : 0 },
-      ];
-      const summaryWs = XLSX.utils.json_to_sheet(summaryData);
-      XLSX.utils.book_append_sheet(wb, summaryWs, "ملخص");
-      
-      if (exportFormat === "csv") {
-        const csv = XLSX.utils.sheet_to_csv(ws);
-        res.setHeader("Content-Type", "text/csv; charset=utf-8");
-        res.setHeader("Content-Disposition", `attachment; filename="comparisons_${startDate || "all"}_${endDate || "all"}.csv"`);
-        res.send("\uFEFF" + csv); // BOM for Arabic support
-      } else {
-        const buffer = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
+        const book = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(book, sheet, "الفروقات الموثقة");
         res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-        res.setHeader("Content-Disposition", `attachment; filename="comparisons_${startDate || "all"}_${endDate || "all"}.xlsx"`);
-        res.send(buffer);
+        return res.send(XLSX.write(book, { type: "buffer", bookType: "xlsx" }));
       }
+      const sum = (entries: typeof rows, field: "producedQuantity" | "soldQuantity" | "difference" | "salesValue") =>
+        entries.reduce((n, row) => n + (row[field] ?? 0), 0);
+      const summary = (entries: typeof rows) => ({
+        totalProduced: entries.length ? sum(entries, "producedQuantity") : null,
+        totalSold: entries.length ? sum(entries, "soldQuantity") : null,
+        totalVariance: entries.length ? sum(entries, "difference") : null,
+        totalWasteQuantity: null, totalWasteValue: null, wastePercentage: null,
+        totalProductionValue: null, totalSalesValue: entries.length ? sum(entries, "salesValue") : null,
+        efficiency: null, recordCount: entries.length,
+      });
+      if (req.path.endsWith("/monthly-waste")) {
+        const byCategory = [...new Set(rows.map(r => r.productCategory || "أخرى"))].map(category => {
+          const entries = rows.filter(r => (r.productCategory || "أخرى") === category);
+          return { category, produced: sum(entries, "producedQuantity"), sold: sum(entries, "soldQuantity"),
+            variance: sum(entries, "difference"), waste: null, wasteValue: null, wastePercentage: null };
+        });
+        const byBranch = [...new Set(rows.map(r => r.branchId))].map(id => {
+          const entries = rows.filter(r => r.branchId === id);
+          return { branchId: id, produced: sum(entries, "producedQuantity"),
+            sold: sum(entries, "soldQuantity"), variance: sum(entries, "difference"),
+            waste: null, wasteValue: null, efficiency: null };
+        });
+        return res.json({ available: rows.length > 0, reason: rows.length ? null : COMPARISON_UNAVAILABLE,
+          period: { year: targetYear, month: targetMonth, startDate: from, endDate: to },
+          summary: summary(rows), byCategory, byBranch, topWasteProducts: [] });
+      }
+      if (req.path.endsWith("/branch-performance")) {
+        const branchRows = [...new Set(rows.map(r => r.branchId))].map(id => {
+          const entries = rows.filter(r => r.branchId === id);
+          return { branchId: id, ...summary(entries), totalWaste: null, totalWasteValue: null,
+            daysActive: new Set(entries.map(r => r.comparisonDate)).size };
+        });
+        return res.json({ available: rows.length > 0, period: { startDate, endDate }, branches: branchRows,
+          overallStats: { totalBranches: branchRows.length, bestBranch: null, worstBranch: null, avgEfficiency: null } });
+      }
+      if (req.path.endsWith("/trends")) {
+        const groupBy = ["daily", "weekly", "monthly"].includes(req.query.groupBy as string) ? req.query.groupBy : "daily";
+        const grouped = new Map<string, typeof rows>();
+        for (const row of rows) {
+          const d = new Date(`${row.comparisonDate}T00:00:00Z`);
+          if (groupBy === "weekly") d.setUTCDate(d.getUTCDate() - d.getUTCDay());
+          const key = groupBy === "monthly" ? row.comparisonDate.slice(0, 7)
+            : groupBy === "weekly" ? d.toISOString().slice(0, 10) : row.comparisonDate;
+          grouped.set(key, [...(grouped.get(key) ?? []), row]);
+        }
+        return res.json({ available: rows.length > 0, period: { startDate, endDate }, groupBy,
+          trends: [...grouped].map(([period, entries]) => ({
+            period, produced: sum(entries, "producedQuantity"), sold: sum(entries, "soldQuantity"),
+            variance: sum(entries, "difference"), waste: null, wasteValue: null, recordCount: entries.length,
+            efficiency: null, wastePercentage: null,
+          })).sort((a, b) => a.period.localeCompare(b.period)) });
+      }
+      const productIdOf = (row: typeof rows[number]) => {
+        try { return Number(JSON.parse(row.statusReason || "{}").productId) || row.id; }
+        catch { return row.id; }
+      };
+      const topProducts = [...new Set(rows.map(productIdOf))].map(productId => {
+        const entries = rows.filter(r => productIdOf(r) === productId);
+        return { productId, productName: entries[0].productName, category: entries[0]?.productCategory,
+          totalProduced: sum(entries, "producedQuantity"),
+          totalSold: sum(entries, "soldQuantity"), totalVariance: sum(entries, "difference"),
+          totalWaste: null, totalWasteValue: null, occurrences: entries.length, wastePercentage: null };
+      });
+      const limit = Number(req.query.limit);
+      return res.json({ available: rows.length > 0, period: { startDate, endDate },
+        branchId: scope.singleBranchId || "all", topProducts: topProducts
+          .sort((a, b) => Math.abs(b.totalVariance) - Math.abs(a.totalVariance))
+          .slice(0, Number.isInteger(limit) && limit > 0 ? Math.min(limit, 100) : 10),
+        totalUniqueProducts: topProducts.length, productsWithWaste: null });
     } catch (error) {
-      console.error("Error exporting comparisons:", error);
-      res.status(500).json({ error: "فشل تصدير البيانات" });
+      console.error("Comparison report failed:", error);
+      res.status(500).json({ error: "تعذر قراءة التقرير" });
     }
   });
 
@@ -20054,146 +19660,85 @@ export async function registerRoutes(
         if (!file) {
           return res.status(400).json({ error: "الملف مطلوب" });
         }
-        if (!branchId) {
+        if (typeof branchId !== "string" || !branchId.trim()) {
           return res.status(400).json({ error: "الفرع مطلوب" });
         }
         
         // SECURITY: Verify branch access for non-admins
-        if (!isUserAdmin(req)) {
-          const hasAccess = await canAccessBranch(req, branchId);
-          if (!hasAccess) {
-            return res.status(403).json({ error: "غير مصرح برفع ملفات لهذا الفرع" });
-          }
+        if (!await canAccessBranch(req, branchId)) {
+          return res.status(403).json({ error: "غير مصرح برفع ملفات لهذا الفرع" });
         }
         
         try {
-          const workbook = XLSX.read(file.buffer, { type: "buffer" });
-          const sheetName = workbook.SheetNames[0];
-          const worksheet = workbook.Sheets[sheetName];
-          const data = XLSX.utils.sheet_to_json(worksheet) as any[];
-          
-          if (data.length === 0) {
-            return res.status(400).json({ error: "الملف فارغ أو بتنسيق غير صحيح" });
-          }
-          
-          // Log first row columns for debugging
-          const firstRow = data[0];
-          const columns = Object.keys(firstRow);
-          console.log("Excel columns detected:", columns);
-          console.log("First row sample:", firstRow);
-          
-          // Create upload record
-          const [uploadRecord] = await db.insert(comparisonUploads).values({
-            branchId,
-            fileName: file.originalname,
-            fileType: "excel",
-            dataType: "sales",
-            totalRecords: data.length,
-            status: "processing",
-            uploadedBy: req.currentUser?.id,
-          }).returning();
-          
-          // Process each row
-          let importedCount = 0;
-          let totalValue = 0;
-          const uniqueProducts = new Set<string>();
-          let minDate: string | null = null;
-          let maxDate: string | null = null;
-          
-          for (const row of data) {
-            // Flexible column detection for various Foodics export formats
-            const dateValue = row["Date"] || row["التاريخ"] || row["date"] || row["تاريخ"] || 
-                              row["Business Date"] || row["تاريخ العمل"] || row["Order Date"] || row["تاريخ الطلب"] ||
-                              row["Created Date"] || row["تاريخ الإنشاء"] || row["Day"] || row["اليوم"] ||
-                              defaultDate; // Use defaultDate from form if no date column
-            const productName = row["Product Name"] || row["اسم المنتج"] || row["product"] || row["المنتج"] || row["Product"] ||
-                                row["Item Name"] || row["اسم الصنف"] || row["Item"] || row["الصنف"] || row["Name"] || row["الاسم"] ||
-                                row["SKU Name"] || row["اسم المنتج (SKU)"];
-            const quantity = parseInt(row["Quantity"] || row["الكمية"] || row["qty"] || row["كمية"] || 
-                                      row["Qty"] || row["Count"] || row["العدد"] || row["Sold Quantity"] || row["الكمية المباعة"] ||
-                                      row["Total Quantity"] || row["إجمالي الكمية"] || "0", 10);
-            const salesValue = parseFloat(row["Sales Value"] || row["قيمة المبيعات"] || row["value"] || row["القيمة"] || 
-                                          row["Total"] || row["الإجمالي"] || row["Amount"] || row["المبلغ"] ||
-                                          row["Net Sales"] || row["صافي المبيعات"] || row["Gross Sales"] || row["إجمالي المبيعات"] ||
-                                          row["Revenue"] || row["الإيراد"] || row["Sales"] || "0");
-            let category = row["Category"] || row["الفئة"] || row["category"] || 
-                             row["Product Category"] || row["فئة المنتج"] || row["Menu Category"] || row["فئة القائمة"] || null;
-            
-            if (!productName) {
-              console.log("Skipping row - missing productName:", { productName, row });
-              continue;
-            }
-            
-            // If no category from file, lookup from productStorageSettings
-            if (!category) {
-              const productNameTrimmed = productName.toString().trim();
-              const storageSetting = await db.select({ productCategory: productStorageSettings.productCategory })
-                .from(productStorageSettings)
-                .where(eq(productStorageSettings.productName, productNameTrimmed))
-                .limit(1);
-              if (storageSetting.length > 0 && storageSetting[0].productCategory) {
-                category = storageSetting[0].productCategory;
+          const workbook = XLSX.read(file.buffer, { type: "buffer", cellDates: false });
+          const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+          const rows = parseComparisonSalesRows(
+            worksheet ? XLSX.utils.sheet_to_json<Record<string, unknown>>(worksheet) : [], defaultDate
+          );
+          const fingerprint = comparisonSalesFingerprint(rows);
+          const periodStart = rows.reduce((min, row) => row.salesDate < min ? row.salesDate : min, rows[0].salesDate);
+          const periodEnd = rows.reduce((max, row) => row.salesDate > max ? row.salesDate : max, rows[0].salesDate);
+          const result = await db.transaction(async tx => {
+            await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext('comparison_sales'), hashtext(${branchId}))`);
+            const prior = await tx.select().from(comparisonUploads).where(and(
+              eq(comparisonUploads.branchId, branchId), eq(comparisonUploads.dataType, "sales"),
+              eq(comparisonUploads.status, "completed"),
+              lte(comparisonUploads.periodStart, periodEnd), gte(comparisonUploads.periodEnd, periodStart),
+            ));
+            const same = prior.find(upload => {
+              if (upload.periodStart !== periodStart || upload.periodEnd !== periodEnd ||
+                  !upload.errorMessage?.startsWith(SALES_EVIDENCE_PREFIX)) return false;
+              try {
+                const evidence = JSON.parse(upload.errorMessage.slice(SALES_EVIDENCE_PREFIX.length));
+                return evidence.fingerprint === fingerprint && Array.isArray(evidence.rows) &&
+                  evidence.rows.length === rows.length && evidence.rows.every((row: any) =>
+                    Number.isSafeInteger(row.productId) && row.unit === "piece");
+              } catch { return false; }
+            });
+            if (same) return { upload: same, reused: true as const };
+            if (prior.length) return { conflict: true as const };
+            // Old imports may lack upload dates or a completed metadata row.
+            const legacyRows = await tx.select({ id: dailySalesData.id }).from(dailySalesData).where(and(
+              eq(dailySalesData.branchId, branchId),
+              gte(dailySalesData.salesDate, periodStart), lte(dailySalesData.salesDate, periodEnd),
+            )).limit(1);
+            if (legacyRows.length) return { conflict: true as const };
+            const products = await storage.getAllProducts();
+            const resolved = resolveComparisonSalesRows(rows, products);
+            for (const row of resolved) {
+              const product = products.find(product => product.id === row.productId);
+              if (!isNewCatalogReferenceAllowed(product)) {
+                throw new SalesFileValidationError(`صف ${row.sourceLine}: المنتج غير نشط في الكتالوج`);
               }
             }
-            
-            if (!dateValue) {
-              console.log("Skipping row - missing dateValue and no defaultDate provided:", { dateValue, row });
-              continue;
-            }
-            
-            // Parse date
-            let salesDate: string;
-            if (typeof dateValue === "number") {
-              const excelDate = new Date((dateValue - 25569) * 86400 * 1000);
-              salesDate = excelDate.toISOString().split("T")[0];
-            } else {
-              const parsed = new Date(dateValue);
-              salesDate = isNaN(parsed.getTime()) ? new Date().toISOString().split("T")[0] : parsed.toISOString().split("T")[0];
-            }
-            
-            // Track date range
-            if (!minDate || salesDate < minDate) minDate = salesDate;
-            if (!maxDate || salesDate > maxDate) maxDate = salesDate;
-            
-            await db.insert(dailySalesData).values({
-              branchId,
-              salesDate,
-              productName: productName.toString().trim(),
-              productCategory: category?.toString().trim() || null,
-              quantitySold: quantity || 0,
-              salesValue: salesValue || 0,
-              uploadId: uploadRecord.id,
-            });
-            
-            importedCount++;
-            totalValue += salesValue || 0;
-            uniqueProducts.add(productName.toString().trim());
+            const totalValue = resolved.reduce((sum, row) => sum + row.salesValue, 0);
+            if (!Number.isFinite(totalValue) || totalValue > 3.402823e38)
+              throw new SalesFileValidationError("إجمالي قيمة المبيعات غير صالح");
+            const uniqueProducts = new Set(resolved.map(row => row.productId)).size;
+            const [upload] = await tx.insert(comparisonUploads).values({
+              branchId, fileName: file.originalname, fileType: "excel", dataType: "sales",
+              periodStart, periodEnd, totalRecords: rows.length, totalValue, uniqueProducts,
+              status: "completed", errorMessage: comparisonSalesMetadata(fingerprint, resolved), uploadedBy: req.currentUser?.id,
+            }).returning();
+            await tx.insert(dailySalesData).values(resolved.map(row => ({
+              salesDate: row.salesDate, productName: row.productName, productCategory: row.productCategory,
+              quantitySold: row.quantitySold, salesValue: row.salesValue, branchId, uploadId: upload.id,
+            })));
+            return { upload, reused: false as const };
+          });
+          if ("conflict" in result) {
+            return res.status(409).json({ error: "توجد مبيعات مستوردة لفترة متداخلة لهذا الفرع؛ يلزم مراجعة الاستبدال قبل رفع ملف آخر", code: "SALES_PERIOD_OVERLAP" });
           }
-          
-          // Update upload record
-          await db.update(comparisonUploads)
-            .set({
-              totalRecords: importedCount,
-              totalValue,
-              uniqueProducts: uniqueProducts.size,
-              periodStart: minDate,
-              periodEnd: maxDate,
-              status: "completed",
-            })
-            .where(eq(comparisonUploads.id, uploadRecord.id));
-          
-          res.json({
-            success: true,
-            uploadId: uploadRecord.id,
-            recordsImported: importedCount,
-            totalValue,
-            uniqueProducts: uniqueProducts.size,
-            periodStart: minDate,
-            periodEnd: maxDate,
+          return res.status(result.reused ? 200 : 201).json({
+            success: true, reused: result.reused, uploadId: result.upload.id,
+            recordsImported: result.upload.totalRecords, totalValue: result.upload.totalValue,
+            uniqueProducts: result.upload.uniqueProducts,
+            periodStart: result.upload.periodStart, periodEnd: result.upload.periodEnd,
           });
         } catch (parseError) {
-          console.error("Error parsing Excel file:", parseError);
-          res.status(400).json({ error: "فشل قراءة الملف - تأكد من صحة التنسيق" });
+          if (parseError instanceof SalesFileValidationError) return res.status(400).json({ error: parseError.message });
+          console.error("Error importing comparison sales:", parseError);
+          return res.status(500).json({ error: "فشل حفظ ملف المبيعات" });
         }
       });
     } catch (error) {
@@ -20205,10 +19750,13 @@ export async function registerRoutes(
   // Run comparison between production and sales
   app.post("/api/production-comparisons/run", isAuthenticated, requirePermission("production", "create"), async (req, res) => {
     try {
+      if (!req.body || typeof req.body !== "object" || Array.isArray(req.body)) {
+        return res.status(400).json({ error: "نطاق التاريخ غير صالح" });
+      }
       const { branchId, startDate, endDate } = req.body;
-      
-      if (!startDate || !endDate) {
-        return res.status(400).json({ error: "يجب تحديد نطاق التاريخ" });
+      if (!comparisonRange(startDate, endDate)) return res.status(400).json({ error: "نطاق التاريخ غير صالح" });
+      if (branchId !== undefined && (typeof branchId !== "string" || !branchId.trim())) {
+        return res.status(400).json({ error: "معرف الفرع غير صالح" });
       }
       
       // SECURITY: Apply branch filter
@@ -20217,354 +19765,64 @@ export async function registerRoutes(
       if (!branchFilter.hasAccess) {
         return res.status(403).json({ error: "غير مصرح بالوصول" });
       }
-      
-      const effectiveBranchId = branchFilter.singleBranchId;
-      
-      // Get sales data for the period
-      const salesConditions: any[] = [
-        gte(dailySalesData.salesDate, startDate),
-        lte(dailySalesData.salesDate, endDate),
-      ];
-      if (effectiveBranchId) {
-        salesConditions.push(eq(dailySalesData.branchId, effectiveBranchId));
-      }
-      
-      const salesData = await db
-        .select()
-        .from(dailySalesData)
-        .where(and(...salesConditions));
-      
-      // Get production orders for the period (approved, completed, or pending with produced quantities)
-      const productionConditions: any[] = [
-        gte(advancedProductionOrders.startDate, startDate),
-        lte(advancedProductionOrders.startDate, endDate),
-        or(
-          eq(advancedProductionOrders.status, "approved"),
-          eq(advancedProductionOrders.status, "completed"),
-          eq(advancedProductionOrders.status, "pending")
-        ),
-      ];
-      if (effectiveBranchId) {
-        productionConditions.push(eq(advancedProductionOrders.targetBranchId, effectiveBranchId));
-      }
-      
-      const productionOrders = await db
-        .select()
-        .from(advancedProductionOrders)
-        .where(and(...productionConditions));
-      
-      // Get production items for these orders
-      const orderIds = productionOrders.map(o => o.id);
-      let productionItems: any[] = [];
-      if (orderIds.length > 0) {
-        productionItems = await db
-          .select()
-          .from(productionOrderItems)
-          .where(inArray(productionOrderItems.orderId, orderIds));
-      }
-      
-      // Get display bar receipts for the period (actual received production at display bar)
-      const receiptConditions: any[] = [
-        gte(displayBarReceipts.receiptDate, startDate as string),
-        lte(displayBarReceipts.receiptDate, endDate as string),
-      ];
-      if (effectiveBranchId) {
-        receiptConditions.push(eq(displayBarReceipts.branchId, effectiveBranchId));
-      }
-      
-      const barReceipts = await db
-        .select({
-          id: displayBarReceipts.id,
-          branchId: displayBarReceipts.branchId,
-          productId: displayBarReceipts.productId,
-          receiptDate: displayBarReceipts.receiptDate,
-          quantity: displayBarReceipts.quantity,
-          productName: productsTable.name,
-          productCategory: productsTable.category,
-          basePrice: productsTable.basePrice,
-        })
-        .from(displayBarReceipts)
-        .leftJoin(productsTable, eq(displayBarReceipts.productId, productsTable.id))
-        .where(and(...receiptConditions));
-      
-      console.log(`[COMPARISON] Found ${barReceipts.length} display bar receipts, ${productionOrders.length} production orders`);
-      
-      // Build product name matching system
-      // Sales data has bilingual names like "Almond croissant - كرواسون اللوز"
-      // System products use Arabic-only names like "كرواسون اللوز"
-      
-      // Normalize Arabic text (remove diacritics, normalize alef/taa)
-      function normalizeArabic(text: string): string {
-        return text
-          .replace(/[\u064B-\u065F\u0670]/g, '') // remove tashkeel
-          .replace(/[أإآ]/g, 'ا') // normalize alef
-          .replace(/ة/g, 'ه') // normalize taa marbuta
-          .replace(/ى/g, 'ي') // normalize alef maqsura
-          .replace(/\s+/g, ' ')
-          .trim();
-      }
-      
-      // Extract Arabic text from a bilingual string
-      function extractArabic(text: string): string {
-        const arabicChars = text.match(/[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\s]+/g);
-        if (arabicChars) {
-          return arabicChars.join(' ').replace(/\s+/g, ' ').trim();
+      const branchIds = await comparisonBranchIds(branchFilter.branchIds);
+      if (!branchIds.length) return res.status(403).json({ error: "غير مصرح بالوصول" });
+      // This lock is shared with the uploader. It prevents a run from reading
+      // partially replaced uploads; transactions change comparisons only.
+      const result = await db.transaction(async tx => {
+        for (const id of [...branchIds].sort()) {
+          await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext('comparison_sales'), hashtext(${id}))`);
         }
-        return '';
-      }
-      
-      // Build lookup maps for matching
-      const allProductsData = await db.select({ name: productsTable.name, category: productsTable.category }).from(productsTable);
-      const systemProductNames = allProductsData.map(p => p.name).filter(Boolean) as string[];
-      const productCategoryMap = new Map<string, string>();
-      for (const p of allProductsData) {
-        if (p.name && p.category) productCategoryMap.set(p.name, p.category);
-      }
-      const exactNameMap = new Map<string, string>(); // normalized → original product name
-      const normalizedProductNames = new Map<string, string>(); // normalized arabic → original
-      for (const name of systemProductNames) {
-        exactNameMap.set(name.toLowerCase().trim(), name);
-        const normalized = normalizeArabic(name);
-        normalizedProductNames.set(normalized, name);
-      }
-      
-      // Cache for resolved names to avoid repeated lookups
-      const nameCache = new Map<string, string>();
-      
-      function resolveProductName(salesName: string): string {
-        if (!salesName) return salesName;
-        const cached = nameCache.get(salesName);
-        if (cached !== undefined) return cached;
-        
-        // 1. Exact match
-        if (exactNameMap.has(salesName.toLowerCase().trim())) {
-          const resolved = exactNameMap.get(salesName.toLowerCase().trim())!;
-          nameCache.set(salesName, resolved);
-          return resolved;
-        }
-        
-        // 2. Split by separator (- or –) and check each part
-        const separators = [' - ', ' – ', '- ', ' -', '-'];
-        for (const sep of separators) {
-          if (salesName.includes(sep)) {
-            const parts = salesName.split(sep).map(p => p.trim()).filter(Boolean);
-            for (const part of parts) {
-              if (exactNameMap.has(part.toLowerCase())) {
-                const resolved = exactNameMap.get(part.toLowerCase())!;
-                nameCache.set(salesName, resolved);
-                return resolved;
-              }
-              // Check normalized arabic
-              const normalizedPart = normalizeArabic(part);
-              if (normalizedProductNames.has(normalizedPart)) {
-                const resolved = normalizedProductNames.get(normalizedPart)!;
-                nameCache.set(salesName, resolved);
-                return resolved;
-              }
-            }
-          }
-        }
-        
-        // 3. Extract Arabic portion from the bilingual name and match
-        const arabicPortion = extractArabic(salesName);
-        if (arabicPortion && arabicPortion.length > 2) {
-          const normalizedArabic = normalizeArabic(arabicPortion);
-          if (normalizedProductNames.has(normalizedArabic)) {
-            const resolved = normalizedProductNames.get(normalizedArabic)!;
-            nameCache.set(salesName, resolved);
-            return resolved;
-          }
-          
-          // 4. Fuzzy: check if any system product name is contained in the Arabic portion or vice versa
-          let bestMatch = '';
-          let bestMatchLen = 0;
-          for (const [normName, origName] of normalizedProductNames) {
-            if (normName.length < 3) continue;
-            if (normalizedArabic.includes(normName) || normName.includes(normalizedArabic)) {
-              if (normName.length > bestMatchLen) {
-                bestMatchLen = normName.length;
-                bestMatch = origName;
-              }
-            }
-          }
-          if (bestMatch) {
-            nameCache.set(salesName, bestMatch);
-            return bestMatch;
-          }
-        }
-        
-        // 5. English-to-Arabic keyword matching for pure English names
-        const englishKeywordMap: Record<string, string> = {
-          'matilda croissant nutella': 'ماتيلدا كرواسون نوتيلا',
-          'choclate matilda': 'ماتيلدا شوكولاته',
-          'chocolate matilda': 'ماتيلدا شوكولاته',
-          'avocado croissant': 'أفوكادو سكرمبل كرواسون',
-          'french toast': 'فرنش توست',
-          'brioche birsaola': 'بريوش بيرزاولا',
-          'brioche haloumey': 'بريوش حلومى',
-          'brioche halloumi': 'بريوش حلومى',
-          'brioche smoked turkey': 'بريوش تركى مدخن',
-          'brioche tunna': 'بريوش تونة',
-          'brioche tuna': 'بريوش تونة',
-          'bruschetta egg': 'بروسكيتا البيض',
-          'menemen': 'منمن',
-          'turkish egg': 'بيض تركى',
-          'cheese croissant': 'كرواسون جبنة',
-          'eggs benedict croissant': 'بيض بنديكت كرواسون مع سالمون',
-        };
-        const lowerSales = salesName.toLowerCase().trim();
-        if (englishKeywordMap[lowerSales]) {
-          const translated = englishKeywordMap[lowerSales];
-          if (exactNameMap.has(translated.toLowerCase())) {
-            const resolved = exactNameMap.get(translated.toLowerCase())!;
-            nameCache.set(salesName, resolved);
-            return resolved;
-          }
-          nameCache.set(salesName, translated);
-          return translated;
-        }
-        
-        // No match found, use original name
-        nameCache.set(salesName, salesName);
-        return salesName;
-      }
-      
-      // Group sales by date + product + branch (using resolved product names)
-      const salesByKey = new Map<string, { quantity: number; value: number; category: string | null }>();
-      let resolvedCount = 0;
-      let unresolvedCount = 0;
-      for (const sale of salesData) {
-        const resolvedName = resolveProductName(sale.productName || '');
-        if (resolvedName !== sale.productName) resolvedCount++;
-        else unresolvedCount++;
-        const key = `${sale.branchId}|${sale.salesDate}|${resolvedName}`;
-        const resolvedCategory = productCategoryMap.get(resolvedName) || sale.productCategory;
-        const existing = salesByKey.get(key) || { quantity: 0, value: 0, category: resolvedCategory };
-        existing.quantity += sale.quantitySold || 0;
-        existing.value += sale.salesValue || 0;
-        salesByKey.set(key, existing);
-      }
-      console.log(`[COMPARISON] Name resolution: ${resolvedCount} matched, ${unresolvedCount} used original name`);
-      
-      // Group production/received by date + product + branch
-      // Priority: Display bar receipts (actual received) > Production orders (planned)
-      const productionByKey = new Map<string, { quantity: number; value: number; category: string | null; source: string }>();
-      
-      // Source 1: Display bar receipts (actual received at display bar - PRIMARY source)
-      for (const receipt of barReceipts) {
-        if (!receipt.productName) continue;
-        const key = `${receipt.branchId}|${receipt.receiptDate}|${receipt.productName}`;
-        const existing = productionByKey.get(key);
-        const unitPrice = receipt.basePrice || 0;
-        if (!existing) {
-          productionByKey.set(key, { 
-            quantity: receipt.quantity || 0, 
-            value: (receipt.quantity || 0) * unitPrice, 
-            category: receipt.productCategory || null,
-            source: "receipt"
-          });
-        } else {
-          existing.quantity += receipt.quantity || 0;
-          existing.value += (receipt.quantity || 0) * unitPrice;
-        }
-      }
-      
-      // Source 2: Production orders (only for products NOT already covered by receipts)
-      for (const order of productionOrders) {
-        const orderItems = productionItems.filter(i => i.orderId === order.id);
-        for (const item of orderItems) {
-          const key = `${order.targetBranchId}|${order.startDate}|${item.productName}`;
-          if (productionByKey.has(key)) continue;
-          const existing = productionByKey.get(key) || { quantity: 0, value: 0, category: item.productCategory, source: "order" };
-          const qty = item.producedQuantity || item.targetQuantity || 0;
-          existing.quantity += qty;
-          existing.value += qty * (item.unitPrice || 0);
-          productionByKey.set(key, existing);
-        }
-      }
-      
-      // Create comparisons
-      const allKeys = Array.from(new Set([...Array.from(salesByKey.keys()), ...Array.from(productionByKey.keys())]));
-      let comparisonsCreated = 0;
-      
-      // Batch fetch all storage settings to avoid N+1 queries
-      const allStorageSettings = await db.select().from(productStorageSettings);
-      const storageSettingsMap = new Map(allStorageSettings.map(s => [s.productName, s]));
-      
-      // Prepare comparison records
-      const comparisonsToInsert: any[] = [];
-      
-      for (const key of allKeys as string[]) {
-        const [keyBranchId, date, productName] = key.split("|");
-        const sales = salesByKey.get(key) || { quantity: 0, value: 0, category: null };
-        const production = productionByKey.get(key) || { quantity: 0, value: 0, category: null };
-        const category = production.category || sales.category;
-        
-        // Made-to-order categories (drinks/pizza) - they don't have waste
-        if (isMadeToOrderCategory(category)) {
-          continue;
-        }
-        
-        const difference = production.quantity - sales.quantity;
-        const differencePercent = production.quantity > 0 
-          ? ((difference / production.quantity) * 100) 
-          : 0;
-        
-        let status = "normal";
-        if (difference > 0) {
-          status = "waste";
-        } else if (difference < 0) {
-          status = "shortage";
-        }
-        
-        // Check if storable using pre-fetched map
-        const storageSetting = storageSettingsMap.get(productName);
-        const isStorable = storageSetting?.isStorable || false;
-        if (isStorable && difference > 0) {
-          status = "stored";
-        }
-        
-        comparisonsToInsert.push({
-          branchId: keyBranchId,
-          comparisonDate: date,
-          productName,
-          productCategory: category,
-          producedQuantity: production.quantity,
-          soldQuantity: sales.quantity,
-          difference,
-          differencePercent,
-          productionValue: production.value,
-          salesValue: sales.value,
-          valueDifference: production.value - sales.value,
-          isStorable,
-          status,
+        const [batches, uploads, catalog] = await Promise.all([
+          tx.select({
+            id: dailyProductionBatches.id, branchId: dailyProductionBatches.branchId,
+            productionDate: dailyProductionBatches.productionDate, productId: dailyProductionBatches.productId,
+            unit: dailyProductionBatches.unit, quantity: dailyProductionBatches.quantity,
+            productName: dailyProductionBatches.productName, productCategory: dailyProductionBatches.productCategory,
+          }).from(dailyProductionBatches).where(and(
+            inArray(dailyProductionBatches.branchId, branchIds),
+            gte(dailyProductionBatches.productionDate, startDate),
+            lte(dailyProductionBatches.productionDate, endDate),
+            eq(dailyProductionBatches.status, "finished"),
+          )),
+          tx.select().from(comparisonUploads).where(and(
+            inArray(comparisonUploads.branchId, branchIds),
+            eq(comparisonUploads.dataType, "sales"), eq(comparisonUploads.status, "completed"),
+            lte(comparisonUploads.periodStart, endDate), gte(comparisonUploads.periodEnd, startDate),
+          )),
+          tx.select({ id: productsTable.id, name: productsTable.name, sku: productsTable.sku,
+            category: productsTable.category, unit: productsTable.unit }).from(productsTable),
+        ]);
+        const sales = uploads.length ? await tx.select().from(dailySalesData).where(and(
+          inArray(dailySalesData.branchId, branchIds),
+          inArray(dailySalesData.uploadId, uploads.map(u => u.id)),
+        )) : [];
+        const built = buildCanonicalComparisons(batches, sales, uploads, catalog, startDate, endDate);
+        // Do not erase earlier comparisons on an unavailable re-run. Legacy rows
+        // remain intact; only explicitly versioned results in this scope are replaced.
+        if (built.rows.length === 0) return built;
+        await tx.delete(dailyComparisons).where(and(
+          inArray(dailyComparisons.branchId, branchIds),
+          gte(dailyComparisons.comparisonDate, startDate),
+          lte(dailyComparisons.comparisonDate, endDate),
+          like(dailyComparisons.statusReason, `${COMPARISON_REASON_PREFIX}%`),
+        ));
+        if (built.rows.length) await tx.insert(dailyComparisons).values(built.rows as any);
+        return built;
+      });
+      if (result.rows.length === 0) {
+        return res.status(409).json({
+          error: COMPARISON_UNAVAILABLE,
+          code: "COMPARISON_EVIDENCE_UNAVAILABLE",
+          coverage: result.coverage,
         });
-        
-        comparisonsCreated++;
       }
+      return res.json({ success: true, comparisonsCreated: result.rows.length,
+        coverage: result.coverage, warning: result.coverage.unmappedSales ||
+          result.coverage.unmatchedProduction || result.coverage.unmatchedSales
+          ? "بعض الصفوف غير قابلة للمقارنة؛ لا يُحتسب غياب المصدر صفراً ولا يُعد الفرق هدراً فعلياً"
+          : undefined });
       
-      // Delete ALL existing comparisons for the date range and branch, then insert new ones
-      await db.transaction(async (tx) => {
-        const deleteConditions: any[] = [
-          gte(dailyComparisons.comparisonDate, startDate as string),
-          lte(dailyComparisons.comparisonDate, endDate as string),
-        ];
-        if (effectiveBranchId) {
-          deleteConditions.push(eq(dailyComparisons.branchId, effectiveBranchId));
-        }
-        await tx.delete(dailyComparisons).where(and(...deleteConditions));
-        
-        if (comparisonsToInsert.length > 0) {
-          await tx.insert(dailyComparisons).values(comparisonsToInsert);
-        }
-      });
-      
-      res.json({
-        success: true,
-        comparisonsCreated,
-        salesRecordsProcessed: salesData.length,
-        productionOrdersProcessed: productionOrders.length,
-      });
     } catch (error) {
       console.error("Error running comparison:", error);
       res.status(500).json({ error: "فشل إجراء المقارنة" });
@@ -20576,6 +19834,8 @@ export async function registerRoutes(
     try {
       const { id } = req.params;
       const { status, reason } = req.body;
+      const comparisonId = Number(id);
+      if (!Number.isSafeInteger(comparisonId) || comparisonId < 1) return res.status(400).json({ error: "معرف المقارنة غير صالح" });
       
       if (!status) {
         return res.status(400).json({ error: "الحالة مطلوبة" });
@@ -20585,32 +19845,21 @@ export async function registerRoutes(
       if (!validStatuses.includes(status)) {
         return res.status(400).json({ error: "حالة غير صالحة" });
       }
-      
-      // Get current comparison
-      const [current] = await db
-        .select()
-        .from(dailyComparisons)
-        .where(eq(dailyComparisons.id, parseInt(id)))
-        .limit(1);
-      
-      if (!current) {
-        return res.status(404).json({ error: "المقارنة غير موجودة" });
+      if (typeof reason === "string" && (reason.startsWith(COMPARISON_REASON_PREFIX) ||
+          reason.startsWith("canonical-comparison-v2:"))) {
+        return res.status(400).json({ error: "سبب التغيير غير صالح" });
       }
-      
-      // Branch isolation check for non-admins
-      if (!isUserAdmin(req) && current.branchId) {
-        const hasAccess = await canAccessBranch(req, current.branchId);
-        if (!hasAccess) {
-          return res.status(403).json({ error: "غير مسموح بتعديل بيانات فرع آخر" });
-        }
-      }
-      
-      const previousStatus = current.status;
-      
-      // Update comparison in a transaction
-      await db.transaction(async (tx) => {
-        // Update the comparison
-        await tx
+      const scope = getEffectiveBranchFilter(req);
+      if (!scope.hasAccess) return res.status(403).json({ error: "غير مصرح بالوصول" });
+      const branchIds = await comparisonBranchIds(scope.branchIds);
+      if (!branchIds.length) return res.status(403).json({ error: "غير مصرح بالوصول" });
+      const result = await db.transaction(async (tx) => {
+        const [current] = await tx.select().from(dailyComparisons).where(and(
+          eq(dailyComparisons.id, comparisonId), inArray(dailyComparisons.branchId, branchIds),
+        )).for("update");
+        if (!current) return { kind: "missing" as const };
+        if (current.statusReason?.startsWith(COMPARISON_REASON_PREFIX)) return { kind: "immutable" as const };
+        const [updated] = await tx
           .update(dailyComparisons)
           .set({
             status,
@@ -20619,25 +19868,24 @@ export async function registerRoutes(
             statusReason: reason || null,
             updatedAt: new Date(),
           })
-          .where(eq(dailyComparisons.id, parseInt(id)));
-        
-        // Log to history table
+          .where(and(eq(dailyComparisons.id, comparisonId),
+            inArray(dailyComparisons.branchId, branchIds),
+            or(isNull(dailyComparisons.statusReason),
+              notLike(dailyComparisons.statusReason, `${COMPARISON_REASON_PREFIX}%`))))
+          .returning();
+        if (!updated) return { kind: "immutable" as const };
         await tx.insert(comparisonStatusHistory).values({
-          comparisonId: parseInt(id),
-          previousStatus,
+          comparisonId,
+          previousStatus: current.status,
           newStatus: status,
           reason: reason || null,
           changedBy: req.currentUser?.id,
         });
+        return { kind: "updated" as const, updated };
       });
-      
-      // Return updated comparison
-      const [updated] = await db
-        .select()
-        .from(dailyComparisons)
-        .where(eq(dailyComparisons.id, parseInt(id)));
-      
-      res.json(updated);
+      if (result.kind === "missing") return res.status(404).json({ error: "المقارنة غير موجودة" });
+      if (result.kind === "immutable") return res.status(409).json({ error: "لا يمكن تغيير دليل المقارنة الموثقة" });
+      res.json(result.updated);
     } catch (error) {
       console.error("Error updating comparison status:", error);
       res.status(500).json({ error: "فشل تحديث الحالة" });
@@ -20649,7 +19897,8 @@ export async function registerRoutes(
     try {
       const { ids, status, reason } = req.body;
       
-      if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      if (!ids || !Array.isArray(ids) || ids.length === 0 ||
+          ids.some(id => !Number.isSafeInteger(Number(id)) || Number(id) < 1)) {
         return res.status(400).json({ error: "قائمة المقارنات مطلوبة" });
       }
       
@@ -20661,32 +19910,32 @@ export async function registerRoutes(
       if (!validStatuses.includes(status)) {
         return res.status(400).json({ error: "حالة غير صالحة" });
       }
-      
+      if (typeof reason === "string" && (reason.startsWith(COMPARISON_REASON_PREFIX) ||
+          reason.startsWith("canonical-comparison-v2:"))) {
+        return res.status(400).json({ error: "سبب التغيير غير صالح" });
+      }
+      const scope = getEffectiveBranchFilter(req);
+      if (!scope.hasAccess) return res.status(403).json({ error: "غير مصرح بالوصول" });
+      const branchIds = await comparisonBranchIds(scope.branchIds);
+      if (!branchIds.length) return res.status(403).json({ error: "غير مصرح بالوصول" });
       let updatedCount = 0;
       let skippedCount = 0;
       
       await db.transaction(async (tx) => {
         for (const id of ids) {
-          // Get current status
+          const comparisonId = Number(id);
           const [current] = await tx
             .select()
             .from(dailyComparisons)
-            .where(eq(dailyComparisons.id, parseInt(id)))
-            .limit(1);
-          
-          // Skip if not found or belongs to another branch (for non-admin users)
-          if (!current) continue;
-          
-          // SECURITY: Verify branch access for non-admin users
-          if (!isUserAdmin(req) && current.branchId) {
-            const hasAccess = await canAccessBranch(req, current.branchId);
-            if (!hasAccess) {
-              skippedCount++;
-              continue;
-            }
+            .where(and(eq(dailyComparisons.id, comparisonId),
+              inArray(dailyComparisons.branchId, branchIds)))
+            .for("update");
+          if (!current) { skippedCount++; continue; }
+          if (current.statusReason?.startsWith(COMPARISON_REASON_PREFIX)) {
+            skippedCount++;
+            continue;
           }
-          
-          await tx
+          const [updated] = await tx
             .update(dailyComparisons)
             .set({
               status,
@@ -20695,10 +19944,14 @@ export async function registerRoutes(
               statusReason: reason || null,
               updatedAt: new Date(),
             })
-            .where(eq(dailyComparisons.id, parseInt(id)));
-            
+            .where(and(eq(dailyComparisons.id, comparisonId),
+              inArray(dailyComparisons.branchId, branchIds),
+              or(isNull(dailyComparisons.statusReason),
+                notLike(dailyComparisons.statusReason, `${COMPARISON_REASON_PREFIX}%`))))
+            .returning({ id: dailyComparisons.id });
+          if (!updated) { skippedCount++; continue; }
           await tx.insert(comparisonStatusHistory).values({
-            comparisonId: parseInt(id),
+            comparisonId,
             previousStatus: current.status,
             newStatus: status,
             reason: reason || null,
@@ -22365,23 +21618,33 @@ export async function registerRoutes(
           };
         });
         
-        // Serialize writers for this branch and period, including concurrent retries.
-        // Existing parsed_data is JSONB: equality ignores object key order but preserves row order.
+        // A multiset of complete source rows: reorder/key order does not affect retries,
+        // but duplicate identical lines retain their multiplicity.
+        const canonicalRow = (value: unknown): string => JSON.stringify(value, (_key, entry) =>
+          entry && !Array.isArray(entry) && typeof entry === "object"
+            ? Object.fromEntries(Object.entries(entry).sort(([a], [b]) => a.localeCompare(b))) : entry);
+        const fingerprint = createHash("sha256").update(JSON.stringify(dataRows.map(canonicalRow).sort())).digest("hex");
         const result = await db.transaction(async tx => {
-          await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${branchId}), hashtext(${JSON.stringify([periodStart ?? null, periodEnd ?? null])}))`);
-          const [existing] = await tx.select().from(salesDataUploads).where(and(
+          await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext('analytics_sales'), hashtext(${branchId}))`);
+          const existingUploads = await tx.select().from(salesDataUploads).where(and(
             eq(salesDataUploads.branchId, branchId),
-            periodStart == null ? isNull(salesDataUploads.periodStart) : eq(salesDataUploads.periodStart, periodStart),
-            periodEnd == null ? isNull(salesDataUploads.periodEnd) : eq(salesDataUploads.periodEnd, periodEnd),
             eq(salesDataUploads.status, "completed"),
-            sql`${salesDataUploads.parsedData} = ${JSON.stringify(dataRows)}::jsonb`
-          )).orderBy(salesDataUploads.id).limit(1);
+            lte(salesDataUploads.periodStart, periodEnd),
+            gte(salesDataUploads.periodEnd, periodStart),
+          ));
+          const existing = existingUploads.find(upload =>
+            upload.periodStart === periodStart && upload.periodEnd === periodEnd &&
+            (upload.errorMessage === `sha256:${fingerprint}` ||
+              (Array.isArray(upload.parsedData) &&
+                createHash("sha256").update(JSON.stringify(upload.parsedData.map(canonicalRow).sort())).digest("hex") === fingerprint)));
           if (existing) return { upload: existing, reused: true };
+          if (existingUploads.length) return { conflict: true as const };
           const [upload] = await tx.insert(salesDataUploads).values({
             branchId, fileName, fileType: 'excel', periodStart, periodEnd,
             status: 'completed', uploadedBy: getCurrentUser(req).id,
             totalRecords: dataRows.length, totalSalesValue: totalSales,
-            uniqueProducts: uniqueProducts.size, parsedData: dataRows, productVelocity
+            uniqueProducts: uniqueProducts.size, parsedData: dataRows, productVelocity,
+            errorMessage: `sha256:${fingerprint}`,
           }).returning();
           if (analyticsRecords.length > 0) {
             await tx.insert(productSalesAnalytics).values(analyticsRecords.map(record => ({
@@ -22389,6 +21652,10 @@ export async function registerRoutes(
             })));
           }
           return { upload, reused: false };
+        });
+        if ("conflict" in result) return res.status(409).json({
+          error: "توجد بيانات مبيعات مستوردة لفترة متداخلة لهذا الفرع؛ يلزم مراجعة الاستبدال",
+          code: "SALES_PERIOD_OVERLAP",
         });
         res.status(result.reused ? 200 : 201).json(result.upload);
       }
@@ -23446,14 +22713,46 @@ export async function registerRoutes(
       // Validate allowed update fields
       const allowedFields = ['productName', 'productCategory', 'quantity', 'unit', 'destination', 'notes', 'status', 'chefId', 'chefName'];
       const updateData: any = {};
+
+      // A manual edit must retain the catalog identity chosen at creation.
+      // Do not silently accept a client-supplied display name/unit that
+      // disagrees with that product, or turn an old unlinked row into stock.
+      if (Object.prototype.hasOwnProperty.call(req.body, "productId")
+        && (!Number.isSafeInteger(Number(req.body.productId))
+          || Number(req.body.productId) !== existingBatch.productId
+          || req.body.productId === null)) {
+        return res.status(400).json({ error: "لا يمكن تغيير معرف المنتج المعتمد للدفعة" });
+      }
+      if (['productId', 'productName', 'productCategory', 'quantity', 'unit'].some(
+        (field) => Object.prototype.hasOwnProperty.call(req.body, field),
+      )) {
+        if (req.body.unit === null) {
+          return res.status(400).json({ error: "الوحدة لا تطابق وحدة المنتج المعتمدة في الكتالوج" });
+        }
+        const catalogProduct = existingBatch.productId
+          ? await getSelectableProductReference(existingBatch.productId)
+          : undefined;
+        const targetError = validateFinishedProductionTarget(
+          catalogProduct,
+          req.body.quantity !== undefined ? req.body.quantity : existingBatch.quantity,
+          req.body.unit !== undefined ? req.body.unit : existingBatch.unit,
+        );
+        if (targetError) return res.status(400).json({ error: targetError });
+        if (req.body.productName !== undefined
+          && (typeof req.body.productName !== "string"
+            || req.body.productName.trim() !== catalogProduct!.name.trim())) {
+          return res.status(400).json({ error: "اسم المنتج لا يطابق المنتج المعتمد في الكتالوج" });
+        }
+        if (req.body.productCategory !== undefined
+          && req.body.productCategory !== catalogProduct!.category) {
+          return res.status(400).json({ error: "تصنيف المنتج لا يطابق المنتج المعتمد في الكتالوج" });
+        }
+      }
       
       for (const field of allowedFields) {
         if (req.body[field] !== undefined) {
           if (field === 'quantity') {
             const qty = Number(req.body[field]);
-            if (isNaN(qty) || qty <= 0) {
-              return res.status(400).json({ error: "الكمية يجب أن تكون رقماً صحيحاً أكبر من صفر" });
-            }
             updateData[field] = qty;
           } else if (field === 'destination') {
             const validDestinations = ['display_bar', 'kitchen_trolley', 'freezer', 'refrigerator'];
@@ -23484,6 +22783,9 @@ export async function registerRoutes(
       res.json({ ...result.batch, transferred: result.transferred });
     } catch (error) {
       console.error("Error updating batch:", error);
+      if (error instanceof Error && error.message === "لا يمكن تعديل دفعة إنتاج مكتملة أو تم ترحيلها إلى المخزون") {
+        return res.status(409).json({ error: error.message });
+      }
       if (error instanceof ProductionStockPostingError || error instanceof CentralKitchenBatchMaterialsError) {
         return res.status(error.status).json({ error: error.message });
       }
@@ -23523,6 +22825,9 @@ export async function registerRoutes(
       res.json({ success: true });
     } catch (error) {
       console.error("Error deleting batch:", error);
+      if (error instanceof Error && error.message === "لا يمكن حذف دفعة إنتاج مكتملة أو تم ترحيلها إلى المخزون") {
+        return res.status(409).json({ error: error.message });
+      }
       res.status(500).json({ error: "فشل في حذف دفعة الإنتاج" });
     }
   });

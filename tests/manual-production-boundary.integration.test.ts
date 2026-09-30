@@ -9,6 +9,7 @@ import {
   centralKitchenOrderItems,
   centralKitchenOrders,
   dailyProductionBatches,
+  productionInventoryLogs,
   products,
   users,
 } from "../shared/schema";
@@ -100,6 +101,8 @@ let fixture: {
   sourceBatchId: number;
   otherSourceBatchId: number;
   linkedBatchId: number;
+  postedBatchId: number;
+  finishedBatchId: number;
 } | undefined;
 
 function captureApp() {
@@ -229,7 +232,9 @@ describe.sequential("manual daily-production boundary (development DB)", () => {
     }
     if (!process.env.DATABASE_URL) throw new Error("Development DATABASE_URL is required");
 
-    const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL, max: 1, allowExitOnIdle: true });
+    // Route registration also queries the database while the fixture transaction
+    // holds a connection; leave a second lease available for those reads.
+    const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL, max: 2, allowExitOnIdle: true });
     databaseState.pool = pool;
     const realDb = drizzle(pool, { schema });
     let ready!: () => void;
@@ -285,7 +290,8 @@ describe.sequential("manual daily-production boundary (development DB)", () => {
 
     const [sourceBatch] = await databaseState.db.insert(dailyProductionBatches).values({
       branchId,
-      productName: "Independent source batch",
+      productId: product.id,
+      productName: "Manual boundary batch",
       quantity: 2,
       unit: "قطعة",
       destination: "freezer",
@@ -303,15 +309,49 @@ describe.sequential("manual daily-production boundary (development DB)", () => {
       status: "in_progress",
       recipeBacked: false,
     }).returning({ id: dailyProductionBatches.id });
+    // Model the linked batch at the point of creation, before its recipe snapshot
+    // is written; the database only permits this transient state in snapshot mode.
+    await databaseState.db.execute(sql`SELECT set_config('app.central_kitchen_snapshot_write', 'on', true)`);
     const [linkedBatch] = await databaseState.db.insert(dailyProductionBatches).values({
       branchId,
       productName: "Linked boundary batch",
       quantity: 1,
       unit: "قطعة",
-      destination: "freezer",
+      destination: "central_kitchen_order",
       productionDate: "2099-05-01",
       status: "in_progress",
       centralKitchenOrderItemId: orderItem.id,
+    }).returning({ id: dailyProductionBatches.id });
+    await databaseState.db.execute(sql`SELECT set_config('app.central_kitchen_snapshot_write', 'off', true)`);
+    const [postedBatch] = await databaseState.db.insert(dailyProductionBatches).values({
+      branchId,
+      productId: product.id,
+      productName: "Manual boundary batch",
+      quantity: 2,
+      unit: "قطعة",
+      destination: "freezer",
+      status: "in_progress",
+      recipeBacked: false,
+    }).returning({ id: dailyProductionBatches.id });
+    await databaseState.db.insert(productionInventoryLogs).values({
+      branchId,
+      productId: product.id,
+      productName: "Manual boundary batch",
+      movementType: "production_in",
+      quantity: 2,
+      referenceType: "batch",
+      referenceId: postedBatch.id,
+      batchId: postedBatch.id,
+    });
+    const [finishedBatch] = await databaseState.db.insert(dailyProductionBatches).values({
+      branchId,
+      productId: product.id,
+      productName: "Manual boundary batch",
+      quantity: 2,
+      unit: "قطعة",
+      destination: "freezer",
+      status: "finished",
+      recipeBacked: false,
     }).returning({ id: dailyProductionBatches.id });
 
     fixture = {
@@ -322,6 +362,8 @@ describe.sequential("manual daily-production boundary (development DB)", () => {
       sourceBatchId: sourceBatch.id,
       otherSourceBatchId: otherSourceBatch.id,
       linkedBatchId: linkedBatch.id,
+      postedBatchId: postedBatch.id,
+      finishedBatchId: finishedBatch.id,
     };
 
     const { registerRoutes } = await import("../server/routes");
@@ -468,5 +510,73 @@ describe.sequential("manual daily-production boundary (development DB)", () => {
     expect(deletion.statusCode).toBe(409);
     expect(deletion.body.error).toContain("الطلب الأصلي");
     expect(await batchFields(fixture!.linkedBatchId)).toEqual(before);
+  });
+
+  it("rejects fractional, non-finite, and non-positive manual PATCH quantities without writing", async () => {
+    const before = await batchFields(fixture!.sourceBatchId);
+    for (const quantity of [1.5, "2.5", Infinity, "Infinity", 0, null, Number.MAX_SAFE_INTEGER + 1]) {
+      const response = await invoke("patch", "/api/daily-production/batches/:id", {
+        user: fixture!.user,
+        params: { id: String(fixture!.sourceBatchId) },
+        body: { quantity },
+      });
+      expect(response.statusCode, String(quantity)).toBe(400);
+      expect(response.body.error, String(quantity)).toContain("صحيح");
+      expect(await batchFields(fixture!.sourceBatchId)).toEqual(before);
+    }
+  });
+
+  it("rejects catalog unit, name, and category mismatches on manual PATCH", async () => {
+    const before = await batchFields(fixture!.sourceBatchId);
+    for (const body of [
+      { unit: "كيلو" },
+      { unit: null },
+      { productName: "Different product" },
+      { productName: null },
+      { productCategory: "other" },
+      { productId: fixture!.productId + 1 },
+    ]) {
+      const response = await invoke("patch", "/api/daily-production/batches/:id", {
+        user: fixture!.user,
+        params: { id: String(fixture!.sourceBatchId) },
+        body,
+      });
+      expect(response.statusCode, JSON.stringify(body)).toBe(400);
+      expect(await batchFields(fixture!.sourceBatchId)).toEqual(before);
+    }
+    const valid = await invoke("patch", "/api/daily-production/batches/:id", {
+      user: fixture!.user,
+      params: { id: String(fixture!.sourceBatchId) },
+      body: { quantity: 3, unit: "قطعة", productName: "Manual boundary batch" },
+    });
+    expect(valid.statusCode).toBe(200);
+    expect(valid.body.quantity).toBe(3);
+  });
+
+  it("does not allow an uncatalogued legacy batch to acquire an arbitrary finished identity", async () => {
+    const response = await invoke("patch", "/api/daily-production/batches/:id", {
+      user: actor("manual-boundary-legacy-actor", fixture!.otherBranchId),
+      params: { id: String(fixture!.otherSourceBatchId) },
+      body: { productName: "Invented finished product", quantity: 4 },
+    });
+    expect(response.statusCode).toBe(400);
+  });
+
+  it("returns conflict on posted or finished batches for both PATCH and DELETE", async () => {
+    for (const id of [fixture!.postedBatchId, fixture!.finishedBatchId]) {
+      const before = await batchFields(id);
+      const patch = await invoke("patch", "/api/daily-production/batches/:id", {
+        user: fixture!.user,
+        params: { id: String(id) },
+        body: { notes: "must not be written" },
+      });
+      expect(patch.statusCode).toBe(409);
+      const deletion = await invoke("delete", "/api/daily-production/batches/:id", {
+        user: fixture!.user,
+        params: { id: String(id) },
+      });
+      expect(deletion.statusCode).toBe(409);
+      expect(await batchFields(id)).toEqual(before);
+    }
   });
 });

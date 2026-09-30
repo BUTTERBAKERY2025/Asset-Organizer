@@ -122,6 +122,7 @@ const CATEGORY_COLORS: Record<string, string> = {
 
 const STATUS_COLORS = {
   normal: "#10b981",
+  variance: "#f59e0b",
   waste: "#ef4444",
   shortage: "#f59e0b",
   stored: "#3b82f6",
@@ -258,14 +259,14 @@ export default function ProductionComparisonsPage() {
       });
       if (!res.ok) {
         const error = await res.json();
-        throw new Error(error.message || "Failed to run comparison");
+        throw new Error(error.error || error.message || "تعذر إجراء المقارنة");
       }
       return res.json();
     },
-    onSuccess: (data: { comparisonsCreated: number }) => {
+    onSuccess: (data: { comparisonsCreated: number; coverage?: { unmappedSales: number; unmatchedProduction: number; unmatchedSales: number }; warning?: string }) => {
       toast({
-        title: "تم إجراء المقارنة بنجاح",
-        description: `تم إنشاء ${data.comparisonsCreated} مقارنة`,
+        title: "تمت مقارنة السجلات الموثقة",
+        description: `${data.comparisonsCreated} صفوف قابلة للمقارنة؛ ${data.warning || "الفرق لا يعني هدراً معتمداً"}`,
       });
       queryClient.invalidateQueries({ queryKey: ["/api/production-comparisons"] });
     },
@@ -312,6 +313,8 @@ export default function ProductionComparisonsPage() {
   });
 
   const handleStatusChange = (comparison: DailyComparison) => {
+    if (comparison.status === "variance" ||
+        comparison.statusReason?.startsWith('{"type":"canonical-comparison-v2"')) return;
     setSelectedComparison(comparison);
     setNewStatus(comparison.status || "normal");
     setStatusReason("");
@@ -319,7 +322,8 @@ export default function ProductionComparisonsPage() {
   };
 
   const handleStatusSubmit = () => {
-    if (selectedComparison && newStatus) {
+    if (selectedComparison && newStatus && selectedComparison.status !== "variance" &&
+        !selectedComparison.statusReason?.startsWith('{"type":"canonical-comparison-v2"')) {
       statusChangeMutation.mutate({
         id: selectedComparison.id,
         status: newStatus,
@@ -726,7 +730,23 @@ export default function ProductionComparisonsPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 mb-6">
+        {(summaryData as { available?: boolean; reason?: string; coverage?: { finishedBatches: number; canonicalBatches: number; salesRows: number; legacyRows: number } } | undefined)?.available === false && (
+          <div className="mb-6 rounded-lg border border-amber-300 bg-amber-50 p-4 text-amber-900" role="status">
+            <p className="font-semibold">المقارنة الكمية غير متاحة — لا يُحتسب الفرق هدراً فعلياً.</p>
+            <p className="text-sm mt-1">{(summaryData as { reason?: string }).reason}</p>
+            <p className="text-sm mt-1">التغطية: {(summaryData as any).coverage?.finishedBatches ?? "—"} دفعات مكتملة،
+              {(summaryData as any).coverage?.canonicalBatches ?? "—"} بمعرف منتج ووحدة،
+              {(summaryData as any).coverage?.salesRows ?? "—"} صفوف مبيعات غير مربوطة،
+              {(summaryData as any).coverage?.legacyRows ?? "—"} مقارنات تاريخية غير موثقة.</p>
+          </div>
+        )}
+        {(summaryData as { available?: boolean } | undefined)?.available === true && (
+          <div className="mb-6 rounded-lg border border-amber-300 bg-amber-50 p-4 text-amber-900" role="status">
+            تعرض الأرقام الصفوف التي ثبت ربطها فقط. غياب صف من مصدر المبيعات أو الإنتاج غير معروف، وليس صفراً.
+            الفرق الكمي ليس هدراً أو عجز مخزون، والمقارنات التاريخية غير الموثقة مستبعدة.
+          </div>
+        )}
+        {(summaryData as { available?: boolean } | undefined)?.available !== false && <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 mb-6">
           <Card className="border-0 shadow-md bg-gradient-to-br from-green-50 to-white">
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
@@ -736,7 +756,7 @@ export default function ProductionComparisonsPage() {
                     {formatNumber(totals.produced)}
                   </p>
                   <p className="text-xs text-slate-400">
-                    {formatCurrency(totals.productionValue)}
+                    قيمة الإنتاج التاريخية غير متاحة
                   </p>
                 </div>
                 <div className="h-12 w-12 bg-green-100 rounded-xl flex items-center justify-center">
@@ -769,12 +789,12 @@ export default function ProductionComparisonsPage() {
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-slate-500">الهدر</p>
+                  <p className="text-sm text-slate-500">الفرق الموجب (ليس هدراً معتمداً)</p>
                   <p className="text-2xl font-bold text-red-700" data-testid="text-total-waste">
                     {formatNumber(totals.waste)}
                   </p>
                   <p className="text-xs text-red-400">
-                    {formatCurrency(Math.abs(totals.wasteValue))}
+                    القيمة النقدية للفرق غير متاحة
                   </p>
                 </div>
                 <div className="h-12 w-12 bg-red-100 rounded-xl flex items-center justify-center">
@@ -788,7 +808,7 @@ export default function ProductionComparisonsPage() {
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-slate-500">النقص</p>
+                  <p className="text-sm text-slate-500">الفرق السالب (ليس عجز مخزون)</p>
                   <p className="text-2xl font-bold text-amber-700" data-testid="text-total-shortage">
                     {formatNumber(totals.shortage)}
                   </p>
@@ -802,7 +822,7 @@ export default function ProductionComparisonsPage() {
               </div>
             </CardContent>
           </Card>
-        </div>
+        </div>}
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
           <TabsList className="bg-white border shadow-sm">
@@ -928,7 +948,7 @@ export default function ProductionComparisonsPage() {
                   <BarChart3 className="h-5 w-5 text-amber-600" />
                   مقارنة الفئات
                 </CardTitle>
-                <CardDescription>الإنتاج مقابل المبيعات والهدر حسب الفئة</CardDescription>
+                <CardDescription>الإنتاج مقابل المبيعات والفرق الموجب حسب الفئة؛ الفرق ليس هدراً فعلياً</CardDescription>
               </CardHeader>
               <CardContent>
                 {comparisonsLoading ? (
@@ -947,7 +967,7 @@ export default function ProductionComparisonsPage() {
                       <Legend />
                       <Bar dataKey="produced" name="الإنتاج" fill="#10b981" radius={[0, 4, 4, 0]} />
                       <Bar dataKey="sold" name="المبيعات" fill="#3b82f6" radius={[0, 4, 4, 0]} />
-                      <Bar dataKey="waste" name="الهدر" fill="#ef4444" radius={[0, 4, 4, 0]} />
+                      <Bar dataKey="waste" name="الفرق الموجب" fill="#ef4444" radius={[0, 4, 4, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 ) : (
@@ -988,7 +1008,7 @@ export default function ProductionComparisonsPage() {
                           <TableHead className="text-center">الإنتاج</TableHead>
                           <TableHead className="text-center">المبيعات</TableHead>
                           <TableHead className="text-center">الفرق</TableHead>
-                          <TableHead className="text-center">قيمة الهدر</TableHead>
+                          <TableHead className="text-center">قيمة الهدر (غير متاحة)</TableHead>
                           <TableHead className="text-center">الحالة</TableHead>
                           <TableHead className="text-center">قابل للتخزين</TableHead>
                           <TableHead className="text-center">الإجراءات</TableHead>
@@ -1044,7 +1064,7 @@ export default function ProductionComparisonsPage() {
                             <TableCell className="text-center">
                               <Badge
                                 variant="outline"
-                                className="cursor-pointer hover:opacity-80"
+                                className="cursor-default"
                                 style={{
                                   backgroundColor:
                                     STATUS_COLORS[c.status as keyof typeof STATUS_COLORS] + "20",
@@ -1052,9 +1072,8 @@ export default function ProductionComparisonsPage() {
                                     STATUS_COLORS[c.status as keyof typeof STATUS_COLORS],
                                   color: STATUS_COLORS[c.status as keyof typeof STATUS_COLORS],
                                 }}
-                                onClick={() => handleStatusChange(c)}
                               >
-                                {COMPARISON_STATUS[c.status as keyof typeof COMPARISON_STATUS]
+                                {c.status === "variance" ? "فرق كمي" : COMPARISON_STATUS[c.status as keyof typeof COMPARISON_STATUS]
                                   ?.label || c.status}
                               </Badge>
                             </TableCell>
@@ -1076,7 +1095,7 @@ export default function ProductionComparisonsPage() {
                             </TableCell>
                             <TableCell className="text-center">
                               <div className="flex items-center justify-center gap-1">
-                                <TooltipProvider>
+                                {c.status !== "variance" && !c.statusReason?.startsWith('{"type":"canonical-comparison-v2"') && <TooltipProvider>
                                   <Tooltip>
                                     <TooltipTrigger asChild>
                                       <Button
@@ -1091,7 +1110,7 @@ export default function ProductionComparisonsPage() {
                                     </TooltipTrigger>
                                     <TooltipContent>تغيير الحالة</TooltipContent>
                                   </Tooltip>
-                                </TooltipProvider>
+                                </TooltipProvider>}
                                 <TooltipProvider>
                                   <Tooltip>
                                     <TooltipTrigger asChild>
@@ -1143,7 +1162,7 @@ export default function ProductionComparisonsPage() {
               </div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {COMPARABLE_CATEGORIES.map((category) => {
+              {COMPARABLE_CATEGORIES.filter(category => categoryBreakdown.some(c => c.category === category)).map((category) => {
                 const catData = categoryBreakdown.find((c) => c.category === category);
                 const efficiency =
                   catData && catData.produced > 0
@@ -1179,7 +1198,7 @@ export default function ProductionComparisonsPage() {
                               : "border-red-500 text-red-600"
                           }
                         >
-                          كفاءة {efficiency}%
+                          نسبة مبيعات/إنتاج {efficiency}% (ليست كفاءة)
                         </Badge>
                       </CardTitle>
                     </CardHeader>
@@ -1198,7 +1217,7 @@ export default function ProductionComparisonsPage() {
                           </span>
                         </div>
                         <div className="flex justify-between text-sm">
-                          <span className="text-slate-500">الهدر</span>
+                          <span className="text-slate-500">الفرق الموجب (ليس هدراً)</span>
                           <span className="font-bold text-red-700">
                             {formatNumber(catData?.waste || 0)} ({wastePercent}%)
                           </span>
