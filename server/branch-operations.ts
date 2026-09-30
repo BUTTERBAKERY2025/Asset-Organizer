@@ -445,7 +445,26 @@ export const branchOperationsDefinitions: readonly CardDefinition[] = [
   },
 ];
 
-export async function hasEffectiveViewPermission(req: Request, module: string, action = "view"): Promise<boolean> {
+// Cache the in-flight check as well as its result only for this Request. A new
+// request must recheck grants (including after revocation).
+const permissionChecks = new WeakMap<Request, Map<string, Promise<boolean>>>();
+
+export function hasEffectiveViewPermission(req: Request, module: string, action = "view"): Promise<boolean> {
+  let checks = permissionChecks.get(req);
+  if (!checks) {
+    checks = new Map();
+    permissionChecks.set(req, checks);
+  }
+  const key = JSON.stringify([module, action]);
+  let check = checks.get(key);
+  if (!check) {
+    check = Promise.resolve().then(() => evaluateEffectivePermission(req, module, action));
+    checks.set(key, check);
+  }
+  return check;
+}
+
+async function evaluateEffectivePermission(req: Request, module: string, action: string): Promise<boolean> {
   const user = req.currentUser;
   if (!user) return false;
   if (user.role === "admin") return true;

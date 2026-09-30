@@ -13,6 +13,12 @@ The approved manager center extends this composition across explicitly granted b
 
 The manager center must be a compact control-and-follow-up workspace, not a long page stacking all domain reports.
 
+Use the existing system identity for the manager center, not an independent aubergine/beige palette.
+
+**Why:** The user explicitly requested that the center match system colors while improving organization and notification behavior.
+
+**How to apply:** Refine hierarchy and progressive disclosure within shared visual tokens rather than treating the operations center as a separately branded product.
+
 **Why:** The user explicitly rejected the initial center as boring, overfilled and too long, and requested a practical distinctive control screen that serves daily operational decisions.
 
 **How to apply:** Keep branch context and actionable priorities immediately accessible; reveal record/domain detail on selection instead of repeating every metric, source explanation and table on the initial screen. Preserve the deeper views and truthful coverage information without making them compete with the primary work.

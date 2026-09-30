@@ -7,6 +7,7 @@ import {
   attendanceRecords,
 } from "@shared/schema";
 import { qualityPassRate, deduplicateOperationsQueue, validateOperationsBranches, availableCardMetrics, makeOperationsQueueItem as queueItem } from "@shared/operations-center";
+import { noticeInSelectedScope, publicCenterNotice } from "@shared/operations-center-notifications";
 import type { OperationsCenterResponse, OperationsMetric, OperationsQueueItem, OperationsEvidenceDay } from "@shared/operations-center";
 import { db } from "./db";
 import { pool } from "./db";
@@ -19,9 +20,61 @@ import { branchOperationsDefinitions, hasEffectiveViewPermission, loadAuthorized
 const MAX_BRANCHES = 30;
 const SOURCE_LIMIT = 101;
 const PAGE_LIMIT = 100;
+const CARD_CONCURRENCY = 6;
+const SOURCE_CONCURRENCY = 4;
+const PERMISSION_CONCURRENCY = 6;
 const dateInRiyadh = (date: Date) => date.toLocaleDateString("en-CA", { timeZone: "Asia/Riyadh" });
 const asIso = (value: Date | string | null | undefined) => value ? new Date(value).toISOString() : null;
 const link = (path: string, branchId: string) => `${path}${path.includes("?") ? "&" : "?"}branchId=${encodeURIComponent(branchId)}`;
+
+/** Bounded workers preserve input order, including when tasks finish out of order. */
+export async function mapOperationsBounded<T, R>(items: readonly T[], limit: number, load: (item: T) => Promise<R>): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let next = 0;
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (next < items.length) {
+      const index = next++;
+      results[index] = await load(items[index]);
+    }
+  }));
+  return results;
+}
+
+function notificationBranches(req: Request): string[] {
+  const input = req.query.branchIds;
+  // Unlike the board, notifications never interpret an omitted scope as "all".
+  if (typeof input !== "string") throw Object.assign(new Error("Select branchIds explicitly"), { status: 400 });
+  const ids = input.split(",").map(id => id.trim());
+  if (!ids.length || ids.length > MAX_BRANCHES || ids.some(id => !id || id === "all") || new Set(ids).size !== ids.length)
+    throw Object.assign(new Error("Invalid branchIds"), { status: 400 });
+  return ids;
+}
+
+async function selectedNotifications(req: Request) {
+  const ids = notificationBranches(req);
+  const allowed = getAllowedBranchIds(req);
+  if (allowed !== null && ids.some(id => !allowed.includes(id)))
+    throw Object.assign(new Error("Branch scope denied"), { status: 403 });
+  const existing = await db.select({ id: branches.id }).from(branches).where(inArray(branches.id, ids));
+  if (!validateOperationsBranches(ids, allowed, existing.map(row => row.id)))
+    throw Object.assign(new Error("Branch scope denied or branch does not exist"), { status: 403 });
+  const userId = req.currentUser!.id;
+  const notifications = await storage.getActiveNotificationsForUserInBranches(userId, ids);
+  const visible = new Map<number, NonNullable<ReturnType<typeof noticeInSelectedScope>> & { notification: (typeof notifications)[number] }>();
+  for (const notification of notifications) {
+    const scope = noticeInSelectedScope(notification, ids);
+    if (scope) visible.set(notification.id, { ...scope, notification });
+  }
+  return Array.from(visible.values()).sort((a, b) =>
+    b.notification.priority - a.notification.priority ||
+    +new Date(b.notification.createdAt) - +new Date(a.notification.createdAt) ||
+    b.notification.id - a.notification.id);
+}
+
+function notificationError(res: any, next: any, error: any) {
+  if (error?.status === 400 || error?.status === 403) return res.status(error.status).json({ message: error.message });
+  return next(error);
+}
 
 /** All returned sources are restricted by BOTH branch scope and their own view grant.
  * Per-source failure is reported as unavailable, never silently converted to zero. */
@@ -41,13 +94,16 @@ export async function projectOperationsCenter(req: Request, requested: string[] 
   const generatedAt = now.toISOString();
   const businessDate = dateInRiyadh(now);
   const dates = Array.from({ length: 7 }, (_, i) => dateInRiyadh(new Date(now.getTime() - (6 - i) * 86400000)));
-  const permitted = async (module: string) => hasEffectiveViewPermission(req, module)
+  const permitted = async (module: string) => await hasEffectiveViewPermission(req, module)
     && (!exportMode || await hasEffectiveViewPermission(req, module, "export"));
   const grants = new Map<string, boolean>();
   const modules = [...new Set([...branchOperationsDefinitions.map(d => d.module), "quality_control", "hr_leaves", "hr_advances", "warehouse", "shifts", "cashier_journal", "delivery_tasks", "attendance"])];
-  for (const module of modules) grants.set(module, await permitted(module));
+  const permissions = await mapOperationsBounded(modules, PERMISSION_CONCURRENCY, permitted);
+  modules.forEach((module, index) => grants.set(module, permissions[index]));
   const enabled = (module: string) => grants.get(module) === true;
-  const cards = (await Promise.all(branchIds.flatMap(branchId => branchOperationsDefinitions.map(async definition => {
+  const cardTasks = branchIds.flatMap(branchId => branchOperationsDefinitions.map(definition => ({ branchId, definition })))
+    .filter(({ definition }) => enabled(definition.module));
+  const cards = (await mapOperationsBounded(cardTasks, CARD_CONCURRENCY, async ({ branchId, definition }) => {
     if (!enabled(definition.module)) return null;
     const card = await loadAuthorizedBranchOperationsCard(definition, branchId, businessDate, req);
     if (!card) return null;
@@ -60,30 +116,32 @@ export async function projectOperationsCenter(req: Request, requested: string[] 
         scope: [branchId], asOf: generatedAt, coverage: "complete",
       })),
     };
-  })))).filter((card): card is NonNullable<typeof card> => card !== null);
+  })).filter((card): card is NonNullable<typeof card> => card !== null);
   const queue: OperationsQueueItem[] = [];
   const coverage: Record<string, "complete" | "unavailable"> = {};
   let truncated = false;
-  async function source(name: string, module: string, load: () => Promise<OperationsQueueItem[]>) {
+  const sources: { name: string; load: () => Promise<OperationsQueueItem[]> }[] = [];
+  function source(name: string, module: string, load: () => Promise<OperationsQueueItem[]>) {
     if (!enabled(module)) return;
+    sources.push({ name, load });
+  }
+  async function loadSource({ name, load }: (typeof sources)[number]) {
     try {
       const rows = await load();
-      if (rows.length >= SOURCE_LIMIT) truncated = true;
-      queue.push(...rows.slice(0, SOURCE_LIMIT - 1));
-      if (coverage[name] !== "unavailable") coverage[name] = "complete";
+      return { name, rows };
     } catch (error) {
       console.error(`Operations center source ${name} unavailable`, error);
-      coverage[name] = "unavailable";
+      return { name, rows: [] as OperationsQueueItem[], failed: true };
     }
   }
-  await source("maintenance", "maintenance", async () => {
+  source("maintenance", "maintenance", async () => {
     const rows = await db.select({ id: maintenanceTickets.id, branchId: maintenanceTickets.branchId, status: maintenanceTickets.status,
       assignee: maintenanceTickets.assigneeUserId, due: maintenanceTickets.dueAt })
       .from(maintenanceTickets).where(and(inArray(maintenanceTickets.branchId, branchIds),
         inArray(maintenanceTickets.status, ["open", "assigned", "in_progress"]))).orderBy(desc(maintenanceTickets.createdAt)).limit(SOURCE_LIMIT);
     return rows.map(r => queueItem("maintenance", r.id, r.status, r.branchId, "maintenance", "بلاغ صيانة", r.status, link("/maintenance", r.branchId), r.assignee || "غير محدد", asIso(r.due), r.assignee));
   });
-  await source("kitchen", "central_kitchen_orders", async () => {
+  source("kitchen", "central_kitchen_orders", async () => {
     const rows = await db.select({ id: centralKitchenOrders.id, branchId: centralKitchenOrders.requestBranchId,
       status: centralKitchenOrders.status }).from(centralKitchenOrders)
       .where(and(inArray(centralKitchenOrders.requestBranchId, branchIds),
@@ -92,7 +150,7 @@ export async function projectOperationsCenter(req: Request, requested: string[] 
     return rows.map(r => queueItem("kitchen_order", r.id, r.status, r.branchId, "central_kitchen_orders", "طلب مطبخ",
       r.status, link(`/central-kitchen-orders?stage=${r.status}`, r.branchId), r.status === "dispatched" ? "الفرع المستلم" : "المطبخ المورد"));
   });
-  await source("transfers", "warehouse", async () => {
+  source("transfers", "warehouse", async () => {
     const rows = await db.select({ id: materialTransfers.id, source: materialTransfers.sourceBranchId,
       destination: materialTransfers.destinationBranchId, status: materialTransfers.status }).from(materialTransfers)
       .where(and(or(inArray(materialTransfers.sourceBranchId, branchIds), inArray(materialTransfers.destinationBranchId, branchIds)),
@@ -102,7 +160,7 @@ export async function projectOperationsCenter(req: Request, requested: string[] 
       .map(id => queueItem("transfer", r.id, r.status, id, "warehouse", "تحويل مواد", r.status,
         link(`/transfer-requests?status=${r.status}`, id), r.status === "in_transit" ? "الفرع المستلم" : "جهة التوريد")));
   });
-  await source("reverse", "warehouse", async () => {
+  source("reverse", "warehouse", async () => {
     const rows = await db.select({ id: reverseMovements.id, source: reverseMovements.sourceBranchId,
       destination: reverseMovements.destinationBranchId, status: reverseMovements.status }).from(reverseMovements)
       .where(or(inArray(reverseMovements.sourceBranchId, branchIds), inArray(reverseMovements.destinationBranchId, branchIds)))
@@ -111,7 +169,7 @@ export async function projectOperationsCenter(req: Request, requested: string[] 
       .flatMap(r => [r.source, r.destination].filter((id): id is string => !!id && branchIds.includes(id))
         .map(id => queueItem("reverse_movement", r.id, r.status, id, "warehouse", "حركة مرتجعات", r.status, link("/reverse-logistics", id))));
   });
-  await source("delivery", "delivery_tasks", async () => {
+  source("delivery", "delivery_tasks", async () => {
     if (!canAccessDeliveryWorkspace(req.currentUser)) {
       coverage.delivery = "unavailable";
       return [];
@@ -137,7 +195,7 @@ export async function projectOperationsCenter(req: Request, requested: string[] 
     return result.rows.map(r => queueItem("delivery_assignment", r.id, r.status, r.branch_id, "delivery_tasks",
       "مهمة توصيل", r.status, link("/driver-deliveries", r.branch_id), r.driver_id || "غير محدد", null, r.driver_id));
   });
-  await source("leaves", "hr_leaves", async () => {
+  source("leaves", "hr_leaves", async () => {
     const rows = await db.select({ id: leaveRequests.id, branchId: leaveRequests.branchId, status: leaveRequests.status,
       level: leaveRequests.currentLevel }).from(leaveRequests)
       .where(and(inArray(leaveRequests.branchId, branchIds), eq(leaveRequests.status, "pending")))
@@ -145,7 +203,7 @@ export async function projectOperationsCenter(req: Request, requested: string[] 
     return rows.map(r => queueItem("leave", r.id, `level_${r.level}`, r.branchId, "hr_leaves", "طلب إجازة",
       r.status, link("/hr/leaves", r.branchId)));
   });
-  await source("attendance", "attendance", async () => {
+  source("attendance", "attendance", async () => {
     const rows = await db.select({ id: attendanceRecords.id, branchId: attendanceRecords.branchId,
       status: attendanceRecords.status }).from(attendanceRecords)
       .where(and(inArray(attendanceRecords.branchId, branchIds), eq(attendanceRecords.attendanceDate, businessDate),
@@ -155,7 +213,7 @@ export async function projectOperationsCenter(req: Request, requested: string[] 
       "سجل حضور قيد المراجعة", r.status,
       link(`/employee-attendance-report?startDate=${businessDate}&endDate=${businessDate}`, r.branchId)));
   });
-  await source("advances", "hr_advances", async () => {
+  source("advances", "hr_advances", async () => {
     const rows = await db.select({ id: advanceRequests.id, branchId: advanceRequests.branchId,
       status: advanceRequests.status }).from(advanceRequests)
       .where(and(inArray(advanceRequests.branchId, branchIds),
@@ -164,7 +222,7 @@ export async function projectOperationsCenter(req: Request, requested: string[] 
     return rows.map(r => queueItem("advance", r.id, r.status, r.branchId, "hr_advances", "طلب سلفة", r.status,
       link("/hr/advances", r.branchId), r.status === "awaiting_signature" ? "الموظف" : r.status === "pending" ? "مدير التشغيل" : "شؤون الموظفين"));
   });
-  await source("quality", "quality_control", async () => {
+  source("quality", "quality_control", async () => {
     const rows = await db.select({ id: qualityChecks.id, branchId: qualityChecks.branchId, result: qualityChecks.result })
       .from(qualityChecks).where(and(inArray(qualityChecks.branchId, branchIds), eq(qualityChecks.checkDate, businessDate),
         inArray(qualityChecks.result, ["failed", "needs_improvement"])))
@@ -172,7 +230,7 @@ export async function projectOperationsCenter(req: Request, requested: string[] 
     return rows.map(r => queueItem("quality_check", r.id, r.result, r.branchId, "quality_control", "فحص جودة يحتاج متابعة",
       r.result, link("/quality-control", r.branchId)));
   });
-  await source("journals", "cashier_journal", async () => {
+  source("journals", "cashier_journal", async () => {
     const user = req.currentUser!;
     const allCashiers = ["admin", "manager"].includes(user.role)
       || await storage.hasPermission(user.id, "cashier_performance", "approve")
@@ -187,7 +245,7 @@ export async function projectOperationsCenter(req: Request, requested: string[] 
       r.status, link(`/cashier-journals?status=${r.status}`, r.branchId), r.status === "submitted" ? "المراجع المخول" : r.cashier,
       null, r.status === "submitted" ? null : r.cashier));
   });
-  await source("closing", "daily_closures", async () => {
+  source("closing", "daily_closures", async () => {
     const rows = await db.select({ id: branchDailyClosures.id, branchId: branchDailyClosures.branchId,
       status: branchDailyClosures.status, date: branchDailyClosures.closureDate }).from(branchDailyClosures)
       .where(and(inArray(branchDailyClosures.branchId, branchIds), lte(branchDailyClosures.closureDate, businessDate),
@@ -195,6 +253,13 @@ export async function projectOperationsCenter(req: Request, requested: string[] 
     return rows.map(r => queueItem("daily_closure", r.id, "open", r.branchId, "daily_closures", "إغلاق يومي غير مكتمل",
       r.status, link(`/branch-daily-closing?date=${encodeURIComponent(r.date)}&from=branch-operations`, r.branchId)));
   });
+  for (const result of await mapOperationsBounded(sources, SOURCE_CONCURRENCY, loadSource)) {
+    if (result.failed) { coverage[result.name] = "unavailable"; continue; }
+    if (result.rows.length >= SOURCE_LIMIT) truncated = true;
+    queue.push(...result.rows.slice(0, SOURCE_LIMIT - 1));
+    // The delivery loader can mark itself unavailable despite a module grant.
+    if (coverage[result.name] !== "unavailable") coverage[result.name] = "complete";
+  }
   // Daily evidence is queried at its historical date, never inferred from today's counters.
   const daily: OperationsEvidenceDay[] = [];
   for (const branchId of branchIds) {
@@ -290,6 +355,34 @@ export async function projectOperationsCenter(req: Request, requested: string[] 
 }
 
 export function registerOperationsCenterRoutes(app: Express): void {
+  const auth = [isAuthenticated, requirePermission("operations", "view")] as const;
+  app.get("/api/operations-center/notifications", ...auth, async (req, res, next) => {
+    res.set("Cache-Control", "no-store");
+    try {
+      const rows = await selectedNotifications(req);
+      const reads = new Set((await storage.getNotificationReadsByUser(req.currentUser!.id)).map(read => read.notificationId));
+      return res.json(rows.map(({ notification, kind, branchIds }) =>
+        publicCenterNotice(notification, { kind, branchIds }, reads.has(notification.id))));
+    } catch (error) { return notificationError(res, next, error); }
+  });
+  app.post("/api/operations-center/notifications/:id/:action", ...auth, async (req, res, next) => {
+    res.set("Cache-Control", "no-store");
+    try {
+      if (req.params.action !== "read" && req.params.action !== "dismiss")
+        return res.status(400).json({ message: "Invalid notification action" });
+      if (!/^[1-9]\d*$/.test(req.params.id) || !Number.isSafeInteger(Number(req.params.id)))
+        return res.status(400).json({ message: "Invalid notification ID" });
+      const id = Number(req.params.id);
+      // Re-evaluate recipient, live workflow authorization and exact selected
+      // branch scope at write time; never trust an ID from a previous fetch.
+      const visible = await selectedNotifications(req);
+      if (!visible.some(row => row.notification.id === id))
+        return res.status(403).json({ message: "Notification is not visible in this scope" });
+      if (req.params.action === "read") await storage.markNotificationRead(id, req.currentUser!.id);
+      else await storage.dismissNotification(id, req.currentUser!.id);
+      return res.json({ id, action: req.params.action });
+    } catch (error) { return notificationError(res, next, error); }
+  });
   const handler = (exportMode: boolean) => async (req: Request, res: any, next: any) => {
     try {
       res.set("Cache-Control", "no-store");

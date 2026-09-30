@@ -1680,6 +1680,7 @@ export interface IStorage {
   updateSystemNotification(id: number, notification: Partial<InsertSystemNotification>): Promise<SystemNotification | undefined>;
   deleteSystemNotification(id: number): Promise<boolean>;
   getActiveNotificationsForUser(userId: string, branchId: string): Promise<SystemNotification[]>;
+  getActiveNotificationsForUserInBranches(userId: string, branchIds: string[]): Promise<SystemNotification[]>;
   markNotificationRead(notificationId: number, userId: string): Promise<NotificationRead>;
   dismissNotification(notificationId: number, userId: string): Promise<NotificationRead>;
   getNotificationReadsByUser(userId: string): Promise<NotificationRead[]>;
@@ -18480,6 +18481,12 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getActiveNotificationsForUser(userId: string, branchId: string): Promise<SystemNotification[]> {
+    return this.getActiveNotificationsForUserInBranches(userId, [branchId]);
+  }
+
+  async getActiveNotificationsForUserInBranches(userId: string, branchIds: string[]): Promise<SystemNotification[]> {
+    if (branchIds.length === 0) return [];
+    const selectedBranches = new Set(branchIds);
     const now = new Date();
     const [userRow] = await db.select({ role: users.role }).from(users).where(eq(users.id, userId));
     const userRole = userRow?.role || null;
@@ -18517,7 +18524,7 @@ export class DatabaseStorage implements IStorage {
       if (userIdsTarget && userIdsTarget.length > 0) {
         if (!userIdsTarget.includes(userId)) return false;
       } else {
-        if (!n.targetAllBranches && n.targetBranchIds && !n.targetBranchIds.includes(branchId)) return false;
+        if (!n.targetAllBranches && n.targetBranchIds && !n.targetBranchIds.some(id => selectedBranches.has(id))) return false;
         // Phase 4: role-based targeting — if targetRoleIds is set and non-empty, only show to matching roles
         const roleIds = (n as any).targetRoleIds as string[] | null | undefined;
         if (roleIds && roleIds.length > 0) {
@@ -18531,6 +18538,7 @@ export class DatabaseStorage implements IStorage {
       || (n.accessModule === "warehouse" && n.autoSource === "warehouse_material_transfer")
       || (n.accessModule === "delivery_tasks" && n.autoSource === "delivery_task"));
     if (!scoped.length) return visible;
+    const scopedIds = new Set(scoped.map(n => n.id));
     const { filterAuthorizedCentralKitchenNotificationUsers } = await import("./central-kitchen-notifications");
     const allowedIds = new Set<number>();
     await Promise.all(scoped.map(async (notification) => {
@@ -18544,7 +18552,7 @@ export class DatabaseStorage implements IStorage {
       if (authorized.includes(userId)) allowedIds.add(notification.id);
     }));
     return visible.filter(n =>
-      !scoped.some(scopedNotification => scopedNotification.id === n.id) || allowedIds.has(n.id));
+      !scopedIds.has(n.id) || allowedIds.has(n.id));
   }
 
   async markNotificationRead(notificationId: number, userId: string): Promise<NotificationRead> {

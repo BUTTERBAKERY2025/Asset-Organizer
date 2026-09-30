@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { AlertTriangle, Download, RefreshCw } from "lucide-react";
+import { AlertTriangle, Download, RefreshCw, Radio, ChevronDown, Bell, Check, X } from "lucide-react";
 import type { OperationsCenterResponse, OperationsQueueItem } from "@shared/operations-center";
+import { parseNoticeAction } from "@shared/operations-center-notifications";
 import { Layout } from "@/components/layout";
 import { OperationsWorkspace, time } from "@/components/operations-center/workspace";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { syncAppBadge } from "@/lib/app-badge";
 import { useAuth } from "@/hooks/useAuth";
 import { useBranches } from "@/hooks/useBranches";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -17,7 +20,105 @@ const RECORD_PARAMS: Record<string, string> = {
   quality_check: "checkId",
 };
 function Empty({ message }: { message: string }) {
-  return <p className="rounded-xl border border-dashed bg-muted/20 px-4 py-8 text-center text-sm text-muted-foreground">{message}</p>;
+  return <p className="rounded-xl border border-dashed border-border bg-muted/20 px-4 py-8 text-center text-sm text-muted-foreground">{message}</p>;
+}
+
+interface CenterNotice {
+  id: number; title: string; content: string; messageType: string; priority: number;
+  createdAt: string; buttonText: string | null; buttonAction: string | null;
+  kind: "general" | "branch"; branchIds: string[]; read: boolean;
+}
+
+function CenterNotifications({ actorId, branchIds, names, liveManaged }: {
+  actorId: string; branchIds: string[]; names: Record<string, string>; liveManaged: boolean;
+}) {
+  const client = useQueryClient();
+  const [, navigate] = useLocation();
+  const [expanded, setExpanded] = useState(false);
+  const [filter, setFilter] = useState<"all" | "unread">("unread");
+  const [limit, setLimit] = useState(4);
+  const [detailId, setDetailId] = useState<number | null>(null);
+  const [error, setError] = useState("");
+  const scope = branchIds.slice().sort().join(",");
+  const queryKey = ["/api/operations-center/notifications", actorId, scope];
+  const notices = useQuery<CenterNotice[]>({
+    queryKey,
+    queryFn: async ({ signal }) => {
+      const response = await fetch(`/api/operations-center/notifications?${new URLSearchParams({ branchIds: scope })}`, { credentials: "include", signal, cache: "no-store" });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return response.json();
+    },
+    retry: false, staleTime: 0, refetchInterval: liveManaged ? false : 60_000,
+    refetchOnWindowFocus: false, refetchOnReconnect: false,
+  });
+  const action = useMutation({
+    mutationFn: async ({ id, verb }: { id: number; verb: "read" | "dismiss" }) => {
+      const response = await fetch(`/api/operations-center/notifications/${id}/${verb}?${new URLSearchParams({ branchIds: scope })}`,
+        { method: "POST", credentials: "include", cache: "no-store" });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    },
+    onSuccess: (_result, { verb }) => {
+      setError("");
+      if (verb === "dismiss") setDetailId(null);
+      void client.invalidateQueries({ queryKey });
+      void client.invalidateQueries({ queryKey: ["/api/active-notifications"] });
+      void client.invalidateQueries({ queryKey: ["/api/system-notifications/my-reads"] });
+      void syncAppBadge();
+    },
+    onError: () => { setDetailId(null); setError("تعذر تحديث الإشعار أو تغيرت صلاحية الوصول. حدّث الإشعارات."); void client.removeQueries({ queryKey }); void notices.refetch(); },
+  });
+  const rows = notices.isError ? [] : notices.data || [];
+  const unread = rows.filter(row => !row.read).length;
+  const filtered = filter === "unread" ? rows.filter(row => !row.read) : rows;
+  const detail = rows.find(row => row.id === detailId);
+  const label = (row: CenterNotice) => row.kind === "general" ? "إعلان عام"
+    : `فرع: ${row.branchIds.map(id => names[id] || id).join("، ")}`;
+  const priority = (value: number) => value >= 4 ? "عاجل" : value === 3 ? "مهم" : null;
+  return <section className="overflow-hidden rounded-xl border border-violet-200/70 bg-card" aria-label="إشعارات مركز التشغيل">
+    <button type="button" aria-expanded={expanded} onClick={() => setExpanded(value => !value)} className="flex w-full items-center justify-between gap-3 px-4 py-3 text-right hover:bg-violet-50/60">
+      <span className="flex items-center gap-2 text-sm font-bold"><Bell className="h-4 w-4 text-violet-700" />الإشعارات <span className="rounded-full bg-violet-100 px-2 py-0.5 text-xs text-violet-800">{notices.isLoading ? "…" : notices.isError ? "!" : `${unread} غير مقروء`}</span></span>
+      <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${expanded ? "rotate-180" : ""}`} />
+    </button>
+    {expanded && <div className="border-t border-violet-100 p-3 sm:p-4">
+      <p className="mb-3 text-xs text-muted-foreground">رسائل النظام الموجهة إليك ضمن نطاق الفروع المختار في رأس الصفحة. تُحدَّث تلقائيًا وبشكل دوري، ويمكن تحديثها يدويًا. قراءة الرسالة أو إخفاؤها لا تنفّذ إجراءً على السجل المرتبط.</p>
+      <div className="mb-3 flex gap-2">
+        <Button size="sm" variant={filter === "unread" ? "default" : "outline"} onClick={() => { setFilter("unread"); setLimit(4); }}>غير المقروءة ({unread})</Button>
+        <Button size="sm" variant={filter === "all" ? "default" : "outline"} onClick={() => { setFilter("all"); setLimit(4); }}>الكل ({rows.length})</Button>
+        <Button size="sm" variant="ghost" disabled={notices.isFetching} onClick={() => notices.refetch()}><RefreshCw className={`h-4 w-4 ${notices.isFetching ? "animate-spin" : ""}`} /><span className="sr-only">تحديث الإشعارات</span></Button>
+      </div>
+      {error && <p role="alert" className="mb-2 text-xs text-destructive">{error}</p>}
+      {notices.isLoading ? <p role="status" className="text-sm text-muted-foreground">جار تحميل الإشعارات…</p>
+        : notices.isError ? <p role="alert" className="text-sm text-destructive">تعذر تحميل الإشعارات. أعد المحاولة.</p>
+        : !rows.length ? <Empty message="لا توجد إشعارات في نطاق الفروع المحدد." />
+        : !filtered.length ? <Empty message="لا توجد إشعارات غير مقروءة في هذا النطاق." />
+        : <div className="space-y-2">{filtered.slice(0, limit).map(row => <article key={row.id} className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-background p-3 sm:flex-nowrap">
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2"><span className={`text-sm ${row.read ? "text-muted-foreground" : "font-bold"}`}>{row.title}</span>{priority(row.priority) && <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${row.priority >= 4 ? "bg-red-100 text-red-800" : "bg-amber-100 text-amber-800"}`}>{priority(row.priority)}</span>}</div>
+            <p className="mt-1 line-clamp-1 text-xs text-muted-foreground">{row.content}</p>
+            <p className="mt-1 text-[11px] text-muted-foreground">{label(row)} · {new Date(row.createdAt).toLocaleString("ar-SA")}{row.read ? " · مقروء" : ""}</p>
+          </div>
+          <div className="flex gap-1">
+            <Button size="sm" variant="outline" onClick={() => setDetailId(row.id)}>التفاصيل</Button>
+            {!row.read && <Button size="icon" variant="ghost" disabled={action.isPending} aria-label={`تحديد ${row.title} كمقروء`} onClick={() => action.mutate({ id: row.id, verb: "read" })}><Check className="h-4 w-4" /></Button>}
+            <Button size="icon" variant="ghost" disabled={action.isPending} aria-label={`إخفاء ${row.title}`} onClick={() => action.mutate({ id: row.id, verb: "dismiss" })}><X className="h-4 w-4" /></Button>
+          </div>
+        </article>)}{filtered.length > limit && <Button variant="outline" size="sm" onClick={() => setLimit(value => value + 8)}>عرض المزيد ({filtered.length - limit})</Button>}</div>}
+    </div>}
+    <Dialog open={!!detail} onOpenChange={open => { if (!open) setDetailId(null); }}>
+      <DialogContent dir="rtl" className="max-w-lg">
+        {detail && <><DialogHeader><DialogTitle className="text-right">{detail.title}</DialogTitle><DialogDescription className="text-right">{label(detail)} · {new Date(detail.createdAt).toLocaleString("ar-SA")}</DialogDescription></DialogHeader>
+          <p className="max-h-[50vh] overflow-auto whitespace-pre-wrap break-words text-sm leading-relaxed">{detail.content}</p>
+          <DialogFooter className="gap-2 sm:gap-2">
+            {detail.buttonAction && parseNoticeAction(detail.buttonAction, window.location.origin) && <Button onClick={() => {
+              const href = parseNoticeAction(detail.buttonAction, window.location.origin);
+              if (href) { setDetailId(null); navigate(href); }
+            }}>{detail.buttonText || "فتح المصدر"}</Button>}
+            {!detail.read && <Button variant="outline" disabled={action.isPending} onClick={() => action.mutate({ id: detail.id, verb: "read" })}>تحديد كمقروء</Button>}
+            <Button variant="outline" disabled={action.isPending} onClick={() => action.mutate({ id: detail.id, verb: "dismiss" })}>إخفاء</Button>
+          </DialogFooter></>}
+      </DialogContent>
+    </Dialog>
+  </section>;
 }
 
 export default function OperationsCenterPage() {
@@ -44,6 +145,7 @@ export default function OperationsCenterPage() {
   useEffect(() => {
     setScopeChecked(false);
     client.removeQueries({ queryKey: ["/api/operations-center"] });
+    client.removeQueries({ queryKey: ["/api/operations-center/notifications"] });
     void refetchBranches().then(result => setScopeChecked(!result.isError));
   }, [user?.id]);
   useEffect(() => {
@@ -51,6 +153,8 @@ export default function OperationsCenterPage() {
     if (removed || branchesError || !allowed) {
       void client.cancelQueries({ queryKey: ["/api/operations-center"] });
       client.removeQueries({ queryKey: ["/api/operations-center"] });
+      void client.cancelQueries({ queryKey: ["/api/operations-center/notifications"] });
+      client.removeQueries({ queryKey: ["/api/operations-center/notifications"] });
       if (removed && !branchesLoading && scopeChecked) setInvalidSelection(true);
     }
   }, [allowedIds.join(","), branchesError, branchesLoading, scopeChecked, allowed]);
@@ -59,21 +163,32 @@ export default function OperationsCenterPage() {
       setScopeChecked(false);
       void client.cancelQueries({ queryKey: ["/api/operations-center"] });
       client.removeQueries({ queryKey: ["/api/operations-center"] });
+      void client.cancelQueries({ queryKey: ["/api/operations-center/notifications"] });
+      client.removeQueries({ queryKey: ["/api/operations-center/notifications"] });
       void refetchBranches().then(result => setScopeChecked(!result.isError));
     };
     window.addEventListener("focus", refreshScope);
     return () => window.removeEventListener("focus", refreshScope);
   }, [refetchBranches]);
+  // One polling authority: the live hook already polls even while SSE is healthy.
+  // Window focus first revalidates branch authorization above, then mounts queries.
+  const liveEnabled = !!user?.id && allowed && scopeChecked && !invalidSelection && !branchesError && !branchesLoading && allowedIds.length > 0 && (effectiveIds.length || allowedIds.length) <= 25;
   const live = useOperationsCenterLive({
-    enabled: !!user?.id && allowed && scopeChecked && !invalidSelection && !branchesError && !branchesLoading && allowedIds.length > 0 && (effectiveIds.length || allowedIds.length) <= 25,
+    enabled: liveEnabled,
     branchIds: liveScope.current,
     onInvalidate: reason => {
       if (reason === "scope-invalidated") {
         setScopeChecked(false);
         void client.cancelQueries({ queryKey: ["/api/operations-center"] });
         client.removeQueries({ queryKey: ["/api/operations-center"] });
+        void client.cancelQueries({ queryKey: ["/api/operations-center/notifications"] });
+        client.removeQueries({ queryKey: ["/api/operations-center/notifications"] });
         void refetchBranches().then(result => setScopeChecked(!result.isError));
-      } else void client.invalidateQueries({ queryKey: ["/api/operations-center"] });
+      } else {
+        const options = { cancelRefetch: reason === "change" };
+        void client.invalidateQueries({ queryKey: ["/api/operations-center"] }, options);
+        void client.invalidateQueries({ queryKey: ["/api/operations-center/notifications"] }, options);
+      }
     },
   });
 
@@ -88,12 +203,14 @@ export default function OperationsCenterPage() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       return res.json();
     },
-    retry: false, staleTime: 0, refetchInterval: 60_000, refetchOnWindowFocus: "always",
+    retry: false, staleTime: 0, refetchInterval: liveEnabled ? false : 60_000,
+    refetchOnWindowFocus: false, refetchOnReconnect: false,
     placeholderData: undefined,
   });
-  const data = scopeChecked && allowed && !branchesLoading && !branchesError && !center.isError &&
+  const data = scopeChecked && allowed && !invalidSelection && !branchesLoading && !branchesError && !center.isError &&
     center.data?.scope.branchIds.every(id => allowedIds.includes(id)) &&
-    (!effectiveIds.length || center.data.scope.branchIds.every(id => effectiveIds.includes(id)))
+    center.data.scope.branchIds.length === (effectiveIds.length ? effectiveIds.length : allowedIds.length) &&
+    (effectiveIds.length ? effectiveIds : allowedIds).every(id => center.data.scope.branchIds.includes(id))
     ? center.data : undefined;
   const changeScope = (ids: string[]) => {
     setMessage("");
@@ -101,6 +218,8 @@ export default function OperationsCenterPage() {
     setInvalidSelection(false);
     void client.cancelQueries({ queryKey: ["/api/operations-center"] });
     client.removeQueries({ queryKey: ["/api/operations-center"] });
+    void client.cancelQueries({ queryKey: ["/api/operations-center/notifications"] });
+    client.removeQueries({ queryKey: ["/api/operations-center/notifications"] });
     const next = ids.filter(id => allowedIds.includes(id));
     setSelected(next);
     navigate(`/operations-center${next.length ? `?${new URLSearchParams({ branchIds: next.join(",") })}` : ""}`, { replace: true });
@@ -146,29 +265,30 @@ export default function OperationsCenterPage() {
       setTimeout(() => URL.revokeObjectURL(link.href), 1000);
     } catch { setMessage("تعذر التصدير من الخادم. حاول مرة أخرى."); }
   };
-  return <Layout><main dir="rtl" className="page-container mx-auto max-w-[1550px] space-y-4 pb-8 pt-4" data-testid="operations-center-page">
-    <header className="relative rounded-2xl bg-[#3e2b3a] text-[#fff8f3] shadow-[0_12px_28px_rgba(48,27,42,0.12)]">
-      <div className="flex flex-col gap-3 px-5 py-4 lg:flex-row lg:items-center lg:justify-between lg:px-7">
-        <div className="min-w-0"><p className="text-[11px] font-bold tracking-[.12em] text-[#e4b6a4]">BUTTER BAKERY / OPERATIONS</p><h1 className="mt-1 text-2xl font-extrabold tracking-tight">مركز إدارة التشغيل</h1></div>
+  return <Layout><main dir="rtl" className="page-container mx-auto max-w-[1550px] space-y-5 pb-10" data-testid="operations-center-page">
+    <header className="border-b border-border pb-4 pt-2">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div className="min-w-0"><p className="text-xs font-bold text-muted-foreground">BUTTER BAKERY · عمليات الفروع</p><h1 className="mt-1 text-2xl font-black text-foreground sm:text-3xl">مركز إدارة التشغيل</h1><p className="mt-1 text-sm text-muted-foreground">قراءة موحدة لما يتطلب المتابعة عبر الفروع المسموح بها.</p></div>
         <div className="flex flex-wrap items-center gap-2">
-          <details className="relative min-w-[175px] flex-1 rounded-xl border border-[#765d6b] bg-[#523b4e] lg:flex-none">
-            <summary className="min-h-10 cursor-pointer px-3 py-2.5 text-xs font-bold">نطاق الفروع · {effectiveIds.length ? `${effectiveIds.length} مختارة` : `${allowedIds.length} مسموح بها`}</summary>
-            <div className="absolute left-0 right-0 z-30 mt-1 min-w-[260px] rounded-xl border border-[#e5d9d8] bg-[#fffdfa] p-2 text-[#342832] shadow-xl">
-              <input aria-label="بحث نطاق الفروع" value={scopeSearch} onChange={event => setScopeSearch(event.target.value)} placeholder="ابحث عن فرع" className="mb-2 min-h-10 w-full rounded-lg border border-[#e5d9d8] bg-[#fffdfa] px-3 text-sm outline-none" />
+          <details className="relative z-30 min-w-[190px] flex-1 sm:flex-none">
+            <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-2 rounded-lg border border-border bg-card px-3 text-sm font-bold text-foreground hover:bg-accent"><span>نطاق الفروع · {effectiveIds.length ? `${effectiveIds.length} مختارة` : `${allowedIds.length} متاحة`}</span><ChevronDown className="h-4 w-4 text-muted-foreground" /></summary>
+            <div className="absolute left-0 right-0 z-30 mt-1 min-w-[260px] rounded-xl border border-border bg-popover p-2 text-popover-foreground shadow-lg">
+              <input aria-label="بحث نطاق الفروع" value={scopeSearch} onChange={event => setScopeSearch(event.target.value)} placeholder="ابحث عن فرع" className="mb-2 min-h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring" />
               <div className="max-h-52 overflow-y-auto">
               <Button variant="ghost" className="w-full justify-start text-xs" onClick={() => changeScope([])}>كل الفروع المسموح بها</Button>
-              {branches.filter(branch => branch.name.toLocaleLowerCase().includes(scopeSearch.toLocaleLowerCase().trim())).map(branch => <label key={branch.id} className="flex min-h-10 cursor-pointer items-center gap-2 rounded px-2 text-xs hover:bg-[#f4ece8]"><input type="checkbox" checked={effectiveIds.includes(branch.id)} onChange={event => changeScope(event.target.checked ? [...effectiveIds, branch.id] : effectiveIds.length ? effectiveIds.filter(id => id !== branch.id) : allowedIds.filter(id => id !== branch.id))} />{branch.name}</label>)}
+              {branches.filter(branch => branch.name.toLocaleLowerCase().includes(scopeSearch.toLocaleLowerCase().trim())).map(branch => <label key={branch.id} className="flex min-h-10 cursor-pointer items-center gap-2 rounded px-2 text-xs hover:bg-accent"><input type="checkbox" checked={effectiveIds.includes(branch.id)} onChange={event => changeScope(event.target.checked ? [...effectiveIds, branch.id] : effectiveIds.length ? effectiveIds.filter(id => id !== branch.id) : allowedIds.filter(id => id !== branch.id))} />{branch.name}</label>)}
               </div>
             </div>
           </details>
-          <Button variant="outline" size="sm" className="min-h-10 border-[#765d6b] bg-[#523b4e] text-[#fff8f3] hover:bg-[#694d60] hover:text-[#fff8f3]" disabled={!data || center.isFetching} onClick={() => center.refetch()}><RefreshCw className={`ml-2 h-4 w-4 ${center.isFetching ? "animate-spin" : ""}`} />تحديث</Button>
-          {canExport("operations") && <Button variant="outline" size="sm" className="min-h-10 border-[#765d6b] bg-[#523b4e] text-[#fff8f3] hover:bg-[#694d60] hover:text-[#fff8f3]" disabled={!data} onClick={exportScope}><Download className="ml-2 h-4 w-4" />تصدير</Button>}
+          <Button variant="outline" size="sm" className="min-h-11" disabled={!data || center.isFetching} onClick={() => center.refetch()}><RefreshCw className={`ml-2 h-4 w-4 ${center.isFetching ? "animate-spin" : ""}`} />تحديث</Button>
+          {canExport("operations") && <Button variant="outline" size="sm" className="min-h-11" disabled={!data} onClick={exportScope}><Download className="ml-2 h-4 w-4" />تصدير</Button>}
         </div>
       </div>
-      {data && <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-[#654b5c] px-5 py-2 text-[11px] text-[#e2d2d5] lg:px-7"><span>يوم العمل: {data.businessDate}</span><span>آخر توليد: {time(data.generatedAt)} · السعودية</span><span>الاتصال: {live.status === "connected" ? "مباشر" : live.status === "polling" ? "تحديث دوري" : live.status === "access-invalidated" ? "الصلاحيات تغيرت" : "جار التحقق"}</span><span>آخر فحص للاتصال: {live.lastCheckedAt ? time(new Date(live.lastCheckedAt).toISOString()) : "غير متاح"}</span></div>}
+      {data && <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-border pt-3 text-xs text-muted-foreground"><span className="font-semibold text-foreground">يوم العمل: {data.businessDate}</span><span>آخر تحديث: {time(data.generatedAt)} · السعودية</span><span className="inline-flex items-center gap-1.5"><Radio className="h-3.5 w-3.5 text-primary" />{live.status === "connected" ? "مباشر" : live.status === "polling" ? "تحديث دوري" : live.status === "access-invalidated" ? "الصلاحيات تغيرت" : "جار التحقق"}</span><span>آخر فحص للاتصال: {live.lastCheckedAt ? time(new Date(live.lastCheckedAt).toISOString()) : "غير متاح"}</span></div>}
     </header>
-    {message && <p role="alert" className="rounded-xl border border-[#e5c5ba] bg-[#fff2eb] p-3 text-sm text-[#944c36]">{message}</p>}
-    {branchesError ? <div className="rounded-xl border bg-card p-6 text-center"><AlertTriangle className="mx-auto mb-2 h-6 w-6 text-destructive" /><p>تعذر التحقق من الفروع المسموح بها.</p><Button variant="outline" className="mt-3" onClick={() => { setScopeChecked(false); void refetchBranches().then(result => setScopeChecked(!result.isError)); }}>إعادة المحاولة</Button></div> : !allowed && !permissionsLoading ? <Empty message="لا تملك صلاحية عرض مركز التشغيل." /> : invalidSelection && !branchesLoading && scopeChecked ? <Empty message="تغير نطاق الصلاحيات أو الفرع المطلوب غير مسموح. اختر نطاقًا جديدًا من الفروع المتاحة أعلاه." /> : !branchesLoading && scopeChecked && !allowedIds.length ? <Empty message="لا توجد فروع مسموح بها لهذا الحساب." /> : branchesLoading || !scopeChecked || center.isLoading ? <div role="status" className="grid gap-3 rounded-2xl border bg-card p-5"><div className="h-6 w-48 animate-pulse rounded-lg bg-muted" /><div className="grid gap-3 lg:grid-cols-[210px_1fr_345px]">{[0, 1, 2].map(index => <div key={index} className="h-64 animate-pulse rounded-xl bg-muted" />)}</div><span className="sr-only">جار تحميل نطاق الفروع والبيانات</span></div> : center.isError ? <div className="rounded-xl border bg-card p-6 text-center"><AlertTriangle className="mx-auto mb-2 h-6 w-6 text-destructive" /><p>تعذر تحميل المركز ({center.error instanceof Error ? center.error.message : "خطأ غير معروف"}). لم نعرض بيانات قديمة.</p><Button variant="outline" className="mt-3" onClick={() => center.refetch()}>إعادة المحاولة</Button></div> : data ?
+    {message && <p role="alert" className="rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">{message}</p>}
+    {data && user?.id && data.scope.branchIds.length > 0 && <CenterNotifications key={`${user.id}:${data.scope.branchIds.slice().sort().join(",")}`} actorId={user.id} branchIds={data.scope.branchIds} names={Object.fromEntries(data.branches.map(branch => [branch.id, branch.name]))} liveManaged={liveEnabled} />}
+    {branchesError ? <div className="rounded-xl border bg-card p-6 text-center"><AlertTriangle className="mx-auto mb-2 h-6 w-6 text-destructive" /><p>تعذر التحقق من الفروع المسموح بها.</p><Button variant="outline" className="mt-3" onClick={() => { setScopeChecked(false); void refetchBranches().then(result => setScopeChecked(!result.isError)); }}>إعادة المحاولة</Button></div> : !allowed && !permissionsLoading ? <Empty message="لا تملك صلاحية عرض مركز التشغيل." /> : invalidSelection && !branchesLoading && scopeChecked ? <Empty message="تغير نطاق الصلاحيات أو الفرع المطلوب غير مسموح. اختر نطاقًا جديدًا من الفروع المتاحة أعلاه." /> : !branchesLoading && scopeChecked && !allowedIds.length ? <Empty message="لا توجد فروع مسموح بها لهذا الحساب." /> : branchesLoading || !scopeChecked || center.isLoading ? <div role="status" className="grid gap-3 rounded-xl border border-border bg-card p-5"><div className="h-6 w-48 animate-pulse rounded-lg bg-muted" /><div className="grid gap-3 md:grid-cols-2">{[0, 1].map(index => <div key={index} className="h-36 animate-pulse rounded-xl bg-muted" />)}</div><span className="sr-only">جار تحميل نطاق الفروع والبيانات</span></div> : center.isError ? <div className="rounded-xl border bg-card p-6 text-center"><AlertTriangle className="mx-auto mb-2 h-6 w-6 text-destructive" /><p>تعذر تحميل المركز ({center.error instanceof Error ? center.error.message : "خطأ غير معروف"}). لم نعرض بيانات قديمة.</p><Button variant="outline" className="mt-3" onClick={() => center.refetch()}>إعادة المحاولة</Button></div> : data ?
       <OperationsWorkspace key={effectiveIds.slice().sort().join(",")} data={data} actorId={user?.id} offset={offset} onOffset={setOffset} open={go} openBranch={id => navigate(`/branch-operations?branchId=${encodeURIComponent(id)}`)} retry={() => { void center.refetch(); }} />
       : <Empty message="تعذر التحقق من نطاق الاستجابة. حدّث الصفحة بعد مراجعة صلاحيات الفروع." />}
   </main></Layout>;
