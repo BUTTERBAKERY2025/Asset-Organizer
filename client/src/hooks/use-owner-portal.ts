@@ -28,7 +28,7 @@ export function revokeOwnerAccess(status: 401 | 403) {
   }
 }
 
-async function ownerGet<T>(path: string, params: Record<string, string> = {}): Promise<T> {
+export async function ownerGet<T>(path: string, params: Record<string, string> = {}): Promise<T> {
   const url = new URL(path, window.location.origin);
   Object.entries(params).forEach(([key, value]) => url.searchParams.set(key, value));
   const response = await fetch(url.pathname + url.search, { credentials: "include" });

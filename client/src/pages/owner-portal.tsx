@@ -3,9 +3,9 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Home, ChartNoAxesCombined, Package, UsersRound, Megaphone, RefreshCw, LogOut, Download, ChevronLeft, ChevronRight, ImageOff, CalendarDays, MapPin, X } from "lucide-react";
 import logo from "@assets/logo_butter_bakery__1768502624540.png";
 import { useAuth } from "@/hooks/useAuth";
-import { ownerAccessRevoked, restoreOwnerAccess, subscribeOwnerAccess, useOwnerAssets, useOwnerBranches, useOwnerMarketing, useOwnerOverview, useOwnerSales, useOwnerShareholders } from "@/hooks/use-owner-portal";
+import { ownerAccessRevoked, ownerGet, restoreOwnerAccess, subscribeOwnerAccess, useOwnerAssets, useOwnerBranches, useOwnerMarketing, useOwnerOverview, useOwnerSales, useOwnerShareholders } from "@/hooks/use-owner-portal";
 import { exportOwnerPdf, ownerDelta, ownerMoney, ownerNumber } from "@/lib/owner-pdf";
-import type { OwnerAssetsResponse, OwnerMarketingResponse, OwnerMarketingSection, OwnerSalesResponse, OwnerShareholdersResponse } from "@shared/owner-portal";
+import type { OwnerAssetsResponse, OwnerMarketingResponse, OwnerMarketingSection, OwnerOverviewResponse, OwnerSalesResponse, OwnerShareholdersResponse } from "@shared/owner-portal";
 import "./owner-portal.css";
 
 type Tab = "home" | "sales" | "assets" | "shareholders" | "marketing";
@@ -25,6 +25,11 @@ const marketingSections: Array<{ id: OwnerMarketingSection; label: string }> = [
   { id: "tasks", label: "المهام" }, { id: "content", label: "المحتوى" },
 ];
 const today = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Riyadh", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+const previousDay = (date: string) => {
+  const day = new Date(`${date}T00:00:00Z`);
+  day.setUTCDate(day.getUTCDate() - 1);
+  return day.toISOString().slice(0, 10);
+};
 const dateText = (value: string) => {
   const d = new Date(value);
   return Number.isNaN(d.getTime()) ? value : new Intl.DateTimeFormat("ar-SA-u-nu-latn", { day: "numeric", month: "short", year: "numeric", timeZone: "Asia/Riyadh" }).format(d);
@@ -47,6 +52,9 @@ function SalesList({ sales }: { sales: OwnerSalesResponse }) {
     <div className="owner-row-main"><strong>{branch.name}</strong><small>{branch.status === "missing" ? <span className="owner-status missing">لم يصل تقرير للفترة</span> : `${ownerNumber(branch.journalCount)} يومية · ${ownerDelta(branch.sales || 0, branch.previousSales)}`}</small></div>
     <div className="owner-row-value">{ownerMoney(branch.sales)}</div>
   </div>)}</div>;
+}
+function LastReport({ date, onSelect }: { date?: string | null; onSelect: (date: string) => void }) {
+  return <p className="owner-sub">{date ? <>آخر تقرير متاح: {dateText(date)} <button type="button" className="owner-link" style={{ color: "#fff", textDecoration: "underline" }} onClick={() => onSelect(date)}>عرض آخر تقرير</button></> : "لا يوجد تقرير متاح لهذا الفرع حتى الآن."}</p>;
 }
 
 export default function OwnerPortal() {
@@ -83,6 +91,12 @@ export default function OwnerPortal() {
   const setSearch = (value: string) => { setSearches(v => ({ ...v, [searchKey]: value })); setPages(v => ({ ...v, [searchKey]: 1 })); };
   const setPage = (value: number) => setPages(v => ({ ...v, [searchKey]: value }));
   const changeBranch = (value: string) => { setBranchId(value); setPages({}); };
+  const selectReportDate = (date: string) => { setDateFrom(date); setDateTo(date); };
+  const chooseSalesPeriod = (period: "today" | "yesterday" | "month") => {
+    const end = period === "yesterday" ? previousDay(today()) : today();
+    setDateFrom(period === "month" ? `${end.slice(0, 7)}-01` : end);
+    setDateTo(end);
+  };
   const activeName = tabList.find(t => t.id === tab)?.label || "الرئيسية";
   const currentData = tab === "home" ? overview.data : tab === "sales" ? sales.data : tab === "assets" ? assets.data : tab === "shareholders" ? shareholders.data : marketing.data;
   const activeQuery = tab === "home" ? overview : tab === "sales" ? sales : tab === "assets" ? assets : tab === "shareholders" ? shareholders : marketing;
@@ -101,17 +115,14 @@ export default function OwnerPortal() {
     setExportError(""); setExporting(true);
     try {
       // A fresh read is deliberate: exporting an off-screen section still gets a matching summary.
-      const summary = overview.data || await queryClient.fetchQuery({ queryKey: ["owner", "overview", dateTo, branchId], queryFn: async () => {
-        const response = await fetch(`/api/owner/overview?${new URLSearchParams({ date: dateTo, branchId })}`, { credentials: "include" });
-        if (!response.ok) throw new Error("تعذر تحميل الملخص");
-        return response.json();
-      } });
+      const summary = overview.data || await queryClient.fetchQuery({ queryKey: ["owner", "overview", dateTo, branchId], queryFn: () => ownerGet<OwnerOverviewResponse>("/api/owner/overview", { date: dateTo, branchId }) });
       if (!currentData || (tab === "sales" && !validDates)) throw new Error("انتظر اكتمال تحميل القسم قبل التصدير");
       const sectionData = tab === "sales" && sales.data ? { title: "مبيعات الفروع", columns: ["الفرع", "المبيعات", "الحالة"], rows: sales.data.branches.map(b => [b.name, ownerMoney(b.sales), b.status === "missing" ? "لم يصل تقرير" : "مسجل"]) } :
         tab === "assets" && assets.data ? { title: "الأصول", columns: ["الأصل", "الفرع", "الحالة"], rows: assets.data.items.map(a => [a.name, a.branchName, a.status]) } :
         tab === "shareholders" && shareholders.data ? { title: "المساهمون", columns: ["الاسم", "الأسهم", "نسبة الملكية"], rows: shareholders.data.items.map(s => [s.name, ownerNumber(s.shares), s.ownershipPercent === null ? "غير متاح" : `${ownerNumber(s.ownershipPercent)}%`]), note: shareholders.data.summary.ownershipBasis } :
         tab === "marketing" && marketing.data ? { title: `التسويق · ${marketingSections.find(s => s.id === section)?.label}`, columns: ["العنوان", "الحالة", "التاريخ"], rows: marketing.data.items.map(m => [m.title, m.status, m.date ? dateText(m.date) : "—"]), note: marketing.data.scopeLabel } : undefined;
-      await exportOwnerPdf({ overview: summary, sales: sales.data, section: sectionData, sectionPage: tab === "home" || tab === "sales" ? undefined : page, branchName: branches.data?.branches.find(b => b.id === branchId)?.name || "جميع الفروع", period: tab === "sales" && dateFrom !== dateTo ? `${dateText(dateFrom)} — ${dateText(dateTo)}` : dateText(dateTo) });
+      if (ownerAccessRevoked()) throw new Error("لم يعد حسابك مخولاً لعرض بوابة المالك");
+      await exportOwnerPdf({ overview: summary, sales: tab === "sales" ? sales.data : undefined, section: sectionData, sectionPage: tab === "home" || tab === "sales" ? undefined : page, branchName: branches.data?.branches.find(b => b.id === branchId)?.name || "جميع الفروع", period: tab === "sales" && dateFrom !== dateTo ? `${dateText(dateFrom)} — ${dateText(dateTo)}` : dateText(dateTo) });
     } catch (error) { setExportError(error instanceof Error ? error.message : "تعذر إنشاء PDF"); }
     finally { setExporting(false); }
   };
@@ -123,27 +134,28 @@ export default function OwnerPortal() {
       <header className="owner-head"><div className="owner-brand"><img src={logo} alt="شعار باتر بيكري" /><div><strong>باتر بيكري</strong><small>OWNER PORTAL</small></div></div>
         <div className="owner-tools"><button className="owner-icon" title="تحديث البيانات" aria-label="تحديث البيانات" onClick={retry}><RefreshCw size={18} /></button><button className="owner-icon" title="تسجيل الخروج" aria-label="تسجيل الخروج" disabled={isLoggingOut} onClick={async () => { try { await logout(); window.location.assign("/login"); } catch { setExportError("تعذر تسجيل الخروج؛ حاول مرة أخرى"); } }}><LogOut size={18} /></button></div></header>
       <div className="owner-kicker">مساحة المالك · {dateText(today())}</div>
-      <h1 className="owner-title">{tab === "home" ? "صورة اليوم، بوضوح." : activeName}</h1>
+      <h1 className="owner-title">{tab === "home" ? dateTo === today() ? "صورة اليوم، بوضوح." : "صورة الفترة، بوضوح." : activeName}</h1>
       <p className="owner-sub">{tab === "home" ? "ما يهمك من الفروع في مكان واحد." : tab === "sales" ? "المبيعات المسجلة في يوميات الفروع، وليست صافي الربح." : tab === "marketing" ? "نشاط التسويق على مستوى الشركة · للعرض فقط" : "بيانات أساسية للعرض فقط"}</p>
       {(tab === "home" || tab === "sales" || tab === "assets") && <div className="owner-filters" aria-label="تصفية البيانات">
         <label className="owner-field"><MapPin size={15} /><select aria-label="الفرع" value={branchId} onChange={e => changeBranch(e.target.value)}><option value="all">جميع الفروع</option>{branches.data?.branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}</select></label>
         {tab === "sales" && <label className="owner-field"><CalendarDays size={15} /><span>من</span><input type="date" aria-label="من تاريخ" value={dateFrom} max={dateTo} onChange={e => setDateFrom(e.target.value)} /></label>}
         {tab !== "assets" && <label className="owner-field"><span>{tab === "home" ? "التاريخ" : "إلى"}</span><input type="date" aria-label="إلى تاريخ" value={dateTo} min={tab === "sales" ? dateFrom : undefined} onChange={e => setDateTo(e.target.value)} /></label>}
+        {tab === "sales" && <><button type="button" className="owner-action" onClick={() => chooseSalesPeriod("today")}>اليوم</button><button type="button" className="owner-action" onClick={() => chooseSalesPeriod("yesterday")}>أمس</button><button type="button" className="owner-action" onClick={() => chooseSalesPeriod("month")}>الشهر الحالي</button></>}
       </div>}
       {branches.isError && (tab === "home" || tab === "sales" || tab === "assets") && <div className="owner-section"><ErrorState retry={retry} /></div>}
       {tab === "home" && (overview.isLoading ? <Loading /> : overview.isError ? <ErrorState retry={retry} /> : overview.data ? <>
-        <div className="owner-hero"><small>المبيعات المسجلة · {dateText(overview.data.dateFrom)}{overview.data.dateTo !== overview.data.dateFrom ? ` — ${dateText(overview.data.dateTo)}` : ""}</small><h2>{ownerNumber(overview.data.totals.sales)} <span>ر.س</span></h2><p>{ownerDelta(overview.data.totals.sales, overview.data.totals.previousSales)}</p><div className="owner-pill">{ownerNumber(overview.data.totals.reportedBranches)} من {ownerNumber(overview.data.totals.branchCount)} فرع أرسل تقريراً</div></div>
+        <div className="owner-hero"><small>المبيعات المسجلة · {dateText(overview.data.dateFrom)}{overview.data.dateTo !== overview.data.dateFrom ? ` — ${dateText(overview.data.dateTo)}` : ""}</small>{overview.data.totals.reportedBranches === 0 ? <><h2>لم يصل تقرير للفترة</h2><LastReport date={overview.data.latestReportDate} onSelect={selectReportDate} /></> : <><h2>{ownerNumber(overview.data.totals.sales)} <span>ر.س</span></h2><p>{ownerDelta(overview.data.totals.sales, overview.data.totals.previousSales)}</p></>}<div className="owner-pill">{ownerNumber(overview.data.totals.reportedBranches)} من {ownerNumber(overview.data.totals.branchCount)} فرع أرسل تقريراً</div></div>
         <div className="owner-section"><div className="owner-section-head"><h2>على مستوى العمل</h2><small>{fresh(overview.data.generatedAt)}</small></div><div className="owner-grid">
           <div className="owner-card owner-metric"><small>يوميات المبيعات</small><strong>{ownerNumber(overview.data.totals.journalCount)}</strong><em>من المصدر المسجل</em></div>
           <div className="owner-card owner-metric"><small>الأصول</small><strong>{ownerNumber(overview.data.assets.total)}</strong><em>{ownerNumber(overview.data.assets.needsAttention)} تحتاج اهتماماً</em></div>
           <div className="owner-card owner-metric"><small>المساهمون</small><strong>{ownerNumber(overview.data.shareholders.count)}</strong><em>بيانات الأسهم الأساسية</em></div>
           <div className="owner-card owner-metric"><small>حملات نشطة</small><strong>{ownerNumber(overview.data.marketing.activeCampaigns)}</strong><em>على مستوى الشركة</em></div>
         </div></div>
-        <div className="owner-section"><div className="owner-section-head"><h2>الفروع اليوم</h2><button className="owner-link" onClick={() => setTab("sales")}>تفاصيل المبيعات ←</button></div><SalesList sales={overview.data} /></div>
+        <div className="owner-section"><div className="owner-section-head"><h2>{dateTo === today() ? "الفروع اليوم" : "الفروع في التاريخ المحدد"}</h2><button className="owner-link" onClick={() => setTab("sales")}>تفاصيل المبيعات ←</button></div><SalesList sales={overview.data} /></div>
         <p className="owner-sub" style={{ marginTop: 14 }}>المصدر: {overview.data.sourceLabel}. الفرع الذي لم يرسل تقريراً لا يُحتسب كمبيعات صفرية.</p>
       </> : null)}
       {tab === "sales" && (validDates ? sales.isLoading ? <Loading /> : sales.isError ? <ErrorState retry={retry} /> : sales.data ? <>
-        <div className="owner-hero"><small>المبيعات المبلّغ عنها · {dateText(dateFrom)} — {dateText(dateTo)}</small><h2>{ownerNumber(sales.data.totals.sales)} <span>ر.س</span></h2><p>{ownerDelta(sales.data.totals.sales, sales.data.totals.previousSales)}</p><div className="owner-pill">تغطية {ownerNumber(sales.data.totals.reportedBranches)} / {ownerNumber(sales.data.totals.branchCount)} فروع</div></div>
+        <div className="owner-hero"><small>المبيعات المبلّغ عنها · {dateText(dateFrom)} — {dateText(dateTo)}</small>{sales.data.totals.reportedBranches === 0 ? <><h2>لم يصل تقرير للفترة</h2><LastReport date={sales.data.latestReportDate} onSelect={selectReportDate} /></> : <><h2>{ownerNumber(sales.data.totals.sales)} <span>ر.س</span></h2><p>{ownerDelta(sales.data.totals.sales, sales.data.totals.previousSales)}</p></>}<div className="owner-pill">تغطية {ownerNumber(sales.data.totals.reportedBranches)} / {ownerNumber(sales.data.totals.branchCount)} فروع</div></div>
         <div className="owner-section"><div className="owner-section-head"><h2>تفصيل الفروع</h2><small>{fresh(sales.data.generatedAt)}</small></div><SalesList sales={sales.data} /><p className="owner-sub">{sales.data.sourceLabel} · غياب التقرير ليس صفراً.</p></div>
       </> : null : <Empty title="نطاق التاريخ غير صالح" hint="اختر تاريخ بداية يسبق تاريخ النهاية." />)}
       {tab === "assets" && <div className="owner-section"><div className="owner-section-head"><h2>سجل الأصول</h2><small>{fresh(assets.data?.generatedAt)}</small></div><input className="owner-search" aria-label="بحث في الأصول" placeholder="ابحث عن أصل..." value={search} onChange={e => setSearch(e.target.value)} />{assets.isLoading ? <Loading /> : assets.isError ? <ErrorState retry={retry} /> : !assets.data?.items.length ? <Empty title="لا توجد أصول مطابقة" hint="جرّب تغيير الفرع أو كلمة البحث." /> : <><div className="owner-list">{assets.data.items.map(item => <button type="button" className="owner-row owner-card owner-detail-row" aria-label={`تفاصيل الأصل ${item.name}`} onClick={() => setDetail({ kind: "asset", item })} key={item.id}><Thumbnail src={item.imageUrl} alt={item.name} /><div className="owner-row-main"><strong>{item.name}</strong><small>{item.branchName}{item.category ? ` · ${item.category}` : ""}</small>{item.maintenanceSummary && <small>صيانة: {item.maintenanceSummary}</small>}</div><span className="owner-status">{item.status}</span></button>)}</div><Paging page={pages.assets || 1} total={assets.data.total} pageSize={assets.data.pageSize} setPage={setPage} /></>}</div>}

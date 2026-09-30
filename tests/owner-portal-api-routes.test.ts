@@ -16,6 +16,7 @@ vi.mock("../server/auth", () => ({
   getEffectiveBranchFilter: mocks.effective,
 }));
 import { registerOwnerPortalRoutes } from "../server/owner-portal-routes";
+import { PgDialect } from "drizzle-orm/pg-core";
 
 const routes = new Map<string, Function[]>();
 registerOwnerPortalRoutes({ get: (path: string, ...handlers: Function[]) => routes.set(path, handlers) } as unknown as Express);
@@ -41,6 +42,29 @@ describe("owner API handlers", () => {
       expect((await request("overview", { role })).status).toHaveBeenCalledWith(403);
     }
     expect(mocks.select).not.toHaveBeenCalled();
+  });
+  it("includes posted sales and scopes the latest report lookup to granted branches", async () => {
+    const results = [
+      [{ id: "a", name: "A" }],
+      [{ branchId: "a", sales: "42.50", journalCount: 1 }],
+      [],
+      [{ date: "2026-09-29" }],
+    ];
+    const filters: unknown[] = [];
+    for (const rows of results) {
+      const query: any = { then: (resolve: Function) => Promise.resolve(rows).then(resolve as any) };
+      for (const method of ["from", "orderBy", "groupBy"]) query[method] = vi.fn(() => query);
+      query.where = vi.fn((condition) => { filters.push(condition); return query; });
+      mocks.select.mockReturnValueOnce(query);
+    }
+    const res = await request("sales", { query: { dateFrom: "2026-09-29", dateTo: "2026-09-29" } });
+    expect(res.json.mock.calls[0][0]).toMatchObject({ latestReportDate: "2026-09-29", totals: { sales: 42.5, reportedBranches: 1 } });
+    const dialect = new PgDialect();
+    for (const filter of filters.slice(1)) {
+      const compiled = dialect.sqlToQuery(filter as any);
+      expect(compiled.params).toEqual(expect.arrayContaining(["a", "posted", "approved"]));
+      expect(compiled.params).not.toContain("submitted");
+    }
   });
   it("rejects no grants and unauthorized branch queries", async () => {
     expect((await request("assets", { grants: [] })).status).toHaveBeenCalledWith(403);

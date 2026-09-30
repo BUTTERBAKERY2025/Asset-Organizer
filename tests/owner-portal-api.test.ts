@@ -38,8 +38,8 @@ describe("owner branch isolation", () => {
 });
 
 describe("owner reporting semantics and minimized query contract", () => {
-  it("allows only submitted and approved journal statuses", () => {
-    expect(OWNER_SALES_STATUSES).toEqual(["submitted", "approved"]);
+  it("matches operational posted and approved journals, excluding drafts and unapproved submissions", () => {
+    expect(OWNER_SALES_STATUSES).toEqual(["posted", "approved"]);
   });
   it("distinguishes missing reports from true zero and never includes other branches", () => {
     const result = ownerSalesResponse([{ id: "a", name: "A" }, { id: "b", name: "B" }], [{ branchId: "a", sales: "0", journalCount: 1 }, { branchId: "secret", sales: "999", journalCount: 4 }], [], "2026-01-01", "2026-01-01");

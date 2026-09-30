@@ -1,8 +1,8 @@
 import type { OwnerBranch, OwnerSalesResponse } from "@shared/owner-portal";
 
 export const OWNER_PAGE_SIZE = 20;
-export const OWNER_SALES_STATUSES = ["submitted", "approved"] as const;
-export const OWNER_SOURCE_LABEL = "إجمالي مبيعات يوميات الكاشير المقدمة والمعتمدة فقط؛ تستبعد المسودات والمرفوضة وأي حالة أخرى. ليست صافي المبيعات ولا تضاف معاملات نقطة البيع. المقارنة بالفترة السابقة المساوية بالأيام بتوقيت الرياض. الإجمالي للمبلغ عنه فقط؛ غياب اليومية لا يعني صفراً.";
+export const OWNER_SALES_STATUSES = ["posted", "approved"] as const;
+export const OWNER_SOURCE_LABEL = "إجمالي مبيعات يوميات الكاشير المرحّلة والمعتمدة فقط؛ تستبعد المسودات والمرفوضة وأي حالة أخرى. ليست صافي المبيعات ولا تضاف معاملات نقطة البيع. المقارنة بالفترة السابقة المساوية بالأيام بتوقيت الرياض. الإجمالي للمبلغ عنه فقط؛ غياب اليومية لا يعني صفراً.";
 export const OWNER_IMAGE_NOTICE = "لا تتوفر معاينة آمنة لهذه المادة؛ تدعم البوابة الصور المخزنة داخلياً فقط.";
 /** Only server-stored paths, never arbitrary URLs or signed URLs, are accepted. */
 export function ownerImageReference(value: unknown): { provider: "documents" | "objects"; key: string } | null {

@@ -15,6 +15,12 @@ Sales are reported cashier journals, not a promise of live POS or reconciled net
 
 **How to apply:** Keep source/status labels and freshness visible; changing this meaning requires reconciling the sources first.
 
+Do not infer journal lifecycle states from the schema comment alone: production uses `posted` for most completed journals, although the comment lists `submitted` instead.
+
+**Why:** A production read on 2026-09-30 found thousands of posted journals omitted by the initial owner report. Selecting today's date also legitimately had no journals although yesterday had sales.
+
+**How to apply:** Compare reporting filters with the operational aggregate and actual stored statuses. Distinguish missing current-day reports from missing historical data; expose a clearly dated latest-report choice rather than silently relabeling older sales as today's.
+
 Authentication must establish a fresh role before mounting operational providers. Cached identity may support a loading placeholder, never access.
 
 **Why:** Owner isolation intentionally denies the broad legacy bootstrap and notification APIs; eager legacy bootstrap can both leak stale UI and fail for owner sessions.

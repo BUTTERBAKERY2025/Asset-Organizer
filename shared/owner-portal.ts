@@ -3,6 +3,7 @@ export type OwnerMarketingSection = "campaigns" | "calendar" | "tasks" | "conten
 export interface OwnerBranch { id: string; name: string }
 export interface OwnerBranchesResponse { branches: OwnerBranch[]; generatedAt: string }
 export interface OwnerSalesResponse {
+  latestReportDate?: string | null;
   sourceLabel: string;
   generatedAt: string;
   dateFrom: string;

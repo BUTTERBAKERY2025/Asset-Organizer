@@ -48,9 +48,9 @@ export async function exportOwnerPdf(input: { overview: OwnerOverviewResponse; s
     { text: `الفترة: ${input.period}    |    إعداد: ${new Date().toLocaleString("ar-SA-u-nu-latn")}`, fontSize: 9, color: "#655976", alignment: "right", margin: [0, 0, 0, 12] },
     { text: "نظرة عامة", style: "heading" },
     table(["المؤشر", "البيانات"], [
-      ["المبيعات المسجلة", ownerMoney(sales.totals.sales)],
+      ["المبيعات المسجلة", sales.totals.reportedBranches === 0 ? "لم يصل تقرير للفترة" : ownerMoney(sales.totals.sales)],
       ["تغطية التقارير", `${ownerNumber(sales.totals.reportedBranches)} من ${ownerNumber(sales.totals.branchCount)} فرع`],
-      ["المقارنة", ownerDelta(sales.totals.sales, sales.totals.previousSales)],
+      ["المقارنة", sales.totals.reportedBranches === 0 ? "لا تتوفر مقارنة دون تقرير للفترة" : ownerDelta(sales.totals.sales, sales.totals.previousSales)],
       ["الأصول", ownerNumber(input.overview.assets.total)],
       ["أصول تحتاج اهتماماً", ownerNumber(input.overview.assets.needsAttention)],
       ["المساهمون", ownerNumber(input.overview.shareholders.count)],

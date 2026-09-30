@@ -37,9 +37,15 @@ async function sales(ids: string[] | null, from: unknown, to: unknown) {
     inArray(cashierSalesJournals.status, [...OWNER_SALES_STATUSES]),
     gte(cashierSalesJournals.journalDate, start), lte(cashierSalesJournals.journalDate, end),
   )).groupBy(cashierSalesJournals.branchId);
-  const [list, current, previous] = await Promise.all([visibleBranches(ids), aggregate(dates.dateFrom, dates.dateTo), aggregate(dates.previousFrom, dates.previousTo)]);
+  const [list, current, previous, latest] = await Promise.all([
+    visibleBranches(ids), aggregate(dates.dateFrom, dates.dateTo), aggregate(dates.previousFrom, dates.previousTo),
+    db.select({ date: sql<string | null>`max(${cashierSalesJournals.journalDate})` }).from(cashierSalesJournals).where(and(
+      branchCondition(cashierSalesJournals.branchId, ids),
+      inArray(cashierSalesJournals.status, [...OWNER_SALES_STATUSES]),
+    )),
+  ]);
   if (ids?.length === 1 && !list.length) throw new OwnerInputError("الفرع غير موجود", 404);
-  return ownerSalesResponse(list, current, previous, dates.dateFrom, dates.dateTo);
+  return { ...ownerSalesResponse(list, current, previous, dates.dateFrom, dates.dateTo), latestReportDate: latest[0]?.date ?? null };
 }
 async function shareholderSummary() {
   // Registered, non-transferred holdings; denominator is not assumed legal capital.
