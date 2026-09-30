@@ -1,17 +1,24 @@
 .production-workspace {
-  --desk-ink: #263245;
-  --desk-muted: #657385;
-  --desk-line: #d9e2e4;
-  --desk-surface: #f5f8f7;
-  --desk-accent: #166c70;
+  --desk-ink: var(--color-foreground, hsl(260 20% 12%));
+  --desk-muted: var(--color-muted-foreground, hsl(260 10% 45%));
+  --desk-line: var(--color-border, hsl(260 20% 90%));
+  --desk-surface: var(--color-card, white);
+  --desk-accent: var(--color-primary, hsl(262 83% 58%));
   color: var(--desk-ink);
   min-width: 0;
 }
 .production-workspace .desk-shell {
   border: 1px solid var(--desk-line);
   border-radius: 16px;
-  background: #edf3f1;
+  background: var(--desk-surface);
   overflow: hidden;
+}
+.dark .production-workspace {
+  --desk-ink: var(--color-foreground, hsl(260 20% 95%));
+  --desk-muted: var(--color-muted-foreground, hsl(260 10% 65%));
+  --desk-line: var(--color-border, hsl(260 20% 22%));
+  --desk-surface: var(--color-card, hsl(260 25% 11%));
+  --desk-accent: var(--color-primary, hsl(265 90% 70%));
 }
 .production-workspace .desk-header {
   display: flex;
@@ -45,9 +52,9 @@
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  border: 1px solid #c9d8d6;
+  border: 1px solid var(--desk-line);
   border-radius: 8px;
-  background: #f9fbfa;
+  background: var(--color-background, hsl(270 40% 99%));
   padding: 8px 11px;
   font-size: 12px;
   font-weight: 700;
@@ -57,7 +64,7 @@
 .production-workspace .desk-actions a:focus-visible { border-color: var(--desk-accent); color: var(--desk-accent); }
 .production-workspace .desk-nav {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 4px;
   width: 100%;
   height: auto;
@@ -77,21 +84,21 @@
   height: 55px;
   padding: 7px 12px;
   border-radius: 8px;
-  color: #526374;
+  color: var(--desk-muted);
   background: transparent;
   font-weight: 700;
   box-shadow: none;
 }
-.production-workspace .desk-nav [role="tab"]:hover { background: #e1ebe9; color: var(--desk-ink); }
+.production-workspace .desk-nav [role="tab"]:hover { background: color-mix(in srgb, var(--desk-accent) 8%, var(--desk-surface)); color: var(--desk-ink); }
 .production-workspace .desk-nav [role="tab"][data-state="active"] {
-  color: #135f65;
-  background: #fffdf8;
-  box-shadow: inset 0 -3px 0 #d0a04d, 0 1px 3px #26324512;
+  color: var(--desk-accent);
+  background: color-mix(in srgb, var(--desk-accent) 8%, var(--desk-surface));
+  box-shadow: inset 0 -3px 0 var(--desk-accent);
 }
 .production-workspace .desk-nav [role="tab"]:focus-visible,
 .production-workspace .desk-actions a:focus-visible { outline: 2px solid var(--desk-accent); outline-offset: 2px; }
-.production-workspace .desk-tab-title { display: flex; align-items: center; gap: 7px; font-size: 13px; }
-.production-workspace .desk-tab-caption { font-size: 10px; font-weight: 500; color: #768697; }
+.production-workspace .desk-tab-title { display: flex; align-items: center; gap: 7px; font-size: 13px; white-space: normal; min-width: 0; }
+.production-workspace .desk-tab-caption { font-size: 10px; font-weight: 500; color: var(--desk-muted); }
 .production-workspace .desk-content { min-width: 0; margin-top: 14px; }
 .production-workspace .desk-section-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 0 0 10px; }
 .production-workspace .desk-section-heading h2 { font-size: 15px; font-weight: 800; }

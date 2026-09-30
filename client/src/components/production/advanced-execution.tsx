@@ -9,11 +9,13 @@ import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
 
+import { useRecipeMode } from "@/components/central-kitchen/recipe-mode";
+
 type Row = {
   itemId: number; productId: number | null; productName: string; unit: string | null;
   plannedQuantity: number; linkageStatus: "linked" | "unknown";
   completedQuantity: number | null; inProgressQuantity: number | null; remainingQuantity: number | null;
-  batches: Array<{ id: number; quantity: number; status: string; requestItemId?: number | null }>;
+  batches: Array<{ id: number; quantity: number; status: string; requestItemId?: number | null; recipeModeActivationId?: number | null }>;
   requestLink?: { requestItemId: number; requestOrderId: number; requestedQuantity: number; allocatedQuantity: number; reason: string } | null;
 };
 type Pending = { key: string; itemId: number; body: { quantity: number; unit: string; productionDate: string; destination: string } };
@@ -38,7 +40,8 @@ export function isSelectedDemandCandidate(page: CandidatePage | undefined, offse
     page.candidates.some(candidate => candidate.requestItemId === id && !candidate.alreadyLinked);
 }
 
-export function AdvancedExecution({ orderId, status, startDate }: { orderId: number; status: string; startDate: string }) {
+export function AdvancedExecution({ orderId, status, startDate, kitchenId = "" }: { orderId: number; status: string; startDate: string; kitchenId?: string }) {
+  const recipeMode = useRecipeMode(kitchenId);
   const { user } = useAuth();
   const { canCreate, canEdit } = usePermissions();
   const { toast } = useToast();
@@ -133,7 +136,8 @@ export function AdvancedExecution({ orderId, status, startDate }: { orderId: num
   return <Card>
     <CardHeader><CardTitle>تنفيذ بنود الخطة — دفعات مرتبطة صراحة</CardTitle></CardHeader>
     <CardContent className="space-y-3">
-      <p className="text-sm text-muted-foreground">الأرقام تخص الدفعات المرتبطة بالبند فقط. السجل التاريخي غير المرتبط غير معلوم ولا يُستنتج من الاسم أو التاريخ. إنشاء دفعة يتطلب وصفة معتمدة؛ الإتمام يصرف المواد ويرحّل الناتج مرة واحدة. المتبقي = المخطط − المكتمل − قيد التنفيذ.</p>
+      <p className="text-sm text-muted-foreground">الأرقام تخص الدفعات المرتبطة بالبند فقط؛ التاريخ غير المرتبط غير معلوم. الوضع المعتاد يثبت الوصفة ويصرف موادها عند الإتمام. عند تفعيل السحب على المكشوف للمطبخ، تُنشأ الدفعة دون وصفة أو خصم خام ويُثبت معرّف التفعيل عليها. الناتج يُرحّل مرة واحدة. راجع وضع المطبخ في لوحة الإنتاج قبل البدء.</p>
+      <p className="text-sm font-semibold text-primary">{recipeMode.isError || !recipeMode.data ? "وضع السحب على المكشوف غير متحقق؛ راجع لوحة الإنتاج." : recipeMode.data.enabled ? "السحب على المكشوف مفعّل لهذا المطبخ — دون وصفة أو خصم خام للدفعات الجديدة." : "السحب على المكشوف متوقف — الوصفة مطلوبة للدفعات الجديدة."}</p>
       {query.isLoading && <p>جارٍ تحميل التنفيذ…</p>}
       {query.isError && <p role="alert" className="text-destructive">{query.error.message}</p>}
       {linkError && <p role="alert" className="text-destructive">{linkError}</p>}
@@ -156,6 +160,7 @@ export function AdvancedExecution({ orderId, status, startDate }: { orderId: num
             {canCreate("production") && <Button size="sm" variant="outline" disabled={!active || !row.productId || !row.unit || mutation.isPending || (pending ? pending.itemId !== row.itemId : row.remainingQuantity === 0)} onClick={() => open(row)}>{pending?.itemId === row.itemId ? "إعادة محاولة إنشاء الدفعة" : "إنشاء دفعة من البند"}</Button>}
             {row.batches.map(batch => <div key={batch.id} className="flex flex-wrap items-center gap-2 text-xs">
               <span>#{batch.id} — {batch.quantity} — {batch.status === "finished" ? "مكتملة" : batch.status === "cancelled" ? "ملغاة" : "قيد التنفيذ"} · {batch.requestItemId ? `بند طلب الفرع #${batch.requestItemId} (رابط الدفعة المجمد)` : "لا رابط طلب فرع مجمد لهذه الدفعة؛ لا يُستنتج مصدر الدفعات التاريخية"}</span>
+              {batch.recipeModeActivationId && <span className="text-xs font-semibold text-primary">السحب على المكشوف · تفعيل #{batch.recipeModeActivationId} · دون وصفة أو خصم خام</span>}
               {batch.status === "in_progress" && active && canEdit("production") && <>
                 <Button size="sm" disabled={mutation.isPending} onClick={() => mutation.mutate({ row, batchId: batch.id, action: "finish" })}>إتمام وصرف المواد</Button>
                 <Button size="sm" variant="outline" disabled={mutation.isPending} onClick={() => { if (window.confirm("إلغاء هذه الدفعة غير المكتملة وإعادة الكمية المتاحة للخطة؟")) mutation.mutate({ row, batchId: batch.id, action: "cancel" }); }}>إلغاء الدفعة</Button>
@@ -166,13 +171,13 @@ export function AdvancedExecution({ orderId, status, startDate }: { orderId: num
       </table></div>
       <Dialog open={!!selected} onOpenChange={open => { if (!open && !mutation.isPending) setSelected(null); }}>
         <DialogContent dir="rtl"><DialogHeader><DialogTitle>دفعة مرتبطة — {selected?.productName}</DialogTitle></DialogHeader>
-          <p className="text-sm">وحدة التنفيذ: {selected?.unit}. تُجمّد الوصفة المعتمدة ولا يُرحّل مخزون قبل الإتمام.</p>
+          <p className="text-sm">وحدة التنفيذ: {selected?.unit}. يطبق الخادم وضع المطبخ عند الإنشاء: وصفة مجمدة، أو سحب على المكشوف دون وصفة أو خصم خام. لا يُرحّل الناتج قبل الإتمام.</p>
           <label>الكمية<Input lang="en" type="number" min={1} step={1} value={quantity} disabled={!!pending} onChange={e => setQuantity(e.target.value)} /></label>
           <label>تاريخ الإنتاج<Input lang="en" type="date" value={date} disabled={!!pending} onChange={e => setDate(e.target.value)} /></label>
           <label>الوجهة<select className="block w-full rounded border p-2" value={destination} disabled={!!pending} onChange={e => setDestination(e.target.value)}>
             <option value="display_bar">العرض</option><option value="kitchen_trolley">عربة المطبخ</option><option value="freezer">الفريزر</option><option value="refrigerator">الثلاجة</option>
           </select></label>
-          <Button disabled={mutation.isPending || !Number.isInteger(Number(quantity)) || Number(quantity) <= 0} onClick={() => selected && mutation.mutate({ row: selected })}>{mutation.isPending ? "جارٍ التنفيذ…" : pending ? "إعادة المحاولة بنفس المفتاح" : "إنشاء الدفعة وتجميد الوصفة"}</Button>
+          <Button disabled={mutation.isPending || !Number.isInteger(Number(quantity)) || Number(quantity) <= 0} onClick={() => selected && mutation.mutate({ row: selected })}>{mutation.isPending ? "جارٍ التنفيذ…" : pending ? "إعادة المحاولة بنفس المفتاح" : "إنشاء الدفعة وفق سياسة المطبخ"}</Button>
         </DialogContent>
       </Dialog>
     </CardContent>

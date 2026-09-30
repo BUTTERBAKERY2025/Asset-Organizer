@@ -59,7 +59,7 @@ export async function advancedExecutionRows(executor: any, orderId: number) {
       CASE WHEN i.execution_unit IS NOT NULL THEN COALESCE(SUM(b.quantity) FILTER (WHERE b.status = 'in_progress'), 0) END AS "inProgressQuantity",
       CASE WHEN i.execution_unit IS NOT NULL THEN i.target_quantity - COALESCE(SUM(b.quantity) FILTER (WHERE b.status IN ('finished', 'in_progress')), 0) END AS "remainingQuantity",
       COALESCE(JSONB_AGG(JSONB_BUILD_OBJECT('id', b.id, 'quantity', b.quantity, 'status', b.status,
-        'requestItemId', b.advanced_request_item_id))
+        'requestItemId', b.advanced_request_item_id, 'recipeModeActivationId', b.recipe_mode_activation_id))
         FILTER (WHERE b.id IS NOT NULL), '[]'::jsonb) AS batches,
       CASE WHEN l.plan_item_id IS NOT NULL THEN JSONB_BUILD_OBJECT(
         'requestItemId', l.request_item_id, 'requestOrderId', ri.order_id,
@@ -310,14 +310,15 @@ export function registerAdvancedProductionExecutionRoutes(app: Express) {
           // deferred advanced constraint forbids committing without final proof.
           recipeBacked: false, status: "in_progress", recordedBy: actor.id,
         }).returning();
-        // No manual/nonrecipe fallback: approved recipe and immutable snapshot are mandatory.
+        // Snapshot is mandatory unless creation stamped an explicit output-only
+        // activation. The helper never consults a later mode change.
         await snapshotRecipeBackedBatchMaterials(tx, {
           batchId: batch.id, kitchenId: batch.branchId, productId: product.id,
           batchQuantity: batch.quantity, batchUnit: unit,
         });
         const [snapshottedBatch] = await tx.select().from(dailyProductionBatches)
           .where(eq(dailyProductionBatches.id, batch.id));
-        if (!snapshottedBatch?.recipeBacked) throw new ExecutionError("تعذر إثبات لقطة وصفة الدفعة؛ أُلغيت عملية الإنشاء");
+        if (!snapshottedBatch?.recipeBacked && !snapshottedBatch?.recipeModeActivationId) throw new ExecutionError("تعذر إثبات لقطة وصفة الدفعة أو استثناء السحب؛ أُلغيت عملية الإنشاء");
         return { batch: snapshottedBatch, replayed: false };
       });
       res.status(result.replayed ? 200 : 201).json(result);

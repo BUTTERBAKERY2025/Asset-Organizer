@@ -6,6 +6,7 @@ import type { CentralKitchenWorkplan } from "@shared/central-kitchen-workplan";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { OperationsBoard } from "./operations-board";
+import { RecipeModeControl } from "./recipe-mode";
 import { ProductionPlanning } from "./production-planning";
 import { planningStatusLabel } from "./production-planning-model";
 import { cycleMovements, cycleStatusLabel, explicitPlanReferences, readCycleSource, type CycleRecord, type MovementLane } from "./production-cycle-model";
@@ -88,7 +89,8 @@ export function ProductionCycle(props: Props) {
     `${order.orderNumber} ${order.source.requestingBranch.name} ${order.items.map(item => item.productName).join(" ")}`.includes(search.trim()));
   return <section dir="rtl" className="space-y-4 min-w-0 text-right" aria-label="دورة الإنتاج الموحدة">
     <div className="rounded-xl border bg-card p-4 space-y-3">
-      <h2 className="text-lg font-black">دورة الإنتاج — من الخام إلى الاستلام</h2>
+      <h2 className="text-lg font-black">مساحة الإنتاج اليومي</h2>
+      <p className="text-sm text-muted-foreground">ابدأ من احتياجات الإنتاج أدناه؛ افتح بند الطلب لتنفيذ الدفعة. التخطيط وتتبع الاستلام متاحان عند الحاجة.</p>
       <div className="flex flex-wrap items-end gap-3">
         <label className="min-w-0 flex-1 text-sm">المطبخ<select className="mt-1 min-h-11 w-full rounded-md border bg-background px-3" value={kitchenId} onChange={event => onKitchenChange(event.target.value)}><option value="" disabled>اختر المطبخ</option>{kitchens.map(kitchen => <option key={kitchen.id} value={kitchen.id}>{kitchen.name}</option>)}</select></label>
         <label className="min-w-0 text-sm">يوم العمل · الرياض<Input className="mt-1" type="date" value={date} onChange={event => onDateChange(event.target.value)} /></label>
@@ -96,12 +98,20 @@ export function ProductionCycle(props: Props) {
       </div>
       <p className="text-sm break-words">النطاق المحدد: {kitchens.find(kitchen => kitchen.id === kitchenId)?.name ?? "لم يُحدد مطبخ بعد"}</p>
       <p className="text-sm">{plan ? `وضع المطبخ: ${modes[plan.metadata.configuration.inventoryMode]} · آخر قراءة: ${new Date(plan.metadata.generatedAt).toLocaleString("ar-SA", { timeZone: "Asia/Riyadh" })}` : "وضع التشغيل غير متحقق حتى تحميل التخطيط."}</p>
-      <p className="text-xs leading-6 text-muted-foreground">الطلب ← الخطة المرتبطة ← الدفعة ← التجهيز والحجز ← الإرسال ← الاستلام. الخام والمنتج النهائي والمرتجع دفاتر مستقلة. لا تُنشأ الروابط باستنتاج المنتج أو التاريخ. توفر المكونات ليس حجزًا؛ استهلاك الوصفة عند إنهاء الدفعة. الإنتاج المستقل لا يثبت استهلاك وصفة.</p>
+      <details className="text-xs leading-6 text-muted-foreground"><summary className="min-h-11 cursor-pointer font-semibold text-primary">كيف تُقرأ الدورة وحركة المخزون؟</summary><p>الطلب ← الخطة المرتبطة ← الدفعة ← التجهيز والحجز ← الإرسال ← الاستلام. الخام والمنتج النهائي والمرتجع دفاتر مستقلة. لا تُنشأ الروابط باستنتاج المنتج أو التاريخ. توفر المكونات ليس حجزًا؛ استهلاك الوصفة عند إنهاء الدفعة. الإنتاج المستقل لا يثبت استهلاك وصفة.</p></details>
     </div>
     {!kitchenId ? <p role="status">اختر مطبخًا مصرحًا لبدء المتابعة.</p> : <>
-      <div className="grid min-w-0 gap-4 xl:grid-cols-3">{(["raw", "shipments", "returns"] as const).map(lane => <MovementQueue key={`${kitchenId}:${date}:${lane}`} lane={lane} kitchenId={kitchenId} date={date} />)}</div>
-      <section className="rounded-xl border bg-card p-4 space-y-3">
-        <h3 className="font-black">طلبات الفروع وسلسلة التنفيذ والاستلام</h3>
+      <RecipeModeControl key={kitchenId} kitchenId={kitchenId} />
+      <section aria-label="تنفيذ الإنتاج اليومي" className="space-y-3">
+        <div><h3 className="font-black">١ · تنفيذ الإنتاج</h3><p className="text-xs leading-6 text-muted-foreground">احتياجات التشغيل الحالية لجميع المواعيد، وليست مقيدة بتاريخ المتابعة أعلاه. اختر البند لعرض احتياجه وبدء دفعة بالصلاحيات الأصلية.</p></div>
+        <OperationsBoard key={kitchenId} embedded kitchens={kitchens} kitchenId={kitchenId} onKitchenChange={onKitchenChange} />
+      </section>
+      <details className="rounded-xl border bg-card p-4">
+        <summary className="min-h-11 cursor-pointer font-bold">٢ · التخطيط والتغطية — مراجعة قبل التنفيذ</summary>
+        <ProductionPlanning key={`${kitchenId}:${date}`} embedded mode="planning" {...props} />
+      </details>
+      <details data-testid="cycle-order-tracking" className="rounded-xl border bg-card p-4 space-y-3">
+        <summary className="min-h-11 cursor-pointer font-bold">٣ · تتبع الطلبات والدفعات والإرسال والاستلام</summary>
         <p className="text-xs text-muted-foreground">طلبات موعد اليوم والمتأخر ضمن نافذة المصدر. الكميات منفصلة حسب الصنف والوحدة؛ الأعداد تخص النتائج المُعادة فقط.</p>
         <Input aria-label="بحث سلسلة الإنتاج" placeholder="رقم الطلب أو الفرع أو الصنف" value={search} onChange={event => setSearch(event.target.value)} />
         <label className="flex min-h-11 items-center gap-2 text-sm"><input type="checkbox" checked={onlyAttention} onChange={event => setOnlyAttention(event.target.checked)} />غير المكتمل أو ذو الفروق فقط</label>
@@ -119,15 +129,19 @@ export function ProductionCycle(props: Props) {
                 <p>تالف {quantity(item.damagedQuantity)} · ناقص {quantity(item.missingQuantity)} · مصدر التجهيز: {item.preparationSourceStatus === "unknown" ? "غير موثق" : `مخزون ${quantity(item.preparedFromStock)} / إنتاج ${quantity(item.preparedFromProduction)}`}</p>
                 {explicitPlanReferences(plan, item.id).map(ref => <Link key={`${ref.planId}:${ref.itemId}`} className="block min-h-11 text-primary underline" href={scope(ref.href, kitchenId, date)}>خطة #{ref.planId} / بند #{ref.itemId} · تغطية {quantity(ref.quantity)} {item.unit}</Link>)}
                 {!explicitPlanReferences(plan, item.id).length && <p className="text-muted-foreground">{plan ? "لا مرجع خطة متقدمة ضمن النتائج المُعادة." : "روابط الخطط غير متاحة."}</p>}
+                {order.linkedBatches.batches.filter(batch => batch.orderItemId === item.id && batch.recipeModeActivationId).map(batch =>
+                  <p key={`mode-${batch.id}`} className="font-semibold text-primary">دفعة #{batch.id} · السحب على المكشوف · تفعيل #{batch.recipeModeActivationId} · دون وصفة أو خصم خام أو تكلفة وصفة</p>)}
                 {order.linkedBatches.batches.filter(batch => batch.orderItemId === item.id).map(batch => <Link className="block min-h-11 text-primary underline" key={batch.id} href={scope(batch.directLink, kitchenId, date)}>دفعة #{batch.id}: {quantity(batch.quantity)} {batch.unit} · {cycleStatusLabel(batch.status)} · {batch.materialPosting === "consumed" ? "استهلاك خام مسجل" : batch.materialPosting === "pending" ? "استهلاك الخام لم يُسجل بعد" : "دليل الاستهلاك غير معروف"} — فتح تنفيذ الطلب المرتبط</Link>)}
               </div>)}
               <Link className="inline-flex min-h-11 items-center text-sm font-bold text-primary" href={scope(order.directOrderLink, kitchenId, date)}>فتح الطلب: التجهيز والإرسال والتوصيل والاستلام ←</Link>
             </article>)}
           </div>
         </CycleState>
-      </section>
-      <details className="rounded-xl border bg-card p-3" open><summary className="min-h-11 cursor-pointer font-bold">التغطية والمخزون الجاهز والخطط المرتبطة</summary><ProductionPlanning mode="planning" {...props} /></details>
-      <details className="rounded-xl border bg-card p-3" open><summary className="min-h-11 cursor-pointer font-bold">تنفيذ الإنتاج الحي — الحالة الحالية لجميع المواعيد</summary><p className="mb-3 text-xs text-muted-foreground">التنفيذ الحي أدناه غير مقيد بتاريخ التقرير؛ يحتفظ بحراس الصلاحيات والوصفة والمخزون الأصلية.</p><OperationsBoard kitchens={kitchens} kitchenId={kitchenId} onKitchenChange={onKitchenChange} /></details>
+      </details>
+      <details data-testid="cycle-inventory-tracking" className="rounded-xl border bg-card p-4">
+        <summary className="min-h-11 cursor-pointer font-bold">٤ · الخام والشحنات والمرتجعات — مسارات المخزون</summary>
+        <div className="mt-3 grid min-w-0 gap-4 xl:grid-cols-3">{(["raw", "shipments", "returns"] as const).map(lane => <MovementQueue key={`${kitchenId}:${date}:${lane}`} lane={lane} kitchenId={kitchenId} date={date} />)}</div>
+      </details>
     </>}
   </section>;
 }

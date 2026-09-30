@@ -73,7 +73,7 @@ export default function ProductionDashboardPage() {
     { value: "legacy", label: "السجل والأدوات", caption: "بيانات النظام السابق", icon: History },
   ];
   return <Layout><main dir="rtl" className="page-container production-workspace pb-10">
-    <Tabs value={tab} onValueChange={changeTab}>
+    <Tabs dir="rtl" value={tab} onValueChange={changeTab}>
       <div className="desk-shell">
         <header className="desk-header">
           <div>

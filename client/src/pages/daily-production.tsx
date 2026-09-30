@@ -104,6 +104,7 @@ interface DailyProductionBatch {
   finishedByName: string | null;
   centralKitchenOrderItemId: number | null;
   recipeBacked: boolean | null;
+  recipeModeActivationId?: number | null;
   centralKitchenIdempotencyKey?: string | null;
   centralKitchenPayloadFingerprint?: string | null;
 }
@@ -155,7 +156,8 @@ const HOUR_LABELS: Record<string, string> = {
 
 const QUICK_QUANTITIES = [1, 2, 3, 5, 10, 12, 15, 20, 24, 30];
 
-function ProductionSourceBadge({ batch, compact = false }: { batch: ProductionSourceFields & { id?: number }; compact?: boolean }) {
+function ProductionSourceBadge({ batch, compact = false }: { batch: ProductionSourceFields & { id?: number; recipeModeActivationId?: number | null }; compact?: boolean }) {
+  if (batch.recipeModeActivationId) return <span className="text-xs font-semibold text-primary">السحب على المكشوف · تفعيل #{batch.recipeModeActivationId} · دون خصم خام</span>;
   const source = getProductionSource(batch);
   const label = getProductionSourceLabel(source);
   const isLinked = source !== "unlinked_legacy";

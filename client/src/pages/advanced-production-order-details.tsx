@@ -359,7 +359,7 @@ export default function AdvancedProductionOrderDetailsPage() {
           }
         />
 
-        <AdvancedExecution key={`${order.id}`} orderId={order.id} status={order.status} startDate={order.startDate} />
+        <AdvancedExecution key={`${order.id}`} orderId={order.id} status={order.status} startDate={order.startDate} kitchenId={order.sourceBranchId} />
 
         {order.status !== 'cancelled' && (
           <Card className="border-0 shadow-sm overflow-hidden">

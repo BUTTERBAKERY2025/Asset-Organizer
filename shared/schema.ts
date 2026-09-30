@@ -4274,6 +4274,7 @@ export const dailyProductionBatches = pgTable("daily_production_batches", {
   centralKitchenIdempotencyKey: varchar("central_kitchen_idempotency_key", { length: 128 }),
   centralKitchenPayloadFingerprint: varchar("central_kitchen_payload_fingerprint", { length: 64 }),
   recipeExceptionId: integer("recipe_exception_id"),
+  recipeModeActivationId: integer("recipe_mode_activation_id"),
   // NULL marks historical/non-recipe batches; recipe-backed batches are set
   // only by the dedicated snapshot workflow.
   recipeBacked: boolean("recipe_backed"),
@@ -4319,6 +4320,7 @@ export const insertDailyProductionBatchSchema = createInsertSchema(
   centralKitchenPayloadFingerprint: true,
   recipeBacked: true,
   recipeExceptionId: true,
+  recipeModeActivationId: true,
 });
 
 export type DailyProductionBatch = typeof dailyProductionBatches.$inferSelect;

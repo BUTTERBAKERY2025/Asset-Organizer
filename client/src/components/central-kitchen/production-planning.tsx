@@ -15,6 +15,7 @@ import { CoverageScope, ItemCoverage } from "./production-coverage";
 import workspaceStyles from "./planning-workspace.css?raw";
 
 type Props = {
+  embedded?: boolean;
   mode: "settings" | "planning";
   kitchens: { id: string; name: string }[];
   kitchenId: string;
@@ -32,7 +33,7 @@ const checkStyle = {
 const number = new Intl.NumberFormat("ar-SA-u-nu-latn");
 const modeLabel = { real: "مخزون فعلي", shadow: "تشغيل ظلّي", paused: "تشغيل متوقف", unknown: "وضع غير معروف" } as const;
 
-export function ProductionPlanning({ mode, kitchens, kitchenId, onKitchenChange, date, onDateChange }: Props) {
+export function ProductionPlanning({ mode, kitchens, kitchenId, onKitchenChange, date, onDateChange, embedded = false }: Props) {
   const [source, setSource] = useState<"all" | "central_request" | "advanced_plan">("all");
   const [status, setStatus] = useState("all");
   const [search, setSearch] = useState("");
@@ -71,8 +72,8 @@ export function ProductionPlanning({ mode, kitchens, kitchenId, onKitchenChange,
   return <section dir="rtl" className="planning-workspace space-y-3" aria-label={mode === "settings" ? "مراجعة إعدادات الإنتاج" : "التخطيط الموحد"}><style>{workspaceStyles}</style>
     <div className="pw-shell"><div className="pw-top"><span className="pw-kicker">{mode === "settings" ? "مراجعة التشغيل" : "مكتب التخطيط"}</span><h2>{mode === "settings" ? "مراجعة إعدادات الإنتاج" : "التخطيط الموحد للإنتاج"}</h2><p>عرض للقراءة فقط للحالة المحفوظة حالياً؛ لا يُعتمد منه التنفيذ أو تخصيص المخزون. جاهزية التخصيص غير معروفة.</p></div>
       <div className="pw-toolbar">
-        <div className="pw-field"><Label htmlFor={`planning-kitchen-${mode}`}>المطبخ المركزي</Label><Select value={kitchenId || ""} onValueChange={value => changeScope(() => onKitchenChange(value))}><SelectTrigger id={`planning-kitchen-${mode}`}><SelectValue placeholder="اختر المطبخ" /></SelectTrigger><SelectContent>{kitchens.map(kitchen => <SelectItem key={kitchen.id} value={kitchen.id}>{kitchen.name}</SelectItem>)}</SelectContent></Select></div>
-        <div className="pw-field"><Label htmlFor={`planning-date-${mode}`}>التاريخ · الرياض</Label><Input id={`planning-date-${mode}`} type="date" value={date} onChange={event => changeScope(() => onDateChange(event.target.value))} /></div>
+        {!embedded && <><div className="pw-field"><Label htmlFor={`planning-kitchen-${mode}`}>المطبخ المركزي</Label><Select value={kitchenId || ""} onValueChange={value => changeScope(() => onKitchenChange(value))}><SelectTrigger id={`planning-kitchen-${mode}`}><SelectValue placeholder="اختر المطبخ" /></SelectTrigger><SelectContent>{kitchens.map(kitchen => <SelectItem key={kitchen.id} value={kitchen.id}>{kitchen.name}</SelectItem>)}</SelectContent></Select></div>
+        <div className="pw-field"><Label htmlFor={`planning-date-${mode}`}>التاريخ · الرياض</Label><Input id={`planning-date-${mode}`} type="date" value={date} onChange={event => changeScope(() => onDateChange(event.target.value))} /></div></>}
         {mode === "planning" ? <>
           <div className="pw-field pw-search"><Label htmlFor="planning-search">بحث في الصفوف المُعادة</Label><Input id="planning-search" type="search" value={search} onChange={event => { setSearch(event.target.value); setPage(1); }} placeholder="رقم أو مصدر أو صنف" /></div>
           <div className="pw-field"><Label htmlFor="planning-source">المصدر</Label><Select value={source} onValueChange={value => { setSource(value as typeof source); setPage(1); }}><SelectTrigger id="planning-source"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">كل المصادر</SelectItem><SelectItem value="central_request">طلبات الفروع</SelectItem><SelectItem value="advanced_plan">أوامر الإنتاج</SelectItem></SelectContent></Select></div>
@@ -81,7 +82,7 @@ export function ProductionPlanning({ mode, kitchens, kitchenId, onKitchenChange,
           <div className="pw-field pw-search"><Label htmlFor="check-search">بحث في الفحوص</Label><Input id="check-search" type="search" value={checkSearch} onChange={event => { setCheckSearch(event.target.value); setCheckPage(1); }} placeholder="عنوان أو وصف الفحص" /></div>
           <div className="pw-field"><Label htmlFor="check-status">نتيجة الفحص</Label><Select value={checkStatus} onValueChange={value => { setCheckStatus(value); setCheckPage(1); }}><SelectTrigger id="check-status"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">كل النتائج</SelectItem>{Object.entries(checkStyle).map(([value, style]) => <SelectItem key={value} value={value}>{style.label}</SelectItem>)}</SelectContent></Select></div>
         </>}
-        <Button type="button" size="sm" variant="outline" onClick={() => planning.refetch()} disabled={!kitchenId || !date || planning.isFetching} aria-label="تحديث المراجعة والتخطيط"><RefreshCw className={`ml-2 h-4 w-4 ${planning.isFetching ? "animate-spin" : ""}`} />تحديث</Button>
+        {!embedded && <Button type="button" size="sm" variant="outline" onClick={() => planning.refetch()} disabled={!kitchenId || !date || planning.isFetching} aria-label="تحديث المراجعة والتخطيط"><RefreshCw className={`ml-2 h-4 w-4 ${planning.isFetching ? "animate-spin" : ""}`} />تحديث</Button>}
       </div>
     </div>
     {!kitchenId ? <Notice title="اختر مطبخاً مركزياً" detail="اختر المطبخ لعرض البيانات الخاصة به." /> :

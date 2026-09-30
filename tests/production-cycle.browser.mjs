@@ -41,6 +41,15 @@ const planning = { kitchen, date: day, rows: [
 const user = { id: "synthetic_production_manager", username: "synthetic", name: "اختبار الإنتاج", role: "admin", branchId: kitchen.id };
 const permissions = ["production", "central_kitchen_orders", "warehouse", "daily_production", "advanced_production_orders"].map(module => ({ module, actions: ["view", "create", "edit"] }));
 let denyRaw = false;
+let recipeModeEnabled = false;
+let recipeModeHistory = [];
+const modeWrites = [];
+const modeManager = () => ["admin", "production_development_manager"].includes(user.role);
+const recipeModeResponse = () => ({
+  kitchenId: kitchen.id, enabled: recipeModeEnabled, canManage: modeManager(),
+  activationId: recipeModeEnabled ? recipeModeHistory[0]?.id ?? null : null,
+  history: recipeModeHistory.slice(0, 30),
+});
 let browser;
 try {
   for (let attempt = 0; attempt < 150; attempt++) {
@@ -56,6 +65,28 @@ try {
   page.on("request", async request => {
     const url = new URL(request.url());
     if (!url.pathname.startsWith("/api/")) return request.continue();
+    if (url.pathname === "/api/production/recipe-mode") {
+      let status = 200;
+      let data;
+      if (request.method() === "PATCH") {
+        const body = JSON.parse(request.postData() || "{}");
+        if (!modeManager()) { status = 403; data = { error: "Synthetic: toggle role forbidden" }; }
+        else if (body.kitchenId !== kitchen.id || typeof body.enabled !== "boolean" || String(body.reason).trim().length < 5) {
+          status = 400; data = { error: "Synthetic: invalid kitchen/reason" };
+        } else {
+          recipeModeEnabled = body.enabled;
+          modeWrites.push({ ...body, actorRole: user.role });
+          recipeModeHistory.unshift({ id: modeWrites.length, enabled: body.enabled, reason: body.reason,
+            actorId: `${user.id}:${user.role}`, createdAt: `${day}T10:30:00Z` });
+          data = recipeModeResponse();
+        }
+      } else {
+        assert.equal(request.method(), "GET");
+        assert.equal(url.searchParams.get("kitchenId"), kitchen.id);
+        data = recipeModeResponse();
+      }
+      return request.respond({ status, contentType: "application/json", body: JSON.stringify(data) });
+    }
     if (request.method() !== "GET") return request.respond({ status: 405, body: "Synthetic fixture forbids writes" });
     let data = [];
     let status = 200;
@@ -84,6 +115,15 @@ try {
   for (const width of [1365, 390]) {
     await page.setViewport({ width, height: 900 });
     await page.goto(`${root}/production-dashboard?role=admin&kitchenId=${kitchen.id}&date=${day}`, { waitUntil: "networkidle2" });
+    await page.waitForSelector('section[aria-label="تنفيذ الإنتاج اليومي"]');
+    assert.equal(await page.$eval('[data-testid="cycle-order-tracking"]', element => element.open), false);
+    assert.equal(await page.$eval('[data-testid="cycle-inventory-tracking"]', element => element.open), false);
+    assert.equal(await page.$$eval('section[aria-label="دورة الإنتاج الموحدة"] > div select', elements => elements.length), 1);
+    assert.equal(await page.$('#planning-kitchen-planning'), null);
+    assert.equal(await page.$('button[aria-label="المطبخ المركزي"]'), null);
+    await page.screenshot({ path: `screenshots/production-workspace-${width}-default.png`, fullPage: true });
+    await page.click('[data-testid="cycle-order-tracking"] > summary');
+    await page.click('[data-testid="cycle-inventory-tracking"] > summary');
     await page.waitForFunction(() => document.body.innerText.includes("SYNTHETIC-31"));
     const result = await page.evaluate(() => ({
       overflow: document.documentElement.scrollWidth > innerWidth,
@@ -105,8 +145,58 @@ try {
   assert.equal(await page.evaluate(() => document.body.innerText.includes("RAW-SYNTHETIC-11")), false);
   assert.equal(await page.evaluate(() => document.body.innerText.includes("SYNTHETIC-31")), true);
   await page.screenshot({ path: "screenshots/production-cycle-390-denied.png", fullPage: true });
+  denyRaw = false;
+  const clickModeButton = async text => {
+    await page.evaluate(text => {
+      const button = [...document.querySelectorAll('[data-testid="production-recipe-mode"] button')].find(node => node.textContent.trim() === text);
+      if (!button || button.disabled) throw new Error(`Mode button unavailable: ${text}`);
+      button.click();
+    }, text);
+  };
+  for (const width of [1365, 390]) {
+    await page.setViewport({ width, height: 900 });
+    for (const role of ["admin", "production_development_manager"]) {
+      user.role = role;
+      recipeModeEnabled = false;
+      recipeModeHistory = [];
+      await page.goto(`${root}/production-dashboard?role=admin&kitchenId=${kitchen.id}&date=${day}`, { waitUntil: "networkidle2" });
+      await page.waitForSelector('[data-testid="production-recipe-mode"]');
+      for (const enabled of [true, false]) {
+        const before = modeWrites.length;
+        await clickModeButton(enabled ? "تفعيل السحب على المكشوف" : "إيقاف السحب على المكشوف");
+        await page.waitForSelector('[aria-label="تأكيد تغيير السحب على المكشوف"] textarea');
+        assert.equal(await page.$eval('[aria-label="تأكيد تغيير السحب على المكشوف"] button', node => node.disabled), true, "Reason is mandatory");
+        await page.type('[aria-label="تأكيد تغيير السحب على المكشوف"] textarea', `${role}: synthetic ${enabled ? "enable" : "disable"} verification`);
+        await clickModeButton("تأكيد التغيير");
+        await page.waitForFunction(enabled => document.querySelector('[data-testid="production-recipe-mode"] > p')?.textContent.includes(enabled ? "مفعّل" : "متوقف"), {}, enabled);
+        assert.equal(modeWrites.length, before + 1);
+        assert.equal(modeWrites.at(-1).enabled, enabled);
+        assert.equal(modeWrites.at(-1).actorRole, role);
+        assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+        const card = await page.$('[data-testid="production-recipe-mode"]');
+        await card.screenshot({ path: `screenshots/recipe-mode-${role}-${width}-${enabled ? "enabled" : "disabled"}.png` });
+      }
+      await page.click('[data-testid="production-recipe-mode"] details > summary');
+      assert.equal(await page.$eval('[data-testid="production-recipe-mode"] details', node => node.innerText.includes("synthetic enable verification") && node.innerText.includes("synthetic disable verification")), true);
+      console.log(JSON.stringify({ role, width, enableDisable: "PASS", reasonRequired: true, auditHistory: true }));
+    }
+    user.role = "production_manager";
+    recipeModeEnabled = true;
+    await page.goto(`${root}/production-dashboard?role=admin&kitchenId=${kitchen.id}&date=${day}`, { waitUntil: "networkidle2" });
+    await page.waitForSelector('[data-testid="production-recipe-mode"]');
+    assert.equal(await page.$$eval('[data-testid="production-recipe-mode"] button', nodes => nodes.length), 0);
+    assert.equal(await page.$eval('[data-testid="production-recipe-mode"]', node => node.innerText.includes("مفعّل")), true);
+    assert(await page.$('section[aria-label="تنفيذ الإنتاج اليومي"]'), "Authorized production workspace remains available");
+    const forbiddenStatus = await page.evaluate(async kitchenId => (await fetch("/api/production/recipe-mode", { method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ kitchenId, enabled: false, reason: "synthetic forbidden role" }) })).status, kitchen.id);
+    assert.equal(forbiddenStatus, 403);
+    assert.equal(recipeModeEnabled, true);
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+    await (await page.$('[data-testid="production-recipe-mode"]')).screenshot({ path: `screenshots/recipe-mode-production-manager-${width}-readonly.png` });
+    console.log(JSON.stringify({ role: user.role, width, readOnly: "PASS", directPatchDenied: true }));
+  }
   assert.deepEqual(errors, []);
-  console.log("PASS synthetic desktop/mobile, exact references and revoked-permission cached-data suppression");
+  console.log("PASS synthetic desktop/mobile, exact references, revoked permissions, manager toggle+reason+history, producer read-only; no database writes");
 } finally {
   await browser?.close();
   try { process.kill(-server.pid, "SIGTERM"); } catch {}

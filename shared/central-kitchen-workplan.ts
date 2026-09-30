@@ -44,6 +44,7 @@ export type CentralKitchenWorkplanBatch = {
   recipeBacked: boolean | null;
   recipeEvidence: CentralKitchenWorkplanRecipeEvidence;
   materialPosting: CentralKitchenWorkplanMaterialPosting;
+  recipeModeActivationId?: number | null;
   materialPostingEvidence: "recorded_movement_present" | "no_recorded_movement";
   directLink: string;
 };

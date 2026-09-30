@@ -5,6 +5,12 @@ description: Recipe approval is configuration, not authorization to start automa
 
 Recipe entry and approval are deliberately separate from consuming ingredients during production. Approval alone must never retroactively deduct material stock or alter existing production batches.
 
+Temporary output-only production is an explicitly authorized exception to recipe requirements, not permission for negative raw stock.
+
+**Why:** On 2026-09-30 the user requested uninterrupted production while recipes are being organized, and clarified that only admin and production-development manager control activation; all otherwise-authorized producers may use the active mode.
+
+**How to apply:** Scope activation per kitchen. Freeze the mode for each new batch, including advanced execution; switching off affects only new creation. Preserve existing recipe-backed batches and historical movements, post finished output once without recipe/raw deductions for proven output-only batches, and never backfill ingredient consumption after recipes are configured. Do not restrict exception execution to the two activation roles.
+
 **Why:** The user first validated finished-output/request movements, then requested a recipe entry and approval screen because no approved formulas existed. Defining formulas is not equivalent to approving a stock-posting migration.
 
 **How to apply:** Consumption must explicitly connect a frozen approved recipe revision to a new production batch, account for stock precision and catalog units without guessed conversions, and debit the kitchen's own material balance—not the main warehouse.

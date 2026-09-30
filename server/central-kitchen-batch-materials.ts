@@ -230,6 +230,9 @@ export async function snapshotRecipeBackedBatchMaterials(
     batchId: number; kitchenId: string; productId: number; batchQuantity: string | number; batchUnit: string;
   },
 ): Promise<void> {
+  const mode = await tx.execute(sql`SELECT recipe_mode_activation_id FROM daily_production_batches WHERE id=${input.batchId}`);
+  // Immutable database-generated proof, never a caller-controlled flag.
+  if (mode.rows[0]?.recipe_mode_activation_id != null) return;
   await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${input.kitchenId}), ${input.productId})`);
   const source = await findApprovedRecipe(tx, input.kitchenId, input.productId, true);
   if (!source) {
@@ -276,7 +279,7 @@ export async function getBatchMaterialRequirements(
   batchId: number,
 ): Promise<CentralKitchenMaterialRequirementsContract | null> {
   const batchResult = await tx.execute(sql`
-    SELECT id, branch_id, product_id, unit AS batch_unit, quantity::text, recipe_backed
+    SELECT id, branch_id, product_id, unit AS batch_unit, quantity::text, recipe_backed, recipe_mode_activation_id
     FROM daily_production_batches WHERE id = ${batchId} LIMIT 1
   `);
   const batch = batchResult.rows[0] as any;
@@ -304,7 +307,9 @@ export async function getBatchMaterialRequirements(
       recipe: null,
       requirements: [],
       materialConsumptionStatus: "not_applicable",
-      message: "هذه الدفعة غير مرتبطة بوصفة مواد",
+      message: batch.recipe_mode_activation_id != null
+        ? `السحب على المكشوف — تفعيل #${batch.recipe_mode_activation_id}؛ دون وصفة أو خصم مواد خام أو تكلفة وصفة`
+        : "هذه الدفعة غير مرتبطة بوصفة مواد",
     };
   }
   if (batch.recipe_backed !== true) {

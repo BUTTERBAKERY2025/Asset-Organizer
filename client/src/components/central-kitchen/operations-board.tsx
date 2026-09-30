@@ -15,6 +15,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { RecipeMaterialsPreview, useRecipeMaterialRequirements } from "@/components/central-kitchen/recipe-materials";
 import { RecipeExceptions, exceptionQueryKey, useOrderRecipeExceptions } from "@/components/central-kitchen/recipe-exceptions";
+import { useRecipeMode } from "./recipe-mode";
 import { linkedBatchPayload, matchingApprovedException, type ExceptionBinding } from "@/components/central-kitchen/recipe-exception-flow";
 import { OPERATIONS_PAGE_SIZE, selectOperationsDemands, type DemandFilter } from "./operations-board-model";
 import "./operations-board.css";
@@ -29,7 +30,7 @@ const modeLabel: Record<CentralKitchenRuntimeMode, string> = { shadow: "تشغي
 const qty = (value: number) => new Intl.NumberFormat("ar-SA-u-nu-latn", { maximumFractionDigits: 2 }).format(value);
 const saudiDate = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Riyadh", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
 
-export function OperationsBoard({ kitchens, kitchenId, onKitchenChange }: { kitchens: Kitchen[]; kitchenId: string; onKitchenChange: (id: string) => void }) {
+export function OperationsBoard({ kitchens, kitchenId, onKitchenChange, embedded = false }: { kitchens: Kitchen[]; kitchenId: string; onKitchenChange: (id: string) => void; embedded?: boolean }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { isAdmin, canCreate } = usePermissions();
@@ -64,6 +65,8 @@ export function OperationsBoard({ kitchens, kitchenId, onKitchenChange }: { kitc
   const recipeRequirements = useRecipeMaterialRequirements({
     kitchenId, productId: production?.productId || 0, quantity: batchQty, enabled: production !== null,
   });
+  const recipeMode = useRecipeMode(kitchenId);
+  const outputOnly = !recipeMode.isError && recipeMode.data?.enabled === true;
   const exceptions = useOrderRecipeExceptions(production?.orderId || 0, production !== null);
   const binding: ExceptionBinding | null = production ? {
     orderId: production.orderId, itemId: production.itemId, kitchenId, productId: production.productId,
@@ -85,15 +88,15 @@ export function OperationsBoard({ kitchens, kitchenId, onKitchenChange }: { kitc
   const batchMutation = useMutation({
     mutationFn: async () => {
       if (!production || !binding) throw new Error("اختر بنداً للإنتاج.");
-      if (batchMode === "recipe" && (!recipeRequirements.data?.recipe || recipeRequirements.isError)) throw new Error("لا توجد وصفة معتمدة صالحة لربط هذه الدفعة.");
-      if (batchMode === "exception" && !exceptions.data) throw new Error("تعذر قراءة الاعتماد؛ أعد تحميل الاستثناءات.");
+      if (!outputOnly && batchMode === "recipe" && (!recipeRequirements.data?.recipe || recipeRequirements.isError)) throw new Error("لا توجد وصفة معتمدة صالحة لربط هذه الدفعة.");
+      if (!outputOnly && batchMode === "exception" && !exceptions.data) throw new Error("تعذر قراءة الاعتماد؛ أعد تحميل الاستثناءات.");
       const signature = JSON.stringify({ ...binding, mode: batchMode, exceptionId: approvedException?.id });
       if (!batchAttemptRef.current || batchAttemptRef.current.signature !== signature) batchAttemptRef.current = { signature, key: crypto.randomUUID() };
-      const payload = linkedBatchPayload(binding, batchMode === "recipe", exceptions.data?.exceptions || [], batchAttemptRef.current.key);
+      const payload = linkedBatchPayload(binding, outputOnly || batchMode === "recipe", exceptions.data?.exceptions || [], batchAttemptRef.current.key);
       const response = await apiRequest("POST", `/api/central-kitchen-orders/${production.orderId}/items/${production.itemId}/production-batches`, payload);
       return response.json();
     },
-    onSuccess: () => { const orderId = production?.orderId; batchAttemptRef.current = null; setProduction(null); setBatchQty(""); setBatchMode("recipe"); refresh(); if (orderId) { void queryClient.invalidateQueries({ queryKey: exceptionQueryKey(orderId) }); void queryClient.invalidateQueries({ queryKey: [`/api/central-kitchen-orders/${orderId}`] }); } toast({ title: batchMode === "recipe" ? "بدأت دفعة الإنتاج وربطت بالوصفة المعتمدة" : "بدأت دفعة استثنائية دون وصفة؛ لا يُسجّل استهلاك مواد خام" }); },
+    onSuccess: (created) => { const orderId = production?.orderId; batchAttemptRef.current = null; setProduction(null); setBatchQty(""); setBatchMode("recipe"); refresh(); if (orderId) { void queryClient.invalidateQueries({ queryKey: exceptionQueryKey(orderId) }); void queryClient.invalidateQueries({ queryKey: [`/api/central-kitchen-orders/${orderId}`] }); } toast({ title: created.recipeModeActivationId ? "بدأت دفعة بالسحب على المكشوف؛ دون وصفة أو خصم خام" : created.recipeBacked ? "بدأت دفعة الإنتاج وربطت بالوصفة المعتمدة" : "بدأت دفعة استثنائية دون وصفة؛ لا يُسجّل استهلاك مواد خام" }); },
     onError: (error) => toast({ title: "تعذر إنشاء الدفعة", description: error instanceof Error ? error.message : "تحقق من الاحتياج المتبقي.", variant: "destructive" }),
   });
   const data = operations.data;
@@ -118,9 +121,9 @@ export function OperationsBoard({ kitchens, kitchenId, onKitchenChange }: { kitc
       <div className="ops-top flex flex-wrap items-center justify-between gap-4">
         <div className="min-w-0"><span className="ops-kicker inline-flex items-center gap-1.5"><Factory className="h-3.5 w-3.5" /> مساحة تشغيل المطبخ</span><h2>احتياجات الإنتاج المعتمدة</h2><p>متابعة كل بند على حدة، دون دمج القطع والكيلو أو افتراض صرف المواد الخام.</p></div>
         <div className="flex flex-wrap items-center gap-2">
-          <Select value={kitchenId || undefined} onValueChange={id => { onKitchenChange(id); setSelectedId(null); setCriteria({ search: "", filter: "all", unit: "all" }); }}><SelectTrigger aria-label="المطبخ المركزي" className="w-[180px] bg-white"><SelectValue placeholder="اختر المطبخ" /></SelectTrigger><SelectContent>{kitchens.map(k => <SelectItem key={k.id} value={k.id}>{k.name}</SelectItem>)}</SelectContent></Select>
+          {!embedded && <Select value={kitchenId || undefined} onValueChange={id => { onKitchenChange(id); setSelectedId(null); setCriteria({ search: "", filter: "all", unit: "all" }); }}><SelectTrigger aria-label="المطبخ المركزي" className="w-[180px] bg-white"><SelectValue placeholder="اختر المطبخ" /></SelectTrigger><SelectContent>{kitchens.map(k => <SelectItem key={k.id} value={k.id}>{k.name}</SelectItem>)}</SelectContent></Select>}
           {data && <Badge variant="outline" className={`${modeStyle[data.runtime.mode]} border`}>{modeLabel[data.runtime.mode]}</Badge>}
-          <Button size="icon" variant="outline" onClick={() => refresh()} disabled={!kitchenId || operations.isFetching} aria-label="تحديث الاحتياجات"><RefreshCw className="h-4 w-4" /></Button>
+          {!embedded && <Button size="icon" variant="outline" onClick={() => refresh()} disabled={!kitchenId || operations.isFetching} aria-label="تحديث الاحتياجات"><RefreshCw className="h-4 w-4" /></Button>}
         </div>
       </div>
       {!kitchenId ? <State icon={<Factory className="h-7 w-7" />} title="اختر مطبخاً مركزياً" text="اعرض احتياجات الفرع المعتمدة وحالة تغطيتها." /> :
@@ -162,7 +165,21 @@ export function OperationsBoard({ kitchens, kitchenId, onKitchenChange }: { kitc
       <DetailValue label="الكمية المطلوبة" value={`${qty(selected.targetQuantity)} ${selected.unit}`} /><DetailValue label="الاحتياج غير المغطّى" value={`${qty(selected.uncoveredQuantity)} ${selected.unit}`} />
       <DetailValue label="المتاح" value={`${qty(selected.availableQuantity)} ${selected.unit}`} /><DetailValue label="المحجوز" value={`${qty(selected.reservedQuantity)} ${selected.unit}`} />
       <DetailValue label="قيد الإنتاج" value={`${qty(selected.linkedUnfinishedQuantity)} ${selected.unit}`} /><DetailValue label="تاريخ الحاجة" value={selected.neededDate || "غير محدد"} />
-    </div>{selected.catalogInactive && <p role="alert" className="flex gap-2 rounded-lg bg-amber-50 p-3 text-xs text-amber-900"><AlertTriangle className="h-4 w-4 shrink-0" />الصنف غير مفعّل حالياً. يظهر الاحتياج المعتمد للمتابعة فقط ولا يمكن بدء عمليات جديدة عليه.</p>}<p className="text-xs text-[#766b84]">بيانات الفرع وحالة الطلب التفصيلية متاحة في سجل الطلب. لا تُستنتج من احتياجات الإنتاج.</p><div className="flex flex-wrap gap-2"><Link href={`/central-kitchen-orders?orderId=${selected.orderId}`} className="inline-flex h-9 items-center rounded-md border px-3 text-xs font-medium" onClick={() => setSelectedId(null)}>فتح الطلب <ArrowLeft className="mr-1 h-3.5 w-3.5" /></Link>{productionAllowed(selected) && <Button size="sm" onClick={() => begin(selected)}><Play className="ml-1 h-3.5 w-3.5" />بدء إنتاج</Button>}</div></div></> : <><DialogHeader><DialogTitle>بدء دفعة إنتاج</DialogTitle><DialogDescription>{production.name} · أقصى احتياج غير مغطى: {qty(production.uncovered)} {production.unit}. المسار المعتاد بوصفة معتمدة؛ الإنتاج دون وصفة يتطلب استثناء معتمداً ومطابقاً لهذه الدفعة.</DialogDescription></DialogHeader><div className="grid gap-3 sm:grid-cols-2"><div><Label>كمية صحيحة</Label><Input className="mt-1" type="number" min="1" step="1" disabled={batchMutation.isPending} value={batchQty} onChange={e => setBatchQty(e.target.value)} /></div><div><Label>تاريخ الإنتاج</Label><Input className="mt-1" type="date" disabled={batchMutation.isPending} value={date} onChange={e => setDate(e.target.value)} /></div></div><div className="flex flex-wrap gap-2"><Button type="button" disabled={batchMutation.isPending} variant={batchMode === "recipe" ? "default" : "outline"} onClick={() => setBatchMode("recipe")}>إنتاج بوصفة معتمدة (الافتراضي)</Button><Button type="button" disabled={batchMutation.isPending} variant={batchMode === "exception" ? "default" : "outline"} onClick={() => setBatchMode("exception")}>طلب استثناء دون وصفة</Button></div>{batchMode === "recipe" && <RecipeMaterialsPreview query={recipeRequirements} kitchenId={kitchenId} onRetry={() => recipeRequirements.refetch()} />}{batchMode === "exception" && <><RecipeExceptions key={`${production.orderId}:${production.itemId}:${batchQty}:${date}`} orderId={production.orderId} binding={binding} allowRequest /><p className="text-xs text-amber-900">لا توجد لقطة وصفة أو إثبات لصرف مواد خام في دفعة الاستثناء. {approvedException ? `الاستثناء المعتمد المطابق #${approvedException.id} متاح للاستخدام مرة واحدة.` : "انتظر الاعتماد المطابق قبل إنشاء الدفعة."}</p></>}<DialogFooter><Button variant="outline" disabled={batchMutation.isPending} onClick={() => { setProduction(null); setSelectedId(null); }}>إلغاء</Button><Button disabled={batchMutation.isPending || !binding || !Number.isInteger(binding.quantity) || binding.quantity < 1 || (batchMode === "recipe" ? recipeRequirements.isLoading || recipeRequirements.isError || !recipeRequirements.data?.recipe : !exceptions.data || !approvedException)} onClick={() => batchMutation.mutate()}>{batchMutation.isPending && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}إنشاء الدفعة</Button></DialogFooter></>}</DialogContent></Dialog>}
+    </div>{selected.catalogInactive && <p role="alert" className="text-destructive">الصنف غير مفعّل؛ لا يمكن بدء إنتاج جديد عليه.</p>}
+    <div className="flex flex-wrap gap-2"><Link href={`/central-kitchen-orders?orderId=${selected.orderId}`} onClick={() => setSelectedId(null)}>فتح الطلب</Link>
+      {productionAllowed(selected) && <Button onClick={() => begin(selected)}>بدء إنتاج</Button>}</div></div></> : <>
+    <DialogHeader><DialogTitle>بدء دفعة إنتاج</DialogTitle><DialogDescription>{production.name} · أقصى احتياج غير مغطى: {qty(production.uncovered)} {production.unit}</DialogDescription></DialogHeader>
+    <div className="grid gap-3 sm:grid-cols-2"><div><Label>كمية صحيحة</Label><Input type="number" min="1" step="1" disabled={batchMutation.isPending} value={batchQty} onChange={e => setBatchQty(e.target.value)} /></div>
+      <div><Label>تاريخ الإنتاج</Label><Input type="date" disabled={batchMutation.isPending} value={date} onChange={e => setDate(e.target.value)} /></div></div>
+    {outputOnly ? <p role="status" className="rounded border border-primary/30 bg-primary/5 p-3">السحب على المكشوف مفعّل: الناتج النهائي سيُضاف دون وصفة أو خصم خام. يتحقق الخادم من الوضع عند إنشاء الدفعة.</p> : <>
+      <div className="flex flex-wrap gap-2"><Button disabled={batchMutation.isPending} variant={batchMode === "recipe" ? "default" : "outline"} onClick={() => setBatchMode("recipe")}>إنتاج بوصفة معتمدة</Button>
+        <Button disabled={batchMutation.isPending} variant={batchMode === "exception" ? "default" : "outline"} onClick={() => setBatchMode("exception")}>طلب استثناء دون وصفة</Button></div>
+      {batchMode === "recipe" && <RecipeMaterialsPreview query={recipeRequirements} kitchenId={kitchenId} onRetry={() => recipeRequirements.refetch()} />}
+      {batchMode === "exception" && <RecipeExceptions key={`${production.orderId}:${production.itemId}:${batchQty}:${date}`} orderId={production.orderId} binding={binding} allowRequest />}
+    </>}
+    <DialogFooter><Button variant="outline" disabled={batchMutation.isPending} onClick={() => { setProduction(null); setSelectedId(null); }}>إلغاء</Button>
+      <Button disabled={batchMutation.isPending || !binding || !Number.isInteger(binding.quantity) || binding.quantity < 1 || (!outputOnly && (batchMode === "recipe" ? recipeRequirements.isLoading || recipeRequirements.isError || !recipeRequirements.data?.recipe : !exceptions.data || !approvedException))} onClick={() => batchMutation.mutate()}>
+        {batchMutation.isPending && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}إنشاء الدفعة</Button></DialogFooter></>}</DialogContent></Dialog>}
     <Dialog open={modeDraft !== null} onOpenChange={open => !open && setModeDraft(null)}><DialogContent dir="rtl"><DialogHeader><DialogTitle>تأكيد تغيير وضع تشغيل المطبخ</DialogTitle><DialogDescription>{modeDraft === "real" ? "سيؤثر التفعيل على الطلبات الجديدة فقط: ستُنشأ حجوزات من مخزون فرع المطبخ. لا يُرحّل أو يُصحح أي رصيد أو طلب قديم." : modeDraft === "paused" ? "سيوقف الإيقاف ترحيل المخزون للطلبات الحقيقية المعلّقة ويمنع بدء أو إنهاء دفعات الإنتاج المرتبطة إلى أن يُستأنف التشغيل. تبقى الأرصدة والحجوزات الحالية محفوظة." : "سيعود أثر الطلبات الجديدة إلى السجل الظلّي فقط، دون تعديل أي طلب أو رصيد قديم."}</DialogDescription></DialogHeader><DialogFooter><Button variant="outline" onClick={() => setModeDraft(null)}>إلغاء</Button><Button disabled={runtimeMutation.isPending} onClick={() => modeDraft && runtimeMutation.mutate(modeDraft)}>{runtimeMutation.isPending && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}تأكيد التغيير</Button></DialogFooter></DialogContent></Dialog>
   </section>;
 }

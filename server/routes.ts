@@ -266,6 +266,7 @@ import { apiCacheMiddleware, invalidateCacheForPath, invalidateCache, jsonSlimMi
 import { requireProductCatalogRead, noStoreProductCatalogRead } from "./product-catalog-access";
 import { registerBatchRoute } from "./batch-api";
 import { registerRecipeExceptionRoutes, assertApprovedRecipeException, RecipeExceptionError } from "./recipe-exceptions";
+import { registerProductionRecipeModeRoutes, lockedRecipeMode } from "./production-recipe-mode";
 import {
   canTransitionCentralKitchenOrder,
   centralKitchenRequestChangeSchema,
@@ -344,6 +345,7 @@ export async function registerRoutes(
   // Setup authentication
   await setupAuth(app);
   registerRecipeExceptionRoutes(app);
+  registerProductionRecipeModeRoutes(app);
   // قفل حساب المراجع الخارجي: مقصور على /api/audit/* و /api/auth/* فقط
   app.use(auditorApiLockdown);
 
@@ -8710,7 +8712,7 @@ export async function registerRoutes(
           return res.status(403).json({ error: "غير مصرح بالوصول إلى الدفعة الأصلية" });
         }
         if (keyReplay.batch.centralKitchenPayloadFingerprint !== batchFingerprint
-          || keyReplay.batch.recipeExceptionId !== (body.data.recipeExceptionId ?? null)) {
+          || (!keyReplay.batch.recipeModeActivationId && keyReplay.batch.recipeExceptionId !== (body.data.recipeExceptionId ?? null))) {
           return res.status(409).json({ error: "مفتاح عدم التكرار مستخدم لدفعة مختلفة" });
         }
         const replaySnapshot = await getBatchMaterialRequirements(db, keyReplay.batch.id);
@@ -8762,14 +8764,15 @@ export async function registerRoutes(
               || existing.productId !== lockedItem.productId
               || existing.recordedBy !== actor.id
               || existing.centralKitchenIdempotencyKey !== key.key
-              || existing.recipeExceptionId !== (body.data.recipeExceptionId ?? null)
+              || (!existing.recipeModeActivationId && existing.recipeExceptionId !== (body.data.recipeExceptionId ?? null))
               || existing.centralKitchenPayloadFingerprint !== batchFingerprint
-              || existingSnapshot?.recipeBacked !== body.data.recipeBacked) {
+              || (!existing.recipeModeActivationId && existingSnapshot?.recipeBacked !== body.data.recipeBacked)) {
               throw new CentralKitchenLiveError("توجد دفعة مختلفة لهذا البند في التاريخ نفسه", 409);
             }
             return { batch: existing, replayed: true, recipeBacked: existingSnapshot?.recipeBacked === true };
           }
-          if (body.data.recipeExceptionId) {
+          const outputOnly = (await lockedRecipeMode(tx, lockedOrder.centralKitchenId))?.enabled === true;
+          if (body.data.recipeExceptionId && !outputOnly) {
             await assertApprovedRecipeException(tx, {
               exceptionId: body.data.recipeExceptionId,
               orderId: lockedOrder.id, itemId: lockedItem.id,
@@ -8795,7 +8798,7 @@ export async function registerRoutes(
           if (body.data.quantity > uncovered) {
             throw new CentralKitchenLiveError(`كمية الدفعة تتجاوز الاحتياج غير المغطى (${uncovered})`, 409);
           }
-          if (body.data.recipeBacked) {
+          if (body.data.recipeBacked && !outputOnly) {
             // Migration 033 only permits recipe_backed=true after the immutable
             // snapshot exists; retain that two-step transition in this transaction.
             await tx.execute(sql`SELECT set_config('app.central_kitchen_snapshot_write', 'on', true)`);
@@ -8813,11 +8816,11 @@ export async function registerRoutes(
             centralKitchenOrderItemId: lockedItem.id,
             centralKitchenIdempotencyKey: key.key,
             centralKitchenPayloadFingerprint: batchFingerprint,
-            recipeExceptionId: body.data.recipeExceptionId ?? null,
-            recipeBacked: body.data.recipeBacked ? null : false,
+            recipeExceptionId: outputOnly ? null : body.data.recipeExceptionId ?? null,
+            recipeBacked: outputOnly ? false : body.data.recipeBacked ? null : false,
             recordedBy: actor.id,
           }).returning();
-          if (body.data.recipeBacked) {
+          if (body.data.recipeBacked && !outputOnly) {
             await snapshotRecipeBackedBatchMaterials(tx, {
               batchId: created.id,
               kitchenId: lockedOrder.centralKitchenId,
@@ -8826,7 +8829,7 @@ export async function registerRoutes(
               batchUnit: lockedItem.unit,
             });
           }
-          return { batch: created, replayed: false, recipeBacked: body.data.recipeBacked };
+          return { batch: created, replayed: false, recipeBacked: !outputOnly && body.data.recipeBacked };
         });
         if (result.replayed) res.set("Idempotent-Replayed", "true");
         return res.status(result.replayed ? 200 : 201).json({
@@ -8852,9 +8855,9 @@ export async function registerRoutes(
           if (replay?.quantity === body.data.quantity
             && replay.recordedBy === actor.id
             && replay.centralKitchenIdempotencyKey === key.key
-            && replay.recipeExceptionId === (body.data.recipeExceptionId ?? null)
+            && (replay.recipeModeActivationId || replay.recipeExceptionId === (body.data.recipeExceptionId ?? null))
             && replay.centralKitchenPayloadFingerprint === batchFingerprint
-            && replaySnapshot?.recipeBacked === body.data.recipeBacked) {
+            && (replay.recipeModeActivationId || replaySnapshot?.recipeBacked === body.data.recipeBacked)) {
             res.set("Idempotent-Replayed", "true");
             return res.json({ ...replay, recipeBacked: replaySnapshot.recipeBacked });
           }

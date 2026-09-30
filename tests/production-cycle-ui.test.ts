@@ -7,6 +7,17 @@ vi.mock("../client/src/components/central-kitchen/production-planning", () => ({
 import { CycleState } from "../client/src/components/central-kitchen/production-cycle";
 
 describe("production cycle source UI and authorized deep links", () => {
+  it("prioritizes daily execution and collapses secondary tracking without repeated scope controls", () => {
+    const source = readFileSync("client/src/components/central-kitchen/production-cycle.tsx", "utf8");
+    const css = readFileSync("client/src/components/central-kitchen/production-workspace.css", "utf8");
+    expect(source.indexOf('aria-label="تنفيذ الإنتاج اليومي"')).toBeLessThan(source.indexOf('data-testid="cycle-order-tracking"'));
+    expect(source).toContain('<OperationsBoard key={kitchenId} embedded');
+    expect(source).toContain('embedded mode="planning"');
+    expect(source).not.toContain('className="rounded-xl border bg-card p-3" open');
+    expect(css).toContain('--desk-accent: var(--color-primary');
+    expect(css).not.toContain("#edf3f1");
+    expect(readFileSync("client/src/pages/production-dashboard.tsx", "utf8")).toContain('<Tabs dir="rtl"');
+  });
   const render = (loading: boolean, error: Error | null, empty = false) =>
     renderToStaticMarkup(React.createElement(CycleState, { loading, error, empty, retry: vi.fn(), children: React.createElement("p", null, "cached-sensitive-data") }));
   it("hides cached children after a forbidden refresh and renders explicit retry", () => {

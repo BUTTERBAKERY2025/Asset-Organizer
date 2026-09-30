@@ -531,6 +531,7 @@ async function buildWorkplan(
         batch.quantity,
         COALESCE(NULLIF(BTRIM(batch.unit), ''), 'غير محددة') AS unit,
         batch.recipe_backed,
+        batch.recipe_mode_activation_id,
         ${consumedEvidence} AS material_consumed
       FROM daily_production_batches batch
       WHERE batch.central_kitchen_order_item_id IN (${sql.join(itemIds.map((id) => sql`${id}`), sql`, `)})
@@ -563,6 +564,7 @@ async function buildWorkplan(
             : "unknown"
         : "unknown";
       const batch: CentralKitchenWorkplanBatch = {
+        recipeModeActivationId: nullableInteger(row.recipe_mode_activation_id),
         id: integerValue(row.id),
         orderItemId: itemId,
         productId: nullableInteger(row.product_id),
