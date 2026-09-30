@@ -681,7 +681,7 @@ app.post("/api/deliveries/:id/:action", (req, res) => {
 });
 app.use("/api", (req, res) => res.status(404).json({ error: `No synthetic fixture for ${req.method} ${req.originalUrl}` }));
 
-app.get(["/users", "/transfer-requests", "/warehouse", "/driver-deliveries", "/central-kitchen-orders", "/reverse-logistics", "/branch-operations"], (req, res) => {
+app.get(["/users", "/transfer-requests", "/warehouse", "/driver-deliveries", "/central-kitchen-orders", "/reverse-logistics", "/branch-operations", "/production-dashboard"], (req, res) => {
   const saved = /(?:^|;\s*)fixture_role=(keeper|branch|branch-multi|driver|admin)(?:;|$)/.exec(req.headers.cookie || "")?.[1];
   const selected = role(req) || (saved as Role | undefined);
   if (!selected) return res.status(400).send("Choose ?role=keeper|branch|branch-multi|driver|admin");

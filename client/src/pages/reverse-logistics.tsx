@@ -73,7 +73,12 @@ export default function ReverseLogisticsPage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const draftAttempt = useRef<{ payload: string; key: string } | null>(null);
-  const movements = useQuery<Movement[]>({ queryKey: ["/api/reverse-logistics"], queryFn: () => get("/api/reverse-logistics") });
+  const requestedMovement = params.get("movementId");
+  const movementId = requestedMovement && /^[1-9]\d*$/.test(requestedMovement) ? requestedMovement : null;
+  const movements = useQuery<Movement[]>({
+    queryKey: ["/api/reverse-logistics", movementId],
+    queryFn: async () => movementId ? [await get(`/api/reverse-logistics/${movementId}`)] : get("/api/reverse-logistics"),
+  });
   const sources = useQuery<{ materials: Material[]; products: Product[] }>({ queryKey: ["/api/reverse-logistics/sources"], queryFn: () => get("/api/reverse-logistics/sources") });
   useEffect(() => {
     if (!globalManager && !scopedBranchId && !params.has("orderItemId") && !params.has("transferItemId")) setLine("");
@@ -191,9 +196,10 @@ export default function ReverseLogisticsPage() {
         </div>
       </CardContent></Card>}
       <section className="space-y-3"><h2 className="text-xl font-semibold">الحركات والحجر</h2>
+        {movementId && <p className="text-sm">عرض الحركة المحددة #{movementId} بعد التحقق من صلاحيتها في الخادم. <Link className="text-primary underline" href="/reverse-logistics">عرض القائمة</Link></p>}
         {movements.isError && <p role="alert" className="text-red-700">{movements.error instanceof Error ? movements.error.message : "تعذر تحميل الحركات"}</p>}
         {movements.data?.length === 0 && <p className="text-muted-foreground">لا توجد حركات في نطاق صلاحياتك.</p>}
-        {!movements.isError && !movements.isFetching && movements.data?.filter(row => globalManager || (!!scopedBranchId && row.source_branch_id === scopedBranchId)).map(row => <Card key={row.id}><CardContent className="space-y-3 p-4">
+        {!movements.isError && !movements.isFetching && movements.data?.filter(row => !!movementId || globalManager || (!!scopedBranchId && row.source_branch_id === scopedBranchId)).map(row => <Card key={row.id}><CardContent className="space-y-3 p-4">
           <div className="flex flex-wrap items-start justify-between gap-2"><div><strong>#{row.id} · {labels[row.kind]} · {row.item_name}</strong><p className="text-sm text-muted-foreground">{location(row.source_warehouse_id,row.source_branch_id)} ← {location(row.destination_warehouse_id,row.destination_branch_id)} · {labels[row.status]}</p></div><span className="rounded bg-muted px-2 py-1 text-sm">{row.quantity} {row.unit}</span></div>
           <div className="grid gap-2 text-sm sm:grid-cols-4"><span>شُحن: {row.shipped_quantity}</span><span>استُلم: {row.received_quantity}</span><span className={number(row.shortage_quantity)>0 ? "text-amber-700" : ""}>ناقص بالشحن: {row.shortage_quantity}</span><span>بالحجر: {row.quarantine_quantity} (تالف {number(row.damaged_quantity)-number(row.written_off_quantity)})</span></div>
           {row.carrier_name && <p className="text-sm">الناقل: {row.carrier_name} · المركبة: {row.vehicle_number || "غير مسجلة"}</p>}

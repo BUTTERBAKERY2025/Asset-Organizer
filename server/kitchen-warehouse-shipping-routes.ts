@@ -75,11 +75,15 @@ export function registerKitchenWarehouseShippingRoutes(app: Express) {
   }));
   app.get("/api/kitchen-warehouse-shipping", isAuthenticated, (req,res,next) =>
     (warehouseManager(req) ? requirePermission("warehouse","view") : requirePermission("production","view"))(req,res,next),
-    (req,res) => run(req,res,async c =>
-    rows(c,`SELECT s.*,w.name destination_name FROM kitchen_warehouse_shipments s
+    (req,res) => run(req,res,async c => {
+    const kitchenId = req.query.kitchenId === undefined ? null : z.string().trim().min(1).max(255).parse(req.query.kitchenId);
+    if (kitchenId && !inScope(req, kitchenId)) throw new ShippingError("Kitchen access denied",403);
+    return rows(c,`SELECT s.*,w.name destination_name FROM kitchen_warehouse_shipments s
       JOIN managed_warehouses w ON w.id=s.destination_warehouse_id
       WHERE ($2::boolean OR $1::varchar[] IS NULL OR s.source_branch_id=ANY($1::varchar[]))
-      ORDER BY s.id DESC LIMIT 500`,[getAllowedBranchIds(req),warehouseManager(req)])));
+        AND ($3::varchar IS NULL OR s.source_branch_id=$3)
+      ORDER BY s.id DESC LIMIT 500`,[getAllowedBranchIds(req),warehouseManager(req),kitchenId]);
+    }));
   app.get("/api/kitchen-warehouse-shipping/stock", ...warehouseView, (req,res) => run(req,res,async c => {
     if (!warehouseManager(req)) throw new ShippingError("Global warehouse manager required",403);
     return rows(c,`SELECT s.*,w.name warehouse_name,p.name product_name

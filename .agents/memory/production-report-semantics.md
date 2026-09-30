@@ -44,3 +44,9 @@ Coverage simulations must consider competing approved demand outside the display
 **Why:** Filtering before sharing free stock can promise the same balance to different days. A generic uncertain-demand reason must not overwrite a reservation mismatch and accidentally certify a prepared item's reservation.
 
 **How to apply:** Keep simulation separate from presentation filters; finished production is already stock, preparation and its reservation are the same goods, and any later real reservation must revalidate atomically.
+
+A unified production workspace does not imply a single inventory ledger or inferred end-to-end lineage.
+
+**Why:** The user approved one monitoring/execution board while explicitly preserving independent stock paths and explicit request/plan/batch/shipment/receipt references. Raw replenishment is not allocated to a branch request merely because its kitchen or date matches.
+
+**How to apply:** Reuse authoritative execution workflows. Keep raw replenishment, finished shipments and returns distinct; expose missing references and source limits rather than fabricating links or complete totals. Changing reservation or consumption timing requires separate authorization.

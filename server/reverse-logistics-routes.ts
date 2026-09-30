@@ -307,6 +307,8 @@ export function registerReverseLogisticsRoutes(app: Express) {
     return (await rows(c,"INSERT INTO managed_warehouses(name) VALUES($1) RETURNING *",[name]))[0];
   }));
   app.get("/api/reverse-logistics", ...warehouseView, async (req,res) => run(req,res,async c => {
+    const kitchenId = req.query.kitchenId === undefined ? null : z.string().trim().min(1).max(255).parse(req.query.kitchenId);
+    if (kitchenId && !scope(req,kitchenId)) throw new Reject("Kitchen access denied",403);
     const allowed = req.currentUser?.role === "branch_manager"
       ? getAllowedBranchIds(req) ?? []
       : getAllowedBranchIds(req);
@@ -316,12 +318,15 @@ export function registerReverseLogisticsRoutes(app: Express) {
       source_branch_id=ANY($1::varchar[]) OR destination_branch_id=ANY($1::varchar[])
       OR ($3::boolean AND m.kind='material_return'))
       AND ($2::boolean = true OR m.kind <> 'warehouse_transfer')
-       ORDER BY m.id DESC LIMIT 250`,[allowed,globalWarehouse(req),mainWarehouseReceiver(req)]);
+      AND ($4::varchar IS NULL OR source_branch_id=$4 OR destination_branch_id=$4)
+       ORDER BY m.id DESC LIMIT 250`,[allowed,globalWarehouse(req),mainWarehouseReceiver(req),kitchenId]);
     return movements.filter(row => branchGrant(req, row.kind, "view")
       && (req.currentUser?.role !== "branch_manager" || (row.source_branch_id && scope(req, row.source_branch_id))));
   }));
   app.get("/api/reverse-logistics/:id", ...warehouseView, async (req,res) => run(req,res,async c => {
-    const row = (await rows(c,"SELECT * FROM reverse_movements WHERE id=$1",[id.parse(req.params.id)]))[0];
+    const row = (await rows(c,`SELECT m.*,m.shipped_quantity-m.received_quantity AS shortage_quantity,
+      m.received_quantity-m.usable_quantity-m.written_off_quantity AS quarantine_quantity
+      FROM reverse_movements m WHERE id=$1`,[id.parse(req.params.id)]))[0];
     if (!row) throw new Reject("Not found",404);
     if (!branchGrant(req,row.kind,"view")) throw new Reject("Return permission denied",403);
     if (req.currentUser?.role === "branch_manager" && (!row.source_branch_id || !scope(req,row.source_branch_id)))

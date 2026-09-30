@@ -26,9 +26,9 @@ describe("production dashboard additive tabs", () => {
   it("keeps old tab URLs and operations default unchanged", () => {
     for (const tab of ["workplan", "operations", "legacy"] as const) expect(getProductionDashboardTab(`?tab=${tab}`, false)).toBe(tab);
     expect(getProductionDashboardTab("?tab=recipes", true)).toBe("recipes");
-    expect(getProductionDashboardTab("?tab=recipes", false)).toBe("operations");
-    expect(getProductionDashboardTab("", false)).toBe("operations");
-    expect(getProductionDashboardTab("?tab=unexpected", false)).toBe("operations");
+    expect(getProductionDashboardTab("?tab=recipes", false)).toBe("cycle");
+    expect(getProductionDashboardTab("", false)).toBe("cycle");
+    expect(getProductionDashboardTab("?tab=unexpected", false)).toBe("cycle");
   });
 
   it("recognizes settings and unified planning URLs without recipe permission", () => {

@@ -11,6 +11,7 @@ import DriverDeliveriesPage, { DeliveryWorkspace } from "@/pages/driver-deliveri
 import CentralKitchenOrdersPage from "@/pages/central-kitchen-orders";
 import ReverseLogisticsPage from "@/pages/reverse-logistics";
 import BranchOperationsPage from "@/pages/branch-operations";
+import ProductionDashboardPage from "@/pages/production-dashboard";
 import "@/lib/i18n";
 import "@/index.css";
 
@@ -29,6 +30,7 @@ async function mount() {
     : page === "/central-kitchen-orders" ? CentralKitchenOrdersPage
     : page === "/reverse-logistics" ? ReverseLogisticsPage
     : page === "/branch-operations" ? BranchOperationsPage
+    : page === "/production-dashboard" ? ProductionDashboardPage
     : null;
   if (!Page) throw new Error(`No real fixture page for ${page}`);
   createRoot(document.getElementById("root")!).render(
