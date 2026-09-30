@@ -7,7 +7,7 @@ import { operationsSourceLabel } from "@/lib/operations-center-presentation";
 export function time(value: string) {
   const date = new Date(value);
   return Number.isFinite(date.getTime())
-    ? new Intl.DateTimeFormat("ar-SA", { timeZone: "Asia/Riyadh", dateStyle: "medium", timeStyle: "short" }).format(date)
+    ? new Intl.DateTimeFormat("ar-SA-u-nu-latn", { timeZone: "Asia/Riyadh", dateStyle: "medium", timeStyle: "short" }).format(date)
     : "غير متاح";
 }
 export const coverageLabel = (coverage: OperationsMetric["coverage"]) =>
@@ -19,7 +19,7 @@ export function Metric({ metric }: { metric: OperationsMetric }) {
         <div className="absolute left-0 z-20 w-60 max-w-[70vw] space-y-1 rounded-xl border border-border bg-popover p-3 text-xs leading-5 text-popover-foreground shadow-lg">
           <p>التعريف: {metric.definition}</p><p>المصدر: {metric.source}</p><p>الفترة: {metric.period}</p><p>النطاق: {metric.scope.join("، ") || "غير متاح"}</p><p>آخر تحديث: {time(metric.asOf)}</p><p>{coverageLabel(metric.coverage)}</p>
         </div></details></div>
-    <p className="mt-2 text-xl font-black text-foreground">{metric.value === null || metric.coverage === "unavailable" ? "غير متاح" : `${new Intl.NumberFormat("ar-SA").format(metric.value)}${metric.unit ? ` ${metric.unit}` : ""}`}</p>
+    <p className="mt-2 text-xl font-black text-foreground">{metric.value === null || metric.coverage === "unavailable" ? "غير متاح" : `${new Intl.NumberFormat("en-US").format(metric.value)}${metric.unit ? ` ${metric.unit}` : ""}`}</p>
     {metric.coverage !== "complete" && <p className="mt-1 text-xs font-bold text-destructive">{coverageLabel(metric.coverage)}</p>}
   </div>;
 }

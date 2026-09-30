@@ -95,7 +95,7 @@ function CenterNotifications({ actorId, branchIds, names, liveManaged }: {
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2"><span className={`text-sm ${row.read ? "text-muted-foreground" : "font-bold"}`}>{row.title}</span>{priority(row.priority) && <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${row.priority >= 4 ? "bg-red-100 text-red-800" : "bg-amber-100 text-amber-800"}`}>{priority(row.priority)}</span>}</div>
             <p className="mt-1 line-clamp-1 text-xs text-muted-foreground">{row.content}</p>
-            <p className="mt-1 text-[11px] text-muted-foreground">{label(row)} · {new Date(row.createdAt).toLocaleString("ar-SA")}{row.read ? " · مقروء" : ""}</p>
+            <p className="mt-1 text-[11px] text-muted-foreground">{label(row)} · {time(row.createdAt)}{row.read ? " · مقروء" : ""}</p>
           </div>
           <div className="flex gap-1">
             <Button size="sm" variant="outline" onClick={() => setDetailId(row.id)}>التفاصيل</Button>
@@ -106,7 +106,7 @@ function CenterNotifications({ actorId, branchIds, names, liveManaged }: {
     </div>}
     <Dialog open={!!detail} onOpenChange={open => { if (!open) setDetailId(null); }}>
       <DialogContent dir="rtl" className="max-w-lg">
-        {detail && <><DialogHeader><DialogTitle className="text-right">{detail.title}</DialogTitle><DialogDescription className="text-right">{label(detail)} · {new Date(detail.createdAt).toLocaleString("ar-SA")}</DialogDescription></DialogHeader>
+        {detail && <><DialogHeader><DialogTitle className="text-right">{detail.title}</DialogTitle><DialogDescription className="text-right">{label(detail)} · {time(detail.createdAt)}</DialogDescription></DialogHeader>
           <p className="max-h-[50vh] overflow-auto whitespace-pre-wrap break-words text-sm leading-relaxed">{detail.content}</p>
           <DialogFooter className="gap-2 sm:gap-2">
             {detail.buttonAction && parseNoticeAction(detail.buttonAction, window.location.origin) && <Button onClick={() => {

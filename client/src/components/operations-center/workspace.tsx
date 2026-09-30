@@ -15,7 +15,7 @@ const views = [
   { id: "branches", title: "الفروع", icon: MapPin },
   { id: "digest", title: "اليومي والأسبوعي", icon: CalendarDays },
 ] satisfies { id: View; title: string; icon: typeof Layers3 }[];
-const number = (value: number) => value.toLocaleString("ar-SA");
+const number = (value: number) => value.toLocaleString("en-US");
 
 function Empty({ children }: { children: ReactNode }) {
   return <div className="rounded-xl border border-dashed border-border bg-muted/20 px-5 py-9 text-center text-sm leading-7 text-muted-foreground">{children}</div>;
