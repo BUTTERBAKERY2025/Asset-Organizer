@@ -7,6 +7,7 @@ import { useTranslation } from "react-i18next";
 import { changeLanguage } from "@/lib/i18n";
 import { prefetchQuery } from "@/lib/queryClient";
 import { preloadRoute, prefetchAdjacentPages } from "@/lib/pagePreloader";
+import { hrHubModule } from "@/lib/hr-hub-route";
 import { saveScrollPosition, getScrollPosition } from "@/lib/scrollMemory";
 import { 
   LayoutDashboard, FileText, LogOut, ClipboardEdit, Building2, AlertTriangle, 
@@ -179,7 +180,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
   }, [location]);
 
   const handleLinkHover = useCallback((href: string) => {
-    preloadRoute(href);
+    preloadRoute(href, user?.role);
     const apiMap: Record<string, string[]> = {
       "/": ["/api/command-center"],
       "/dashboard": ["/api/dashboard/stats"],
@@ -222,7 +223,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     if (queries) {
       queries.forEach(q => prefetchQuery([q]));
     }
-  }, []);
+  }, [user?.role]);
 
   const handleLogout = async () => {
     await logout();
@@ -273,7 +274,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         label: t("sidebar.hr"),
         icon: UsersRound,
         items: [
-          { href: "/hr-hub", label: t("sidebar.hrHub"), icon: Sparkles, module: "hr_management", isHeader: true },
+          { href: "/hr-hub", label: t("sidebar.hrHub"), icon: Sparkles, module: hrHubModule(user?.role), isHeader: true },
           { href: "/branch-employees", label: t("sidebar.branchEmployees"), icon: Users, module: "branch_employees", indent: true },
           { href: "/terminated-employees", label: t("sidebar.terminatedEmployees"), icon: Users, module: "branch_employees", indent: true },
           { href: "/operations-employees", label: t("sidebar.operationsEmployees"), icon: Users, module: "operations", indent: true, adminOnly: true },

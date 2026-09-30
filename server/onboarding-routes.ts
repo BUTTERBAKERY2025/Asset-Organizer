@@ -1114,57 +1114,64 @@ export function registerOnboardingRoutes(app: Express) {
       if (!signature) return res.status(400).json({ error: "التوقيع مطلوب" });
       if (!selfiePhotoUrl) return res.status(400).json({ error: "صورة الإثبات في الفرع مطلوبة" });
 
-      const [tk] = await db.select().from(onboardingTokens).where(eq(onboardingTokens.token, token)).limit(1);
-      if (!tk) return res.status(404).json({ error: "الرابط غير صالح" });
-      if (tk.revokedAt) return res.status(410).json({ error: "تم إلغاء هذا الرابط" });
-      if (tk.usedAt) return res.status(410).json({ error: "تم استخدام هذا الرابط مسبقاً" });
-      if (new Date(tk.expiresAt) < new Date()) return res.status(410).json({ error: "انتهت صلاحية هذا الرابط" });
+      const result = await db.transaction<
+        { status: number; error: string } | { success: true; distanceM: number | null; withinRadius: boolean | null }
+      >(async tx => {
+        // Send/resend locks the notification before revoking token rows.
+        // Use the same order here, then re-read both states after the locks.
+        await tx.execute(sql`SELECT n.id FROM onboarding_notifications n
+          JOIN onboarding_tokens t ON t.notification_id = n.id
+          WHERE t.token = ${token} FOR UPDATE OF n`);
+        await tx.execute(sql`SELECT id FROM onboarding_tokens WHERE token = ${token} FOR UPDATE`);
+        const [tk] = await tx.select().from(onboardingTokens).where(eq(onboardingTokens.token, token)).limit(1);
+        if (!tk) return { status: 404, error: "الرابط غير صالح" };
+        if (tk.revokedAt) return { status: 410, error: "تم إلغاء هذا الرابط" };
+        if (tk.usedAt) return { status: 410, error: "تم استخدام هذا الرابط مسبقاً" };
+        const now = new Date();
+        if (new Date(tk.expiresAt) <= now) return { status: 410, error: "انتهت صلاحية هذا الرابط" };
 
-      const [n] = await db.select().from(onboardingNotifications).where(eq(onboardingNotifications.id, tk.notificationId)).limit(1);
-      if (!n) return res.status(404).json({ error: "الإشعار غير موجود" });
-      if (!["pending", "sent"].includes(n.status)) {
-        return res.status(409).json({ error: "تم توقيع هذا الإشعار مسبقاً أو لم يعد قابلاً للتوقيع" });
-      }
+        const [n] = await tx.select().from(onboardingNotifications).where(eq(onboardingNotifications.id, tk.notificationId)).limit(1);
+        if (!n) return { status: 404, error: "الإشعار غير موجود" };
+        if (!["pending", "sent"].includes(n.status))
+          return { status: 409, error: "تم توقيع هذا الإشعار مسبقاً أو لم يعد قابلاً للتوقيع" };
 
-      // حساب المسافة من الفرع
-      let distanceM: number | null = null;
-      let withinRadius: boolean | null = null;
-      if (n.branchId && typeof selfieLat === "number" && typeof selfieLng === "number") {
-        const [b] = await db.select().from(branches).where(eq(branches.id, n.branchId)).limit(1);
-        if (b && b.latitude != null && b.longitude != null) {
-          distanceM = haversineMeters(b.latitude, b.longitude, selfieLat, selfieLng);
-          withinRadius = distanceM <= (b.locationRadius || 200);
+        let distanceM: number | null = null;
+        let withinRadius: boolean | null = null;
+        if (n.branchId && typeof selfieLat === "number" && typeof selfieLng === "number") {
+          const [b] = await tx.select().from(branches).where(eq(branches.id, n.branchId)).limit(1);
+          if (b && b.latitude != null && b.longitude != null) {
+            distanceM = haversineMeters(b.latitude, b.longitude, selfieLat, selfieLng);
+            withinRadius = distanceM <= (b.locationRadius || 200);
+          }
         }
-      }
 
-      const ip = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() || req.ip || null;
-      const ua = (req.headers["user-agent"] as string) || null;
-
-      await db
-        .update(onboardingNotifications)
-        .set({
-          status: "signed",
-          employeeSignature: signature,
-          selfiePhotoUrl,
+        const signed = await tx.update(onboardingNotifications).set({
+          status: "signed", employeeSignature: signature, selfiePhotoUrl,
           selfieLat: typeof selfieLat === "number" ? selfieLat : null,
           selfieLng: typeof selfieLng === "number" ? selfieLng : null,
           selfieAccuracy: typeof selfieAccuracy === "number" ? selfieAccuracy : null,
-          selfieCapturedAt: new Date(),
-          distanceFromBranchM: distanceM,
-          withinBranchRadius: withinRadius,
-          signedAt: new Date(),
-          signedIp: ip,
-          signedUserAgent: ua,
-          updatedAt: new Date(),
-        })
-        .where(eq(onboardingNotifications.id, n.id));
-
-      await db.update(onboardingTokens).set({ usedAt: new Date() }).where(eq(onboardingTokens.id, tk.id));
-
-      res.json({ success: true, distanceM, withinRadius });
+          selfieCapturedAt: now, distanceFromBranchM: distanceM, withinBranchRadius: withinRadius,
+          signedAt: now,
+          signedIp: (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() || req.ip || null,
+          signedUserAgent: (req.headers["user-agent"] as string) || null, updatedAt: now,
+        }).where(and(eq(onboardingNotifications.id, n.id), inArray(onboardingNotifications.status, ["pending", "sent"])))
+          .returning({ id: onboardingNotifications.id });
+        if (!signed.length) throw new Error("JOINING_SIGN_STATE_CHANGED");
+        const used = await tx.update(onboardingTokens).set({ usedAt: now }).where(and(
+          eq(onboardingTokens.id, tk.id), eq(onboardingTokens.notificationId, n.id),
+          isNull(onboardingTokens.usedAt), isNull(onboardingTokens.revokedAt),
+          sql`${onboardingTokens.expiresAt} > clock_timestamp()`,
+        )).returning({ id: onboardingTokens.id });
+        if (!used.length) throw new Error("JOINING_SIGN_STATE_CHANGED");
+        return { success: true, distanceM, withinRadius };
+      });
+      if ("error" in result) return res.status(result.status).json({ error: result.error });
+      res.json(result);
     } catch (e: any) {
+      if (e instanceof Error && e.message === "JOINING_SIGN_STATE_CHANGED")
+        return res.status(409).json({ error: "تغيرت حالة رابط المباشرة؛ حدّث الصفحة قبل المحاولة مجدداً" });
       console.error("[onboarding] sign error:", e);
-      res.status(500).json({ error: e.message });
+      res.status(500).json({ error: "تعذر حفظ توقيع المباشرة؛ لم يُحفظ التوقيع أو استخدام الرابط" });
     }
   });
 }

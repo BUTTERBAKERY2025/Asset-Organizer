@@ -29,7 +29,7 @@ import {
   Printer, Download, Pencil,
 } from "lucide-react";
 import type { JobOffer, OnboardingNotification, Branch } from "@shared/schema";
-import { consumeJoiningNotificationLink, retainAuthorizedJoiningRow } from "@/lib/onboarding-notification-navigation";
+import { consumeJoiningNotificationLink, joiningNotificationResponseReady, retainAuthorizedJoiningRow } from "@/lib/onboarding-notification-navigation";
 
 // نفس الـ schema المستخدم في صفحة موظفي الفرع لضمان توحيد البيانات
 const employeeFormSchema = z.object({
@@ -146,7 +146,7 @@ export default function OnboardingPage() {
     setViewRow(retain); setCreateFor(retain); setConvertRow(retain); setEditRow(retain); setFileRow(retain);
     if (rowsQuery.isFetching || rowsQuery.isError) setShareLink(null);
     const intent = consumeJoiningNotificationLink(searchParams, rows,
-      !rowsQuery.isPending && !rowsQuery.isFetching, consumedNotificationLinks.current);
+      joiningNotificationResponseReady(rowsQuery), consumedNotificationLinks.current);
     if (!intent.handled) return;
     if (intent.row) {
       setViewRow(intent.row);
@@ -154,7 +154,7 @@ export default function OnboardingPage() {
     } else {
       setNotificationLinkError("الإشعار المطلوب غير موجود ضمن المباشرات المصرّح لك بها أو تعذر التحقق من الصلاحية. لم نحمّل سجلًا خارج نطاقك.");
     }
-  }, [searchParams, rows, rowsQuery.isPending, rowsQuery.isFetching, rowsQuery.isError]);
+  }, [searchParams, rows, rowsQuery.isPending, rowsQuery.isFetching, rowsQuery.isError, rowsQuery.isSuccess]);
 
   const filtered = useMemo(() => {
     let r = rows;

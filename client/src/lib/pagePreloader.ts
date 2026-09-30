@@ -1,3 +1,5 @@
+import { hrHubModule } from "@/lib/hr-hub-route";
+
 const pageImports: Record<string, () => Promise<any>> = {
   "platform-home": () => import("@/pages/platform-home"),
   "branch-operations": () => import("@/pages/branch-operations"),
@@ -289,6 +291,7 @@ export function prefetchAdjacentPages(currentRoute: string) {
 
 const ROUTE_TO_PAGE: Record<string, string> = {
   "/": "platform-home",
+  "/hr-hub": "hr-hub",
   "/owner": "owner-portal",
   "/branch-operations": "branch-operations",
   "/operations-center": "operations-center",
@@ -431,8 +434,21 @@ const ROUTE_TO_PAGE: Record<string, string> = {
   "/travel-requests": "travel-requests",
 };
 
-export function preloadRoute(href: string) {
-  const pageKey = ROUTE_TO_PAGE[href];
+/** Only internal route intents may select a preload; query/hash are not page keys. */
+export function resolvePreloadPage(href: string, role?: string | null): string | undefined {
+  if (!href.startsWith("/") || href.startsWith("//") || /[\\\u0000-\u0020\u007f]/.test(href)) return;
+  const url = new URL(href, "https://internal.invalid");
+  if (url.origin !== "https://internal.invalid") return;
+  if (url.pathname === "/hr-hub") {
+    // Do not eagerly load either personnel page before the role is known.
+    if (!role) return;
+    return hrHubModule(role) === "operations_hr" ? "operations-hr" : "hr-hub";
+  }
+  return ROUTE_TO_PAGE[url.pathname];
+}
+
+export function preloadRoute(href: string, role?: string | null) {
+  const pageKey = resolvePreloadPage(href, role);
   if (pageKey) preloadPage(pageKey);
 }
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { findAuthorizedJoiningNotification, joiningNotificationId, consumeJoiningNotificationLink, retainAuthorizedJoiningRow } from "../client/src/lib/onboarding-notification-navigation";
+import { findAuthorizedJoiningNotification, joiningNotificationId, consumeJoiningNotificationLink, joiningNotificationResponseReady, retainAuthorizedJoiningRow } from "../client/src/lib/onboarding-notification-navigation";
 
 describe("authorized onboarding notification link receiver", () => {
   const rows = [
@@ -34,5 +34,19 @@ describe("authorized onboarding notification link receiver", () => {
     expect(retainAuthorizedJoiningRow(selected, [])).toBeNull();
     expect(consumeJoiningNotificationLink("?notificationId=12", rows, true, consumed).handled).toBe(false);
     expect(retainAuthorizedJoiningRow(selected, rows)).toBe(rows[0]);
+  });
+  it("does not consume an initial query failure; a successful retry opens the exact authorized record once", () => {
+    const consumed = new Set<string>();
+    const failed = { isSuccess: false, isFetching: false, isError: true };
+    expect(consumeJoiningNotificationLink("?notificationId=12", [], joiningNotificationResponseReady(failed), consumed).handled).toBe(false);
+    expect(consumed.size).toBe(0);
+    const success = { isSuccess: true, isFetching: false, isError: false };
+    expect(consumeJoiningNotificationLink("?notificationId=12", rows, joiningNotificationResponseReady(success), consumed).row).toBe(rows[0]);
+    expect(consumeJoiningNotificationLink("?notificationId=12", rows, joiningNotificationResponseReady(success), consumed).handled).toBe(false);
+    expect(retainAuthorizedJoiningRow(rows[0], [])).toBeNull();
+  });
+  it("does not consume stale authorized data during refetch or an errored refetch", () => {
+    expect(joiningNotificationResponseReady({ isSuccess: true, isFetching: true, isError: false })).toBe(false);
+    expect(joiningNotificationResponseReady({ isSuccess: true, isFetching: false, isError: true })).toBe(false);
   });
 });

@@ -18,13 +18,19 @@ export function findAuthorizedJoiningNotification<T extends { notification: { id
 export function consumeJoiningNotificationLink<T extends { notification: { id: number } | null }>(
   search: string,
   authorizedRows: readonly T[],
-  settled: boolean,
+  authorizedResponseReady: boolean,
   consumed: Set<string>,
 ): { handled: boolean; row: T | null } {
   const raw = new URLSearchParams(search).get("notificationId");
-  if (!raw || !settled || consumed.has(raw)) return { handled: false, row: null };
+  if (!raw || !authorizedResponseReady || consumed.has(raw)) return { handled: false, row: null };
   consumed.add(raw);
   return { handled: true, row: findAuthorizedJoiningNotification(search, authorizedRows) };
+}
+
+export function joiningNotificationResponseReady(query: {
+  isSuccess: boolean; isFetching: boolean; isError: boolean;
+}) {
+  return query.isSuccess && !query.isFetching && !query.isError;
 }
 
 export function retainAuthorizedJoiningRow<T extends { offer: { id: number } }>(
