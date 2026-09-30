@@ -15,10 +15,10 @@ describe("operations demand presentation", () => {
   it("bounds 79 lines and sorts deterministically by due date, order, then item", () => {
     const result = selectOperationsDemands([...lines].reverse(), {});
     expect(result.pageItems).toHaveLength(OPERATIONS_PAGE_SIZE);
-    expect(result.totalPages).toBe(4);
+    expect(result.totalPages).toBe(8);
     expect(result.filtered.map(d => d.orderItemId)).toEqual(selectOperationsDemands(lines, {}).filtered.map(d => d.orderItemId));
-    expect(selectOperationsDemands(lines, { page: 4 }).pageItems).toHaveLength(4);
-    expect(selectOperationsDemands(lines, { page: 50 }).currentPage).toBe(4);
+    expect(selectOperationsDemands(lines, { page: 8 }).pageItems).toHaveLength(9);
+    expect(selectOperationsDemands(lines, { page: 50 }).currentPage).toBe(8);
   });
   it("keeps units separate and respects search and filters without changing any quantity", () => {
     const original = JSON.stringify(lines);

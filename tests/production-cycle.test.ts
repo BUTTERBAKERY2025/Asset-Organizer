@@ -5,9 +5,9 @@ import type { ProductionPlanningResponse } from "../shared/production-planning";
 import { readFileSync } from "node:fs";
 
 describe("unified production cycle boundaries", () => {
-  it("defaults to the cycle but preserves all existing operational tabs", () => {
+  it("defaults to execution and preserves tracking plus all historical operational tabs", () => {
     expect(getProductionDashboardTab("", false)).toBe("cycle");
-    for (const tab of ["operations", "workplan", "unified-planning", "settings-review", "legacy"] as const)
+    for (const tab of ["tracking", "operations", "workplan", "unified-planning", "settings-review", "legacy"] as const)
       expect(getProductionDashboardTab(`?tab=${tab}`, false)).toBe(tab);
   });
   it("never merges replenishment, finished shipments and reverse ledgers", () => {
@@ -48,7 +48,7 @@ describe("unified production cycle boundaries", () => {
       expect(fetch).toHaveBeenCalledWith("/protected", expect.objectContaining({ credentials: "include", cache: "no-store" }));
     } finally { vi.unstubAllGlobals(); }
   });
-  it("keeps lane errors, limited data, source semantics and existing execution visible", () => {
+  it("keeps lane errors, limited data, source semantics and execution in its own view", () => {
     const source = readFileSync("client/src/components/central-kitchen/production-cycle.tsx", "utf8");
     expect(source).toContain("if (error)");
     expect(source).toContain("if (loading)");
@@ -56,7 +56,9 @@ describe("unified production cycle boundaries", () => {
     expect(source).toContain("query.isError ? undefined : query.data");
     expect(source).toContain("قد تغيب سجلات أقدم");
     expect(source).toContain("<OperationsBoard");
-    expect(source).toContain("<ProductionPlanning");
+    expect(source).toContain('if (view === "execution")');
+    expect(source).toContain('view === "tracking" && !!kitchenId');
+    expect(readFileSync("client/src/pages/production-dashboard.tsx", "utf8")).toContain('<ProductionPlanning mode="planning"');
     expect(source).toContain("movementId=");
   });
 });

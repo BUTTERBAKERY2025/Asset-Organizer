@@ -1,7 +1,7 @@
 import type { CentralKitchenOperationDemand } from "@shared/central-kitchen-live";
 
 export type DemandFilter = "all" | "uncovered" | "production" | "inactive" | "covered";
-export const OPERATIONS_PAGE_SIZE = 25;
+export const OPERATIONS_PAGE_SIZE = 10;
 
 /** Pure presentation transform: never aggregate quantities across units or mutate source demand. */
 export function selectOperationsDemands(
