@@ -10,6 +10,7 @@ import { OperationsDecisionBoard } from "@/components/operations-center/decision
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Sheet, SheetContent, SheetDescription, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { syncAppBadge } from "@/lib/app-badge";
 import { useAuth } from "@/hooks/useAuth";
 import { useBranches } from "@/hooks/useBranches";
@@ -36,7 +37,6 @@ function CenterNotifications({ actorId, branchIds, names, liveManaged }: {
 }) {
   const client = useQueryClient();
   const [, navigate] = useLocation();
-  const [expanded, setExpanded] = useState(false);
   const [filter, setFilter] = useState<"all" | "unread">("unread");
   const [limit, setLimit] = useState(4);
   const [detailId, setDetailId] = useState<number | null>(null);
@@ -76,12 +76,12 @@ function CenterNotifications({ actorId, branchIds, names, liveManaged }: {
   const label = (row: CenterNotice) => row.kind === "general" ? "إعلان عام"
     : `فرع: ${row.branchIds.map(id => names[id] || id).join("، ")}`;
   const priority = (value: number) => value >= 4 ? "عاجل" : value === 3 ? "مهم" : null;
-  return <section className="overflow-hidden rounded-xl border border-violet-200/70 bg-card" aria-label="إشعارات مركز التشغيل">
-    <button type="button" aria-expanded={expanded} onClick={() => setExpanded(value => !value)} className="flex w-full items-center justify-between gap-3 px-4 py-3 text-right hover:bg-violet-50/60">
-      <span className="flex items-center gap-2 text-sm font-bold"><Bell className="h-4 w-4 text-violet-700" />الإشعارات <span className="rounded-full bg-violet-100 px-2 py-0.5 text-xs text-violet-800">{notices.isLoading ? "…" : notices.isError ? "!" : `${unread} غير مقروء`}</span></span>
-      <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${expanded ? "rotate-180" : ""}`} />
-    </button>
-    {expanded && <div className="border-t border-violet-100 p-3 sm:p-4">
+  return <Sheet>
+    <SheetTrigger asChild><Button type="button" variant="outline" size="sm" className="min-h-11 gap-2" aria-label={`إشعارات مركز التشغيل: ${notices.isError ? "تعذر تحميلها" : `${unread} غير مقروء`}`}><Bell className="h-4 w-4" />الإشعارات <span className="rounded-full bg-violet-100 px-2 py-0.5 text-xs text-violet-800">{notices.isLoading ? "…" : notices.isError ? "!" : unread.toLocaleString("en-US")}</span></Button></SheetTrigger>
+    <SheetContent side="left" dir="rtl" className="w-full overflow-y-auto sm:max-w-lg">
+      <SheetTitle className="text-right">الإشعارات</SheetTitle>
+      <SheetDescription className="text-right">رسائل النظام في نطاق الفروع المختار؛ قراءة الإشعار لا تُنجز المهمة.</SheetDescription>
+      <div className="mt-5">
       <p className="mb-3 text-xs text-muted-foreground">رسائل النظام الموجهة إليك ضمن نطاق الفروع المختار في رأس الصفحة. تُحدَّث تلقائيًا وبشكل دوري، ويمكن تحديثها يدويًا. قراءة الرسالة أو إخفاؤها لا تنفّذ إجراءً على السجل المرتبط.</p>
       <div className="mb-3 flex gap-2">
         <Button size="sm" variant={filter === "unread" ? "default" : "outline"} onClick={() => { setFilter("unread"); setLimit(4); }}>غير المقروءة ({unread})</Button>
@@ -105,7 +105,8 @@ function CenterNotifications({ actorId, branchIds, names, liveManaged }: {
             <Button size="icon" variant="ghost" disabled={action.isPending} aria-label={`إخفاء ${row.title}`} onClick={() => action.mutate({ id: row.id, verb: "dismiss" })}><X className="h-4 w-4" /></Button>
           </div>
         </article>)}{filtered.length > limit && <Button variant="outline" size="sm" onClick={() => setLimit(value => value + 8)}>عرض المزيد ({filtered.length - limit})</Button>}</div>}
-    </div>}
+    </div>
+    </SheetContent>
     <Dialog open={!!detail} onOpenChange={open => { if (!open) setDetailId(null); }}>
       <DialogContent dir="rtl" className="max-w-lg">
         {detail && <><DialogHeader><DialogTitle className="text-right">{detail.title}</DialogTitle><DialogDescription className="text-right">{label(detail)} · {time(detail.createdAt)}</DialogDescription></DialogHeader>
@@ -120,7 +121,7 @@ function CenterNotifications({ actorId, branchIds, names, liveManaged }: {
           </DialogFooter></>}
       </DialogContent>
     </Dialog>
-  </section>;
+  </Sheet>;
 }
 
 export default function OperationsCenterPage() {
@@ -287,12 +288,12 @@ export default function OperationsCenterPage() {
           </Popover>
           <Button variant="outline" size="sm" className="min-h-11" disabled={!data || center.isFetching} onClick={() => center.refetch()}><RefreshCw className={`ml-2 h-4 w-4 ${center.isFetching ? "animate-spin" : ""}`} />تحديث</Button>
           {canExport("operations") && <Button variant="outline" size="sm" className="min-h-11" disabled={!data} onClick={exportScope}><Download className="ml-2 h-4 w-4" />تصدير</Button>}
+          {data && user?.id && data.scope.branchIds.length > 0 && <CenterNotifications key={`${user.id}:${data.scope.branchIds.slice().sort().join(",")}`} actorId={user.id} branchIds={data.scope.branchIds} names={Object.fromEntries(data.branches.map(branch => [branch.id, branch.name]))} liveManaged={liveEnabled} />}
         </div>
       </div>
       {data && <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-border pt-3 text-xs text-muted-foreground"><span className="font-semibold text-foreground">يوم العمل: {data.businessDate}</span><span>آخر تحديث: {time(data.generatedAt)} · السعودية</span><span className="inline-flex items-center gap-1.5"><Radio className="h-3.5 w-3.5 text-primary" />{live.status === "connected" ? "مباشر" : live.status === "polling" ? "تحديث دوري" : live.status === "access-invalidated" ? "الصلاحيات تغيرت" : "جار التحقق"}</span><span>آخر فحص للاتصال: {live.lastCheckedAt ? time(new Date(live.lastCheckedAt).toISOString()) : "غير متاح"}</span></div>}
     </header>
     {message && <p role="alert" className="rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">{message}</p>}
-    {data && user?.id && data.scope.branchIds.length > 0 && <CenterNotifications key={`${user.id}:${data.scope.branchIds.slice().sort().join(",")}`} actorId={user.id} branchIds={data.scope.branchIds} names={Object.fromEntries(data.branches.map(branch => [branch.id, branch.name]))} liveManaged={liveEnabled} />}
     {branchesError ? <div className="rounded-xl border bg-card p-6 text-center"><AlertTriangle className="mx-auto mb-2 h-6 w-6 text-destructive" /><p>تعذر التحقق من الفروع المسموح بها.</p><Button variant="outline" className="mt-3" onClick={() => { setScopeChecked(false); void refetchBranches().then(result => setScopeChecked(!result.isError)); }}>إعادة المحاولة</Button></div> : !allowed && !permissionsLoading ? <Empty message="لا تملك صلاحية عرض مركز التشغيل." /> : invalidSelection && !branchesLoading && scopeChecked ? <Empty message="تغير نطاق الصلاحيات أو الفرع المطلوب غير مسموح. اختر نطاقًا جديدًا من الفروع المتاحة أعلاه." /> : !branchesLoading && scopeChecked && !allowedIds.length ? <Empty message="لا توجد فروع مسموح بها لهذا الحساب." /> : branchesLoading || !scopeChecked || center.isLoading ? <div role="status" className="grid gap-3 rounded-xl border border-border bg-card p-5"><div className="h-6 w-48 animate-pulse rounded-lg bg-muted" /><div className="grid gap-3 md:grid-cols-2">{[0, 1].map(index => <div key={index} className="h-36 animate-pulse rounded-xl bg-muted" />)}</div><span className="sr-only">جار تحميل نطاق الفروع والبيانات</span></div> : center.isError ? <div className="rounded-xl border bg-card p-6 text-center"><AlertTriangle className="mx-auto mb-2 h-6 w-6 text-destructive" /><p>تعذر تحميل المركز ({center.error instanceof Error ? center.error.message : "خطأ غير معروف"}). لم نعرض بيانات قديمة.</p><Button variant="outline" className="mt-3" onClick={() => center.refetch()}>إعادة المحاولة</Button></div> : data ?
       <OperationsDecisionBoard key={effectiveIds.slice().sort().join(",")} data={data} actorId={user?.id} offset={offset} onOffset={setOffset} open={go} openBranch={id => navigate(`/branch-operations?branchId=${encodeURIComponent(id)}`)} retry={() => { void center.refetch(); }} />
       : <Empty message="تعذر التحقق من نطاق الاستجابة. حدّث الصفحة بعد مراجعة صلاحيات الفروع." />}

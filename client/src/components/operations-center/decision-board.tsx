@@ -1,9 +1,10 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Activity, ArrowLeft, ArrowUpLeft, BellRing, CalendarDays, ChevronLeft, ChevronRight, ClipboardList, Factory, FileSearch, MapPin, PackageCheck, Search, ShieldCheck, Sparkles, TrendingUp, Users, Wrench } from "lucide-react";
+import { Activity, ArrowLeft, ArrowUpLeft, BellRing, CalendarDays, ChevronLeft, ChevronRight, Factory, FileSearch, MapPin, PackageCheck, Search, ShieldCheck, Sparkles, TrendingUp, Users, Wrench } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { operationsDecisionQueue, type OperationsCenterResponse, type OperationsMonthResponse, type OperationsQueueItem } from "@shared/operations-center";
 import { apiRequest } from "@/lib/queryClient";
+import { usePermissions } from "@/hooks/usePermissions";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { RecordSheet, time } from "./record-sheet";
@@ -12,15 +13,15 @@ import "./decision-board.css";
 
 const fmt = (n: number) => new Intl.NumberFormat("en-US").format(n);
 const domains = [
-  { id: "people", title: "الفريق", hint: "حضور · إجازات · سلف", icon: Users, types: ["attendance_record", "leave", "advance"], modules: ["attendance", "hr_leaves", "hr_advances"] },
+  { id: "people", title: "متابعة الحضور", hint: "حضور · إجازات · سلف", icon: Users, types: ["attendance_record", "leave", "advance"], modules: ["attendance", "hr_leaves", "hr_advances"] },
   { id: "kitchen", title: "المطبخ", hint: "الطلبات والإنتاج", icon: Factory, types: ["kitchen_order"], modules: ["central_kitchen_orders"] },
   { id: "supply", title: "المواد والتوصيل", hint: "تحويلات · مرتجعات · توصيل", icon: PackageCheck, types: ["transfer", "reverse_movement", "delivery_assignment"], modules: ["warehouse", "delivery_tasks"] },
   { id: "quality", title: "الجودة والصيانة", hint: "فحوص · بلاغات", icon: Wrench, types: ["quality_check", "maintenance"], modules: ["quality_control", "maintenance"] },
   { id: "sales", title: "المبيعات والإقفال", hint: "يوميات · إغلاقات", icon: TrendingUp, types: ["cashier_journal", "daily_closure"], modules: ["cashier_journal", "daily_closures", "sales_analytics"] },
 ] as const;
 type DomainId = typeof domains[number]["id"];
-type View = DomainId | "branches" | "monthly" | "evidence" | null;
-type Focus = "overdue" | "assigned" | "followup" | "today" | "all";
+type View = DomainId | "branches" | "monthly" | "analysis" | "evidence" | null;
+type Focus = "critical" | "overdue" | "assigned" | "followup" | "today" | "all";
 type Insight = { title: string; explanation: string; sourceType: string; sourceId: string; branchId: string; href: string };
 type InsightResponse = { kind: "ai"; generatedAt: string; insights: Insight[]; coverage: OperationsCenterResponse["coverage"] };
 
@@ -38,22 +39,22 @@ export function OperationsDecisionBoard({ data, actorId, offset, onOffset, open,
   openBranch: (id: string) => void; retry: () => void;
 }) {
   const [view, setView] = useState<View>(null);
-  const [branch, setBranch] = useState("");
+  const { canView } = usePermissions();
   const [focus, setFocus] = useState<Focus>("all");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [source, setSource] = useState<SourceSelection | null>(null);
   const [month, setMonth] = useState(() => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Riyadh", year: "numeric", month: "2-digit" }).format(new Date()));
   const [search, setSearch] = useState("");
   const ids = data.scope.branchIds;
-  const current = ids.includes(branch) ? branch : "";
-  const scopedIds = current ? [current] : ids;
+  const scopedIds = ids;
+  const current = "";
   const scopeKey = [...scopedIds].sort().join(",");
   const branchName = (id: string) => data.branches.find(b => b.id === id)?.name ?? id;
-  const { unique: queue, urgent: overdue, assigned, followup } = useMemo(
-    () => operationsDecisionQueue(data.queue.filter(item => ids.includes(item.branchId) && (!current || current === item.branchId)), actorId, data.generatedAt),
-    [data, actorId, current]);
-  const today = queue.filter(item => item.dueAt && Number.isFinite(Date.parse(item.dueAt)) && new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Riyadh", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(item.dueAt)) === data.businessDate && !overdue.includes(item));
-  const cohorts: Record<Focus, OperationsQueueItem[]> = { overdue, assigned, followup, today, all: queue };
+  const { unique: queue, critical, urgent: overdue, assigned, followup } = useMemo(
+    () => operationsDecisionQueue(data.queue.filter(item => ids.includes(item.branchId)), actorId, data.generatedAt),
+    [data, actorId]);
+  const today = queue.filter(item => item.dueAt && Number.isFinite(Date.parse(item.dueAt)) && new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Riyadh", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(item.dueAt)) === data.businessDate && !critical.includes(item) && !overdue.includes(item));
+  const cohorts: Record<Focus, OperationsQueueItem[]> = { critical, overdue, assigned, followup, today, all: queue };
   const visible = cohorts[focus];
   const selectedDomain = domains.find(d => d.id === view);
   const domainItems = selectedDomain ? queue.filter(item => (selectedDomain.types as readonly string[]).includes(item.sourceType)) : [];
@@ -113,86 +114,53 @@ export function OperationsDecisionBoard({ data, actorId, offset, onOffset, open,
     }
   };
 
-  return <div className="oc-board space-y-3.5 pb-5" data-testid="operations-decision-board">
-    <section className="oc-hero oc-in flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
-      <div className="min-w-0"><p className="oc-kicker text-[10px] font-black uppercase">BUTTER / DAILY OPERATIONS</p>
-        <h2 className="mt-1 text-xl font-black leading-tight sm:text-2xl">قرار اليوم، من واقع الفروع.</h2>
-        <p className="mt-1 text-xs text-[#706580]">سجلات تحتاج انتباهك · يوم العمل <span dir="ltr" className="inline-block font-semibold text-[#57466c]">{data.businessDate}</span></p>
+  return <div className="oc-board space-y-3 pb-5" data-testid="operations-decision-board">
+    <section className="oc-panel p-3 sm:p-4" aria-label="الاهتمام الآن">
+      <div className="flex flex-wrap items-center justify-between gap-2"><div><h2 className="text-base font-black">يحتاج انتباهك الآن</h2><p className="text-xs text-muted-foreground">سجلات للمتابعة والقراءة، لا اعتماد تلقائي · {qualified}</p></div>
+        <button type="button" onClick={() => showFocus("all")} className="text-xs font-bold text-primary hover:underline">كل السجلات <ArrowLeft className="inline size-3.5" /></button>
       </div>
-      <label className="flex shrink-0 items-center gap-2 text-xs font-semibold text-[#665778]"><MapPin className="size-4 text-violet-600" /><span className="sr-only">فرع العرض</span>
-        <select aria-label="تصفية فرع في مساحة العمل" value={current} onChange={event => { setBranch(event.target.value); setSelectedId(null); setSource(null); }} className="min-h-10 max-w-[230px] rounded-xl border border-violet-200 bg-[#fdfcff] px-3 text-xs text-[#352748] focus-visible:outline-2 focus-visible:outline-violet-600">
-          <option value="">كل الفروع المختارة</option>{data.branches.filter(b => ids.includes(b.id)).map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-        </select>
-      </label>
+      {unavailable.length > 0 && <p role="status" className="mt-2 text-xs text-amber-900">تعذر تحميل {fmt(unavailable.length)} مصادر؛ القائمة جزئية وليست صفرًا.</p>}
+      <div className="mt-2 flex flex-wrap gap-1.5">{([
+         ["critical", "أولوية عاجلة مسجلة", BellRing], ["overdue", "مواعيد منقضية", CalendarDays], ["assigned", "مسند إليّ", ShieldCheck],
+        ["followup", "يحتاج متابعة", Activity], ["today", "يستحق اليوم", CalendarDays],
+      ] as const).filter(([id]) => cohorts[id].length > 0).map(([id, label, Icon]) =>
+        <button key={id} type="button" onClick={() => showFocus(id)} className="inline-flex items-center gap-1 rounded-full border border-border px-2.5 py-1 text-xs font-semibold hover:bg-accent"><Icon className="size-3.5 text-primary" />{label} · {fmt(cohorts[id].length)}</button>)}</div>
+      {queue.length ? <div className="mt-3 grid gap-2 md:grid-cols-3">{[...critical, ...overdue, ...assigned, ...followup].slice(0, 3).map(item =>
+        <QueueRow key={item.id} item={item} branch={branchName(item.branchId)} onOpen={() => openRecord(item)} />)}</div>
+        : <p className="mt-3 text-xs text-muted-foreground">لا سجلات ظاهرة في الصفحة الحالية؛ غياب السجل لا يعني اكتمال العمل.</p>}
     </section>
-
-    <section className="oc-in grid grid-cols-2 gap-2 sm:grid-cols-4" aria-label="أولويات المتابعة" style={{ animationDelay: "70ms" }}>
-      {([
-        { id: "overdue", label: "مواعيد منقضية", icon: BellRing, color: "text-rose-700", bg: "bg-rose-50" },
-        { id: "assigned", label: "مسند إليّ", icon: ShieldCheck, color: "text-violet-700", bg: "bg-violet-100" },
-        { id: "followup", label: "تحتاج متابعة", icon: ClipboardList, color: "text-amber-700", bg: "bg-amber-50" },
-        { id: "today", label: "تستحق اليوم", icon: Activity, color: "text-[#6252a1]", bg: "bg-[#f0edfa]" },
-      ] as const).map(stat => <button key={stat.id} type="button" disabled={!cohorts[stat.id].length} onClick={() => showFocus(stat.id)} className="oc-stat flex min-h-[76px] items-center gap-3 px-3 py-2.5 text-right focus-visible:outline-2 focus-visible:outline-violet-600 disabled:cursor-default disabled:hover:translate-y-0 disabled:hover:bg-[#fdfcff] disabled:hover:border-[#e7def0]" aria-label={`${stat.label}: ${fmt(cohorts[stat.id].length)}${cohorts[stat.id].length ? "؛ عرض السجلات" : ""}`}>
-        <span className={`flex size-9 shrink-0 items-center justify-center rounded-xl ${stat.bg} ${stat.color}`}><stat.icon className="size-[18px]" /></span>
-        <span><strong className="block text-xl font-black leading-none tabular-nums">{fmt(cohorts[stat.id].length)}</strong><span className="mt-1 block text-[11px] font-semibold leading-tight text-[#776b85]">{stat.label}</span></span>
-      </button>)}
-    </section>
-
-    <div className="grid gap-3 lg:grid-cols-[minmax(0,1.42fr)_minmax(300px,.8fr)]">
-      <section className="oc-panel oc-in min-w-0 p-4 sm:p-5" style={{ animationDelay: "120ms" }}>
-        <div className="flex items-start justify-between gap-2"><div><p className="oc-kicker text-[10px] font-black">01 / قائمة القرار</p><h3 className="mt-1 text-base font-black">ابدأ من هنا</h3></div>
-          {queue.length > 0 && <button type="button" onClick={() => showFocus("all")} className="inline-flex items-center gap-1 text-xs font-bold text-violet-700 hover:underline">كل السجلات <ArrowLeft className="size-3.5" /></button>}
-        </div>
-        <p className="mt-1 text-[11px] text-muted-foreground">سجلات للقراءة والمتابعة، لا إجراءات اعتماد داخل المركز · {qualified}</p>
-        {queue.length ? <div className="mt-3 space-y-1.5">
-          {[...overdue, ...assigned, ...followup].slice(0, 4).map(item => <QueueRow key={item.id} item={item} branch={branchName(item.branchId)} onOpen={() => openRecord(item)} />)}
-          {queue.length > 4 && <button type="button" onClick={() => showFocus("all")} className="mt-1 flex w-full items-center justify-center gap-1 rounded-lg py-1.5 text-xs font-bold text-violet-700 hover:bg-violet-50">عرض بقية السجلات في الصفحة <ChevronLeft className="size-3.5" /></button>}
-        </div> : <div className="mt-3 rounded-xl border border-dashed border-violet-200 bg-[#faf7fd] px-4 py-5 text-center"><ShieldCheck className="mx-auto size-6 text-violet-500" /><p className="mt-2 text-sm font-bold">لا سجلات متابعة في هذه الصفحة</p><p className="mt-1 text-xs text-muted-foreground">يمكنك مراجعة المصادر والإغلاقات؛ الغياب لا يؤكد خلو الفروع من العمل.</p></div>}
-        {unavailable.length > 0 && <p role="status" className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-[11px] text-amber-900">تغطية جزئية: {fmt(unavailable.length)} مصادر تعذر تحميلها. لا تُحتسب كصفر.</p>}
-      </section>
-
-      <section className="oc-panel oc-in p-4 sm:p-5" style={{ animationDelay: "170ms" }}>
-        <p className="oc-kicker text-[10px] font-black">02 / دلائل التشغيل</p><h3 className="mt-1 text-base font-black">الإغلاقات المسجلة</h3>
-        <p className="mt-1 text-[11px] text-muted-foreground">آخر 7 أيام · الأيام ذات سجل إغلاق فقط؛ غياب السجل ليس صفرًا</p>
-        {chart.length ? <div className="mt-3 h-[144px]" dir="ltr" aria-label="رسم الإغلاقات المؤكدة خلال الأيام السبعة الماضية">
-          <ResponsiveContainer width="100%" height="100%"><BarChart data={chart} margin={{ top: 8, right: 4, left: -26, bottom: 0 }} barSize={19}>
-            <CartesianGrid stroke="#eee7f4" vertical={false} /><XAxis dataKey="date" tick={{ fontSize: 10, fill: "#867994" }} axisLine={false} tickLine={false} /><YAxis allowDecimals={false} tick={{ fontSize: 10, fill: "#867994" }} axisLine={false} tickLine={false} />
-            <Tooltip formatter={value => [fmt(Number(value)), "إغلاقات مؤكدة"]} contentStyle={{ borderRadius: 12, borderColor: "#e7def0", fontSize: 12, direction: "rtl" }} /><Bar dataKey="count" fill="#794ab5" radius={[5, 5, 0, 0]} /></BarChart></ResponsiveContainer>
-        </div> : <div className="mt-4 flex h-[130px] items-center justify-center rounded-xl border border-dashed border-violet-200 text-center text-xs text-muted-foreground">لا تتوفر أدلة إغلاق للرسم في هذا النطاق.</div>}
-        {hasClosureGaps && <p className="mt-1 text-[11px] text-amber-800">بعض بيانات الإغلاق غير متاحة؛ الأعمدة لا تمثل إجمالي كل الفروع.</p>}
-        <button type="button" onClick={() => setView("monthly")} className="mt-3 flex w-full items-center justify-between border-t border-violet-100 pt-3 text-xs font-bold text-violet-700 hover:underline"><span className="flex items-center gap-2"><CalendarDays className="size-4" />ملف إغلاقات الشهر</span><ChevronLeft className="size-4" /></button>
-      </section>
-    </div>
-
-    <section className="oc-in" style={{ animationDelay: "210ms" }}>
-      <div className="mb-2 flex items-end justify-between gap-3"><div><p className="oc-kicker text-[10px] font-black">03 / مسارات العمل</p><h3 className="mt-0.5 text-base font-black">ادخل إلى المجال</h3></div><span className="text-[11px] text-muted-foreground">المتاح حسب صلاحياتك</span></div>
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-5">{domains.filter(domainAvailable).map(domain => {
-        const count = queue.filter(item => (domain.types as readonly string[]).includes(item.sourceType)).length;
-        return <button key={domain.id} type="button" onClick={() => { setSearch(""); setView(domain.id); }} className="oc-domain flex min-h-[88px] flex-col justify-between rounded-2xl border border-[#e7def0] bg-[#fdfcff] p-3 text-right focus-visible:outline-2 focus-visible:outline-violet-600">
-          <span className="flex items-start justify-between"><span className="flex size-8 items-center justify-center rounded-lg bg-[#f1eafa] text-violet-700"><domain.icon className="size-[17px]" /></span><ChevronLeft className="size-4 text-[#a18daf]" /></span>
-          <span className="mt-2"><strong className="block text-xs font-black">{domain.title}</strong><span className="block truncate text-[10px] text-muted-foreground">{count ? `${fmt(count)} سجل في الصفحة` : domain.hint}</span></span>
-        </button>;
-      })}</div>
-      <div className="mt-2 flex flex-wrap gap-2">
-        <button type="button" onClick={() => setView("branches")} className="inline-flex items-center gap-1.5 rounded-full border border-violet-200 bg-violet-50/70 px-3 py-1.5 text-[11px] font-bold text-violet-800 hover:bg-violet-100"><MapPin className="size-3.5" />الفروع ({fmt(scopedIds.length)})</button>
-        <button type="button" onClick={() => showFocus("all")} className="inline-flex items-center gap-1.5 rounded-full border border-violet-200 bg-violet-50/70 px-3 py-1.5 text-[11px] font-bold text-violet-800 hover:bg-violet-100"><FileSearch className="size-3.5" />دليل السجلات والمصادر</button>
+    <section aria-label="مجالات العمل اليومية">
+      <h2 className="mb-2 text-sm font-black">مسارات العمل</h2>
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-5">{domains.filter(domainAvailable).map(domain =>
+        <button key={domain.id} type="button" onClick={() => { setSearch(""); setView(domain.id); }} className="oc-domain flex min-h-[82px] items-center gap-2 rounded-xl border border-border bg-card p-3 text-right focus-visible:outline-2 focus-visible:outline-primary">
+          <domain.icon className="size-5 shrink-0 text-primary" /><span className="min-w-0"><strong className="block text-xs">{domain.title}</strong><small className="block truncate text-[10px] text-muted-foreground">{domain.hint}</small></span>
+        </button>)}
+        {canView("operations_hr") && scopedIds.length > 0 && <button type="button" onClick={() => open("/hr-hub", scopedIds[0])} className="oc-domain flex min-h-[82px] items-center gap-2 rounded-xl border border-border bg-card p-3 text-right"><Users className="size-5 text-primary" /><span><strong className="block text-xs">إدارة الموظفين</strong><small className="text-[10px] text-muted-foreground">رواتب · مباشرة · نقل</small></span></button>}
+        {([
+          ["branches", "الفروع", MapPin], ["monthly", "إغلاقات الشهر", CalendarDays],
+          ["analysis", "التحليل والمساعد", Sparkles],
+        ] as const).map(([id, title, Icon]) => <button key={id} type="button" onClick={() => setView(id)} className="oc-domain flex min-h-[82px] items-center gap-2 rounded-xl border border-border bg-card p-3 text-right"><Icon className="size-5 shrink-0 text-primary" /><strong className="text-xs">{title}</strong></button>)}
       </div>
-    </section>
-
-    <section className="oc-panel oc-in flex flex-col gap-3 p-4 sm:flex-row sm:items-start sm:justify-between sm:p-5" style={{ animationDelay: "250ms" }}>
-      <div className="min-w-0"><p className="oc-kicker flex items-center gap-1.5 text-[10px] font-black"><Sparkles className="size-3.5" />مساعد القرار</p><h3 className="mt-1 text-sm font-black">قراءة إضافية، عند طلبك فقط.</h3><p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">تحليل سجلات نطاق الفروع الحالي. الاقتراحات ليست اعتمادًا أو إجراءً منفذًا.</p></div>
-      <Button variant="outline" size="sm" className="shrink-0 border-violet-200 text-violet-800 hover:bg-violet-50" disabled={insights.isPending} onClick={() => insights.mutate({ scope: scopeKey, branchIds: [...scopedIds] })}>{aiLoading ? "جار التحليل…" : aiResult ? "إعادة التحليل يدويًا" : "تحليل هذا النطاق"}</Button>
-      {aiError && <p role="alert" className="text-xs text-destructive">{insights.error instanceof Error ? insights.error.message : "تعذر التحليل. حاول مجددًا."}</p>}
-      {aiResult && <div className="w-full space-y-1.5 sm:max-w-[49%]">{aiResult.insights.length ? aiResult.insights.map((insight, index) => <button key={`${insight.sourceType}:${insight.sourceId}:${index}`} type="button" onClick={() => aiOpen(insight)} className="block w-full rounded-xl border border-violet-100 bg-[#faf7fd] p-2.5 text-right hover:bg-violet-50"><strong className="block text-xs">{insight.title}</strong><span className="mt-0.5 block text-[11px] text-muted-foreground">{insight.explanation}</span></button>) : <p className="text-xs text-muted-foreground">لم تظهر اقتراحات مدعومة بالسجلات المتاحة.</p>}</div>}
     </section>
 
     <Sheet open={!!view} onOpenChange={value => { if (!value) { setView(null); setSearch(""); } }}>
       <SheetContent side="left" dir="rtl" className="!w-full !max-w-[620px] overflow-y-auto border-violet-100 bg-[#fbf9fe] p-0 text-[#29213b]">
         <div className="sticky top-0 z-10 border-b border-violet-100 bg-[#fbf9fe]/95 px-5 pb-4 pt-8 backdrop-blur-sm sm:px-6">
-          <p className="text-[10px] font-black text-violet-700">BUTTER / تفاصيل التشغيل</p><SheetTitle className="mt-1 text-right text-xl font-black">{selectedDomain?.title ?? (view === "monthly" ? "إغلاقات الشهر" : view === "branches" ? "الفروع" : "دليل السجلات")}</SheetTitle>
+          <SheetTitle className="mt-1 text-right text-xl font-black">{selectedDomain?.title ?? (view === "monthly" ? "إغلاقات الشهر" : view === "branches" ? "الفروع" : view === "analysis" ? "التحليل والمساعد" : "سجلات المتابعة")}</SheetTitle>
           <SheetDescription className="mt-1 text-right text-xs">ضمن الفروع المصرح بها فقط · القراءة لا تنفذ إجراءً على المصدر.</SheetDescription>
         </div>
         <div className="space-y-4 p-5 sm:p-6">
+          {view === "analysis" && <>
+            <div className="rounded-xl border border-border bg-card p-3"><h3 className="text-sm font-bold">الإغلاقات المسجلة · آخر 7 أيام</h3><p className="text-xs text-muted-foreground">سجلات مؤكدة فقط؛ غياب السجل ليس صفرًا.</p>
+              {chart.length ? <div className="mt-3 h-44" dir="ltr"><ResponsiveContainer width="100%" height="100%"><BarChart data={chart}><CartesianGrid strokeDasharray="3 3" vertical={false} /><XAxis dataKey="date" /><YAxis allowDecimals={false} /><Tooltip /><Bar dataKey="count" name="إغلاق مسجل" fill="#794ab5" /></BarChart></ResponsiveContainer></div> : <p className="mt-3 text-xs">لا توجد أدلة إغلاق متاحة للرسم.</p>}
+              {hasClosureGaps && <p className="mt-2 text-xs text-amber-800">بعض بيانات الإغلاق غير متاحة؛ الرسم جزئي.</p>}
+            </div>
+            <div className="rounded-xl border border-border bg-card p-3"><h3 className="text-sm font-bold">مساعد القرار</h3><p className="mt-1 text-xs text-muted-foreground">اقتراحات من سجلات النطاق الحالي، لا تُنفّذ إجراءات أو اعتمادات.</p>
+              <Button variant="outline" size="sm" className="mt-3" disabled={aiLoading} onClick={() => insights.mutate({ scope: scopeKey, branchIds: [...scopedIds] })}>{aiLoading ? "جار التحليل…" : "تحليل هذا النطاق"}</Button>
+              {aiError && <p role="alert" className="mt-2 text-xs text-destructive">{insights.error instanceof Error ? insights.error.message : "تعذر التحليل."}</p>}
+              {aiResult && <div className="mt-3 space-y-2">{aiResult.insights.length ? aiResult.insights.map((insight, index) => <button key={`${insight.sourceType}:${insight.sourceId}:${index}`} type="button" onClick={() => aiOpen(insight)} className="block w-full rounded-lg border border-border p-2 text-right text-xs hover:bg-accent"><strong>{insight.title}</strong><span className="block text-muted-foreground">{insight.explanation}</span></button>) : <p className="text-xs text-muted-foreground">لا توجد اقتراحات مدعومة بالسجلات الحالية.</p>}</div>}
+            </div>
+          </>}
           {view === "branches" && <div className="space-y-2">{data.branches.filter(item => scopedIds.includes(item.id)).map(item => <button key={item.id} type="button" onClick={() => openBranch(item.id)} className="oc-row flex w-full items-center justify-between rounded-xl border border-violet-100 bg-card p-3 text-right text-sm font-bold"><span className="flex items-center gap-2"><MapPin className="size-4 text-violet-600" />{item.name}</span><ArrowUpLeft className="size-4 text-violet-600" /></button>)}</div>}
           {view === "monthly" && <>
             <label className="block text-xs font-bold">الشهر <input type="month" value={month} onChange={e => setMonth(e.target.value)} className="mt-1 block min-h-10 rounded-lg border border-violet-200 bg-card px-2 text-sm" /></label>
@@ -220,18 +188,17 @@ export function OperationsDecisionBoard({ data, actorId, offset, onOffset, open,
           </>}
           {view === "evidence" && <>
             <div className="flex flex-wrap gap-1.5">{([
-              ["all", "كل السجلات"], ["overdue", "مواعيد منقضية"], ["assigned", "مسند إليّ"], ["followup", "متابعة"], ["today", "اليوم"],
-            ] as const).filter(([key]) => key === focus || cohorts[key].length > 0).map(([key, label]) => <button key={key} type="button" onClick={() => setFocus(key)} className={`rounded-full px-3 py-1.5 text-xs font-bold ${focus === key ? "bg-violet-700 text-white" : "border border-violet-200 bg-card text-violet-800"}`}>{label} · {fmt(cohorts[key].length)}</button>)}</div>
+               ["all", "كل السجلات"], ["critical", "أولوية عاجلة مسجلة"], ["overdue", "مواعيد منقضية"], ["assigned", "مسند إليّ"], ["followup", "متابعة"], ["today", "اليوم"],
+             ] as const).filter(([key]) => key === "all" || cohorts[key].length > 0).map(([key, label]) => <button key={key} type="button" onClick={() => setFocus(key)} className={`rounded-full px-3 py-1.5 text-xs font-bold ${focus === key ? "bg-violet-700 text-white" : "border border-violet-200 bg-card text-violet-800"}`}>{label} · {fmt(cohorts[key].length)}</button>)}</div>
             <p className="text-xs text-muted-foreground">سجلات {qualified}. المواعيد المنقضية ليست بالضرورة حالات طوارئ.</p>
             <div className="space-y-2">{visible.map(item => <QueueRow key={item.id} item={item} branch={branchName(item.branchId)} onOpen={() => openRecord(item)} />)}</div>
             {!visible.length && <div className="rounded-xl border border-dashed border-violet-200 p-5 text-center text-xs text-muted-foreground">لا سجلات في هذه المجموعة ضمن الصفحة الحالية.</div>}
             <div className="flex gap-2"><Button variant="outline" size="sm" disabled={offset === 0} onClick={() => onOffset(Math.max(0, offset - data.scope.limit))}><ChevronRight className="size-4" />السابقة</Button><Button variant="outline" size="sm" disabled={data.coverage.nextOffset === null} onClick={() => onOffset(data.coverage.nextOffset!)}>التالية<ChevronLeft className="size-4" /></Button></div>
-            {focus === "all" && data.cards.some(card => scopedIds.includes(card.branchId)) && <details className="rounded-xl border border-violet-100 bg-card p-3"><summary className="cursor-pointer text-xs font-bold text-violet-800">مصادر البيانات ومؤشراتها</summary><div className="mt-3 space-y-1.5">{data.cards.filter(card => scopedIds.includes(card.branchId)).map(card => <button key={`${card.branchId}:${card.id}`} type="button" onClick={() => openSource(card.id, card.branchId)} className="oc-row flex w-full items-center justify-between rounded-lg border border-violet-100 px-3 py-2 text-right text-xs"><span>{card.title} · {branchName(card.branchId)}</span><span className="text-muted-foreground">{card.state === "ready" ? "متاح" : "غير متاح"}</span></button>)}</div></details>}
           </>}
           {selectedDomain && <>
             <label className="relative block"><Search className="absolute right-3 top-3 size-4 text-violet-500" /><input aria-label="بحث سجلات المجال" value={search} onChange={e => setSearch(e.target.value)} placeholder="ابحث في السجلات والمصادر" className="min-h-10 w-full rounded-xl border border-violet-200 bg-card pr-10 pl-3 text-sm outline-none focus:border-violet-500" /></label>
             {!!filteredDomainItems.length && <div className="space-y-2"><h3 className="text-xs font-black text-violet-800">سجلات المتابعة · {fmt(filteredDomainItems.length)}</h3>{filteredDomainItems.map(item => <QueueRow key={item.id} item={item} branch={branchName(item.branchId)} onOpen={() => openRecord(item)} />)}</div>}
-            {!!filteredCards.length && <div className="space-y-2"><h3 className="text-xs font-black text-violet-800">مصادر المجال · {fmt(filteredCards.length)}</h3>{filteredCards.map(card => <button key={`${card.branchId}:${card.id}`} type="button" onClick={() => openSource(card.id, card.branchId)} className="oc-row flex w-full items-center gap-3 rounded-xl border border-violet-100 bg-card p-3 text-right text-xs"><span className="min-w-0 flex-1"><strong className="block truncate">{card.title}</strong><span className="text-muted-foreground">{branchName(card.branchId)} · {card.state === "ready" ? "مؤشرات متاحة" : "المصدر غير متاح"}</span></span><ChevronLeft className="size-4 text-violet-600" /></button>)}</div>}
+            {!!filteredCards.length && <details className="rounded-xl border border-border bg-card p-3"><summary className="cursor-pointer text-xs font-bold text-primary">مصادر المجال · {fmt(filteredCards.length)}</summary><div className="mt-3 space-y-2">{filteredCards.map(card => <button key={`${card.branchId}:${card.id}`} type="button" onClick={() => openSource(card.id, card.branchId)} className="oc-row flex w-full items-center gap-3 rounded-xl border border-violet-100 p-3 text-right text-xs"><span className="min-w-0 flex-1"><strong className="block truncate">{card.title}</strong><span className="text-muted-foreground">{branchName(card.branchId)} · {card.state === "ready" ? "مؤشرات متاحة" : "المصدر غير متاح"}</span></span><ChevronLeft className="size-4 text-violet-600" /></button>)}</div></details>}
             {!filteredDomainItems.length && !filteredCards.length && <p className="rounded-xl border border-dashed border-violet-200 p-5 text-center text-xs text-muted-foreground">{search ? "لا نتائج تطابق البحث." : "لا سجلات ظاهرة في هذه الصفحة؛ قد تكون هناك سجلات لم تُحمّل بعد."}</p>}
           </>}
         </div>

@@ -33,6 +33,8 @@ export type OperationsQueueItem = {
   /** Persisted assigned actor only; stage labels are never personal assignments. */
   ownerId: string | null;
   dueAt: string | null;
+  /** Source-declared urgency only; never inferred from a deadline or stage. */
+  priorityReason?: "urgent" | "critical";
   href: string;
   actions: { label: string; href: string; capability: "read" }[];
 };
@@ -87,10 +89,12 @@ export function operationsDecisionQueue(rows: OperationsQueueItem[], actorId: st
     seen.add(key);
     return true;
   });
-  const urgent = unique.filter(item => item.dueAt && Number.isFinite(Date.parse(item.dueAt)) && Date.parse(item.dueAt) < Date.parse(asOf));
-  const assigned = unique.filter(item => actorId && item.ownerId === actorId && !urgent.includes(item));
-  const followup = unique.filter(item => !urgent.includes(item) && !assigned.includes(item));
-  return { unique, urgent, assigned, followup };
+  const critical = unique.filter(item => item.priorityReason === "urgent" || item.priorityReason === "critical");
+  const urgent = unique.filter(item => !critical.includes(item) && item.dueAt && Number.isFinite(Date.parse(item.dueAt)) && Date.parse(item.dueAt) < Date.parse(asOf));
+  const assigned = unique.filter(item => actorId && item.ownerId === actorId && !critical.includes(item) && !urgent.includes(item));
+  const followup = unique.filter(item => !critical.includes(item) && !urgent.includes(item) && !assigned.includes(item));
+  // Keep urgent as the legacy deadline cohort for existing consumers.
+  return { unique, critical, urgent, assigned, followup };
 }
 
 /** A zero-sized observed cohort has no meaningful pass rate. */

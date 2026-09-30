@@ -17,4 +17,16 @@ describe("operations decision evidence", () => {
     expect(result.assigned).toEqual([assigned]);
     expect(result.followup).toEqual([unclear]);
   });
+  it("keeps source-declared urgent priority distinct from overdue, assigned and followup", () => {
+    const sourceUrgent = { ...makeOperationsQueueItem("maintenance", 4, "open", "a", "maintenance", "بلاغ", "open", "/maintenance", "manager", "2026-09-29T00:00:00Z", "me"), priorityReason: "urgent" as const };
+    const overdue = makeOperationsQueueItem("maintenance", 5, "open", "a", "maintenance", "بلاغ", "open", "/maintenance", "manager", "2026-09-29T00:00:00Z", "me");
+    const assigned = makeOperationsQueueItem("maintenance", 6, "open", "a", "maintenance", "بلاغ", "open", "/maintenance", "manager", null, "me");
+    const followup = makeOperationsQueueItem("maintenance", 7, "open", "a", "maintenance", "بلاغ", "open", "/maintenance");
+    const result = operationsDecisionQueue([sourceUrgent, overdue, assigned, followup], "me", "2026-09-30T12:00:00Z");
+    expect(result.critical).toEqual([sourceUrgent]);
+    expect(result.urgent).toEqual([overdue]);
+    expect(result.assigned).toEqual([assigned]);
+    expect(result.followup).toEqual([followup]);
+    expect([...result.critical, ...result.urgent, ...result.assigned, ...result.followup]).toHaveLength(result.unique.length);
+  });
 });

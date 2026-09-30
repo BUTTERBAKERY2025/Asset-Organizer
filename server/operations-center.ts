@@ -140,10 +140,13 @@ export async function projectOperationsCenter(req: Request, requested: string[] 
   }
   source("maintenance", "maintenance", async () => {
     const rows = await db.select({ id: maintenanceTickets.id, branchId: maintenanceTickets.branchId, status: maintenanceTickets.status,
-      assignee: maintenanceTickets.assigneeUserId, due: maintenanceTickets.dueAt })
+      assignee: maintenanceTickets.assigneeUserId, due: maintenanceTickets.dueAt, priority: maintenanceTickets.priority })
       .from(maintenanceTickets).where(and(inArray(maintenanceTickets.branchId, branchIds),
         inArray(maintenanceTickets.status, ["open", "assigned", "in_progress"]))).orderBy(desc(maintenanceTickets.createdAt)).limit(SOURCE_LIMIT);
-    return rows.map(r => queueItem("maintenance", r.id, r.status, r.branchId, "maintenance", "بلاغ صيانة", r.status, link("/maintenance", r.branchId), r.assignee || "غير محدد", asIso(r.due), r.assignee));
+    return rows.map(r => ({
+      ...queueItem("maintenance", r.id, r.status, r.branchId, "maintenance", "بلاغ صيانة", r.status, link("/maintenance", r.branchId), r.assignee || "غير محدد", asIso(r.due), r.assignee),
+      ...(r.priority === "urgent" ? { priorityReason: "urgent" as const } : {}),
+    }));
   });
   source("kitchen", "central_kitchen_orders", async () => {
     const rows = await db.select({ id: centralKitchenOrders.id, branchId: centralKitchenOrders.requestBranchId,
