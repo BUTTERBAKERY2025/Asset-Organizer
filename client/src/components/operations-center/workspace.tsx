@@ -2,6 +2,7 @@ import { useState, type ReactNode } from "react";
 import { ArrowUpLeft, ChevronDown, ChevronLeft, ClipboardList, Layers3, MapPin, Search, Store, CalendarDays } from "lucide-react";
 import type { OperationsCenterResponse, OperationsQueueItem } from "@shared/operations-center";
 import { Button } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { filterOperationsQueue } from "@/lib/operations-center-queue";
 import { findSelectedRecord, findSelectedSource, groupOperationsSources, operationsSourceLabel, queueQualifier, type SourceSelection } from "@/lib/operations-center-presentation";
 import { Metric, RecordSheet, coverageLabel, time } from "./record-sheet";
@@ -53,6 +54,7 @@ export function OperationsWorkspace({ data, actorId, offset, onOffset, open, ope
   const [view, setView] = useState<View>("overview");
   const [branchId, setBranchId] = useState<string | null>(null);
   const [branchSearch, setBranchSearch] = useState("");
+  const [branchOpen, setBranchOpen] = useState(false);
   const [sourceSearch, setSourceSearch] = useState("");
   const [queueSearch, setQueueSearch] = useState("");
   const [queueSource, setQueueSource] = useState("all");
@@ -86,16 +88,16 @@ export function OperationsWorkspace({ data, actorId, offset, onOffset, open, ope
     </nav>
     <div className="flex flex-wrap items-center justify-between gap-3">
       <div><p className="text-xs font-bold text-primary">مساحة القرار / {views.find(entry => entry.id === view)?.title}</p><h2 className="mt-0.5 text-xl font-black text-foreground sm:text-2xl">{view === "overview" ? "ما يحدث عبر الفروع" : view === "inbox" ? "سجلات تحتاج متابعة" : view === "sources" ? "المصادر بحسب المجال" : view === "branches" ? "الفروع في النطاق" : "السجلات اليومية والأسبوعية"}</h2></div>
-      <details className="relative z-20 min-w-[170px] rounded-lg border border-border bg-card">
-        <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 px-3 text-sm font-bold"><MapPin className="h-4 w-4 text-primary" /><span className="max-w-40 truncate">{activeBranch ? name(activeBranch) : "كل الفروع"}</span><ChevronDown className="mr-auto h-4 w-4 text-muted-foreground" /></summary>
-        <div className="absolute left-0 top-full mt-2 w-[min(320px,85vw)] rounded-xl border border-border bg-popover p-2 shadow-lg">
+      <Popover open={branchOpen} onOpenChange={setBranchOpen}>
+        <PopoverTrigger asChild><button type="button" className="flex min-h-11 min-w-[170px] items-center gap-2 rounded-lg border border-border bg-card px-3 text-sm font-bold"><MapPin className="h-4 w-4 text-primary" /><span className="max-w-40 truncate">{activeBranch ? name(activeBranch) : "كل الفروع"}</span><ChevronDown className="mr-auto h-4 w-4 text-muted-foreground" /></button></PopoverTrigger>
+        <PopoverContent dir="rtl" align="end" className="w-[min(320px,85vw)] rounded-xl p-2">
           <label className="flex items-center gap-2 rounded-lg border border-input px-2"><Search className="h-4 w-4 text-muted-foreground" /><input aria-label="بحث عن فرع" value={branchSearch} onChange={event => setBranchSearch(event.target.value)} placeholder="ابحث عن فرع" className="min-h-10 min-w-0 flex-1 bg-transparent text-sm outline-none" /></label>
           <div className="oc-branch-results mt-2 max-h-60 overflow-y-auto">
-            <button type="button" onClick={event => { selectBranch(null); event.currentTarget.closest("details")?.removeAttribute("open"); }} className="min-h-10 w-full rounded-lg px-3 text-right text-sm font-bold hover:bg-accent">كل الفروع المسموح بها</button>
-            {branches.filter(branch => branch.name.toLocaleLowerCase().includes(branchSearch.toLocaleLowerCase().trim())).map(branch => <button type="button" key={branch.id} onClick={event => { selectBranch(branch.id); event.currentTarget.closest("details")?.removeAttribute("open"); }} className="min-h-10 w-full rounded-lg px-3 text-right text-sm hover:bg-accent">{branch.name}</button>)}
+            <button type="button" onClick={() => { selectBranch(null); setBranchOpen(false); }} className="min-h-10 w-full rounded-lg px-3 text-right text-sm font-bold hover:bg-accent">كل الفروع المسموح بها</button>
+            {branches.filter(branch => branch.name.toLocaleLowerCase().includes(branchSearch.toLocaleLowerCase().trim())).map(branch => <button type="button" key={branch.id} onClick={() => { selectBranch(branch.id); setBranchOpen(false); }} className="min-h-10 w-full rounded-lg px-3 text-right text-sm hover:bg-accent">{branch.name}</button>)}
           </div>
-        </div>
-      </details>
+        </PopoverContent>
+      </Popover>
     </div>
     {view === "overview" && <>
       <section className="grid overflow-hidden rounded-xl border border-border bg-card md:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">

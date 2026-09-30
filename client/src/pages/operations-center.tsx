@@ -7,6 +7,7 @@ import { parseNoticeAction } from "@shared/operations-center-notifications";
 import { Layout } from "@/components/layout";
 import { OperationsWorkspace, time } from "@/components/operations-center/workspace";
 import { Button } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { syncAppBadge } from "@/lib/app-badge";
 import { useAuth } from "@/hooks/useAuth";
@@ -133,6 +134,7 @@ export default function OperationsCenterPage() {
   const [offset, setOffset] = useState(0);
   const [message, setMessage] = useState("");
   const [scopeSearch, setScopeSearch] = useState("");
+  const [scopeOpen, setScopeOpen] = useState(false);
   const allowedIds = useMemo(() => branches.map(branch => branch.id), [branches]);
   // An empty selection means the server's current authorized scope, not cached client-side "all".
   const effectiveIds = selected.filter(id => allowedIds.includes(id));
@@ -213,6 +215,8 @@ export default function OperationsCenterPage() {
     (effectiveIds.length ? effectiveIds : allowedIds).every(id => center.data.scope.branchIds.includes(id))
     ? center.data : undefined;
   const changeScope = (ids: string[]) => {
+    setScopeOpen(false);
+    setScopeSearch("");
     setMessage("");
     setOffset(0);
     setInvalidSelection(false);
@@ -270,16 +274,16 @@ export default function OperationsCenterPage() {
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div className="min-w-0"><p className="text-xs font-bold text-muted-foreground">BUTTER BAKERY · عمليات الفروع</p><h1 className="mt-1 text-2xl font-black text-foreground sm:text-3xl">مركز إدارة التشغيل</h1><p className="mt-1 text-sm text-muted-foreground">قراءة موحدة لما يتطلب المتابعة عبر الفروع المسموح بها.</p></div>
         <div className="flex flex-wrap items-center gap-2">
-          <details className="relative z-30 min-w-[190px] flex-1 sm:flex-none">
-            <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-2 rounded-lg border border-border bg-card px-3 text-sm font-bold text-foreground hover:bg-accent"><span>نطاق الفروع · {effectiveIds.length ? `${effectiveIds.length} مختارة` : `${allowedIds.length} متاحة`}</span><ChevronDown className="h-4 w-4 text-muted-foreground" /></summary>
-            <div className="absolute left-0 right-0 z-30 mt-1 min-w-[260px] rounded-xl border border-border bg-popover p-2 text-popover-foreground shadow-lg">
+          <Popover open={scopeOpen} onOpenChange={setScopeOpen}>
+            <PopoverTrigger asChild><button type="button" className="flex min-h-11 min-w-[190px] flex-1 items-center justify-between gap-2 rounded-lg border border-border bg-card px-3 text-sm font-bold text-foreground hover:bg-accent sm:flex-none"><span>نطاق الفروع · {effectiveIds.length ? `${effectiveIds.length} مختارة` : `${allowedIds.length} متاحة`}</span><ChevronDown className="h-4 w-4 text-muted-foreground" /></button></PopoverTrigger>
+            <PopoverContent dir="rtl" align="end" className="w-[min(320px,calc(100vw-24px))] rounded-xl p-2">
               <input aria-label="بحث نطاق الفروع" value={scopeSearch} onChange={event => setScopeSearch(event.target.value)} placeholder="ابحث عن فرع" className="mb-2 min-h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring" />
               <div className="max-h-52 overflow-y-auto">
               <Button variant="ghost" className="w-full justify-start text-xs" onClick={() => changeScope([])}>كل الفروع المسموح بها</Button>
               {branches.filter(branch => branch.name.toLocaleLowerCase().includes(scopeSearch.toLocaleLowerCase().trim())).map(branch => <label key={branch.id} className="flex min-h-10 cursor-pointer items-center gap-2 rounded px-2 text-xs hover:bg-accent"><input type="checkbox" checked={effectiveIds.includes(branch.id)} onChange={event => changeScope(event.target.checked ? [...effectiveIds, branch.id] : effectiveIds.length ? effectiveIds.filter(id => id !== branch.id) : allowedIds.filter(id => id !== branch.id))} />{branch.name}</label>)}
               </div>
-            </div>
-          </details>
+            </PopoverContent>
+          </Popover>
           <Button variant="outline" size="sm" className="min-h-11" disabled={!data || center.isFetching} onClick={() => center.refetch()}><RefreshCw className={`ml-2 h-4 w-4 ${center.isFetching ? "animate-spin" : ""}`} />تحديث</Button>
           {canExport("operations") && <Button variant="outline" size="sm" className="min-h-11" disabled={!data} onClick={exportScope}><Download className="ml-2 h-4 w-4" />تصدير</Button>}
         </div>
