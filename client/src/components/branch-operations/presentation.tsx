@@ -125,6 +125,7 @@ export function SectionHeader({ section, count }: { section: SectionMeta; count:
       <h2 id={`branch-ops-${section.id}`} className="font-black text-foreground">{section.label}</h2>
       <p className="mt-0.5 text-xs text-muted-foreground">{section.hint}</p>
     </div>
+    <span className="mr-auto shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-bold text-primary" aria-label={`${count} صفحات عمل`}>{count.toLocaleString("en-US")}</span>
   </div>;
 }
 
@@ -294,11 +295,11 @@ export function OperationCardView({ card, section, onOpen, onRefresh, expanded =
   const panelId = `branch-operation-card-panel-${card.id}`;
   return <article id={`branch-operation-card-${card.id}`} className={`branch-ops-card border border-border bg-card text-card-foreground shadow-sm ${expanded ? "branch-ops-card-expanded" : ""}`} data-testid={`branch-operation-card-${card.id}`}>
     <button type="button" className="group branch-ops-card-main" onClick={() => onOpen(workflowHref(card.id, card.href))} aria-label={`فتح ${card.title}`}>
-      <div className="flex items-center gap-3">
+       <div className="flex items-center gap-2.5">
         <PlatformAppIcon icon={meta.icon} color={meta.color} />
         <span className="min-w-0 flex-1">
-          <h3 className="branch-ops-card-title block break-words text-base font-black leading-snug text-foreground">{card.title}</h3>
-          <span className="mt-1 block text-xs font-semibold text-muted-foreground">فتح صفحة العمل</span>
+           <h3 className="branch-ops-card-title block break-words text-sm font-black leading-snug text-foreground">{card.title}</h3>
+           <span className="mt-0.5 block text-[11px] font-semibold text-muted-foreground">فتح صفحة العمل</span>
         </span>
         <ChevronLeft className="h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
       </div>
@@ -322,7 +323,7 @@ export function EmptyState({ title, text, icon: Icon, action }: { title: string;
 }
 
 export function BoardSkeleton() {
-  return <div className="mt-7 space-y-7" aria-label="جار تحميل لوحة الفرع" aria-busy="true"><div className="branch-ops-shimmer h-8 w-44 rounded-lg" /><div className="branch-ops-grid">{Array.from({ length: 10 }).map((_, index) => <div key={index} className="branch-ops-shimmer h-32 rounded-2xl" />)}</div></div>;
+  return <div className="mt-7 space-y-7" aria-label="جار تحميل لوحة الفرع" aria-busy="true"><div className="branch-ops-shimmer h-8 w-44 rounded-lg" /><div className="branch-ops-sections">{[3, 5, 3].map((count, group) => <div key={group} className="branch-ops-section" data-card-count={count}><div className="branch-ops-shimmer mb-3 h-5 w-36 rounded-lg" /><div className="branch-ops-grid">{Array.from({ length: count }).map((_, index) => <div key={index} className="branch-ops-shimmer h-28 rounded-2xl" />)}</div></div>)}</div></div>;
 }
 
 export { AlertTriangle, Settings2, ShieldAlert, Store };

@@ -180,22 +180,24 @@ export default function BranchOperationsPage() {
           <>
             <DailyWorkspace key={validBoard.branchId} branchId={validBoard.branchId} cards={validBoard.cards} onOpen={go} onRefresh={() => board.refetch()} refreshing={board.isFetching} />
             {validBoard.cards.length === 0 ? <EmptyState title="لا توجد وحدات متاحة" text="لا توجد صفحات تشغيلية مسموح بها لهذا الحساب في الفرع المحدد." icon={Settings2} /> : (
-              <div className="mt-6 space-y-8">
-                <h2 className="text-lg font-black">المؤشرات وصفحات العمل</h2>
+               <div className="mt-6">
+                 <h2 className="mb-5 text-lg font-black">المؤشرات وصفحات العمل</h2>
+                 <div className="branch-ops-sections">
                 {groupCards(validBoard.cards.filter(card => !isNavigationOnly(card))).map(({ section, cards }) => section.id === "people" ? (
-                  <details key={`${validBoard.branchId}-${section.id}`} className="rounded-xl border border-border bg-muted/20 p-4" data-testid="branch-operations-section-people">
+                   <details key={`${validBoard.branchId}-${section.id}`} className="branch-ops-section rounded-xl border border-border bg-muted/20 p-4" data-card-count={cards.length} data-testid="branch-operations-section-people">
                     <summary className="min-h-8 cursor-pointer font-bold" id="branch-ops-people">{section.label}</summary>
                     <p className="mb-3 text-xs text-muted-foreground">{section.hint}</p>
                     <div className="branch-ops-grid">{cards.map(card => <OperationCardView key={card.id} card={card} section={section} onOpen={go} onRefresh={() => board.refetch()} expanded={expandedCardId === card.id} onToggle={() => setExpandedCardId(current => current === card.id ? null : card.id)} />)}</div>
                   </details>
                 ) : (
-                  <section key={section.id} aria-labelledby={`branch-ops-${section.id}`} data-testid={`branch-operations-section-${section.id}`}>
+                   <section key={section.id} className="branch-ops-section" data-card-count={cards.length} aria-labelledby={`branch-ops-${section.id}`} data-testid={`branch-operations-section-${section.id}`}>
                     <SectionHeader section={section} count={cards.length} />
                     <div className="branch-ops-grid">
                       {cards.map((card) => <OperationCardView key={card.id} card={card} section={section} onOpen={go} onRefresh={() => board.refetch()} expanded={expandedCardId === card.id} onToggle={() => setExpandedCardId(current => current === card.id ? null : card.id)} />)}
                     </div>
                   </section>
                 ))}
+                 </div>
                 {validBoard.cards.some(isNavigationOnly) && <details className="rounded-xl border bg-muted/20 p-4" data-testid="branch-operations-navigation-only">
                   <summary className="min-h-11 cursor-pointer font-bold">روابط تنقل فقط ({validBoard.cards.filter(isNavigationOnly).length})</summary>
                   <p className="mb-3 text-xs text-muted-foreground">هذه الصفحات لا توفر مؤشرات للوحة؛ فتحها لا يعني وجود إجراء مطلوب أو اكتماله.</p>

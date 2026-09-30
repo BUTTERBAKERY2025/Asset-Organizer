@@ -273,11 +273,11 @@
   @media (min-width: 640px) {
     .platform-app-icon { width: 80px; height: 80px; }
   }
-  .branch-ops-shell .platform-app-icon { width: 56px; height: 56px; border-radius: .875rem; }
-  .branch-ops-shell .platform-app-icon svg { width: 28px; height: 28px; }
+  .branch-ops-shell .platform-app-icon { width: 42px; height: 42px; border-radius: .7rem; }
+  .branch-ops-shell .platform-app-icon svg { width: 21px; height: 21px; }
   @media (min-width: 640px) {
-    .branch-ops-shell .platform-app-icon { width: 64px; height: 64px; }
-    .branch-ops-shell .platform-app-icon svg { width: 32px; height: 32px; }
+    .branch-ops-shell .platform-app-icon { width: 46px; height: 46px; }
+    .branch-ops-shell .platform-app-icon svg { width: 23px; height: 23px; }
   }
   /* Branch operations board: layout-only rules (container-query grid and the
      compact card variant). Colors are Tailwind theme utilities on the elements
@@ -322,12 +322,23 @@
      .branch-ops-action-layout > [data-testid="branch-operations-needs-action"] { grid-column: 1; grid-row: 1; }
      .branch-ops-side-stack { grid-column: 2; grid-row: 1; }
    }
+  .branch-ops-sections {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 1.4rem 1.25rem;
+  }
+  .branch-ops-section {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
   .branch-ops-grid {
     display: grid;
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 10rem), 1fr));
     gap: .65rem;
     align-items: start;
   }
+  .branch-ops-grid > .branch-ops-card { max-width: 17rem; }
   .branch-ops-card {
     display: flex;
     flex-direction: column;
@@ -336,7 +347,7 @@
     container-type: inline-size;
     container-name: opscard;
     border-radius: 1rem;
-    min-height: 7.25rem;
+    min-height: 6.5rem;
     transition: box-shadow 160ms ease, transform 160ms ease;
   }
   .branch-ops-card-main {
@@ -344,8 +355,8 @@
     display: block;
     position: relative;
     width: 100%;
-    min-height: 5.75rem;
-    padding: .75rem;
+    min-height: 4.9rem;
+    padding: .65rem;
     border-radius: .95rem;
     text-align: right;
   }
@@ -425,22 +436,23 @@
   @media (min-width: 640px) {
     .branch-ops-icon img { width: 52px; height: 52px; }
   }
-  @container branchops (min-width: 300px) {
-    .branch-ops-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  @container branchops (min-width: 380px) {
+    .branch-ops-grid { grid-template-columns: repeat(auto-fill, minmax(min(100%, 9rem), 1fr)); }
   }
-  @container branchops (min-width: 680px) {
-    .branch-ops-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .8rem; }
-    .branch-ops-card-main { padding: .9rem; }
-    .branch-ops-card-panel { padding: .9rem; }
-    .branch-ops-alerts { padding: 0 .9rem .9rem; }
+  @container branchops (max-width: 759px) {
+    .branch-ops-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr)); }
+    .branch-ops-grid > .branch-ops-card { max-width: none; }
   }
-  @container opscard (max-width: 280px) {
-    .branch-ops-card-main { text-align: center; }
-    .branch-ops-card-main > div { flex-direction: column; align-items: center; gap: .75rem; }
-    .branch-ops-card-main > div > :nth-child(2) { width: 100%; padding-top: 0; }
-    .branch-ops-card-main > div > :last-child { display: none; }
-    .branch-ops-card-main h3 { font-size: .875rem; overflow-wrap: anywhere; }
-    .branch-ops-alerts { justify-content: center; }
+  @container branchops (min-width: 760px) {
+    .branch-ops-section { flex: 1 1 calc(50% - .625rem); }
+    .branch-ops-section[data-card-count="1"] { flex: 0 1 13.5rem; }
+    .branch-ops-section[data-card-count="2"] { flex: 0 1 28rem; }
+    .branch-ops-grid { gap: .75rem; }
+  }
+  @container branchops (min-width: 1100px) {
+    .branch-ops-section { flex-basis: calc(50% - .625rem); }
+    .branch-ops-section[data-card-count="1"] { flex-basis: 14rem; }
+    .branch-ops-section[data-card-count="2"] { flex-basis: 30rem; }
   }
   @media (hover: hover) {
     .branch-ops-card:hover { box-shadow: 0 10px 24px -12px color-mix(in oklab, var(--color-primary) 35%, transparent); transform: translateY(-2px); }

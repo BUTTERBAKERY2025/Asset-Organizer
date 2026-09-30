@@ -775,7 +775,7 @@ export default function CentralKitchenOrdersPage() {
   return <Layout>
     <main dir="rtl" className="page-container kitchen-workspace space-y-4 bg-background pb-10 text-foreground">
       {invalidLinkedBranch && !branchesLoading && <p role="alert" className="rounded border border-destructive/30 p-3 text-destructive">الفرع المطلوب غير متاح. اختر فرعًا مسموحًا من القائمة للمتابعة.</p>}
-      <PageHeader icon={Factory} tone="production" title={operationsView ? "تشغيل المطبخ اليومي" : "طلبات المطبخ"} description={operationsView ? "قائمة العمل والطلب المحدد في مساحة واحدة" : "رتّب ما يحتاج قراراً الآن، ثم افتح التفاصيل عند الحاجة"
+      <PageHeader icon={Factory} tone="production" title={operationsView ? "تشغيل المطبخ اليومي" : "طلبيات الفرع"} description={operationsView ? "قائمة العمل والطلب المحدد في مساحة واحدة" : "رتّب ما يحتاج قراراً الآن، ثم افتح التفاصيل عند الحاجة"
       }
         className="kitchen-mobile-header"
         actions={<div className="flex flex-wrap gap-2">
@@ -784,7 +784,7 @@ export default function CentralKitchenOrdersPage() {
           {canConfigureRouting && <Button variant="outline" size="sm" className="hidden min-h-11 sm:inline-flex" onClick={() => setSettingsOpen(true)} data-testid="kitchen-settings-trigger"><Settings className="ml-2 h-4 w-4" />إعدادات المطبخ</Button>}
           <Button variant="outline" size="sm" className="min-h-11" aria-label="تحديث الطلبات" onClick={refresh} data-testid="refresh-kitchen-orders"><RefreshCw className="h-4 w-4 sm:ml-2" /><span className="hidden sm:inline">تحديث</span></Button>
           {canCreate("central_kitchen_orders") && <Button size="sm" className="order-first min-h-11 sm:order-none" onClick={() => void openCreate()} data-testid="create-kitchen-order"><Plus className="ml-2 h-4 w-4" />طلب من المطبخ</Button>}
-          <DropdownMenu><DropdownMenuTrigger asChild><Button variant="outline" size="icon" className="h-11 w-11 sm:hidden" aria-label="خيارات طلبات المطبخ"><EllipsisVertical className="h-5 w-5" /></Button></DropdownMenuTrigger><DropdownMenuContent align="end" dir="rtl">
+          <DropdownMenu><DropdownMenuTrigger asChild><Button variant="outline" size="icon" className="h-11 w-11 sm:hidden" aria-label="خيارات طلبيات الفرع"><EllipsisVertical className="h-5 w-5" /></Button></DropdownMenuTrigger><DropdownMenuContent align="end" dir="rtl">
             {canConfigureRouting && <DropdownMenuItem className="min-h-11" onSelect={() => setSettingsOpen(true)}><Settings className="ml-2 h-4 w-4" />إعدادات المطبخ</DropdownMenuItem>}
             {canSeeDemandReport && <DropdownMenuItem asChild className="min-h-11"><a href="/central-kitchen-demand-report"><BarChart3 className="ml-2 h-4 w-4" />تقرير الطلب غير الملبّى</a></DropdownMenuItem>}
           </DropdownMenuContent></DropdownMenu>

@@ -188,7 +188,7 @@ const definitions: CardDefinition[] = [
     },
   },
   {
-    id: "kitchen", title: "طلبات المطبخ", group: "operations", module: "central_kitchen_orders", href: "/central-kitchen-orders",
+    id: "kitchen", title: "طلبيات الفرع", group: "operations", module: "central_kitchen_orders", href: "/central-kitchen-orders",
     load: async (branchId, _businessDate, req) => {
       const rows = await db.select({ status: centralKitchenOrders.status, value: count(),
         oldestNeededDate: sql<string | null>`min(${centralKitchenOrders.neededDate})`,

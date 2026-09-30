@@ -5,7 +5,7 @@ export const BRANCH_OPERATION_ROUTES = [
   { path: "/sales-analytics", id: "sales", label: "المبيعات", section: "الوردية والمبيعات والإغلاق" },
   { path: "/targets-dashboard", id: "targets", label: "الأهداف", section: "الوردية والمبيعات والإغلاق" },
   { path: "/branch-daily-closing", id: "closing", label: "الإغلاق اليومي", section: "الوردية والمبيعات والإغلاق" },
-  { path: "/central-kitchen-orders", id: "kitchen", label: "طلبات المطبخ", section: "التوريد والاستلام" },
+  { path: "/central-kitchen-orders", id: "kitchen", label: "طلبيات الفرع", section: "التوريد والاستلام" },
   { path: "/transfer-requests", id: "warehouse", label: "تحويلات المستودع", section: "التوريد والاستلام" },
   { path: "/purchasing-requests", id: "purchasing", label: "المشتريات", section: "التوريد والاستلام" },
   { path: "/display-bar-waste", id: "waste", label: "الهدر", section: "مشكلات الفرع" },
