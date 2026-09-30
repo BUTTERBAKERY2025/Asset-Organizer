@@ -216,6 +216,8 @@ import { registerOnboardingRoutes } from "./onboarding-routes";
 import { registerHrRoutes } from "./hr-routes";
 import { registerSelfServiceRoutes } from "./self-service-routes";
 import { registerShareholderPortalRoutes } from "./shareholder-portal-routes";
+import { registerOwnerPortalRoutes } from "./owner-portal-routes";
+import { validateOwnerBranches } from "./owner-security";
 import { registerBranchOpeningRoutes } from "./branch-opening-routes";
 import { registerMediaTeamRoutes } from "./media-team-routes";
 import { registerEmploymentApplicationRoutes } from "./employment-applications-routes";
@@ -355,9 +357,14 @@ export async function registerRoutes(
 
   // Lightweight health-check endpoint used by the frontend connection-status
   // indicator to measure latency. Bypasses auth + cache for accurate measurement.
-  app.get("/api/health", (_req, res) => {
+  app.get("/api/health", async (_req, res) => {
     res.set("Cache-Control", "no-store, no-cache, must-revalidate");
-    res.json({ ok: true, ts: Date.now() });
+    try {
+      await db.execute(sql`SELECT 1`);
+      res.json({ status: "healthy", timestamp: new Date().toISOString(), database: "connected" });
+    } catch {
+      res.status(503).json({ status: "unhealthy", timestamp: new Date().toISOString(), database: "disconnected" });
+    }
   });
 
   app.get("/api/attendance-debug", isAuthenticated, requirePermission("branch_employees", "view"), async (_req, res) => {
@@ -619,6 +626,7 @@ export async function registerRoutes(
   registerHrRoutes(app);
   registerSelfServiceRoutes(app);
   registerShareholderPortalRoutes(app);
+  registerOwnerPortalRoutes(app);
   registerBranchOpeningRoutes(app);
   registerMediaTeamRoutes(app);
   registerEmploymentApplicationRoutes(app);
@@ -828,12 +836,15 @@ export async function registerRoutes(
       // SECURITY: Only admins may assign privileged roles. Non-admins can only
       // create "viewer" or "employee" accounts. This prevents privilege escalation
       // via the users:create permission (e.g., creating an admin or hr_manager).
-      const PRIVILEGED_ROLES = new Set(["admin", "hr_manager", "hr_specialist", "financial_accountant", "financial_manager", "production_development_manager", "operations_manager", "branch_manager", "attendance_clerk", "warehouse_keeper"]);
+      const PRIVILEGED_ROLES = new Set(["business_owner", "admin", "hr_manager", "hr_specialist", "financial_accountant", "financial_manager", "production_development_manager", "operations_manager", "branch_manager", "attendance_clerk", "warehouse_keeper"]);
       const requestedRole = (role as string | undefined) || "viewer";
+      if (requestedRole === "business_owner" && branchId === "all_branches") {
+        return res.status(400).json({ error: "حدد فروع الأونر صراحةً" });
+      }
       if (PRIVILEGED_ROLES.has(requestedRole) && (req as any).currentUser?.role !== "admin") {
         return res.status(403).json({ error: "فقط المسؤولين يمكنهم منح هذا الدور" });
       }
-      if (!["admin", "hr_manager", "hr_specialist", "financial_accountant", "financial_manager", "production_development_manager", "operations_manager", "branch_manager", "employee", "viewer", "attendance_clerk", "warehouse_keeper"].includes(requestedRole)) {
+      if (!["business_owner", "admin", "hr_manager", "hr_specialist", "financial_accountant", "financial_manager", "production_development_manager", "operations_manager", "branch_manager", "employee", "viewer", "attendance_clerk", "warehouse_keeper"].includes(requestedRole)) {
         return res.status(400).json({ error: "دور غير صالح" });
       }
       if (requestedRole === "warehouse_keeper"
@@ -847,7 +858,15 @@ export async function registerRoutes(
       let assignedBranchId: string | null = null;
       let grantAllBranches = false;
       
-      if (requestedRole === "warehouse_keeper") {
+      if (requestedRole === "business_owner") {
+        try {
+          const allBranches = await storage.getAllBranches();
+          validBranchIds = validateOwnerBranches(branchIds, branchId, [], allBranches.map(b => b.id)).ids;
+          assignedBranchId = validBranchIds.length === 1 ? validBranchIds[0] : null;
+        } catch (error) {
+          return res.status(400).json({ error: error instanceof Error ? error.message : "فروع الأونر غير صالحة" });
+        }
+      } else if (requestedRole === "warehouse_keeper") {
         // main_warehouse is a virtual scope, not a row in branches. users.branch_id
         // has a foreign key; role-based auth projects this sentinel at read time.
         assignedBranchId = null;
@@ -912,6 +931,13 @@ export async function registerRoutes(
       const { firstName, lastName, username, role, jobTitle, password, branchId, branchIds, isActive } = req.body;
       const updateData: any = {};
       const currentUser = getCurrentUser(req);
+      const accountToEdit = await storage.getUser(req.params.id);
+      if (accountToEdit?.role === "business_owner" && currentUser.role !== "admin") {
+        return res.status(403).json({ error: "فقط المسؤولين يمكنهم تعديل حساب الأونر" });
+      }
+      if ((role ?? accountToEdit?.role) === "business_owner" && branchId === "all_branches") {
+        return res.status(400).json({ error: "حدد فروع الأونر صراحةً" });
+      }
       if (jobTitle !== undefined) {
         if (jobTitle !== null && !JOB_TITLES.includes(jobTitle as typeof JOB_TITLES[number])) {
           return res.status(400).json({ error: "مسمى وظيفي غير صالح" });
@@ -937,7 +963,7 @@ export async function registerRoutes(
       }
       
       if (role !== undefined) {
-        if (!["admin", "hr_manager", "hr_specialist", "financial_accountant", "financial_manager", "production_development_manager", "operations_manager", "branch_manager", "employee", "viewer", "attendance_clerk", "warehouse_keeper"].includes(role)) {
+        if (!["business_owner", "admin", "hr_manager", "hr_specialist", "financial_accountant", "financial_manager", "production_development_manager", "operations_manager", "branch_manager", "employee", "viewer", "attendance_clerk", "warehouse_keeper"].includes(role)) {
           return res.status(400).json({ error: "Invalid role" });
         }
         // SECURITY: Only admins can change user roles to prevent privilege escalation
@@ -978,7 +1004,23 @@ export async function registerRoutes(
           || (branchIds !== undefined && (!Array.isArray(branchIds) || branchIds.some((id: unknown) => id !== "main_warehouse"))))) {
         return res.status(400).json({ error: "مسؤول المستودع يتبع المستودع الرئيسي فقط" });
       }
-      if (keeperRole) {
+      if ((role ?? beforeUpdate?.role) === "business_owner") {
+        try {
+          const [allBranches, grants] = await Promise.all([
+            storage.getAllBranches(),
+            storage.getUserBranchAccess(req.params.id),
+          ]);
+          const selection = validateOwnerBranches(branchIds, branchId, grants.map(g => g.branchId), allBranches.map(b => b.id));
+          // A role-only edit keeps explicit grants intact, including access/default metadata.
+          if (selection.replace) {
+            validBranchIds = selection.ids;
+            updateBranchAccess = true;
+            updateData.branchId = selection.ids.length === 1 ? selection.ids[0] : null;
+          }
+        } catch (error) {
+          return res.status(400).json({ error: error instanceof Error ? error.message : "فروع الأونر غير صالحة" });
+        }
+      } else if (keeperRole) {
         updateData.branchId = null;
         validBranchIds = [];
         updateBranchAccess = true;

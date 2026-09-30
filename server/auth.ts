@@ -3,6 +3,7 @@ import type { Express, RequestHandler } from "express";
 import connectPg from "connect-pg-simple";
 import rateLimit from "express-rate-limit";
 import { storage } from "./storage";
+import { createOwnerApiLockdown, isOwnerRequestAllowed, isOwnerSessionValid } from "./owner-security";
 import { db, pool } from "./db";
 import { systemAuditLogs, ROLE_PERMISSION_TEMPLATES, JOB_ROLE_PERMISSION_TEMPLATES, userPermissions, userPermissionOverrides, permissions as permissionDefinitions } from "@shared/schema";
 import { and, eq, or, isNull, gt } from "drizzle-orm";
@@ -596,6 +597,13 @@ export const validateOrigin: RequestHandler = (req, res, next) => {
 export async function setupAuth(app: Express) {
   app.set("trust proxy", 1);
   app.use(getSession());
+  app.use(createOwnerApiLockdown(
+    id => storage.getUser(id),
+    async (userId, sessionId) => {
+      const sessions = await storage.getUserSessions(userId);
+      return sessions.some(session => isOwnerSessionValid(session, sessionId));
+    },
+  ));
   
   // Rate limiting and CSRF/origin validation are applied globally in index.ts
 
@@ -772,6 +780,15 @@ export async function setupAuth(app: Express) {
 
       const { password: _, ...safeUser } = user;
       
+      if (user.role === "business_owner") {
+        const allowedBranches = await storage.getUserBranchAccess(user.id);
+        return res.json({
+          id: user.id, username: user.username, firstName: user.firstName,
+          lastName: user.lastName, role: user.role, isActive: user.isActive,
+          branchId: null, activeBranchId: null, activeBranch: null, allowedBranches,
+        });
+      }
+
       const [userBranches, activeBranch] = await Promise.all([
         storage.getUserBranchAccess(user.id),
         req.session.activeBranchId ? storage.getBranch(req.session.activeBranchId) : Promise.resolve(null)
@@ -1111,8 +1128,18 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
   }
 
   // Pre-fetch permissions in parallel for non-admin users (will be needed by requirePermission)
+  if (user.role === "business_owner") {
+    const sessions = await storage.getUserSessions(user.id);
+    if (!sessions.some(session => isOwnerSessionValid(session, req.sessionID))) {
+      req.session.destroy(() => {});
+      return res.status(401).json({ error: "انتهت صلاحية الجلسة" });
+    }
+  }
+  if (user.role === "business_owner" && !isOwnerRequestAllowed(req.method, req.originalUrl)) {
+    return res.status(403).json({ error: "حساب الأونر مخصص للاطلاع عبر بوابته فقط" });
+  }
   let permissions: any[] = [];
-  if (user.role !== "admin") {
+  if (user.role !== "admin" && user.role !== "business_owner") {
     permissions = await storage.getUserPermissions(userId, { bypassCache: true });
   }
 
@@ -1468,6 +1495,10 @@ export function getActiveBranchFilter(req: any): string | null {
 export async function canAccessBranch(req: any, branchId: string): Promise<boolean> {
   const user = req.currentUser;
   if (!user) return false;
+  if (user.role === "business_owner") {
+    const grants = await storage.getUserBranchAccess(user.id);
+    return grants.some(grant => grant.branchId === branchId);
+  }
   if (user.role === "warehouse_keeper") return branchId === "main_warehouse";
   
   // Admin can access all branches
@@ -1596,6 +1627,7 @@ export function isUserAdmin(req: any): boolean {
 export function getAllowedBranchIds(req: any): string[] | null {
   const user = req.currentUser;
   if (!user) return [];
+  if (user.role === "business_owner") return (req.userBranchAccess || []).map((grant: any) => grant.branchId);
   if (user.role === "warehouse_keeper") return ["main_warehouse"];
   
   // Admin can see all branches

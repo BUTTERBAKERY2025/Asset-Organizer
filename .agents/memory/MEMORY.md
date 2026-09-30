@@ -81,3 +81,4 @@
 - [External sales evidence](external-sales-evidence.md) — analytical imports and exact-upload retries do not prove inventory consumption or deduplicate overlapping sales events.
 - [Warehouse keeper scope](warehouse-keeper-scope.md) — main warehouse is virtual; persist no branch sentinel, isolate source authority from branch receipt and driver execution.
 - [Branch request cycle](branch-request-cycle-boundary.md) — branch manager requests and receives for its primary branch; tracking is not source shipping or warehouse administration.
+- [Owner portal boundary](owner-portal-boundary.md) — minimal oversight, explicit branch grants, honest journal-sales labels, and fresh-role bootstrap before operational UI.

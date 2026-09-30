@@ -182,23 +182,7 @@ app.use(createCentralKitchenHttpDiagnostics({ logger: centralKitchenDiagnosticLo
 
 app.set('json spaces', 0);
 
-// Health check endpoint
-app.get("/api/health", async (_req, res) => {
-  try {
-    await db.execute(sql`SELECT 1`);
-    res.json({
-      status: "healthy",
-      timestamp: new Date().toISOString(),
-      database: "connected",
-    });
-  } catch (error) {
-    res.status(503).json({
-      status: "unhealthy",
-      timestamp: new Date().toISOString(),
-      database: "disconnected",
-    });
-  }
-});
+// API health is registered in routes.ts after session/owner isolation middleware.
 
 // Graceful shutdown handling
 let isShuttingDown = false;

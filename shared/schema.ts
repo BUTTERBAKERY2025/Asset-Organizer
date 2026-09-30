@@ -1756,6 +1756,8 @@ export const ROLE_PERMISSION_TEMPLATES: Record<
   { module: SystemModule; actions: ModuleAction[] }[]
 > = {
   // Admin gets full access (handled separately in middleware)
+  // Owner portal is independently authorized; never grant operational modules.
+  business_owner: [],
   admin: SYSTEM_MODULES.map((module) => ({
     module,
     actions: [...MODULE_ACTIONS] as ModuleAction[],

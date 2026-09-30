@@ -1,6 +1,6 @@
 import React, { Suspense, useEffect, useTransition, useCallback, useState } from "react";
 import { useStuckPageWatchdog, StuckPageMessage } from "@/hooks/useStuckPageWatchdog";
-import { Switch, Route } from "wouter";
+import { Switch, Route, Redirect, useLocation } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { ThemeProvider } from "next-themes";
@@ -205,6 +205,7 @@ const InvitationPage = makeLazy("invitation");
 const FloorPlanPage = makeLazy("floor-plan");
 const HRHubPage = makeLazy("hr-hub");
 const MyPortalPage = makeLazy("my-portal");
+const OwnerPortalPage = makeLazy("owner-portal");
 const ShareholderPortalPage = makeLazy("shareholder-portal");
 const AuditPortalPage = makeLazy("audit-portal");
 const HREmployeeDocumentsPage = makeLazy("hr/employee-documents");
@@ -336,8 +337,15 @@ const StandaloneDeliveryPage = React.memo(function StandaloneDeliveryPage() {
 });
 
 const Router = React.memo(function Router() {
+  const { user } = useAuth();
+  const [location] = useLocation();
+  // Redirect before any operational route mounts or requests its permissions.
+  if (user?.role === "business_owner" && location !== "/owner" && location !== "/login") {
+    return <Redirect to="/owner" />;
+  }
   return (
     <Switch>
+      <Route path="/owner">{() => <OwnerPortalGate />}</Route>
       <Route path="/">{() => <ProtectedPage component={PlatformHomePage} />}</Route>
       <Route path="/branch-operations">{() => <ProtectedPage component={BranchOperationsPage} />}</Route>
       <Route path="/branch-complaints">{() => <ModulePage component={BranchComplaintsPage} module="branch_complaints" />}</Route>
@@ -580,6 +588,13 @@ const Router = React.memo(function Router() {
   );
 });
 
+function OwnerPortalGate() {
+  const { user, isAuthenticated } = useAuth();
+  if (!isAuthenticated) return <ProtectedPage component={OwnerPortalPage} />;
+  if (user?.role !== "business_owner" && user?.role !== "admin") return <AccessDeniedPage message="بوابة المالك متاحة للمالك والمدير فقط" />;
+  return <ProtectedPage component={OwnerPortalPage} />;
+}
+
 function App() {
   useEffect(() => {
     startAggressivePreload();
@@ -596,23 +611,25 @@ function App() {
       <QueryClientProvider client={queryClient}>
         <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false} storageKey="butter-theme" disableTransitionOnChange>
           <AuthGate>
-            <ProductionProvider>
-              <TooltipProvider>
-                <Toaster />
-                <InactivityLogout />
-                <Router />
-                <PWAInstallPrompt />
-                <PushNotificationPrompt />
-                <OfflineIndicator />
-                <SlowConnectionBanner />
-                <DataErrorBanner />
-              </TooltipProvider>
-            </ProductionProvider>
+            <AppShell />
           </AuthGate>
         </ThemeProvider>
       </QueryClientProvider>
     </ErrorBoundary>
   );
+}
+
+function AppShell() {
+  const { user } = useAuth();
+  if (user?.role === "business_owner") {
+    // No operational providers, notification polling, or permissions reads
+    // are mounted for the owner. The owner route is independently guarded.
+    return <Router />;
+  }
+  return <ProductionProvider><TooltipProvider>
+    <Toaster /><InactivityLogout /><Router /><PWAInstallPrompt />
+    <PushNotificationPrompt /><OfflineIndicator /><SlowConnectionBanner /><DataErrorBanner />
+  </TooltipProvider></ProductionProvider>;
 }
 
 export default App;

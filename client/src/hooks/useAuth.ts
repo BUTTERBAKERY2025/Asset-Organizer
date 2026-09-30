@@ -20,10 +20,10 @@ interface AuthUser extends UserWithoutPassword {
   allowedBranches?: UserBranchAccess[];
 }
 
-export function useAuth() {
+export function useAuth(verifyOnMount = false) {
   const queryClient = useQueryClient();
 
-  const { data: user, isLoading } = useQuery<AuthUser | null>({
+  const { data: user, isLoading, isFetching, isFetchedAfterMount, isError, refetch } = useQuery<AuthUser | null>({
     queryKey: ["/api/auth/me"],
     queryFn: async () => {
       const res = await fetch("/api/auth/me", {
@@ -41,7 +41,8 @@ export function useAuth() {
     staleTime: 1000 * 60 * 5,
     gcTime: 1000 * 60 * 30,
     refetchOnWindowFocus: false,
-    refetchOnMount: true,
+    // Cached identity is never an authorization decision on a new mount.
+    refetchOnMount: verifyOnMount ? "always" : true,
     refetchOnReconnect: true,
   });
 
@@ -174,6 +175,10 @@ export function useAuth() {
   return {
     user,
     isLoading,
+    isFetching,
+    isFetchedAfterMount,
+    isAuthError: isError,
+    refetchAuth: refetch,
     isAuthenticated: !!user,
     isAdmin: user?.role === "admin",
     isEmployee: user?.role === "employee" || user?.role === "admin",

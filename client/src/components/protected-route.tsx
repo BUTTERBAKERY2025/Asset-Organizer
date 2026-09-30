@@ -225,7 +225,7 @@ export function AnyModuleProtectedRoute({ children, modules, requiredRole }: Any
 
 export function PublicOnlyRoute({ children }: { children: React.ReactNode }) {
   const { isReady } = useAuthReady();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
 
   // Show lightweight skeleton during any transient loading
   if (!isReady) {
@@ -233,6 +233,7 @@ export function PublicOnlyRoute({ children }: { children: React.ReactNode }) {
   }
 
   if (isAuthenticated) {
+    if (user?.role === "business_owner") return <Redirect to="/owner" />;
     return <Redirect to={loginReturnDestination()} />;
   }
 

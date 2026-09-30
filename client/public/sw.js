@@ -1,7 +1,7 @@
 const CACHE_NAME = 'butter-v10';
 const STATIC_CACHE = 'butter-static-v10';
 const FONT_CACHE = 'butter-fonts-v4';
-const API_CACHE = 'butter-api-v8';
+const API_CACHE = 'butter-api-v9';
 
 const STATIC_ASSETS = [
   '/',
@@ -38,6 +38,12 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
   const url = new URL(event.request.url);
+  // Sensitive owner aggregates must never reach any cache strategy, including
+  // extension/download heuristics. Cache version bump removes old API entries.
+  if (url.pathname.toLowerCase().startsWith('/api/owner/')) {
+    event.respondWith(fetch(event.request, { cache: 'no-store' }));
+    return;
+  }
 
   if (url.origin === 'https://fonts.googleapis.com' || url.origin === 'https://fonts.gstatic.com') {
     event.respondWith(cacheFirst(event.request, FONT_CACHE));

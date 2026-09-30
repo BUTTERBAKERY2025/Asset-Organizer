@@ -1,6 +1,6 @@
 const CACHE_PREFIX = 'btr_qc_';
 const MAX_ENTRIES = 60;
-const CACHE_VERSION = 3;
+const CACHE_VERSION = 4;
 
 interface CacheEntry {
   d: any;
@@ -104,6 +104,7 @@ function persist() {
 }
 
 export function getCachedData(queryKey: string): any | undefined {
+  if (queryKey.toLowerCase().startsWith('/api/owner/')) return undefined;
   const store = getStore();
   const entry = store.e[queryKey];
   if (!entry) return undefined;
@@ -115,6 +116,8 @@ export function getCachedData(queryKey: string): any | undefined {
 }
 
 export function setCachedData(queryKey: string, data: any, ttlMs: number) {
+  if (queryKey.toLowerCase().startsWith('/api/owner/')) return;
+  if (queryKey === '/api/auth/me' && data?.role === 'business_owner') return;
   const store = getStore();
   store.e[queryKey] = { d: data, t: Date.now(), ttl: ttlMs };
   const keys = Object.keys(store.e);

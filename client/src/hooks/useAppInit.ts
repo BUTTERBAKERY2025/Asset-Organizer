@@ -10,11 +10,12 @@ interface InitData {
 
 const FIVE_MINUTES = 1000 * 60 * 5;
 
-export function useAppInit() {
+export function useAppInit(enabled = true) {
   const queryClient = useQueryClient();
 
   const { data, isLoading } = useQuery<InitData>({
     queryKey: ["/api/auth/init"],
+    enabled,
     queryFn: async () => {
       const fallbackFromCache = (): InitData => ({
         user: hasValidSession() ? getCachedUser() : null,

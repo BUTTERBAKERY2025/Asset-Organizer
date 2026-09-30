@@ -6,6 +6,7 @@ const pageImports: Record<string, () => Promise<any>> = {
   "floor-plan": () => import("@/pages/floor-plan"),
   "hr-hub": () => import("@/pages/hr-hub"),
   "my-portal": () => import("@/pages/my-portal"),
+  "owner-portal": () => import("@/pages/owner-portal"),
   "hr/employee-documents": () => import("@/pages/hr/employee-documents"),
   "hr/leaves": () => import("@/pages/hr/leaves"),
   "hr/warnings": () => import("@/pages/hr/warnings"),
@@ -283,6 +284,7 @@ export function prefetchAdjacentPages(currentRoute: string) {
 
 const ROUTE_TO_PAGE: Record<string, string> = {
   "/": "platform-home",
+  "/owner": "owner-portal",
   "/branch-operations": "branch-operations",
   "/branch-complaints": "branch-complaints",
   "/driver-deliveries": "driver-deliveries",

@@ -219,6 +219,31 @@ export const queryClient = new QueryClient({
   },
 });
 
+// Owner aggregates are session/scope-sensitive, never retain inactive pages.
+queryClient.setQueryDefaults(["owner"], {
+  gcTime: 0,
+  placeholderData: undefined,
+  refetchOnMount: "always",
+  networkMode: "online",
+});
+
+let ownerAuthScope: string | undefined;
+queryClient.getQueryCache().subscribe(event => {
+  if (event.type !== "updated" || event.query.queryKey[0] !== "/api/auth/me" ||
+      event.query.state.status !== "success") return;
+  const user = event.query.state.data as {
+    id?: string; role?: string; allowedBranches?: { branchId: string; accessLevel?: string }[];
+  } | null;
+  const scope = JSON.stringify([
+    user?.id ?? null, user?.role ?? null,
+    (user?.allowedBranches ?? []).map(branch => `${branch.branchId}:${branch.accessLevel ?? ""}`).sort(),
+  ]);
+  if (ownerAuthScope === scope) return;
+  ownerAuthScope = scope;
+  void queryClient.cancelQueries({ queryKey: ["owner"] });
+  queryClient.removeQueries({ queryKey: ["owner"] });
+});
+
 const ENDPOINT_CACHE_TIERS: Record<string, number> = {
   "/api/branches": CACHE_TIMES.STATIC,
   "/api/my-permissions": CACHE_TIMES.LONG,

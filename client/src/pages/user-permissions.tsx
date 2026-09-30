@@ -43,6 +43,7 @@ const ROLE_LABELS: Record<string, string> = {
   financial_manager: "مدير مالي",
   production_development_manager: "مدير الإنتاج والتطوير",
   warehouse_keeper: "أمين المستودعات",
+  business_owner: "أونر — اطلاع",
   financial_accountant: "محاسب مالي",
   operations_manager: "مدير عمليات",
   branch_manager: "مدير فرع",

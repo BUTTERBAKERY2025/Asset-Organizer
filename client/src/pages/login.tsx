@@ -94,7 +94,7 @@ const T = {
 
 export default function LoginPage() {
   const [, setLocation] = useLocation();
-  const { login, isLoggingIn, isAuthenticated, verifyOtp, resendOtp, isVerifyingOtp, isResendingOtp } = useAuth();
+  const { login, isLoggingIn, isAuthenticated, user, verifyOtp, resendOtp, isVerifyingOtp, isResendingOtp } = useAuth();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -146,7 +146,7 @@ export default function LoginPage() {
   }, []);
 
   if (isAuthenticated) {
-    setLocation(loginReturnDestination());
+    setLocation(user?.role === "business_owner" ? "/owner" : loginReturnDestination());
     return null;
   }
 
@@ -160,7 +160,9 @@ export default function LoginPage() {
     // Restore intended path if present
     const next = loginReturnDestination();
 
-    if (userData?.role === "attendance_clerk") {
+    if (userData?.role === "business_owner") {
+      setLocation("/owner");
+    } else if (userData?.role === "attendance_clerk") {
       setLocation(next !== "/" ? next : "/attendance-check");
     } else if (userData?.role === "shareholder") {
       setLocation(next !== "/" ? next : "/shareholder-portal");

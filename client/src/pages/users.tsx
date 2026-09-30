@@ -106,6 +106,7 @@ function buildPassword(): string {
 }
 
 const ROLES = [
+  { value: "business_owner", label: "أونر — اطلاع", icon: Shield, description: "بوابة اطلاع مستقلة للفروع الممنوحة صراحةً دون صلاحيات تشغيلية" },
   { value: "admin", label: "مدير", icon: Shield, description: "صلاحيات كاملة" },
   { value: "hr_manager", label: "مدير الموارد البشرية", icon: UserCog, description: "اطلاع على بيانات الموظفين والإجازات والمستندات في جميع الفروع (لا يشمل المالية أو المخزون)" },
   { value: "hr_specialist", label: "اختصاصي موارد بشرية", icon: UserCog, description: "صلاحيات موارد بشرية في جميع الفروع أقل من المدير: الإجازات والمستندات والإنذارات والسلف والحضور والورديات والتوظيف (بدون إغلاق الرواتب أو نهاية الخدمة، وبيانات الموظفين عرض فقط)" },
