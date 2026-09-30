@@ -1896,6 +1896,11 @@ export const ROLE_PERMISSION_TEMPLATES: Record<
   operations_manager: [
     { module: "dashboard", actions: ["view", "export"] },
     { module: "operations_hr", actions: ["view"] },
+    // موظفو الفروع المصرّح بها فقط؛ اعتماد مراجعة التشغيل استشاري ولا
+    // يمنح إغلاق الرواتب أو الصرف النهائي أو إدارة شؤون الموظفين العامة.
+    { module: "operations_payroll", actions: ["view", "export", "approve"] },
+    { module: "operations_joining", actions: ["view", "create", "approve"] },
+    { module: "operations_employee_transfer", actions: ["view", "create"] },
     // التشغيل والإنتاج والجودة
     { module: "operations", actions: ["view", "create", "edit", "delete", "export", "print"] },
     { module: "branch_complaints", actions: ["view", "create", "edit", "approve"] },

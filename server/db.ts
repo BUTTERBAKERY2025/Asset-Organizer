@@ -1,6 +1,7 @@
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
 import * as schema from "@shared/schema";
+import { ensureOperationsJoiningSchema } from "./operations-joining-schema";
 
 const { Pool } = pg;
 
@@ -76,7 +77,87 @@ export async function warmupPool() {
   }
 }
 
+// Required by registered monthly workflow routes. Do not swallow this behind
+// the best-effort legacy migration block: readiness must mean its schema exists.
+export async function ensureOperationsMonthWorkflowSchema() {
+  await pool.query(`CREATE TABLE IF NOT EXISTS operations_month_reviews (
+    id bigserial PRIMARY KEY,
+    branch_id varchar NOT NULL REFERENCES branches(id),
+    month varchar(7) NOT NULL CHECK (month ~ '^20[0-9]{2}-(0[1-9]|1[0-2])$'),
+    status text NOT NULL DEFAULT 'open' CHECK (status IN ('open','closed','reopened')),
+    revision integer NOT NULL DEFAULT 0,
+    declarations jsonb NOT NULL DEFAULT '[]',
+    history jsonb NOT NULL DEFAULT '[]',
+    fingerprint text,
+    snapshot jsonb,
+    closed_at timestamptz,
+    closed_by varchar REFERENCES users(id),
+    closed_by_name text,
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    UNIQUE (branch_id, month)
+  )`);
+  await pool.query(`SELECT branch_id,month,status,revision,declarations,history,
+    fingerprint,snapshot,closed_at,closed_by,closed_by_name,updated_at
+    FROM operations_month_reviews WHERE false`);
+}
+
+// Schema only: never seed legacy rent into a made-up historical period.
+// Rent readers continue using pnl_branch_settings until genuine history exists.
+export async function ensurePnlExpenseSchema() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS pnl_rent_history (
+      id SERIAL PRIMARY KEY,
+      branch_id VARCHAR NOT NULL REFERENCES branches(id),
+      monthly_amount REAL NOT NULL,
+      effective_from DATE NOT NULL,
+      effective_to DATE,
+      contract_ref TEXT,
+      notes TEXT,
+      created_by VARCHAR,
+      created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_pnl_rent_history_branch ON pnl_rent_history (branch_id);
+    CREATE INDEX IF NOT EXISTS idx_pnl_rent_history_effective ON pnl_rent_history (branch_id,effective_from);
+    CREATE TABLE IF NOT EXISTS pnl_recurring_expenses (
+      id SERIAL PRIMARY KEY,
+      branch_id VARCHAR NOT NULL REFERENCES branches(id),
+      category TEXT NOT NULL,
+      name TEXT NOT NULL,
+      monthly_amount REAL NOT NULL,
+      effective_from DATE NOT NULL,
+      effective_to DATE,
+      vendor TEXT,
+      notes TEXT,
+      is_active BOOLEAN NOT NULL DEFAULT TRUE,
+      created_by VARCHAR,
+      created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_pnl_recurring_branch ON pnl_recurring_expenses (branch_id);
+    CREATE INDEX IF NOT EXISTS idx_pnl_recurring_active ON pnl_recurring_expenses (branch_id,is_active);
+    CREATE INDEX IF NOT EXISTS idx_pnl_recurring_effective ON pnl_recurring_expenses (branch_id,effective_from);
+    ALTER TABLE pnl_monthly_inputs
+      ADD COLUMN IF NOT EXISTS internet_cost REAL DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS government_fees REAL DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS insurance_cost REAL DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS subscriptions_cost REAL DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS security_cost REAL DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS bank_fees REAL DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS fuel_cost REAL DEFAULT 0;
+  `);
+  await pool.query(`SELECT id,branch_id,monthly_amount,effective_from,effective_to,
+    contract_ref,notes,created_by,created_at,updated_at FROM pnl_rent_history WHERE false`);
+  await pool.query(`SELECT id,branch_id,category,name,monthly_amount,effective_from,effective_to,
+    vendor,notes,is_active,created_by,created_at,updated_at FROM pnl_recurring_expenses WHERE false`);
+  await pool.query(`SELECT internet_cost,government_fees,insurance_cost,subscriptions_cost,
+    security_cost,bank_fees,fuel_cost FROM pnl_monthly_inputs WHERE false`);
+}
+
 export async function runStartupMigrations() {
+  await ensureOperationsMonthWorkflowSchema();
+  await ensurePnlExpenseSchema();
+  await ensureOperationsJoiningSchema(pool);
   try {
     if (process.env.NODE_ENV !== "production") {
       const { readFile } = await import("node:fs/promises");
@@ -496,22 +577,6 @@ export async function runStartupMigrations() {
       reviewed_at timestamp NOT NULL DEFAULT now(),
       note text,
       UNIQUE (branch_id, month, reviewed_by)
-    )`);
-    await pool.query(`CREATE TABLE IF NOT EXISTS operations_month_reviews (
-      id bigserial PRIMARY KEY,
-      branch_id varchar NOT NULL REFERENCES branches(id),
-      month varchar(7) NOT NULL CHECK (month ~ '^20[0-9]{2}-(0[1-9]|1[0-2])$'),
-      status text NOT NULL DEFAULT 'open' CHECK (status IN ('open','closed','reopened')),
-      revision integer NOT NULL DEFAULT 0,
-      declarations jsonb NOT NULL DEFAULT '[]',
-      history jsonb NOT NULL DEFAULT '[]',
-      fingerprint text,
-      snapshot jsonb,
-      closed_at timestamptz,
-      closed_by varchar REFERENCES users(id),
-      closed_by_name text,
-      updated_at timestamptz NOT NULL DEFAULT now(),
-      UNIQUE (branch_id, month)
     )`);
     await pool.query(`CREATE TABLE IF NOT EXISTS employee_transfer_requests (
       id serial PRIMARY KEY,

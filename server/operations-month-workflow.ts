@@ -62,9 +62,11 @@ async function evidence(q: Queryable, branchId: string, month: string) {
 async function load(req: Request, branchId: string, month: string): Promise<OperationsMonthWorkflow> {
   const canDaily = await hasEffectiveViewPermission(req, "daily_closures");
   const canEdit = await hasEffectiveViewPermission(req, "operations", "edit");
-  const canPayroll = await hasEffectiveViewPermission(req, req.currentUser?.role === "operations_manager" ? "operations_payroll" : "salary_closing")
-    && await hasEffectiveViewPermission(req, req.currentUser?.role === "operations_manager" ? "operations_hr" : "employee_reports");
-  const canSalaryView = await hasEffectiveViewPermission(req, "salary_closing");
+  const isOperationsManager = req.currentUser?.role === "operations_manager";
+  const canPayroll = isOperationsManager
+    ? await hasEffectiveViewPermission(req, "operations_payroll") && await hasEffectiveViewPermission(req, "operations_hr")
+    : await hasEffectiveViewPermission(req, "salary_closing");
+  const canSalaryView = !isOperationsManager && await hasEffectiveViewPermission(req, "salary_closing");
   const canSalaryEdit = canSalaryView && await hasEffectiveViewPermission(req, "salary_closing", "edit");
   const canCosts = await hasEffectiveViewPermission(req, "pnl_dashboard") && await hasEffectiveViewPermission(req, "pnl");
   const canSales = await hasEffectiveViewPermission(req, "sales_analytics");
@@ -94,8 +96,8 @@ async function load(req: Request, branchId: string, month: string): Promise<Oper
       [branchId, month])).rows.map(row => ({ ...row, paidAt: iso(row.paidAt) }));
     const balance = payrollBalance(lines, payments);
     const snapshotAvailable = closure?.status === "closed";
-    const remaining = snapshotAvailable && balance.paid !== null ? Math.max(0, Math.round((Number(closure.total_net) - balance.paid) * 100)) / 100 : null;
-    const overpaid = snapshotAvailable && balance.paid !== null ? Math.max(0, Math.round((balance.paid - Number(closure.total_net)) * 100)) / 100 : null;
+    const remaining = snapshotAvailable ? balance.remaining : null;
+    const overpaid = snapshotAvailable ? balance.overpaid : null;
     const membership = new Set(lines.map(line => line.employeeId));
     output.payroll = { available: true, status: closure?.status || "not_closed", ...balance,
       due: snapshotAvailable ? Number(closure.total_net) : null,
@@ -103,7 +105,9 @@ async function load(req: Request, branchId: string, month: string): Promise<Oper
       settlementStatus: !snapshotAvailable ? "not_closed" : balance.unreconciledPaymentCount ? "unreconciled"
         : balance.unknownPaymentAmounts ? "unknown_amount" : overpaid! > 0 ? "overpaid"
         : remaining === 0 ? "paid" : balance.paid === 0 ? "unpaid" : "partial",
-      sourceHref: canSalaryView ? href("/salary-closing", branchId, month, "branch") : null, canManage: canSalaryEdit,
+      sourceHref: isOperationsManager
+        ? `${href("/hr-hub", branchId, month)}&tab=payroll`
+        : canSalaryView ? href("/salary-closing", branchId, month, "branch") : null, canManage: canSalaryEdit,
       employees: lines.map(line => { const sum = payrollBalance([line], payments.filter(p => p.employeeId === line.employeeId));
         return { ...line, paid: sum.paid, remaining: sum.remaining, overpaid: sum.overpaid }; }),
       payments: payments.map(payment => ({ ...payment, reconciled: snapshotAvailable && membership.has(payment.employeeId) })) };
@@ -112,22 +116,32 @@ async function load(req: Request, branchId: string, month: string): Promise<Oper
     else if (closure?.status !== "closed") output.payroll.reason = "لم تُعتمد لقطة رواتب مغلقة؛ لا نعرض راتباً مستحقاً تقديرياً";
   }
   if (canCosts) {
-    const [year, number] = month.split("-").map(Number);
-    const [inputs, rent, recurring] = await Promise.all([
-      db.select().from(pnlMonthlyInputs).where(and(eq(pnlMonthlyInputs.branchId, branchId), eq(pnlMonthlyInputs.year, year), eq(pnlMonthlyInputs.month, number))),
-      storage.getRentForPeriod(branchId, year, number), storage.getRecurringExpensesForPeriod(branchId, year, number),
-    ]);
-    const labels = { electricityCost: "كهرباء", waterCost: "مياه", utilitiesOther: "مرافق أخرى", internetCost: "إنترنت",
-      governmentFees: "رسوم حكومية", insuranceCost: "تأمين", subscriptionsCost: "اشتراكات", securityCost: "أمن",
-      bankFees: "رسوم بنكية", fuelCost: "وقود", maintenanceCost: "صيانة", marketingCost: "تسويق", suppliesCost: "مستلزمات", otherCosts: "تكاليف أخرى" };
-    const input = inputs[0];
-    const items = Object.entries(labels).filter(([key]) => input && (input as any)[key] !== null)
-      .map(([key, label]) => ({ label, amount: Number((input as any)[key] || 0) }));
-    if (rent) items.push({ label: "إيجار", amount: Number(rent) });
-    for (const row of recurring) items.push({ label: "عقد متكرر مسجل", amount: Number(row.monthlyAmount || 0) });
-    output.expenses = { available: true, recorded: input || rent || recurring.length ? Math.round(items.reduce((s, i) => s + i.amount, 0) * 100) / 100 : null,
-      paid: null, items, sourceHref: href("/pnl-dashboard", branchId, month),
-      canManage: await hasEffectiveViewPermission(req, "pnl_dashboard", "edit"), reason: "تكاليف مسجلة؛ المصدر لا يثبت الدفع النقدي. لا تشمل الرواتب أو تكلفة البضاعة." };
+    try {
+      const [year, number] = month.split("-").map(Number);
+      const [inputs, rent, recurring] = await Promise.all([
+        db.select().from(pnlMonthlyInputs).where(and(eq(pnlMonthlyInputs.branchId, branchId), eq(pnlMonthlyInputs.year, year), eq(pnlMonthlyInputs.month, number))),
+        storage.getRentEvidenceForPeriod(branchId, year, number), storage.getRecurringExpensesForPeriod(branchId, year, number),
+      ]);
+      const labels = { electricityCost: "كهرباء", waterCost: "مياه", utilitiesOther: "مرافق أخرى", internetCost: "إنترنت",
+        governmentFees: "رسوم حكومية", insuranceCost: "تأمين", subscriptionsCost: "اشتراكات", securityCost: "أمن",
+        bankFees: "رسوم بنكية", fuelCost: "وقود", maintenanceCost: "صيانة", marketingCost: "تسويق", suppliesCost: "مستلزمات", otherCosts: "تكاليف أخرى" };
+      const input = inputs[0];
+      const items = Object.entries(labels).filter(([key]) => input && (input as any)[key] !== null)
+        .map(([key, label]) => ({ label, amount: Number((input as any)[key] || 0) }));
+      if (rent.found) items.push({ label: "إيجار", amount: Number(rent.amount) });
+      for (const row of recurring) items.push({ label: "عقد متكرر مسجل", amount: Number(row.monthlyAmount || 0) });
+      output.expenses = { available: true, recorded: input || rent.found || recurring.length ? Math.round(items.reduce((s, i) => s + i.amount, 0) * 100) / 100 : null,
+        paid: null, items, sourceHref: href("/pnl-dashboard", branchId, month),
+        canManage: await hasEffectiveViewPermission(req, "pnl", "edit"), reason: "تكاليف مسجلة؛ المصدر لا يثبت الدفع النقدي. لا تشمل الرواتب أو تكلفة البضاعة." };
+    } catch (sourceError: any) {
+      // A missing optional financial source must not break payroll or the
+      // operational workflow, nor turn an incomplete total into a real zero.
+      const sourceCode = sourceError?.code || sourceError?.cause?.code;
+      console.error("[operations-month-workflow] Expense source unavailable", sourceCode || "unknown");
+      output.expenses = { ...output.expenses, reason: sourceCode === "42P01"
+        ? "مصدر من مصادر المصروفات غير مهيأ في قاعدة البيانات؛ لا يمكن إثبات إجمالي الشهر."
+        : "تعذر تحميل مصادر المصروفات؛ لم نعرض إجمالياً ناقصاً أو بيانات قديمة." };
+    }
   }
   if (canDaily || canSales) {
     const ev = await evidence(pool, branchId, month);

@@ -10,6 +10,7 @@ import { operationsSourceLabel, queueQualifier } from "@/lib/operations-center-p
 import { Metric, time } from "./record-sheet";
 import { OperationsMonthWorkspace } from "./month-workflow";
 import "./decision-board.css";
+import { monthlyReturnIntent } from "@/lib/operations-center-navigation";
 
 const fmt = (value: number) => new Intl.NumberFormat("en-US").format(value);
 const dayKey = (value: string) => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Riyadh", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(value));
@@ -39,7 +40,7 @@ export function OperationsDecisionBoard({ data, actorId, offset, onOffset, open,
   open: (href: string, branchId: string, item?: OperationsQueueItem) => void;
   openBranch: (id: string) => void; retry: () => void;
 }) {
-  const [view, setView] = useState<Workspace>(null);
+  const [view, setView] = useState<Workspace>(() => monthlyReturnIntent(window.location.search, data.scope.branchIds).monthly ? "monthly" : null);
   const [selected, setSelected] = useState<Selected>(null);
   const [search, setSearch] = useState("");
   const [mobileDetail, setMobileDetail] = useState(false);

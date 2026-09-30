@@ -211,7 +211,7 @@ import { recipientsSchema as reportRecipientsSchema } from "./scheduler";
 import { insertBranchSchema, insertInventoryItemSchema, insertSavedFilterSchema, insertUserSchema, insertConstructionProjectSchema, insertContractorSchema, insertProjectWorkItemSchema, insertProjectBudgetAllocationSchema, insertConstructionContractSchema, insertContractItemSchema, insertPaymentRequestSchema, insertContractPaymentSchema, insertContractMilestoneSchema, insertContractVariationSchema, insertContractGuaranteeSchema, insertContractTemplateSchema, insertProjectExpenseSchema, insertProjectDailyLogSchema, insertProjectDailyLogPhotoSchema, insertDailyLogActivitySchema, insertUserPermissionSchema, insertProductSchema, insertShiftSchema, insertShiftEmployeeSchema, insertProductionOrderSchema, insertQualityCheckSchema, insertTargetWeightProfileSchema, insertBranchMonthlyTargetSchema, insertIncentiveTierSchema, insertIncentiveAwardSchema, SYSTEM_MODULES, MODULE_ACTIONS, JOB_ROLE_PERMISSION_TEMPLATES, JOB_TITLE_LABELS, MODULE_LABELS, ACTION_LABELS, JOB_TITLES, insertDisplayBarReceiptSchema, insertDisplayBarDailySummarySchema, insertWasteReportSchema, insertWasteItemSchema, insertMarketingCampaignSchema, insertCampaignBudgetAllocationSchema, insertCampaignGoalSchema, insertCampaignExpenseSchema, insertMarketingCalendarEventSchema, insertMarketingInfluencerSchema, insertInfluencerCampaignLinkSchema, insertInfluencerContactSchema, insertInfluencerPaymentSchema, insertInfluencerContractSchema, insertMarketingTaskSchema, insertMarketingTaskActivitySchema, insertMarketingPerformanceReportSchema, insertMarketingAssetSchema, insertMarketingTeamMemberSchema, insertMarketingAlertSchema, insertScheduleTemplateSchema, insertSchedulePeriodSchema, insertEmployeeScheduleSchema, insertAttendanceRecordSchema, insertTimeEntrySchema, isMadeToOrderCategory, suggestCategoryFromProductName, userBranchAccess } from "@shared/schema";
 import { z } from "zod";
 import { registerKitchenRoutingRoutes, kitchenActionAllowed, getKitchenRouting, getKitchenRoutingBatch, routingActor, routingPersonEligible } from "./central-kitchen-routing";
-import { setupAuth, isAuthenticated, requirePermission, requireAnyPermission, getActiveBranchFilter, requireBranchAccess, canAccessBranch, isUserAdmin, getAllowedBranchIds, getEffectiveBranchFilter, getWarehouseKeeperEffectivePermissions, getBranchManagerEffectivePermissions, invalidateAuthCache, HR_MANAGER_MODULES, HR_SPECIALIST_PERMISSIONS, FINANCIAL_MANAGER_PERMISSIONS, OPERATIONS_MANAGER_PERMISSIONS, BRANCH_MANAGER_INTRINSIC_PERMISSIONS, hasCrossBranchHrReadAccess } from "./auth";
+import { setupAuth, isAuthenticated, requirePermission, requireAnyPermission, getActiveBranchFilter, requireBranchAccess, canAccessBranch, isUserAdmin, getAllowedBranchIds, getEffectiveBranchFilter, getWarehouseKeeperEffectivePermissions, getBranchManagerEffectivePermissions, invalidateAuthCache, HR_MANAGER_MODULES, HR_SPECIALIST_PERMISSIONS, FINANCIAL_MANAGER_PERMISSIONS, OPERATIONS_MANAGER_PERMISSIONS, BRANCH_MANAGER_INTRINSIC_PERMISSIONS, hasCrossBranchHrReadAccess, filterRoleDeniedPermissions } from "./auth";
 import { comparisonBranchIds, comparisonDate, comparisonEvidence, comparisonRange, buildCanonicalComparisons, COMPARISON_REASON_PREFIX, COMPARISON_UNAVAILABLE } from "./production-comparison-evidence";
 import { authRateLimiter, biometricRateLimiter, uploadRateLimiter, apiRateLimiter, validateFileUpload, sanitizeFilename, trackLoginAttempt } from "./security";
 import { registerGovernanceRoutes } from "./governance-routes";
@@ -1602,7 +1602,7 @@ export async function registerRoutes(
         permissions = Array.from(merged, ([module, moduleActions]) => ({ module, actions: [...moduleActions] }));
       }
 
-      res.json(permissions);
+      res.json(filterRoleDeniedPermissions(currentUser.role, permissions));
     } catch (error) {
       console.error("Error fetching my permissions:", error);
       res.status(500).json({ error: "Failed to fetch permissions" });
@@ -1772,7 +1772,7 @@ export async function registerRoutes(
         firstName: targetUser.firstName || null,
         role: targetUser.role,
         note,
-        permissions,
+        permissions: filterRoleDeniedPermissions(targetUser.role, permissions),
       });
     } catch (error) {
       console.error("Error fetching detailed effective permissions:", error);
@@ -24111,6 +24111,35 @@ export async function registerRoutes(
   });
 
   // User Effective Permissions
+  const operationsManagerEffectivePermissions = async (userId: string) => {
+    const [stored, direct, branches] = await Promise.all([
+      storage.getUserEffectivePermissions(userId),
+      storage.getUserPermissions(userId, { bypassCache: true }),
+      storage.getUserBranchAccess(userId),
+    ]);
+    const merged = new Map(stored.permissions.map(permission => [
+      `${permission.module}:${permission.action}`, permission,
+    ]));
+    for (const permission of direct) {
+      for (const action of permission.actions) {
+        merged.set(`${permission.module}:${action}`, { module: permission.module, action, allowed: true });
+      }
+    }
+    // Intrinsic role capabilities cannot require clicking an optional grant
+    // template. They match requirePermission and /api/my-permissions.
+    for (const [module, actions] of Object.entries(OPERATIONS_MANAGER_PERMISSIONS)) {
+      for (const action of actions) merged.set(`${module}:${action}`, { module, action, allowed: true });
+    }
+    return {
+      ...stored,
+      permissions: filterRoleDeniedPermissions("operations_manager", Array.from(merged.values())),
+      // Never use RBAC's historical global/default-branch fallback for this
+      // role; only persisted explicit branch access controls its HR scope.
+      allowedBranches: [...new Set(branches.map(branch => branch.branchId)
+        .filter(branchId => branchId !== HQ_BRANCH_ID))],
+    };
+  };
+
   app.get("/api/rbac/users/:userId/effective-permissions", isAuthenticated, requirePermission("users", "view"), async (req, res) => {
     try {
       const currentUser = getCurrentUser(req);
@@ -24126,6 +24155,9 @@ export async function registerRoutes(
       
       const targetUser = await storage.getUser(targetUserId);
       if (!targetUser) return res.status(404).json({ error: "المستخدم غير موجود" });
+      if (targetUser.role === "operations_manager") {
+        return res.json(await operationsManagerEffectivePermissions(targetUserId));
+      }
       if (targetUser.role === "warehouse_keeper") {
         const effective = await getWarehouseKeeperEffectivePermissions(
           targetUserId, await storage.getUserPermissions(targetUserId, { bypassCache: true }),
@@ -24148,7 +24180,10 @@ export async function registerRoutes(
         });
       }
       const effectivePermissions = await storage.getUserEffectivePermissions(targetUserId);
-      res.json(effectivePermissions);
+      res.json({
+        ...effectivePermissions,
+        permissions: filterRoleDeniedPermissions(targetUser.role, effectivePermissions.permissions),
+      });
     } catch (error) {
       console.error("Error fetching user effective permissions:", error);
       res.status(500).json({ error: "فشل في جلب الصلاحيات الفعلية" });
@@ -24159,6 +24194,9 @@ export async function registerRoutes(
   app.get("/api/rbac/my-permissions", isAuthenticated, async (req, res) => {
     try {
       const currentUser = getCurrentUser(req);
+      if (currentUser.role === "operations_manager") {
+        return res.json(await operationsManagerEffectivePermissions(currentUser.id));
+      }
       if (currentUser.role === "warehouse_keeper") {
         const effective = (req as any).authPermissions
           ?? await getWarehouseKeeperEffectivePermissions(
@@ -24182,7 +24220,10 @@ export async function registerRoutes(
         });
       }
       const effectivePermissions = await storage.getUserEffectivePermissions(currentUser.id);
-      res.json(effectivePermissions);
+      res.json({
+        ...effectivePermissions,
+        permissions: filterRoleDeniedPermissions(currentUser.role, effectivePermissions.permissions),
+      });
     } catch (error) {
       console.error("Error fetching current user permissions:", error);
       res.status(500).json({ error: "فشل في جلب صلاحياتك" });

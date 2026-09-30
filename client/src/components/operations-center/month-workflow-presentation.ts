@@ -19,7 +19,9 @@ export function validMonthSource(href: string, branchId: string, month: string, 
     const url = new URL(href, origin);
     const branchParameter = url.pathname === "/salary-closing" ? "branch" : "branchId";
     return url.origin === origin &&
-      ["/salary-closing", "/pnl-dashboard", "/branch-daily-closures", "/sales-analytics"].includes(url.pathname) &&
+      ["/salary-closing", "/hr-hub", "/pnl-dashboard", "/branch-daily-closures", "/sales-analytics"].includes(url.pathname) &&
+      (url.pathname !== "/hr-hub" || url.searchParams.get("tab") === "payroll") &&
+      (url.pathname !== "/salary-closing" || !url.searchParams.has("branchId") || url.searchParams.get("branchId") === branchId) &&
       url.searchParams.get(branchParameter) === branchId &&
       url.searchParams.get("month") === month;
   } catch { return false; }

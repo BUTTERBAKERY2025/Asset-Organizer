@@ -197,6 +197,24 @@ export const OPERATIONS_MANAGER_PERMISSIONS: Record<string, string[]> =
     ),
   );
 
+// Legacy grants must not advertise access to modules the role cannot use.
+// Keep response filtering and endpoint authorization on the same deny list.
+export const OPERATIONS_MANAGER_DENIED_MODULES = [
+  "hr_management", "salary_closing", "hr_onboarding", "hr_job_offers", "employee_transfers",
+] as const;
+
+export function isRoleModuleDenied(role: string, module: string): boolean {
+  return role === "operations_manager"
+    && (OPERATIONS_MANAGER_DENIED_MODULES as readonly string[]).includes(module);
+}
+
+export function filterRoleDeniedPermissions<T extends { module: string }>(
+  role: string,
+  permissions: T[],
+): T[] {
+  return permissions.filter(permission => !isRoleModuleDenied(role, permission.module));
+}
+
 // Branch managers can create requests for, and receive requests at, their own
 // branch. Kitchen-side branch checks still prevent approve/prepare/dispatch.
 export const BRANCH_MANAGER_CENTRAL_KITCHEN_PERMISSIONS = ["view", "create", "edit"] as const;
@@ -1319,7 +1337,7 @@ export const requirePermission = (module: string, action?: string): RequestHandl
     if (user.role === "operations_manager") {
       // These legacy modules contain unscoped HR administration and financial
       // mutations. Use the purpose-built operations HR permissions instead.
-      if (["hr_management", "salary_closing", "hr_onboarding", "hr_job_offers", "employee_transfers"].includes(module)) {
+      if (isRoleModuleDenied(user.role, module)) {
         return res.status(403).json({ error: "استخدم صلاحيات موارد التشغيل المحددة" });
       }
       const allowed = operationsManagerActionsFor(module);
@@ -1461,6 +1479,10 @@ export const requireAnyPermission = (module: string, actions: string[]): Request
     // Operations Manager: grant when ANY requested action is allowed for this module
     // (mirrors requirePermission above).
     if (user.role === "operations_manager") {
+      // Hard-denied legacy modules cannot be restored by historical direct grants.
+      if (isRoleModuleDenied(user.role, module)) {
+        return res.status(403).json({ error: "استخدم صلاحيات موارد التشغيل المحددة" });
+      }
       const allowed = operationsManagerActionsFor(module);
       if (allowed && actions.some((a) => allowed.includes(a))) {
         return next();

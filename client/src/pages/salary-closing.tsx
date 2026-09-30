@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { Layout } from "@/components/layout";
+import { salaryBranchIntent } from "@/lib/operations-center-navigation";
 import { PageHeader } from "@/components/dashboard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -914,11 +915,12 @@ export default function SalaryClosingPage() {
   const isRTL = i18n.language === "ar";
   const { toast } = useToast();
   const { isAdmin, user } = useAuth();
-  const { canEdit: canEditModule } = usePermissions();
+  const { canEdit: canEditModule, canView } = usePermissions();
   const isHrManager = user?.role === "hr_manager";
   // Salary closing is a core financial function: allow anyone with salary_closing:edit
   // (e.g. financial_manager via role template) in addition to admin / HR manager.
   const canCloseSalary = isAdmin || isHrManager || canEditModule("salary_closing");
+  const canViewSalary = canView("salary_closing");
   const canApproveSalaryClosing = isAdmin || isHrManager || canEditModule("salary_closing");
   // Manual salary deductions/advances write to /api/salary-deductions (branch_employees:edit),
   // which a monitoring-only financial_manager lacks — gate that UI separately to avoid 403s.
@@ -929,17 +931,17 @@ export default function SalaryClosingPage() {
   // قراءة الفرع والشهر من رابط الصفحة إن وُجدا (قادمة من صفحة التقارير الشاملة)
   const urlParams = useMemo(() => {
     const sp = new URLSearchParams(window.location.search);
-    return { branch: sp.get("branch") || "", month: sp.get("month") || "" };
+    return { ...salaryBranchIntent(window.location.search), month: sp.get("month") || "" };
   }, []);
 
   const [branch, setBranch] = useState<string>(urlParams.branch);
   const [month, setMonth] = useState<string>(
-    /^\d{4}-\d{2}$/.test(urlParams.month) ? urlParams.month : new Date().toISOString().slice(0, 7)
+    /^\d{4}-(0[1-9]|1[0-2])$/.test(urlParams.month) ? urlParams.month : new Date().toISOString().slice(0, 7)
   );
 
   // تهيئة الفرع الافتراضي
   useEffect(() => {
-    if (!branch) {
+    if (!branch && !urlParams.explicit) {
       if (userBranchId) setBranch(userBranchId);
       else if (branches && branches.length > 0) setBranch(branches[0].id);
     }
@@ -1011,8 +1013,8 @@ export default function SalaryClosingPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const branchActive = !!branch && branch !== "all";
-  const isAllBranches = branch === "all";
+  const branchActive = !!branch && branch !== "all" && branches.some(item => item.id === branch) && canViewSalary;
+  const isAllBranches = branch === "all" && !urlParams.conflict && canViewSalary;
   // عرض البيانات مفعّل عند اختيار فرع محدد أو "كل الفروع"
   const dataActive = branchActive || isAllBranches;
 
@@ -1033,7 +1035,7 @@ export default function SalaryClosingPage() {
       if (!res.ok) throw new Error("Failed to fetch salary closing bundle");
       return res.json();
     },
-    enabled: branchActive,
+    enabled: branchActive && canView("employee_reports"),
     staleTime: 60_000,
   });
 
@@ -2320,13 +2322,13 @@ export default function SalaryClosingPage() {
     setNetMax("");
   };
 
-  if (!canCloseSalary) {
+  if (!canViewSalary) {
     return (
       <Layout>
         <div className="flex flex-col items-center justify-center py-20 text-center" dir={isRTL ? "rtl" : "ltr"}>
           <ShieldAlert className="w-14 h-14 text-red-400 mb-4" />
           <h2 className="text-xl font-bold text-gray-800 mb-1">غير مصرّح بالوصول</h2>
-          <p className="text-gray-500">صفحة إغلاق الرواتب الشهرية متاحة للمدير ومدير الموارد البشرية والمدير المالي فقط.</p>
+          <p className="text-gray-500">لا تملك صلاحية عرض إغلاق الرواتب.</p>
         </div>
       </Layout>
     );
@@ -2342,6 +2344,7 @@ export default function SalaryClosingPage() {
           description="تقرير شهري شامل للرواتب يتضمن الحضور والغياب وساعات العمل، مع بحث وفلترة متقدمة"
           backHref="/employee-reports"
         />
+        {urlParams.explicit && !branchActive && !isAllBranches && <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">{urlParams.conflict && !branch ? "رابط الرواتب يحتوي فرعين مختلفين. اختر الفرع صراحةً؛ لم نستخدم فرعًا افتراضيًا." : "الفرع المطلوب غير متاح ضمن صلاحياتك. اختر فرعًا مسموحًا؛ لم نعرض بيانات فرع آخر."}</p>}
         {branch !== "all" && salaryClosingPreview?.operationsReviews?.length ? (
           <div role="status" className="rounded-lg border border-primary/30 bg-primary/5 px-4 py-3 text-sm">
             <strong>مراجعة مدير التشغيل (استشارية):</strong>

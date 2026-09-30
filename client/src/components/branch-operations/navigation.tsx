@@ -6,6 +6,7 @@ import { useBranchNavigation } from "@/hooks/use-branch-navigation";
 import { branchOperationDestination } from "@/lib/branch-operation-navigation";
 import { branchDeskReturnUrl } from "@/lib/branch-operation-return-state";
 import { Button } from "@/components/ui/button";
+import { operationsCenterReturnHref } from "@/lib/operations-center-navigation";
 
 export function BranchOperationsNavigation() {
   const [path] = useLocation();
@@ -17,6 +18,10 @@ export function BranchOperationsNavigation() {
     "/driver-deliveries": { section: "التوريد", label: "مهمة التوصيل" },
     "/reverse-logistics": { section: "التوريد", label: "حركة المرتجعات" },
     "/quality-control": { section: "الجودة", label: "فحص الجودة" },
+    "/hr-hub": { section: "الموظفون", label: "مراجعة الرواتب والموظفين" },
+    "/salary-closing": { section: "الإغلاقات الشهرية", label: "إغلاق الرواتب والصرف" },
+    "/pnl-dashboard": { section: "الإغلاقات الشهرية", label: "المصروفات والنتائج" },
+    "/branch-daily-closures": { section: "الإغلاقات الشهرية", label: "الإغلاقات التشغيلية" },
   } as Record<string, { section: string; label: string }>)[path] : undefined);
   return destination ? <NavigationContext path={path} destination={destination} /> : null;
 }
@@ -33,8 +38,7 @@ function NavigationContext({ path, destination }: {
   const branch = branches.find((item) => item.id === branchId);
   const params = new URLSearchParams(window.location.search);
   const fromCenter = params.get("from") === "operations-center";
-  const centerIds = (params.get("centerBranchIds") || "").split(",").filter(id => branches.some(b => b.id === id));
-  const centerHref = `/operations-center${centerIds.length ? `?${new URLSearchParams({ branchIds: centerIds.join(",") })}` : ""}`;
+  const centerHref = operationsCenterReturnHref(window.location.search, branches.map(branch => branch.id));
 
   return <nav dir="rtl" aria-label="مسار العمل" className="mx-3 mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border bg-card px-3 py-2 sm:mx-6" data-testid="branch-operations-navigation">
     <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">

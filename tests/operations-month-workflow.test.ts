@@ -4,12 +4,17 @@ import { monthlyEvidence, monthCalendar, payrollBalance } from "../shared/operat
 
 const mocks = vi.hoisted(() => ({
   query: vi.fn(), connect: vi.fn(), release: vi.fn(),
+  monthlyInputs: vi.fn(), rent: vi.fn(), recurring: vi.fn(),
   grants: new Set(["operations:view", "operations:edit", "daily_closures:view"]),
 }));
 vi.mock("../server/db", () => ({
-  pool: { query: mocks.query, connect: mocks.connect }, db: {},
+  pool: { query: mocks.query, connect: mocks.connect },
+  db: { select: () => ({ from: () => ({ where: mocks.monthlyInputs }) }) },
 }));
-vi.mock("../server/storage", () => ({ storage: {} }));
+vi.mock("../server/storage", () => ({ storage: {
+  getRentEvidenceForPeriod: mocks.rent,
+  getRecurringExpensesForPeriod: mocks.recurring,
+} }));
 vi.mock("../server/auth", () => ({
   isAuthenticated: (_req: any, _res: any, next: any) => next(),
   getAllowedBranchIds: (req: any) => req.allowed,
@@ -24,11 +29,11 @@ registerOperationsMonthWorkflow({
   post: (path: string, ...args: any[]) => { handlers[`POST ${path}`] = args; },
 } as any);
 
-async function call(action = "", data: any = {}) {
+async function call(action = "", data: any = {}, role = "viewer-test") {
   const method = action ? "POST" : "GET";
   const path = `/api/operations-center/month-workflow${action ? `/${action}` : ""}`;
   const req: any = { method, query: data, body: data, allowed: ["b1"],
-    currentUser: { id: "actor", role: "viewer-test" } };
+    currentUser: { id: "actor", role } };
   let result: any;
   let failure: any;
   let status = 200;
@@ -71,6 +76,11 @@ describe("monthly evidence and real payment totals", () => {
     expect(payrollBalance([{ employeeId: 1, due: 100 }], [{ employeeId: 1, amount: 120 }]))
       .toMatchObject({ remaining: 0, overpaid: 20, paid: 120 });
   });
+  it("never settles one employee's unpaid salary with another employee's excess", () => {
+    expect(payrollBalance([{ employeeId: 1, due: 100 }, { employeeId: 2, due: 100 }],
+      [{ employeeId: 1, amount: 200 }]))
+      .toMatchObject({ due: 200, paid: 200, remaining: 100, overpaid: 100 });
+  });
   it("unmatched snapshot employee payments cannot be counted toward settlement", () => {
     expect(payrollBalance([{ employeeId: 1, due: 100 }], [{ employeeId: 2, amount: 100 }]))
       .toMatchObject({ paid: null, recordedPaid: 100, remaining: null, overpaid: null,
@@ -96,6 +106,9 @@ describe("monthly review endpoint authorization and transaction guards", () => {
   let records: any[];
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.monthlyInputs.mockResolvedValue([]);
+    mocks.rent.mockResolvedValue({ amount: 0, found: false });
+    mocks.recurring.mockResolvedValue([]);
     mocks.grants = new Set(["operations:view", "operations:edit", "daily_closures:view"]);
     state = { status: "open", revision: 0, declarations: [], history: [] };
     records = monthCalendar("2025-02").map((date, i) => ({ id: i + 1, date, status: "closed", sales: 100, updated: "2025-03-01" }));
@@ -207,7 +220,7 @@ describe("monthly review endpoint authorization and transaction guards", () => {
     expect((await call("close", { branchId: "b1", month: "2025-02", revision: 0, note: "" })).failure.status).toBe(400);
   });
   it("financial reconciliation uses saved snapshot membership, not employee's current branch", async () => {
-    mocks.grants.add("salary_closing:view"); mocks.grants.add("employee_reports:view");
+    mocks.grants.add("salary_closing:view");
     const prior = mocks.query.getMockImplementation()!;
     mocks.query.mockImplementation(async (sql: string, ...args: any[]) => {
       if (sql.includes("FROM salary_closures")) return { rows: [{ id: 8, status: "closed", total_net: 100 }] };
@@ -221,6 +234,70 @@ describe("monthly review endpoint authorization and transaction guards", () => {
     expect(response.result.payroll).toMatchObject({ paid: 120, remaining: 0, overpaid: 20, settlementStatus: "overpaid" });
     expect(response.result.payroll.payments[0].reconciled).toBe(true);
     expect(mocks.query.mock.calls.some(call => call[0].includes("branch_employees"))).toBe(false);
+  });
+  it("monthly settlement preserves each employee's unpaid and overpaid balances", async () => {
+    mocks.grants.add("salary_closing:view");
+    const prior = mocks.query.getMockImplementation()!;
+    mocks.query.mockImplementation(async (sql: string, ...args: any[]) => {
+      if (sql.includes("FROM salary_closures")) return { rows: [{ id: 8, status: "closed", total_net: 200 }] };
+      if (sql.includes("FROM salary_closure_lines")) return { rows: [
+        { employeeId: 1, name: "A", due: 100 }, { employeeId: 2, name: "B", due: 100 },
+      ] };
+      if (sql.includes("FROM salary_payments")) return { rows: [
+        { id: 1, employeeId: 1, amount: 200, method: "cash", paidAt: new Date(), actor: "HR", note: null },
+      ] };
+      return prior(sql, ...args);
+    });
+    const response = await call("", { branchId: "b1", month: "2025-02" });
+    expect(response.result.payroll).toMatchObject({ due: 200, paid: 200, remaining: 100, overpaid: 100, settlementStatus: "overpaid" });
+    expect(response.result.payroll.employees[1].remaining).toBe(100);
+  });
+  it("operations payroll opens its authorized payroll tab, never legacy salary controls", async () => {
+    mocks.grants.add("operations_hr:view");
+    mocks.grants.add("operations_payroll:view");
+    // Even an obsolete direct grant must not offer the forbidden destination.
+    mocks.grants.add("salary_closing:view");
+    mocks.grants.add("salary_closing:edit");
+    const response = await call("", { branchId: "b1", month: "2025-02" }, "operations_manager");
+    expect(response.result.payroll.available).toBe(true);
+    const url = new URL(response.result.payroll.sourceHref, "https://example.test");
+    expect(url.pathname).toBe("/hr-hub");
+    expect(url.searchParams.get("branchId")).toBe("b1");
+    expect(url.searchParams.get("month")).toBe("2025-02");
+    expect(url.searchParams.get("tab")).toBe("payroll");
+    expect(response.result.payroll.canManage).toBe(false);
+  });
+  it("operations payroll still requires both operations HR and payroll read grants", async () => {
+    mocks.grants.add("operations_payroll:view");
+    const response = await call("", { branchId: "b1", month: "2025-02" }, "operations_manager");
+    expect(response.result.payroll.available).toBe(false);
+    expect(response.result.payroll.sourceHref).toBe(null);
+  });
+  it("expense edits use the actual pnl write permission, not the dashboard permission", async () => {
+    for (const grant of ["pnl:view", "pnl_dashboard:view", "pnl_dashboard:edit"]) mocks.grants.add(grant);
+    expect((await call("", { branchId: "b1", month: "2025-02" })).result.expenses.canManage).toBe(false);
+    mocks.grants.add("pnl:edit");
+    expect((await call("", { branchId: "b1", month: "2025-02" })).result.expenses.canManage).toBe(true);
+  });
+  it("retains a documented zero rent while keeping missing expense evidence unknown", async () => {
+    mocks.grants.add("pnl:view"); mocks.grants.add("pnl_dashboard:view");
+    expect((await call("", { branchId: "b1", month: "2025-02" })).result.expenses.recorded).toBe(null);
+    mocks.rent.mockResolvedValue({ amount: 0, found: true });
+    expect((await call("", { branchId: "b1", month: "2025-02" })).result.expenses)
+      .toMatchObject({ recorded: 0, paid: null, items: [{ label: "إيجار", amount: 0 }] });
+  });
+  it("an unavailable expense table does not break the other monthly files or invent a zero", async () => {
+    mocks.grants.add("pnl:view"); mocks.grants.add("pnl_dashboard:view");
+    mocks.recurring.mockRejectedValueOnce(Object.assign(new Error("query failed"),
+      { cause: { code: "42P01" } }));
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const response = await call("", { branchId: "b1", month: "2025-02" });
+      expect(response.failure).toBeUndefined();
+      expect(response.result.expenses).toMatchObject({ available: false, recorded: null, paid: null });
+      expect(response.result.expenses.reason).toContain("غير مهيأ");
+      expect(response.result.closing.available).toBe(true);
+    } finally { log.mockRestore(); }
   });
   it("unmatched payments surface reconciliation state and no invented employee name", async () => {
     mocks.grants.add("salary_closing:view"); mocks.grants.add("employee_reports:view");

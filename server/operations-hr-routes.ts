@@ -93,7 +93,13 @@ export function registerOperationsHrRoutes(app: Express) {
         .where(and(inArray(employeeTransferRequests.sourceBranchId, ids), inArray(employeeTransferRequests.destinationBranchId, ids)))
         .orderBy(desc(employeeTransferRequests.requestedAt)).limit(200);
       if (!transfers.length) return res.json([]);
-      const history = await db.select().from(transferHistory)
+      const history = await db.select({
+        id: transferHistory.id, transferId: transferHistory.transferId,
+        eventType: transferHistory.eventType, performedBy: transferHistory.performedBy,
+        performedByName: sql<string>`coalesce(nullif(concat_ws(' ', ${users.firstName}, ${users.lastName}), ''), ${users.username})`,
+        eventTimestamp: transferHistory.eventTimestamp, details: transferHistory.details,
+      }).from(transferHistory)
+        .leftJoin(users, eq(transferHistory.performedBy, users.id))
         .where(inArray(transferHistory.transferId, transfers.map(t => t.id)))
         .orderBy(desc(transferHistory.eventTimestamp));
       res.set("Cache-Control", "no-store").json(transfers.map(t => ({

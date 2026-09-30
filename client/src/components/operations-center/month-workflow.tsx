@@ -6,6 +6,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { time } from "./record-sheet";
 import { lastCompletedOperationsMonth, monthMoney, validMonthSource } from "./month-workflow-presentation";
+import { monthlyReturnIntent, withMonthlyReturn } from "@/lib/operations-center-navigation";
 
 type FileId = "payroll" | "expenses" | "closing" | "sales";
 type Command = "close" | "reopen" | "declare" | "remove-declaration";
@@ -27,10 +28,11 @@ export function OperationsMonthWorkspace({ branches, actorId, open }: {
   branches: { id: string; name: string }[]; actorId?: string;
   open: (href: string, branchId: string) => void;
 }) {
-  const [branchId, setBranchId] = useState(branches.length === 1 ? branches[0].id : "");
-  const [month, setMonth] = useState(lastCompletedOperationsMonth);
-  const [file, setFile] = useState<FileId | null>(null);
-  const [detail, setDetail] = useState(false);
+  const [intent] = useState(() => monthlyReturnIntent(window.location.search, branches.map(branch => branch.id)));
+  const [branchId, setBranchId] = useState(intent.branchId || (branches.length === 1 ? branches[0].id : ""));
+  const [month, setMonth] = useState(intent.month || lastCompletedOperationsMonth());
+  const [file, setFile] = useState<FileId | null>(intent.file);
+  const [detail, setDetail] = useState(!!intent.file && !!intent.branchId);
   const [command, setCommand] = useState<Command | null>(null);
   const [note, setNote] = useState("");
   const [date, setDate] = useState("");
@@ -80,8 +82,9 @@ export function OperationsMonthWorkspace({ branches, actorId, open }: {
     if ((command === "declare" || command === "remove-declaration") && !date.startsWith(`${month}-`)) return;
     mutation.mutate({ action: command, scope, key, body: { branchId, month, revision: data.closing.revision, note: note.trim(), ...(date ? { date } : {}) } });
   };
+  const openMonthlySource = (href: string) => open(withMonthlyReturn(href, branchId, month, file, window.location.origin), branchId);
   const source = (href: string | null, label: string) => href && validMonthSource(href, branchId, month, window.location.origin)
-    ? <Button type="button" variant="outline" size="sm" disabled={!canAct} onClick={() => open(href, branchId)}>{label}<ArrowUpLeft className="mr-1 size-4" /></Button> : null;
+    ? <Button type="button" variant="outline" size="sm" disabled={!canAct} onClick={() => openMonthlySource(href)}>{label}<ArrowUpLeft className="mr-1 size-4" /></Button> : null;
   const begin = (action: Command, selectedDate = "") => { setCommand(action); setDate(selectedDate); setNote(""); setError(null); };
   const branch = branches.find(item => item.id === branchId);
   const caption = (id: FileId) => !data ? "اختر فرعًا لتحميل الملف" : id === "payroll"
@@ -159,7 +162,7 @@ export function OperationsMonthWorkspace({ branches, actorId, open }: {
           {data.closing.dailyRecords.map(item => <article key={item.id} className="oc-panel flex flex-wrap items-center justify-between gap-2 p-3 text-sm"><div><strong>{item.date}</strong><p className="text-xs">الحالة: {item.status} · المبيعات المسجلة: {monthMoney(item.sales)}</p></div><Button variant="outline" size="sm" disabled={!canAct} onClick={() => {
             try {
               const url = new URL(item.href, window.location.origin);
-              if (url.origin === window.location.origin && url.pathname === `/branch-daily-closures/${item.id}` && item.date.startsWith(`${month}-`) && url.searchParams.get("branchId") === branchId) open(item.href, branchId);
+              if (url.origin === window.location.origin && url.pathname === `/branch-daily-closures/${item.id}` && item.date.startsWith(`${month}-`) && url.searchParams.get("branchId") === branchId) openMonthlySource(item.href);
             } catch { setError({ scope, message: "رابط الإغلاق اليومي غير صالح." }); }
           }}>فتح الإغلاق اليومي</Button></article>)}
           <h4 className="font-bold">سجل إجراءات الشهر</h4>

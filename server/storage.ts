@@ -1657,6 +1657,7 @@ export interface IStorage {
   upsertPnlMonthlyInputs(inputs: InsertPnlMonthlyInputs): Promise<PnlMonthlyInputs>;
   // P&L v2 — rent history with effective dates
   getRentForPeriod(branchId: string, year: number, month: number): Promise<number>;
+  getRentEvidenceForPeriod(branchId: string, year: number, month: number): Promise<{ amount: number; found: boolean }>;
   listRentHistory(branchId: string): Promise<PnlRentHistory[]>;
   upsertRentHistoryEntry(entry: InsertPnlRentHistory & { id?: number }): Promise<PnlRentHistory>;
   deleteRentHistoryEntry(id: number): Promise<boolean>;
@@ -17279,6 +17280,12 @@ export class DatabaseStorage implements IStorage {
   // history rows exist yet, falls back to legacy pnl_branch_settings.monthlyRent
   // so behavior is preserved during migration.
   async getRentForPeriod(branchId: string, year: number, month: number): Promise<number> {
+    return (await this.getRentEvidenceForPeriod(branchId, year, month)).amount;
+  }
+
+  // Preserve the distinction between an explicitly recorded zero and no row.
+  // Existing numeric-only consumers retain their previous zero fallback.
+  async getRentEvidenceForPeriod(branchId: string, year: number, month: number): Promise<{ amount: number; found: boolean }> {
     try {
       const periodStart = `${year}-${String(month).padStart(2, '0')}-01`;
       const rows = await db.select().from(pnlRentHistory)
@@ -17289,12 +17296,12 @@ export class DatabaseStorage implements IStorage {
         ))
         .orderBy(desc(pnlRentHistory.effectiveFrom))
         .limit(1);
-      if (rows.length > 0) return rows[0].monthlyAmount || 0;
+      if (rows.length > 0) return { amount: Number(rows[0].monthlyAmount || 0), found: true };
     } catch (error: any) {
-      if (error?.code !== '42P01') throw error; // table missing → fall through
+      if ((error?.code || error?.cause?.code) !== '42P01') throw error; // table missing → fall through
     }
     const legacy = await this.getPnlBranchSettings(branchId);
-    return legacy?.monthlyRent || 0;
+    return { amount: Number(legacy?.monthlyRent || 0), found: !!legacy };
   }
 
   async listRentHistory(branchId: string): Promise<PnlRentHistory[]> {

@@ -14,3 +14,9 @@ Payroll review by the operations manager is advisory and must never block HR app
 **Why:** The user explicitly chose optional review so HR can continue without it.
 
 **How to apply:** Keep review permission distinct from closing authority; describe review records as advisory, not as final payroll approval or proof that later-changing live amounts were approved.
+
+Scoped payroll review/export, joining-link creation and signed-joining approval, and employee transfer are baseline operations-manager capabilities, not optional hidden tools.
+
+**Why:** The user explicitly authorized these capabilities after screenshots showed the role could open the center but was denied its required workflows. Their requested authority is over all employees and accepted-offer recruits in explicitly permitted branches, not company-wide HR administration.
+
+**How to apply:** Keep existing branch grants unchanged (zero grants means zero branches), exclude HQ, and preserve HR's final financial and employee-conversion authority. Joining approval must notify authorized HR management and link to the exact record; a missing recipient must be explicit, not a silently lost notification.

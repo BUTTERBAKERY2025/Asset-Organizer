@@ -26,3 +26,15 @@ The monthly workspace must provide an actual saved operational review lifecycle,
 **Why:** The user explicitly rejected the report-only monthly view and authorized completing the functional workflow without another redesign. They previously required operations payroll review to remain advisory, not a prerequisite for HR closing or payment.
 
 **How to apply:** Operational review may close/reopen with an audit trail but must not lock or approve financial sources. Unrecorded calendar days need evidence or a documented nonoperating declaration; changes after review require reconciliation. Preserve existing financial authority. Never treat a legacy payment flag without an amount as full payment, or match historical payroll by an employee's current branch after transfer. Explicitly requested AI suggestions cannot execute actions.
+
+Evaluate payroll settlement employee by employee before aggregating outstanding and excess amounts.
+
+**Why:** Matching the total paid to the total payroll can hide an unpaid employee when another employee was overpaid. A balanced monthly total is not proof that individual salary obligations were met.
+
+**How to apply:** Preserve both outstanding and excess totals and require reconciliation; never offset one employee's excess against another employee's unpaid entitlement.
+
+Verify receiving-page permission and URL contracts, not just the sender or a standalone monthly fixture.
+
+**Why:** The isolated workspace worked while the real operations payroll link was absent or landed on employees, and the salary page used a different permission from its API. Mocked storage also hid missing expense-source tables.
+
+**How to apply:** Check actual destination pages, current source guards, branch/month return context, and real development-schema reads. Report unauthenticated verification limits rather than claiming an end-to-end account test.

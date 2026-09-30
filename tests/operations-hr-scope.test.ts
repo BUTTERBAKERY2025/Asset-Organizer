@@ -11,13 +11,12 @@ const manager = (grants: string[]) => ({
 });
 
 describe("operations manager HR boundary", () => {
-  it("requires explicit payroll, joining and transfer grants while blocking legacy broad HR grants", async () => {
+  it("grants scoped payroll, joining and transfer capabilities intrinsically while blocking legacy broad HR grants", async () => {
     const req: any = {
       ...manager(["branch-a"]), method: "GET",
       authPermissions: [
         { module: "hr_management", actions: ["view", "edit"] },
         { module: "salary_closing", actions: ["view", "edit"] },
-        { module: "operations_payroll", actions: ["view"] },
       ],
     };
     const responses: number[] = [];
@@ -34,9 +33,12 @@ describe("operations manager HR boundary", () => {
     await requirePermission("operations_payroll", "view")(req, res, next);
     expect(calls).toBe(1);
     await requirePermission("operations_payroll", "approve")(req, res, next);
+    await requirePermission("operations_payroll", "export")(req, res, next);
     await requirePermission("operations_joining", "create")(req, res, next);
+    await requirePermission("operations_joining", "approve")(req, res, next);
     await requirePermission("operations_employee_transfer", "create")(req, res, next);
-    expect(responses).toEqual([403, 403, 403, 403, 403, 403]);
+    expect(calls).toBe(6);
+    expect(responses).toEqual([403, 403, 403]);
   });
 
   it("never elevates manual HR permission to cross-branch visibility", () => {

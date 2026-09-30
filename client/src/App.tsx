@@ -415,7 +415,7 @@ const Router = React.memo(function Router() {
       <Route path="/employee-attendance-report">{() => <ModulePage component={EmployeeAttendanceReportPage} module="attendance" />}</Route>
       <Route path="/timesheet">{() => <ModulePage component={TimesheetPage} module="shifts" />}</Route>
       <Route path="/employee-reports">{() => <ModulePage component={EmployeeReportsDashboardPage} module="employee_reports" />}</Route>
-      <Route path="/salary-closing">{() => <ModulePage component={SalaryClosingPage} module="employee_reports" />}</Route>
+      <Route path="/salary-closing">{() => <ModulePage component={SalaryClosingPage} module="salary_closing" />}</Route>
       <Route path="/floor-plan">{() => <ModulePage component={FloorPlanPage} module="floor_plan" />}</Route>
       
       {/* Production - الإنتاج */}

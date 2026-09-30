@@ -59,12 +59,20 @@ export function payrollBalance(
   const paidCents = payments.reduce((s, p) => s + (p.amount === null || !Number.isFinite(p.amount) ? 0 : cents(p.amount)), 0);
   const dueCents = lines.reduce((s, l) => s + cents(l.due), 0);
   const confirmed = !unknown && !unmatched.length;
+  // Employee entitlements cannot offset each other: paying A twice does
+  // not discharge B's unpaid salary. Keep deficits and excesses separate.
+  const paidByEmployee = new Map<number, number>();
+  for (const payment of payments) {
+    if (payment.amount !== null && Number.isFinite(payment.amount))
+      paidByEmployee.set(payment.employeeId, (paidByEmployee.get(payment.employeeId) || 0) + cents(payment.amount));
+  }
+  const balances = lines.map(line => cents(line.due) - (paidByEmployee.get(line.employeeId) || 0));
   return {
     due: dueCents / 100,
     paid: confirmed ? paidCents / 100 : null,
     recordedPaid: unknown ? null : paidCents / 100,
-    remaining: confirmed ? Math.max(0, dueCents - paidCents) / 100 : null,
-    overpaid: confirmed ? Math.max(0, paidCents - dueCents) / 100 : null,
+    remaining: confirmed ? balances.reduce((sum, balance) => sum + Math.max(0, balance), 0) / 100 : null,
+    overpaid: confirmed ? balances.reduce((sum, balance) => sum + Math.max(0, -balance), 0) / 100 : null,
     unknownPaymentAmounts: unknown,
     unreconciledPaymentCount: unmatched.length,
     unreconciledPaymentAmount: unmatched.some(p => p.amount === null || !Number.isFinite(p.amount)) ? null

@@ -553,6 +553,7 @@ export function registerOperationsCenterRoutes(app: Express): void {
       const monthlyLink = (path: string, branchId: string) => `${path}?${new URLSearchParams({ branchId, month })}`;
       const salaryLink = (branchId: string) => `${salaryPage}?${new URLSearchParams({
         [salaryPage === "/hr-hub" ? "branchId" : "branch"]: branchId, month,
+        ...(salaryPage === "/hr-hub" ? { tab: "payroll" } : {}),
       })}`;
       if (await hasEffectiveViewPermission(req, req.currentUser?.role === "operations_manager" ? "operations_payroll" : "salary_closing")
           && await hasEffectiveViewPermission(req, req.currentUser?.role === "operations_manager" ? "operations_hr" : "employee_reports"))
@@ -685,7 +686,7 @@ export function registerOperationsCenterRoutes(app: Express): void {
             eq(salaryClosures.month, month), eq(salaryClosures.status, "closed")));
         for (const snapshot of snapshots) {
           const href = req.currentUser!.role === "operations_manager"
-            ? `/hr-hub?${new URLSearchParams({ branchId: snapshot.branchId, month })}`
+            ? `/hr-hub?${new URLSearchParams({ branchId: snapshot.branchId, month, tab: "payroll" })}`
             : `/salary-closing?${new URLSearchParams({ branch: snapshot.branchId, month })}`;
           records.push({ sourceType: "payroll_month", sourceId: `snapshot-${month}`, branchId: snapshot.branchId, href,
             status: "closed_snapshot_not_disbursed_total", dueAt: null,

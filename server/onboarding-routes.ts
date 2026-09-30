@@ -10,6 +10,7 @@ import {
   branches,
   users,
   branchEmployees,
+  systemNotifications,
 } from "@shared/schema";
 import crypto from "crypto";
 import { storage } from "./storage";
@@ -134,7 +135,14 @@ export function registerOnboardingRoutes(app: Express) {
         id: onboardingNotifications.id, jobOfferId: onboardingNotifications.jobOfferId,
         branchId: onboardingNotifications.branchId, status: onboardingNotifications.status,
         actualStartDate: onboardingNotifications.actualStartDate,
-      }).from(onboardingNotifications).where(inArray(onboardingNotifications.jobOfferId, offers.map(o => o.id)));
+        signedAt: onboardingNotifications.signedAt,
+        confirmedAt: onboardingNotifications.confirmedAt,
+        confirmedBy: onboardingNotifications.confirmedBy,
+        confirmedNotes: onboardingNotifications.confirmedNotes,
+        confirmedByName: sql<string>`coalesce(nullif(concat_ws(' ', ${users.firstName}, ${users.lastName}), ''), ${users.username})`,
+      }).from(onboardingNotifications)
+        .leftJoin(users, eq(onboardingNotifications.confirmedBy, users.id))
+        .where(inArray(onboardingNotifications.jobOfferId, offers.map(o => o.id)));
       res.set("Cache-Control", "no-store");
       res.json(offers.map(offer => ({
         ...offer,
@@ -214,6 +222,76 @@ export function registerOnboardingRoutes(app: Express) {
         return res.status(409).json({ error: "المباشرة موقعة أو منتهية" });
       console.error("Operations joining send error:", error);
       res.status(500).json({ error: "تعذر إرسال رابط المباشرة" });
+    }
+  });
+  app.post("/api/operations-hr/joining/:id/confirm", isAuthenticated, operationsJoiningScope, requirePermission("operations_hr", "view"), requirePermission("operations_joining", "approve"), async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      const notes = req.body?.notes;
+      if (!Number.isSafeInteger(id) || id < 1 || (notes != null && (typeof notes !== "string" || notes.length > 1000)))
+        return res.status(400).json({ error: "حدد إشعاراً صحيحاً وملاحظة لا تتجاوز 1000 حرف" });
+      const allowed = operationsJoiningBranches(req);
+      const result = await db.transaction(async tx => {
+        // Lock both offer and notification. Conversion/cancellation and a second
+        // confirmation cannot race the state check or create duplicate bell alerts.
+        await tx.execute(sql`SELECT n.id FROM onboarding_notifications n JOIN job_offers o ON o.id = n.job_offer_id WHERE n.id = ${id} FOR UPDATE OF n, o`);
+        const [entry] = await tx.select({ notification: onboardingNotifications, offer: jobOffers })
+          .from(onboardingNotifications).innerJoin(jobOffers, eq(onboardingNotifications.jobOfferId, jobOffers.id))
+          .where(eq(onboardingNotifications.id, id)).limit(1);
+        if (!entry) return { error: "NOT_FOUND" };
+        const n = entry.notification;
+        if (entry.offer.status !== "accepted" || entry.offer.hiredEmployeeId || !n.branchId
+          || n.branchId !== entry.offer.branchId || !allowed.includes(n.branchId))
+          return { error: "OUT_OF_SCOPE" };
+        if (n.status === "confirmed") return { alreadyConfirmed: true, id: n.id, status: n.status, confirmedAt: n.confirmedAt, confirmedBy: n.confirmedBy };
+        if (n.status !== "signed" || !n.signedAt) return { error: "NOT_SIGNED" };
+        const managers = await tx.select().from(users).where(and(eq(users.role, "hr_manager"), eq(users.isActive, "active")));
+        const recipients: string[] = [];
+        for (const manager of managers) {
+          // Resolve recipient scope and source permission freshly, not from a
+          // job title or from the operations manager's branch grant.
+          const [permissions, grants] = await Promise.all([
+            storage.getUserPermissions(manager.id, { bypassCache: true }),
+            storage.getUserBranchAccess(manager.id),
+          ]);
+          const recipientReq: any = { currentUser: manager, authPermissions: permissions, userBranchAccess: grants, method: "GET" };
+          if (!getEffectiveBranchFilter(recipientReq, n.branchId).hasAccess) continue;
+          let permitted = false;
+          const recipientRes: any = { status() { return this; }, json() { return this; } };
+          await requirePermission(PERMISSION_MODULE, "view")(recipientReq, recipientRes, () => { permitted = true; });
+          if (permitted) recipients.push(manager.id);
+        }
+        if (!recipients.length) return { error: "NO_HR_RECIPIENT" };
+        const at = new Date();
+        const [confirmed] = await tx.update(onboardingNotifications).set({
+          status: "confirmed", confirmedAt: at, confirmedBy: req.currentUser.id,
+          confirmedNotes: notes?.trim() || null, updatedAt: at,
+        }).where(and(eq(onboardingNotifications.id, id), eq(onboardingNotifications.status, "signed"))).returning();
+        if (!confirmed) throw new Error("CONFIRMATION_CHANGED");
+        await tx.insert(systemNotifications).values({
+          title: "اعتماد مباشرة عمل من إدارة التشغيل",
+          // Historical exact-recipient alerts outlive grants. Keep their text
+          // free of candidate/branch/offer details; the linked HR page rechecks
+          // current permissions before revealing the actual personnel record.
+          content: "اعتمد مدير التشغيل مباشرة عمل بعد توقيع الموظف. راجع سجل المباشرات المصرّح لك به لاستكمال إجراءات شؤون الموظفين.",
+          messageType: "announcement", displayStyle: "banner", priority: 3,
+          targetAllBranches: false, targetBranchIds: [n.branchId], targetRoleIds: ["hr_manager"],
+          targetUserIds: recipients, createdBy: req.currentUser.id,
+          autoGenerated: true, autoSource: "operations_joining_confirmed",
+          dedupeKey: `operations-joining-confirmed:${n.id}`,
+          buttonText: "مراجعة المباشرة المعتمدة", buttonAction: `/hr/onboarding?notificationId=${n.id}`,
+        });
+        return { id: confirmed.id, status: confirmed.status, confirmedAt: confirmed.confirmedAt,
+          confirmedBy: confirmed.confirmedBy, alreadyConfirmed: false, hrNotificationCreated: true };
+      });
+      if (result.error === "NOT_FOUND") return res.status(404).json({ error: "الإشعار غير موجود" });
+      if (result.error === "OUT_OF_SCOPE") return res.status(403).json({ error: "المباشرة خارج نطاق فروعك أو تم تحويل صاحب العرض إلى موظف" });
+      if (result.error === "NOT_SIGNED") return res.status(409).json({ error: "لا يمكن اعتماد المباشرة قبل توقيع الموظف عليها" });
+      if (result.error === "NO_HR_RECIPIENT") return res.status(409).json({ error: "لا يوجد مدير شؤون موظفين نشط ومصرّح له بهذا الفرع لاستلام الإشعار؛ لم يُحفظ الاعتماد" });
+      res.set("Cache-Control", "no-store").json(result);
+    } catch (error) {
+      console.error("Operations joining confirmation error:", error);
+      res.status(500).json({ error: "تعذر اعتماد المباشرة وإشعار شؤون الموظفين؛ لم تُحفظ العملية جزئياً" });
     }
   });
   // ===== List: accepted offers (مع ربط إشعار المباشرة إن وجد) =====

@@ -1,6 +1,9 @@
 -- ============================================================================
 -- P&L Expense Management v2
 -- ============================================================================
+-- WARNING: section 4 seeds an unverified historical effective date (2024-01-01).
+-- For schema readiness use operations_month_expense_readiness.sql instead.
+-- Do not run the rent seed without independently verified effective dates.
 -- شغّل هذا الملف يدوياً على Supabase SQL Editor قبل نشر الكود الجديد.
 -- يُضيف:
 --   1. جدول pnl_rent_history     — سجل الإيجار مع تواريخ الصلاحية

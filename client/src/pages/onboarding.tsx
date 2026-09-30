@@ -3,7 +3,7 @@ import { useReactToPrint } from "react-to-print";
 import { CompanyHeader } from "@/components/company-header";
 import { EmployeeFileDialog } from "@/components/employee-full-file";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import { Layout } from "@/components/layout";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { Card, CardContent } from "@/components/ui/card";
@@ -29,6 +29,7 @@ import {
   Printer, Download, Pencil,
 } from "lucide-react";
 import type { JobOffer, OnboardingNotification, Branch } from "@shared/schema";
+import { consumeJoiningNotificationLink, retainAuthorizedJoiningRow } from "@/lib/onboarding-notification-navigation";
 
 // نفس الـ schema المستخدم في صفحة موظفي الفرع لضمان توحيد البيانات
 const employeeFormSchema = z.object({
@@ -116,6 +117,9 @@ const normalizeSaudiPhone = (raw: string): string => {
 export default function OnboardingPage() {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
+  const searchParams = useSearch();
+  const consumedNotificationLinks = useRef(new Set<string>());
+  const [notificationLinkError, setNotificationLinkError] = useState("");
   const qc = useQueryClient();
   const [tab, setTab] = useState("all");
   const [search, setSearch] = useState("");
@@ -126,8 +130,31 @@ export default function OnboardingPage() {
   const [fileRow, setFileRow] = useState<Row | null>(null);
   const [shareLink, setShareLink] = useState<{ link: string; phone?: string } | null>(null);
 
-  const { data: rows = [], isLoading } = useQuery<Row[]>({ queryKey: ["/api/hr/onboarding"] });
+  const rowsQuery = useQuery<Row[]>({
+    queryKey: ["/api/hr/onboarding"], staleTime: 0, gcTime: 0,
+    refetchOnMount: "always", retry: false,
+  });
+  const isLoading = rowsQuery.isPending || rowsQuery.isFetching;
+  const rows = useMemo(() => rowsQuery.isError || rowsQuery.isFetching ? [] : rowsQuery.data ?? [],
+    [rowsQuery.data, rowsQuery.isError, rowsQuery.isFetching]);
   const { data: stats } = useQuery<Record<string, number>>({ queryKey: ["/api/hr/onboarding/stats"] });
+
+  useEffect(() => {
+    // Never preserve an old personnel dialog through an authorization refetch.
+    // A revoked/missing row cannot stay selected just because it was once seen.
+    const retain = (row: Row | null) => retainAuthorizedJoiningRow(row, rows);
+    setViewRow(retain); setCreateFor(retain); setConvertRow(retain); setEditRow(retain); setFileRow(retain);
+    if (rowsQuery.isFetching || rowsQuery.isError) setShareLink(null);
+    const intent = consumeJoiningNotificationLink(searchParams, rows,
+      !rowsQuery.isPending && !rowsQuery.isFetching, consumedNotificationLinks.current);
+    if (!intent.handled) return;
+    if (intent.row) {
+      setViewRow(intent.row);
+      setNotificationLinkError("");
+    } else {
+      setNotificationLinkError("الإشعار المطلوب غير موجود ضمن المباشرات المصرّح لك بها أو تعذر التحقق من الصلاحية. لم نحمّل سجلًا خارج نطاقك.");
+    }
+  }, [searchParams, rows, rowsQuery.isPending, rowsQuery.isFetching, rowsQuery.isError]);
 
   const filtered = useMemo(() => {
     let r = rows;
@@ -418,7 +445,8 @@ export default function OnboardingPage() {
         <CreateDialog row={createFor} onClose={() => setCreateFor(null)} onSuccess={invalidate} />
 
         {/* View Details Dialog */}
-        <ViewDialog row={viewRow} onClose={() => setViewRow(null)} />
+      {notificationLinkError && <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">{notificationLinkError}</p>}
+      <ViewDialog row={viewRow} onClose={() => setViewRow(null)} />
 
         {/* Convert to Employee Dialog */}
         <ConvertDialog row={convertRow} onClose={() => setConvertRow(null)} onSuccess={invalidate} />

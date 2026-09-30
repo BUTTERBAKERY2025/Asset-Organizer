@@ -8,6 +8,7 @@ import { Layout } from "@/components/layout";
 import { time } from "@/components/operations-center/workspace";
 import { OperationsDecisionBoard } from "@/components/operations-center/decision-board";
 import { OperationsCenterScreen } from "@/components/operations-center/operations-screen";
+import { attachCenterContext } from "@/lib/operations-center-navigation";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -250,9 +251,7 @@ export default function OperationsCenterPage() {
         url.pathname = `/branch-daily-closures/${item.sourceId}`;
         url.search = "";
       }
-      url.searchParams.set("branchId", branchId);
-      url.searchParams.set("from", "operations-center");
-      url.searchParams.set("centerBranchIds", effectiveIds.join(","));
+      attachCenterContext(url, branchId, effectiveIds);
       navigate(`${url.pathname}${url.search}${url.hash}`);
     } catch { setMessage("رابط المصدر غير صالح؛ لم يتم فتحه."); }
   };

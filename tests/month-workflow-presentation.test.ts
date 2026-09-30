@@ -20,5 +20,9 @@ describe("monthly workspace presentation boundaries", () => {
     expect(validMonthSource("/sales-analytics?branchId=one&month=2026-08", "one", "2026-09", origin)).toBe(false);
     expect(validMonthSource("https://evil.test/salary-closing?branch=one&month=2026-09", "one", "2026-09", origin)).toBe(false);
     expect(validMonthSource("/hr-hub?branchId=one&month=2026-09", "one", "2026-09", origin)).toBe(false);
+    expect(validMonthSource("/hr-hub?branchId=one&month=2026-09&tab=payroll", "one", "2026-09", origin)).toBe(true);
+    expect(validMonthSource("/hr-hub?branchId=two&month=2026-09&tab=payroll", "one", "2026-09", origin)).toBe(false);
+    expect(validMonthSource("/hr-hub?branchId=one&month=2026-08&tab=payroll", "one", "2026-09", origin)).toBe(false);
+    expect(validMonthSource("/salary-closing?branch=one&branchId=two&month=2026-09", "one", "2026-09", origin)).toBe(false);
   });
 });
