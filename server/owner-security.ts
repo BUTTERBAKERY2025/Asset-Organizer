@@ -35,6 +35,32 @@ export function validateOwnerBranches(
   return { ids: [...new Set(selection as string[])], replace };
 }
 
+/** Owner grants never become operational-role grants by omission on a role change. */
+export function validateOwnerExitBranches(
+  branchIds: unknown,
+  branchId: unknown,
+  availableIds: string[],
+): { ids: string[]; all: boolean } {
+  if (branchIds === undefined && branchId === undefined) {
+    throw new Error("حدد فروع الدور الجديد صراحةً عند تغيير دور الأونر");
+  }
+  if (branchIds !== undefined && branchId !== undefined) {
+    throw new Error("حدد الفروع بطريقة واحدة فقط");
+  }
+  if (branchIds !== undefined) {
+    if (!Array.isArray(branchIds) || branchIds.some(id => typeof id !== "string" || !availableIds.includes(id))) {
+      throw new Error("يوجد فرع غير صالح ضمن الفروع المحددة");
+    }
+    return { ids: [...new Set(branchIds)], all: false };
+  }
+  if (branchId === "all_branches") return { ids: [], all: true };
+  if (branchId === null || branchId === "" || branchId === "none") return { ids: [], all: false };
+  if (typeof branchId !== "string" || !availableIds.includes(branchId)) {
+    throw new Error("يوجد فرع غير صالح ضمن الفروع المحددة");
+  }
+  return { ids: [branchId], all: false };
+}
+
 /** Fail closed on ambiguous URLs rather than normalizing into a privileged route. */
 export function isOwnerRequestAllowed(method: string, url: string): boolean {
   const raw = url.split("?")[0];

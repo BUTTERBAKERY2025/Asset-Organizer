@@ -217,7 +217,7 @@ import { registerHrRoutes } from "./hr-routes";
 import { registerSelfServiceRoutes } from "./self-service-routes";
 import { registerShareholderPortalRoutes } from "./shareholder-portal-routes";
 import { registerOwnerPortalRoutes } from "./owner-portal-routes";
-import { validateOwnerBranches } from "./owner-security";
+import { validateOwnerBranches, validateOwnerExitBranches } from "./owner-security";
 import { registerBranchOpeningRoutes } from "./branch-opening-routes";
 import { registerMediaTeamRoutes } from "./media-team-routes";
 import { registerEmploymentApplicationRoutes } from "./employment-applications-routes";
@@ -1020,6 +1020,22 @@ export async function registerRoutes(
         } catch (error) {
           return res.status(400).json({ error: error instanceof Error ? error.message : "فروع الأونر غير صالحة" });
         }
+      } else if (beforeUpdate?.role === "business_owner" && role !== undefined && role !== "business_owner") {
+        // An owner-to-operational-role change is never allowed to inherit owner
+        // grants implicitly, including the legacy users.branchId projection.
+        try {
+          const allBranches = await storage.getAllBranches();
+          const selection = keeperRole && (branchId === "main_warehouse" ||
+            (Array.isArray(branchIds) && branchIds.length === 1 && branchIds[0] === "main_warehouse"))
+            ? { ids: [], all: false }
+            : validateOwnerExitBranches(branchIds, branchId, allBranches.map(b => b.id));
+          validBranchIds = selection.ids;
+          grantAllBranches = selection.all;
+          updateBranchAccess = !selection.all;
+          updateData.branchId = selection.ids.length === 1 ? selection.ids[0] : null;
+        } catch (error) {
+          return res.status(400).json({ error: error instanceof Error ? error.message : "فروع الدور الجديد غير صالحة" });
+        }
       } else if (keeperRole) {
         updateData.branchId = null;
         validBranchIds = [];
@@ -1055,6 +1071,15 @@ export async function registerRoutes(
           return res.status(400).json({ error: "لا يمكنك تعطيل حسابك الخاص" });
         }
         updateData.isActive = isActive;
+      }
+
+      if (beforeUpdate?.role === "business_owner" && role !== undefined && role !== "business_owner") {
+        // Revoke owner grants before changing the role: concurrent requests must
+        // never observe an operational role with the old owner's branch grants.
+        const oldGrants = await storage.getUserBranchAccess(req.params.id);
+        for (const access of oldGrants) {
+          await storage.removeUserBranchAccess(req.params.id, access.branchId);
+        }
       }
       
       // Snapshot old values for permission audit logging (role / activation changes)

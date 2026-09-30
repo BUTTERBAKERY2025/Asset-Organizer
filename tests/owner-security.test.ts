@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { createOwnerApiLockdown, isOwnerRequestAllowed, isOwnerSessionValid, validateOwnerBranches } from "../server/owner-security";
+import { createOwnerApiLockdown, isOwnerRequestAllowed, isOwnerSessionValid, validateOwnerBranches, validateOwnerExitBranches } from "../server/owner-security";
 
 describe("owner explicit branch assignments", () => {
   const available = ["riyadh", "tabuk"];
@@ -23,6 +23,25 @@ describe("owner explicit branch assignments", () => {
       .toEqual({ ids: ["riyadh", "tabuk"], replace: true });
     expect(validateOwnerBranches(undefined, "tabuk", [], available))
       .toEqual({ ids: ["tabuk"], replace: true });
+  });
+});
+
+describe("owner to operational-role branch transition", () => {
+  const available = ["riyadh", "tabuk"];
+  it("requires a fresh explicit selection, not owner grants or legacy branch projection", () => {
+    expect(() => validateOwnerExitBranches(undefined, undefined, available)).toThrow(/صراحةً/);
+  });
+  it("preserves exactly the newly selected, authorized branches", () => {
+    expect(validateOwnerExitBranches(["tabuk", "tabuk"], undefined, available)).toEqual({ ids: ["tabuk"], all: false });
+    expect(validateOwnerExitBranches(undefined, "riyadh", available)).toEqual({ ids: ["riyadh"], all: false });
+    expect(validateOwnerExitBranches([], undefined, available)).toEqual({ ids: [], all: false });
+    expect(validateOwnerExitBranches(undefined, "all_branches", available)).toEqual({ ids: [], all: true });
+  });
+  it("rejects ambiguous, malformed, and unknown selections rather than silently filtering", () => {
+    for (const [ids, id] of [
+      [["tabuk"], "riyadh"], [["tabuk", "unknown"], undefined],
+      ["tabuk", undefined], [undefined, "unknown"], [[null], undefined],
+    ]) expect(() => validateOwnerExitBranches(ids, id, available)).toThrow();
   });
 });
 

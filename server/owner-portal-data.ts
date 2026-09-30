@@ -2,7 +2,7 @@ import type { OwnerBranch, OwnerSalesResponse } from "@shared/owner-portal";
 
 export const OWNER_PAGE_SIZE = 20;
 export const OWNER_SALES_STATUSES = ["posted", "approved"] as const;
-export const OWNER_SOURCE_LABEL = "إجمالي مبيعات يوميات الكاشير المرحّلة والمعتمدة فقط؛ تستبعد المسودات والمرفوضة وأي حالة أخرى. ليست صافي المبيعات ولا تضاف معاملات نقطة البيع. المقارنة بالفترة السابقة المساوية بالأيام بتوقيت الرياض. الإجمالي للمبلغ عنه فقط؛ غياب اليومية لا يعني صفراً.";
+export const OWNER_SOURCE_LABEL = "إجمالي المبيعات شامل الضريبة كما سُجل في يوميات الكاشير المرحّلة والمعتمدة؛ لا تضاف الضريبة مرة أخرى ولا تجمع معاملات نقطة البيع معها. تستبعد المسودات والمرفوضة وأي حالة أخرى. ليست صافي المبيعات. المقارنة بالفترة السابقة المساوية بالأيام بتوقيت الرياض لا تصلح إلا عند اكتمال التغطية لكلا الفترتين. الإجمالي للمبلغ عنه فقط؛ غياب اليومية لا يعني صفراً.";
 export const OWNER_IMAGE_NOTICE = "لا تتوفر معاينة آمنة لهذه المادة؛ تدعم البوابة الصور المخزنة داخلياً فقط.";
 /** Only server-stored paths, never arbitrary URLs or signed URLs, are accepted. */
 export function ownerImageReference(value: unknown): { provider: "documents" | "objects"; key: string } | null {
@@ -70,21 +70,29 @@ export function ownerScope(role: string, grants: string[], allowed: string[] | n
   if (!ids.length) throw new OwnerInputError("لا توجد فروع ممنوحة صراحة", 403);
   return ids;
 }
-export interface OwnerSalesAggregate { branchId: string; sales: string | number; journalCount: number }
+export interface OwnerSalesAggregate { branchId: string; sales: string | number; journalCount: number; reportedDays: number }
 export function ownerSalesResponse(branches: OwnerBranch[], current: OwnerSalesAggregate[], previous: OwnerSalesAggregate[], dateFrom: string, dateTo: string): OwnerSalesResponse {
   const nowMap = new Map(current.map(row => [row.branchId, row]));
   const beforeMap = new Map(previous.map(row => [row.branchId, row]));
+  const days = (Date.parse(`${dateTo}T00:00:00Z`) - Date.parse(`${dateFrom}T00:00:00Z`)) / 86400000 + 1;
   const items = branches.map(branch => {
     const row = nowMap.get(branch.id), before = beforeMap.get(branch.id);
     return { ...branch, sales: row ? Number(row.sales) : null, journalCount: row ? Number(row.journalCount) : 0, status: row ? "reported" as const : "missing" as const, previousSales: before ? Number(before.sales) : null };
   });
   const round = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
+  const reportedBranches = items.filter(row => row.status === "reported").length;
+  const previousReportedBranches = items.filter(row => row.previousSales !== null).length;
+  const comparisonComparable = reportedBranches > 0 && reportedBranches === branches.length && reportedBranches === previousReportedBranches &&
+    branches.every(branch => {
+      const now = nowMap.get(branch.id), before = beforeMap.get(branch.id);
+      return (!now && !before) || (!!now && !!before && Number(now.reportedDays) === days && Number(before.reportedDays) === days);
+    });
   return {
     sourceLabel: OWNER_SOURCE_LABEL, generatedAt: new Date().toISOString(), dateFrom, dateTo, branches: items,
     totals: {
       sales: round(items.reduce((n, row) => n + (row.sales ?? 0), 0)),
       journalCount: items.reduce((n, row) => n + row.journalCount, 0),
-      reportedBranches: items.filter(row => row.status === "reported").length, branchCount: items.length,
+      reportedBranches, branchCount: items.length, previousReportedBranches, comparisonComparable,
       previousSales: items.some(row => row.previousSales !== null) ? round(items.reduce((n, row) => n + (row.previousSales ?? 0), 0)) : null,
     },
   };

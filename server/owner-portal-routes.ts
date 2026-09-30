@@ -4,7 +4,7 @@ import { branches, cashierSalesJournals, inventoryItems, maintenanceTickets, mar
 import type { OwnerAssetsResponse, OwnerMarketingResponse, OwnerMarketingSection, OwnerOverviewResponse, OwnerShareholdersResponse } from "@shared/owner-portal";
 import { db } from "./db";
 import { getAllowedBranchIds, getEffectiveBranchFilter, isAuthenticated } from "./auth";
-import { OWNER_IMAGE_NOTICE, OWNER_PAGE_SIZE, OWNER_SALES_STATUSES, OwnerInputError, ownerDate, ownerDateRange, ownerImageMime, ownerImageReference, ownerPage, ownerSalesResponse, ownerScope, ownerSearch, ownerString } from "./owner-portal-data";
+import { OWNER_IMAGE_NOTICE, OWNER_PAGE_SIZE, OWNER_SALES_STATUSES, OWNER_SOURCE_LABEL, OwnerInputError, ownerDate, ownerDateRange, ownerImageMime, ownerImageReference, ownerPage, ownerSalesResponse, ownerScope, ownerSearch, ownerString } from "./owner-portal-data";
 
 const generatedAt = () => new Date().toISOString();
 const attentionStatuses = ["maintenance", "damaged", "missing", "صيانة", "تالف", "مفقود"];
@@ -32,6 +32,7 @@ async function sales(ids: string[] | null, from: unknown, to: unknown) {
     // Cast each real value before summing to avoid PostgreSQL float4 accumulation loss.
     sales: sql<string>`round(sum(${cashierSalesJournals.totalSales}::numeric), 2)`,
     journalCount: count(),
+    reportedDays: sql<number>`count(distinct ${cashierSalesJournals.journalDate})::int`,
   }).from(cashierSalesJournals).where(and(
     branchCondition(cashierSalesJournals.branchId, ids),
     inArray(cashierSalesJournals.status, [...OWNER_SALES_STATUSES]),
@@ -124,13 +125,30 @@ export function registerOwnerPortalRoutes(app: Express) {
   get("/api/owner/sales", (req, ids) => sales(ids, req.query.dateFrom, req.query.dateTo));
   get("/api/owner/overview", async (req, ids): Promise<OwnerOverviewResponse> => {
     const date = ownerDate(req.query.date);
-    const [report, assetTotals, campaignTotals, summary] = await Promise.all([
-      sales(ids, date, date),
-      db.select({ total: count(), needsAttention: sql<number>`count(*) filter (where ${inArray(inventoryItems.status, attentionStatuses)})::int` }).from(inventoryItems).where(branchCondition(inventoryItems.branchId, ids)),
-      db.select({ activeCampaigns: count() }).from(marketingCampaigns).where(eq(marketingCampaigns.status, "active")),
-      shareholderSummary(),
+    const [report, assetTotals, campaignTotals, summary] = await Promise.allSettled([
+      Promise.resolve().then(() => sales(ids, date, date)),
+      Promise.resolve().then(() => db.select({ total: count(), needsAttention: sql<number>`count(*) filter (where ${inArray(inventoryItems.status, attentionStatuses)})::int` }).from(inventoryItems).where(branchCondition(inventoryItems.branchId, ids))),
+      Promise.resolve().then(() => db.select({ activeCampaigns: count() }).from(marketingCampaigns).where(eq(marketingCampaigns.status, "active"))),
+      Promise.resolve().then(() => shareholderSummary()),
     ]);
-    return { ...report, assets: assetTotals[0], marketing: campaignTotals[0], shareholders: { count: summary.count, totalShares: summary.totalShares } };
+    const sectionErrors: NonNullable<OwnerOverviewResponse["sectionErrors"]> = {};
+    if (report.status === "rejected") sectionErrors.sales = "تعذر تحميل بيانات المبيعات";
+    if (assetTotals.status === "rejected") sectionErrors.assets = "تعذر تحميل بيانات الأصول";
+    if (campaignTotals.status === "rejected") sectionErrors.marketing = "تعذر تحميل بيانات التسويق";
+    if (summary.status === "rejected") sectionErrors.shareholders = "تعذر تحميل بيانات المساهمين";
+    // Empty fields are never interpreted as zero when sectionErrors.sales is present.
+    const salesReport = report.status === "fulfilled" ? report.value : {
+      sourceLabel: OWNER_SOURCE_LABEL, generatedAt: generatedAt(), dateFrom: date, dateTo: date,
+      latestReportDate: null, branches: [],
+      totals: { sales: 0, journalCount: 0, reportedBranches: 0, branchCount: 0, previousSales: null, previousReportedBranches: 0, comparisonComparable: false },
+    };
+    return {
+      ...salesReport,
+      assets: assetTotals.status === "fulfilled" ? assetTotals.value[0] : null,
+      marketing: campaignTotals.status === "fulfilled" ? campaignTotals.value[0] : null,
+      shareholders: summary.status === "fulfilled" ? { count: summary.value.count, totalShares: summary.value.totalShares } : null,
+      ...(Object.keys(sectionErrors).length ? { sectionErrors } : {}),
+    };
   });
   get("/api/owner/assets", async (req, ids): Promise<OwnerAssetsResponse> => {
     const page = ownerPage(req.query.page), search = ownerSearch(req.query.search);

@@ -46,7 +46,7 @@ describe("owner API handlers", () => {
   it("includes posted sales and scopes the latest report lookup to granted branches", async () => {
     const results = [
       [{ id: "a", name: "A" }],
-      [{ branchId: "a", sales: "42.50", journalCount: 1 }],
+       [{ branchId: "a", sales: "42.50", journalCount: 1, reportedDays: 1 }],
       [],
       [{ date: "2026-09-29" }],
     ];
@@ -58,13 +58,58 @@ describe("owner API handlers", () => {
       mocks.select.mockReturnValueOnce(query);
     }
     const res = await request("sales", { query: { dateFrom: "2026-09-29", dateTo: "2026-09-29" } });
-    expect(res.json.mock.calls[0][0]).toMatchObject({ latestReportDate: "2026-09-29", totals: { sales: 42.5, reportedBranches: 1 } });
+     expect(res.json.mock.calls[0][0]).toMatchObject({ latestReportDate: "2026-09-29", totals: { sales: 42.5, reportedBranches: 1, previousReportedBranches: 0, comparisonComparable: false } });
     const dialect = new PgDialect();
     for (const filter of filters.slice(1)) {
       const compiled = dialect.sqlToQuery(filter as any);
       expect(compiled.params).toEqual(expect.arrayContaining(["a", "posted", "approved"]));
       expect(compiled.params).not.toContain("submitted");
     }
+  });
+  it("preserves successful overview sales when a non-sales section fails", async () => {
+    const results: Array<unknown[] | Error> = [
+      [{ id: "a", name: "A" }],
+      [{ branchId: "a", sales: "42.50", journalCount: 1, reportedDays: 1 }],
+      [{ branchId: "a", sales: "40", journalCount: 1, reportedDays: 1 }],
+      [{ date: "2026-09-29" }],
+      new Error("private asset query"),
+      [{ activeCampaigns: 2 }],
+      [{ count: 1, totalShares: "100" }],
+    ];
+    for (const rows of results) {
+      const query: any = { then: (resolve: Function, reject: Function) => rows instanceof Error ? Promise.reject(rows).then(resolve as any, reject as any) : Promise.resolve(rows).then(resolve as any, reject as any) };
+      for (const method of ["from", "orderBy", "groupBy", "where"]) query[method] = vi.fn(() => query);
+      mocks.select.mockReturnValueOnce(query);
+    }
+    const res = await request("overview", { query: { date: "2026-09-29" } });
+    const body = res.json.mock.calls[0][0];
+    expect(res.status).not.toHaveBeenCalled();
+    expect(body).toMatchObject({
+      totals: { sales: 42.5, previousSales: 40, comparisonComparable: true },
+      assets: null, marketing: { activeCampaigns: 2 }, shareholders: { count: 1, totalShares: 100 },
+      sectionErrors: { assets: "تعذر تحميل بيانات الأصول" },
+    });
+    expect(JSON.stringify(body)).not.toContain("private asset query");
+  });
+  it("signals unavailable sales rather than allowing its empty fields to be read as zero", async () => {
+    const failure = new Error("private sales query");
+    const results: Array<unknown[] | Error> = [
+      [{ id: "a", name: "A" }], failure, [], [{ date: null }],
+      [{ total: 3, needsAttention: 1 }], [{ activeCampaigns: 2 }], [{ count: 1, totalShares: "100" }],
+    ];
+    for (const rows of results) {
+      const query: any = { then: (resolve: Function, reject: Function) => rows instanceof Error ? Promise.reject(rows).then(resolve as any, reject as any) : Promise.resolve(rows).then(resolve as any, reject as any) };
+      for (const method of ["from", "orderBy", "groupBy", "where"]) query[method] = vi.fn(() => query);
+      mocks.select.mockReturnValueOnce(query);
+    }
+    const res = await request("overview", { query: { date: "2026-09-29" } });
+    const body = res.json.mock.calls[0][0];
+    expect(body).toMatchObject({
+      sectionErrors: { sales: "تعذر تحميل بيانات المبيعات" },
+      branches: [], totals: { comparisonComparable: false, previousSales: null },
+      assets: { total: 3, needsAttention: 1 }, marketing: { activeCampaigns: 2 },
+    });
+    expect(JSON.stringify(body)).not.toContain("private sales query");
   });
   it("rejects no grants and unauthorized branch queries", async () => {
     expect((await request("assets", { grants: [] })).status).toHaveBeenCalledWith(403);

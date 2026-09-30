@@ -8,13 +8,15 @@ export interface OwnerSalesResponse {
   generatedAt: string;
   dateFrom: string;
   dateTo: string;
-  totals: { sales: number; journalCount: number; reportedBranches: number; branchCount: number; previousSales: number | null };
+  totals: { sales: number; journalCount: number; reportedBranches: number; branchCount: number; previousSales: number | null; previousReportedBranches?: number; comparisonComparable?: boolean };
   branches: Array<OwnerBranch & { sales: number | null; journalCount: number; status: "reported" | "missing"; previousSales: number | null }>;
 }
 export interface OwnerOverviewResponse extends OwnerSalesResponse {
-  assets: { total: number; needsAttention: number };
-  marketing: { activeCampaigns: number };
-  shareholders: { count: number; totalShares: number };
+  /** An unavailable sales section is signaled by sectionErrors.sales; its empty report fields are not zero sales. */
+  sectionErrors?: Partial<Record<"sales" | "assets" | "marketing" | "shareholders", string>>;
+  assets: { total: number; needsAttention: number } | null;
+  marketing: { activeCampaigns: number } | null;
+  shareholders: { count: number; totalShares: number } | null;
 }
 export interface OwnerAssetsResponse {
   items: Array<{ id: string; name: string; branchName: string; status: string; category: string | null; imageUrl: string | null; maintenanceSummary: string | null }>;

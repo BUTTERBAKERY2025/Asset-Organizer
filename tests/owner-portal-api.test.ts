@@ -42,10 +42,23 @@ describe("owner reporting semantics and minimized query contract", () => {
     expect(OWNER_SALES_STATUSES).toEqual(["posted", "approved"]);
   });
   it("distinguishes missing reports from true zero and never includes other branches", () => {
-    const result = ownerSalesResponse([{ id: "a", name: "A" }, { id: "b", name: "B" }], [{ branchId: "a", sales: "0", journalCount: 1 }, { branchId: "secret", sales: "999", journalCount: 4 }], [], "2026-01-01", "2026-01-01");
+    const result = ownerSalesResponse([{ id: "a", name: "A" }, { id: "b", name: "B" }], [{ branchId: "a", sales: "0", journalCount: 1, reportedDays: 1 }, { branchId: "secret", sales: "999", journalCount: 4, reportedDays: 1 }], [], "2026-01-01", "2026-01-01");
     expect(result.branches[0]).toMatchObject({ sales: 0, status: "reported" });
     expect(result.branches[1]).toMatchObject({ sales: null, status: "missing", previousSales: null });
-    expect(result.totals).toEqual({ sales: 0, journalCount: 1, reportedBranches: 1, branchCount: 2, previousSales: null });
+    expect(result.totals).toEqual({ sales: 0, journalCount: 1, reportedBranches: 1, branchCount: 2, previousSales: null, previousReportedBranches: 0, comparisonComparable: false });
+  });
+  it("only allows period comparison for identical reported branch sets with complete branch-day coverage", () => {
+    const branches = [{ id: "a", name: "A" }, { id: "b", name: "B" }];
+    const row = (branchId: string, reportedDays: number, sales = "30") => ({ branchId, reportedDays, sales, journalCount: 2 });
+    const compare = (current: ReturnType<typeof row>[], previous: ReturnType<typeof row>[]) =>
+      ownerSalesResponse(branches, current, previous, "2026-01-03", "2026-01-04").totals;
+    expect(compare([row("a", 2), row("b", 2)], [row("a", 2), row("b", 2)])).toMatchObject({ previousReportedBranches: 2, comparisonComparable: true });
+    expect(compare([row("a", 2)], [row("a", 2)])).toMatchObject({ previousReportedBranches: 1, comparisonComparable: false });
+    expect(compare([row("a", 1)], [row("a", 2)]).comparisonComparable).toBe(false);
+    expect(compare([row("a", 2)], [row("a", 1)]).comparisonComparable).toBe(false);
+    expect(compare([row("a", 2)], [row("b", 2)]).comparisonComparable).toBe(false);
+    expect(compare([row("a", 2), row("b", 2)], [row("a", 2)]).comparisonComparable).toBe(false);
+    expect(compare([], []).comparisonComparable).toBe(false);
   });
   it("registers only protected GET endpoints with private cache policy", () => {
     const source = readFileSync(new URL("../server/owner-portal-routes.ts", import.meta.url), "utf8");
@@ -64,6 +77,7 @@ describe("owner reporting semantics and minimized query contract", () => {
     expect(source).toContain("isNull(marketingAssets.branchId)");
     expect(source).toContain("limit(OWNER_PAGE_SIZE)");
     expect(source).toContain("::numeric");
+    expect(source).toContain("count(distinct ${cashierSalesJournals.journalDate})::int");
   });
 });
 

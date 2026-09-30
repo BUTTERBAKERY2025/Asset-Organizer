@@ -15,6 +15,12 @@ Sales are reported cashier journals, not a promise of live POS or reconciled net
 
 **How to apply:** Keep source/status labels and freshness visible; changing this meaning requires reconciling the sources first.
 
+Owner sales must show the recorded gross amount inclusive of VAT, without adding 15% again, for yesterday and month-to-date as well as custom dates.
+
+**Why:** The user explicitly required inclusive amounts without expanding owner disclosure. The canonical P&L extracts VAT from journal gross; a separate accounting draft generator adds VAT inconsistently and is not the authority for owner sales.
+
+**How to apply:** Preserve the recorded gross amount and honest journal-source label. Any accounting-generator reconciliation is separate work, not a reason to recalculate historical owner totals or expose accounting details.
+
 Do not infer journal lifecycle states from the schema comment alone: production uses `posted` for most completed journals, although the comment lists `submitted` instead.
 
 **Why:** A production read on 2026-09-30 found thousands of posted journals omitted by the initial owner report. Selecting today's date also legitimately had no journals although yesterday had sales.
