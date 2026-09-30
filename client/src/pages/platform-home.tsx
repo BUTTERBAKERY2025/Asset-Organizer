@@ -79,6 +79,8 @@ export default function PlatformHomePage() {
   useEffect(() => {
     if (isAttendanceClerk) {
       navigate("/attendance-check");
+    } else if (!permsLoading && user?.role === "operations_manager" && canView("operations")) {
+      navigate("/operations-center");
     } else if (!permsLoading && user?.role === "warehouse_keeper" && canView("warehouse")) {
       navigate("/warehouse");
     } else if (!permsLoading && user?.role === "employee" && user.jobTitle === "delivery" && canView("delivery_tasks")) {
@@ -131,7 +133,7 @@ export default function PlatformHomePage() {
   const apps: (AppTileProps & { module?: SystemModule })[] = [
     { title: "مركز الموارد البشرية",          icon: UsersRound,     href: "/hr-hub",                  color: "people",     module: "hr_management" },
     { title: t("modules.sales.title"),       icon: Receipt,        href: "/cashier-journals",        color: "money",      module: "cashier_journal" },
-    { title: t("modules.operations.title"),  icon: Factory,        href: "/operations",              color: "production", module: "operations" },
+    { title: t("modules.operations.title"),  icon: Factory,        href: user?.role === "operations_manager" ? "/operations-center" : "/operations", color: "production", module: "operations" },
     { title: "شكاوى الفروع",                 icon: MessageSquareWarning, href: "/branch-complaints",   color: "people",     module: "branch_complaints" },
     ...(canAccessDeliveryWorkspace(user) ? [{ title: user?.role === "employee" ? "مهامي للتوصيل" : "إدارة التوصيل", icon: Truck, href: "/driver-deliveries", color: "inventory" as const, module: "delivery_tasks" as SystemModule }] : []),
     { title: t("modules.production.title"),  icon: ClipboardList,  href: "/production-dashboard",    color: "production", module: "production" },

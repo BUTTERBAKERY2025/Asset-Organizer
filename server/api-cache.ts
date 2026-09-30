@@ -146,6 +146,10 @@ export function apiCacheMiddleware(req: Request, res: Response, next: NextFuncti
     return next();
   }
 
+  // Authorization is evaluated by route middleware, after this cache. A
+  // cached authenticated response could survive branch-grant revocation.
+  if ((req as any).session?.userId) return next();
+
   // These details include live workflow status and permission-derived actions.
   // Never return an old response before the route's authorization checks.
   if (isProductCatalogReadPath(req) || isCentralKitchenOrderReadPath(req)) {

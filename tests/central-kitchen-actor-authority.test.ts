@@ -9,14 +9,16 @@ const actor = (id: string, branchId: string, role = "branch_manager") => ({
 });
 
 // Exercise the live guard's routing queries without a database or production writes.
-function routingExecutor(person: ReturnType<typeof actor>, scopedBranch: string | null) {
+function routingExecutor(person: ReturnType<typeof actor>, scopedBranch: string | null, hasKitchenGrant = true) {
   let query = 0;
   return {
     select() {
       const current = ++query;
       // routingPeople builds a userBranchAccess subquery before its people query.
       const rows = current === 2 ? [person]
-        : current === 3 ? [{ userId: person.id, module: "central_kitchen_orders", actions: person.actions }]
+        : current === 3 ? (person.role === "operations_manager" && hasKitchenGrant
+          ? [{ userId: person.id, branchId: "kitchen" }] : [])
+        : current === 4 ? [{ userId: person.id, module: "central_kitchen_orders", actions: person.actions }]
         : current === 7 ? (scopedBranch ? [person] : [])
         : current === 8 && scopedBranch
           ? [{ userId: person.id, module: "central_kitchen_orders", actions: person.actions }]
@@ -60,6 +62,12 @@ describe("central kitchen action actor/source authority", () => {
       const revoked = { ...supervisor, actions: ["view", "edit"] };
       expect(await kitchenActionAllowed(routingExecutor(revoked, null), revoked.id, order, "approve")).toBe(false);
     }
+  });
+
+  it("never permits operations actions in an ungranted event kitchen", async () => {
+    const ops = actor("ops", "ungranted", "operations_manager");
+    expect(await kitchenActionAllowed(routingExecutor(ops, null, false), ops.id, order, "approve")).toBe(false);
+    expect(await kitchenActionAllowed(routingExecutor(ops, null, false), ops.id, order, "prepare")).toBe(false);
   });
 
   it("requires action-specific permission even for the production manager", async () => {

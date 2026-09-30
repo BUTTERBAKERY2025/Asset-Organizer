@@ -797,8 +797,8 @@ export async function setupAuth(app: Express) {
       res.json({
         ...safeUser,
         branchId: user.role === "warehouse_keeper" ? "main_warehouse" : safeUser.branchId,
-        activeBranchId: user.role === "warehouse_keeper" ? "main_warehouse" : req.session.activeBranchId || null,
-        activeBranch: user.role === "warehouse_keeper" ? null : activeBranch,
+        activeBranchId: user.role === "warehouse_keeper" ? "main_warehouse" : user.role === "operations_manager" && !userBranches.some((b: any) => b.branchId === req.session.activeBranchId) ? null : req.session.activeBranchId || null,
+        activeBranch: user.role === "warehouse_keeper" || user.role === "operations_manager" && !userBranches.some((b: any) => b.branchId === req.session.activeBranchId) ? null : activeBranch,
         allowedBranches: user.role === "warehouse_keeper" ? [] : userBranches,
       });
     } catch (error) {
@@ -849,11 +849,8 @@ export async function setupAuth(app: Express) {
         // Financial Manager is a cross-branch role — sees every branch org-wide.
         filteredBranches = allBranches;
       } else if (user.role === "operations_manager") {
-        // Operations Manager: all branches UNLESS the admin explicitly restricted
-        // the user to specific branches — then only those appear.
-        filteredBranches = userBranches.length > 0
-          ? allBranches.filter((b: any) => userBranches.some((ub: any) => ub.branchId === b.id))
-          : allBranches;
+        // PHASE1: grants are explicit. No rows means DENY, never all.
+        filteredBranches = allBranches.filter((b: any) => userBranches.some((ub: any) => ub.branchId === b.id));
       } else if (userBranches.length > 0) {
         const allowedIds = userBranches.map((b: any) => b.branchId);
         filteredBranches = allBranches.filter((b: any) => allowedIds.includes(b.id));
@@ -890,6 +887,13 @@ export async function setupAuth(app: Express) {
         }
         permissions = Array.from(merged, ([module, actions]) => ({ module, actions: [...actions] }));
       }
+      if (user.role === "operations_manager") {
+        const merged = new Map<string, Set<string>>(permissions.map((p: any) => [p.module, new Set<string>(p.actions || [])]));
+        for (const [module, actions] of Object.entries(OPERATIONS_MANAGER_PERMISSIONS)) {
+          merged.set(module, new Set([...(merged.get(module) || []), ...actions]));
+        }
+        permissions = Array.from(merged, ([module, actions]) => ({ module, actions: [...actions] }));
+      }
       if (user.role === "warehouse_keeper") {
         permissions = await getWarehouseKeeperEffectivePermissions(user.id, permissions);
       }
@@ -900,8 +904,8 @@ export async function setupAuth(app: Express) {
         user: {
           ...user,
           branchId: user.role === "warehouse_keeper" ? "main_warehouse" : user.branchId,
-          activeBranchId: user.role === "warehouse_keeper" ? "main_warehouse" : req.session.activeBranchId || null,
-          activeBranch: user.role === "warehouse_keeper" ? null : activeBranch,
+          activeBranchId: user.role === "warehouse_keeper" ? "main_warehouse" : user.role === "operations_manager" && !userBranches.some((b: any) => b.branchId === req.session.activeBranchId) ? null : req.session.activeBranchId || null,
+          activeBranch: user.role === "warehouse_keeper" || user.role === "operations_manager" && !userBranches.some((b: any) => b.branchId === req.session.activeBranchId) ? null : activeBranch,
           allowedBranches: user.role === "warehouse_keeper" ? [] : userBranches,
         },
         branches: filteredBranches,
@@ -934,7 +938,7 @@ export async function setupAuth(app: Express) {
       if (user?.role === "warehouse_keeper") {
         return res.status(403).json({ error: "نطاق أمين المستودعات هو المستودع الرئيسي فقط" });
       }
-      if (!hasAccess && userBranches.length > 0 && user?.role !== "admin") {
+      if ((user?.role === "operations_manager" && !hasAccess) || (!hasAccess && userBranches.length > 0 && user?.role !== "admin")) {
         return res.status(403).json({ error: "ليس لديك صلاحية للوصول لهذا الفرع" });
       }
 
@@ -1145,6 +1149,14 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
 
   (req as any).currentUser = user;
   (req as any).userBranchAccess = branchAccess;
+  // A grantless operations manager must never reach a legacy handler that
+  // interprets an omitted filter as "all". Keep only the auth/bootstrap and
+  // empty branch selector available so the client can explain the denial.
+  if (user.role === "operations_manager" && branchAccess.length === 0
+      && req.path !== "/api/branches" && req.path !== "/api/my-permissions"
+      && !req.path.startsWith("/api/auth/")) {
+    return res.status(403).json({ error: "لا توجد فروع مسموحة لحسابك" });
+  }
   (req as any).hasAllBranchesAccess = branchAccess.length > 0;
   // Fresh, request-local snapshot: permission middleware can reuse this read
   // within this request, never across sessions or workers.
@@ -1299,7 +1311,7 @@ export const requirePermission = (module: string, action?: string): RequestHandl
     }
 
     // Operations Manager role: action-aware auto-grant for daily-operations modules
-    // across ALL branches (branch scope handled in getAllowedBranchIds). Modules
+    // only in explicitly granted branches (scope handled by branch guards). Modules
     // not in the map fall through to the standard explicit-permission check below.
     if (user.role === "operations_manager") {
       const allowed = operationsManagerActionsFor(module);
@@ -1482,6 +1494,11 @@ export const requireAnyPermission = (module: string, actions: string[]): Request
 export function getActiveBranchFilter(req: any): string | null {
   const user = req.currentUser;
   if (user?.role === "warehouse_keeper") return "main_warehouse";
+  if (user?.role === "operations_manager") {
+    const allowed = getAllowedBranchIds(req)!;
+    return allowed.includes(req.session?.activeBranchId) ? req.session.activeBranchId
+      : allowed.length === 1 ? allowed[0] : "__no_authorized_branch__";
+  }
   // Admin can see all branches - return null means no filter
   if (user?.role === "admin") {
     // But if admin has selected a specific branch, filter by it
@@ -1508,15 +1525,10 @@ export async function canAccessBranch(req: any, branchId: string): Promise<boole
   // requirePermission still governs WHAT they can do; this only governs WHICH branch.
   if (user.role === "financial_manager" || user.role === "production_development_manager") return true;
 
-  // Operations Manager: cross-branch BY DEFAULT, but if the admin explicitly
-  // restricted the user to specific branches (user_branch_access rows exist),
-  // those restrictions WIN — the role must not bypass them. No rows = all branches.
+  // Operations Manager: request-local, DB-fresh explicit grants only.
   if (user.role === "operations_manager") {
-    const opsBranches = req.userBranchAccess || await storage.getUserBranchAccess(user.id);
-    if (Array.isArray(opsBranches) && opsBranches.length > 0) {
-      return opsBranches.some((access: any) => access.branchId === branchId);
-    }
-    return true;
+    const opsBranches = await storage.getUserBranchAccess(user.id);
+    return opsBranches.some((access: any) => access.branchId === branchId);
   }
   
   // Check if user has the required permission for the module linked to this branch
@@ -1564,6 +1576,10 @@ export const requireBranchAccess: RequestHandler = async (req, res, next) => {
     if (!req.session?.activeBranchId) {
       return res.status(400).json({ message: "يجب تحديد الفرع" });
     }
+    // Never trust a stale session branch when a grant has been revoked.
+    if (user.role === "operations_manager" && !(await canAccessBranch(req, req.session.activeBranchId))) {
+      return res.status(403).json({ message: "ليس لديك صلاحية للوصول لهذا الفرع" });
+    }
     // Inject active branch into request body
     if (req.body) {
       req.body.branchId = req.session.activeBranchId;
@@ -1590,6 +1606,13 @@ export function getMandatoryBranchFilter(req: any): string | null {
   const user = req.currentUser;
   if (!user) return null;
   if (user.role === "warehouse_keeper") return "main_warehouse";
+  // This legacy helper cannot express multiple branch IDs. Fail closed rather
+  // than returning null (which callers interpret as unrestricted).
+  if (user.role === "operations_manager") {
+    const allowed = getAllowedBranchIds(req)!;
+    return allowed.includes(req.session?.activeBranchId) ? req.session.activeBranchId
+      : allowed.length === 1 ? allowed[0] : "__no_authorized_branch__";
+  }
   
   // Admin can see all branches unless they selected a specific one
   if (user.role === "admin") {
@@ -1642,15 +1665,11 @@ export function getAllowedBranchIds(req: any): string[] | null {
     return null; // كل الفروع
   }
 
-  // Operations Manager: مدير التشغيل — كل الفروع افتراضياً، لكن إذا حدّد الأدمن
-  // له "فروع مسموحة" معينة (صفوف user_branch_access) فهي المُلزِمة ولا يتجاوزها
-  // الدور. عدم وجود صفوف = كل الفروع.
+  // Operations Manager: no default-branch or all-branch fallback. isAuthenticated
+  // loads these grants from the database on EVERY request.
   if (user.role === "operations_manager") {
     const opsAccess = req.userBranchAccess || [];
-    if (Array.isArray(opsAccess) && opsAccess.length > 0) {
-      return opsAccess.map((access: any) => access.branchId);
-    }
-    return null; // كل الفروع
+    return Array.isArray(opsAccess) ? opsAccess.map((access: any) => access.branchId) : [];
   }
   
   // Check if user has explicit branch access

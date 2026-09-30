@@ -139,6 +139,22 @@ export async function sendTestPushToOwnedDevice(userId: string, endpoint: string
 
 // تحديد المستخدمين المستهدفين بنفس منطق getActiveNotificationsForUser
 // الفرع: يُطابق فرع المستخدم الأساسي أو أي فرع لديه وصول له (user_branch_access)
+// Re-evaluate explicit grants at dispatch time, including per-user targets.
+async function filterOperationsNotificationScope(n: SystemNotification, candidateIds: string[]): Promise<string[]> {
+  const scope = n.accessBranchIds?.length ? n.accessBranchIds
+    : !n.targetAllBranches ? n.targetBranchIds : null;
+  if (!candidateIds.length) return candidateIds;
+  const [people, grants] = await Promise.all([
+    db.select({ id: users.id, role: users.role }).from(users).where(inArray(users.id, candidateIds)),
+    db.select({ uid: userBranchAccess.userId }).from(userBranchAccess)
+      .where(and(inArray(userBranchAccess.userId, candidateIds),
+        scope?.length ? inArray(userBranchAccess.branchId, scope) : undefined)),
+  ]);
+  const roles = new Map(people.map(person => [person.id, person.role]));
+  const authorized = new Set(grants.map(grant => grant.uid));
+  return candidateIds.filter(id => roles.get(id) !== "operations_manager" || authorized.has(id));
+}
+
 async function resolveTargetUserIds(n: SystemNotification): Promise<string[]> {
   const targetUserIds = (n as any).targetUserIds as string[] | null | undefined;
   if (targetUserIds && targetUserIds.length > 0) {
@@ -147,19 +163,20 @@ async function resolveTargetUserIds(n: SystemNotification): Promise<string[]> {
       .from(users)
       .where(and(inArray(users.id, targetUserIds), eq(users.isActive, "active")));
     const activeIds = activeRows.map((row) => row.id);
+    const scopedIds = await filterOperationsNotificationScope(n, activeIds);
     if (n.accessModule === "central_kitchen_orders") {
       const { filterAuthorizedCentralKitchenNotificationUsers } = await import("./central-kitchen-notifications");
-      return filterAuthorizedCentralKitchenNotificationUsers(db, n, activeIds);
+      return filterAuthorizedCentralKitchenNotificationUsers(db, n, scopedIds);
     }
     if (n.accessModule === "delivery_tasks" && n.autoSource === "delivery_task") {
       const { filterAuthorizedDeliveryNoticeUsers } = await import("./delivery-notifications");
-      return filterAuthorizedDeliveryNoticeUsers(n, activeIds);
+      return filterAuthorizedDeliveryNoticeUsers(n, scopedIds);
     }
     if (n.accessModule === "warehouse" && n.autoSource === "warehouse_material_transfer") {
       const { filterAuthorizedWarehouseTransferNotificationUsers } = await import("./warehouse-transfer-notifications");
-      return filterAuthorizedWarehouseTransferNotificationUsers(db, n, activeIds);
+      return filterAuthorizedWarehouseTransferNotificationUsers(db, n, scopedIds);
     }
-    return activeIds;
+    return scopedIds;
   }
 
   const conds = [];
@@ -179,7 +196,7 @@ async function resolveTargetUserIds(n: SystemNotification): Promise<string[]> {
     .select({ id: users.id })
     .from(users)
     .where(conds.length ? and(...conds) : undefined);
-  const userIds = rows.map((r) => r.id);
+  const userIds = await filterOperationsNotificationScope(n, rows.map((r) => r.id));
   if (n.accessModule === "central_kitchen_orders") {
     const { filterAuthorizedCentralKitchenNotificationUsers } = await import("./central-kitchen-notifications");
     return filterAuthorizedCentralKitchenNotificationUsers(db, n, userIds);

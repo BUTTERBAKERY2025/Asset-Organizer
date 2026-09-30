@@ -41,7 +41,7 @@ import {
 
 type CardId = BranchOperationsCard["id"];
 
-interface CardDefinition {
+export interface CardDefinition {
   id: CardId;
   title: string;
   group: BranchOperationsCard["group"];
@@ -53,7 +53,7 @@ interface CardDefinition {
 const branchHref = (path: string, branchId: string) =>
   `${path}${path.includes("?") ? "&" : "?"}branchId=${encodeURIComponent(branchId)}`;
 
-const definitions: CardDefinition[] = [
+export const branchOperationsDefinitions: readonly CardDefinition[] = [
   {
     id: "maintenance", title: "الصيانة", group: "operations", module: "maintenance", href: "/maintenance",
     load: async (branchId) => {
@@ -445,7 +445,7 @@ const definitions: CardDefinition[] = [
   },
 ];
 
-async function hasEffectiveViewPermission(req: Request, module: string, action = "view"): Promise<boolean> {
+export async function hasEffectiveViewPermission(req: Request, module: string, action = "view"): Promise<boolean> {
   const user = req.currentUser;
   if (!user) return false;
   if (user.role === "admin") return true;
@@ -468,6 +468,23 @@ async function hasEffectiveViewPermission(req: Request, module: string, action =
   return storage.hasPermission(user.id, module, action);
 }
 
+/** Authorization must precede invoking the definition loader; this is also
+ * used by the multi-branch projection. A missing grant is not a zero metric. */
+export async function loadAuthorizedBranchOperationsCard(
+  definition: CardDefinition, branchId: string, businessDate: string, req: Request,
+): Promise<BranchOperationsCard | null> {
+  if (!await hasEffectiveViewPermission(req, definition.module)) return null;
+  const href = branchHref(definition.href, branchId);
+  try {
+    return { id: definition.id, title: definition.title, group: definition.group, href,
+      state: "ready", ...await definition.load(branchId, businessDate, req) };
+  } catch (error) {
+    console.error(`Branch operations card failed: ${definition.id}`, error);
+    return { id: definition.id, title: definition.title, group: definition.group,
+      href, state: "error", metrics: [], alerts: [] };
+  }
+}
+
 export function registerBranchOperationsRoute(app: Express): void {
   app.get("/api/branch-operations/summary", isAuthenticated, async (req, res, next) => {
     try {
@@ -487,6 +504,7 @@ export function registerBranchOperationsRoute(app: Express): void {
 
     // Authorization is completed before any metric query. Permission lookup
     // failures therefore fail closed and cannot accidentally expose a card.
+    const definitions = branchOperationsDefinitions;
     const allowed = await Promise.all(definitions.map((definition) =>
       hasEffectiveViewPermission(req, definition.module)));
     const visible = definitions.filter((_, index) => allowed[index]);

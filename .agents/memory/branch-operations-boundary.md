@@ -5,6 +5,12 @@ description: Approved phased dashboard approach and avoiding false equivalence b
 
 Build the branch operational board as a composition of authoritative existing modules, not a second operational database. New domains require their own complete workflows before appearing as working dashboard sections.
 
+The approved manager center extends this composition across explicitly granted branches. Its intervention inbox is a projection of source workflows, not a replacement approval or stock ledger. Unknown assignees and absent deadlines must remain unknown.
+
+**Why:** On 2026-09-30 the user approved the seven-stage scope-first implementation, preserving HR/finance boundaries while adding live and periodic operational follow-up.
+
+**How to apply:** Separate actual user assignment from role labels; link each queue item to its exact source record. Daily/weekly evidence is not a persisted historical snapshot, and live connection timestamps are not data freshness. Keep periodic refresh as recovery for process-local update hints.
+
 **Why:** The user approved a familiar branch-staff entry point while explicitly requiring every piece of information to match the real system structure. Similar labels are not interchangeable: asset maintenance status is not a maintenance ticket, visitor logs are not supervisory visits, and cashier closing is not a cash-custody ledger.
 
 **How to apply:** Verify domain semantics before reusing a source. Navigation-only cards are acceptable until trustworthy counters exist; never invent metrics or silently substitute a different workflow. Keep missing-domain development staged according to the branch operations roadmap.

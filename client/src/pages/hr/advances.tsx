@@ -39,6 +39,9 @@ const initialForm = {
 };
 
 export default function AdvancesPage() {
+  const sourceParams = new URLSearchParams(window.location.search);
+  const linkedAdvanceId = sourceParams.get("advanceId");
+  const linkedAdvanceBranch = sourceParams.get("branchId");
   const { toast } = useToast();
   const qc = useQueryClient();
   const { hasPermission } = usePermissions();
@@ -116,7 +119,7 @@ export default function AdvancesPage() {
     enabled: !navigationBranch.isResolving,
   });
 
-  const { data: pendingRequests = [] } = useQuery<any[]>({
+  const { data: pendingRequests = [], isFetching: requestsFetching, isError: requestsError } = useQuery<any[]>({
     queryKey: ["/api/hr/advance-requests", "open"],
     queryFn: async () => {
       const statuses = ["pending", "pre_approved", "awaiting_signature", "signed", "approved", "disbursed"];
@@ -147,10 +150,13 @@ export default function AdvancesPage() {
     return { action, signature, done };
   }, [scopedPendingRequests]);
   const visibleRequests = useMemo(() => {
+    if (linkedAdvanceId) return !requestsFetching && !requestsError && /^[1-9]\d*$/.test(linkedAdvanceId)
+      ? scopedPendingRequests.filter((r: any) => String(r.id) === linkedAdvanceId && r.branchId === linkedAdvanceBranch)
+      : [];
     const base = reqFilter === "all" ? scopedPendingRequests : reqGroups[reqFilter];
     const q = reqSearch.trim().toLowerCase();
     return q ? base.filter((r: any) => (r.employeeName || "").toLowerCase().includes(q)) : base;
-  }, [scopedPendingRequests, reqGroups, reqFilter, reqSearch]);
+  }, [scopedPendingRequests, reqGroups, reqFilter, reqSearch, linkedAdvanceId, linkedAdvanceBranch, requestsFetching, requestsError]);
 
   const reviewMutation = useMutation({
     mutationFn: async ({ id, decision, note }: { id: number; decision: "approved" | "rejected"; note?: string }) =>
@@ -400,6 +406,7 @@ export default function AdvancesPage() {
                 </button>
               ))}
             </div>
+            {linkedAdvanceId && !requestsFetching && (requestsError || !visibleRequests.length) && <p role="alert" className="rounded-lg border border-destructive p-3 text-sm text-destructive">تعذر فتح طلب السلفة المحدد؛ قد لا يكون متاحًا أو لا تملك صلاحية الاطلاع عليه.</p>}
             {visibleRequests.length === 0 && (
               <div className="text-sm text-muted-foreground text-center py-4">لا توجد طلبات في هذه المجموعة</div>
             )}

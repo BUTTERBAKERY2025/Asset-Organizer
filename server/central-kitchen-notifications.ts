@@ -167,8 +167,9 @@ export async function insertCentralKitchenNotification(
 export async function routedRecipients(tx: DatabaseExecutor, order: any, event: CentralKitchenNotificationEvent): Promise<string[]> {
   const kitchenPeople = await routingPeople(tx, order.centralKitchenId);
   const kitchenIds = kitchenPeople.filter((p: any) => kitchenManagerEligible(p, "view")).map((p: any) => p.id);
-  const ops = async () => (await routingPeople(tx)).filter((p: any) =>
-    p.role === "operations_manager" && routingPersonEligible(p, "view")).map((p: any) => p.id);
+  const ops = async () => (await routingPeople(tx, order.centralKitchenId)).filter((p: any) =>
+    p.role === "operations_manager" && p.authorizedBranchIds?.includes(order.centralKitchenId)
+      && routingPersonEligible(p, "view")).map((p: any) => p.id);
   if (event === "overdue" && ["received", "cancelled"].includes(order.status)) return [];
   if (event === "missing_responsible") return ops();
   if (event === "overdue") return Array.from(new Set([

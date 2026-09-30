@@ -87,7 +87,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     "/finished-goods-inventory": "production", "/kitchen-warehouse-shipping": "production", "/sales-data-uploads": "production", "/production-reports": "production",
     "/production-comparisons": "production", "/production-comparison-reports": "production", "/production": "production",
     "/product-category-management": "production",
-    "/operations": "operations", "/central-kitchen-orders": "operations", "/branch-shifts": "operations", "/shift-reports": "operations",
+    "/operations": "operations", "/operations-center": "operations", "/central-kitchen-orders": "operations", "/branch-shifts": "operations", "/shift-reports": "operations",
      "/driver-deliveries": "operations",
     "/products": "operations", "/quality-control": "operations", "/display-bar-waste": "operations",
     "/operations-reports": "operations",
@@ -323,6 +323,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         label: t("sidebar.operations"),
         icon: Factory,
         items: [
+           { href: "/operations-center", label: "مركز إدارة التشغيل", icon: LayoutDashboard, module: "operations", isHeader: true, hideIfNoPermission: true },
           { href: "/operations", label: t("sidebar.operationsDashboard"), icon: LayoutDashboard, module: "operations", isHeader: true, hideIfNoPermission: true },
           { href: "/central-kitchen-orders", label: "طلبات المطبخ المركزي", icon: ClipboardList, module: "central_kitchen_orders", indent: true },
           { href: "/transfer-requests", label: "طلب مواد المستودع واستلامها", icon: Send, module: "branch_supply", indent: true },

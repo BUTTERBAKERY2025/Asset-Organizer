@@ -107,7 +107,7 @@ async function isEligibleOwner(userId: string, branchId: string): Promise<boolea
   const branchGrants = await db.select({ branchId: userBranchAccess.branchId }).from(userBranchAccess)
     .where(eq(userBranchAccess.userId, userId));
   if (user.role === "operations_manager") {
-    return branchGrants.length === 0 || branchGrants.some((grant) => grant.branchId === branchId);
+    return branchGrants.some((grant) => grant.branchId === branchId);
   }
   if (user.branchId === branchId) return true;
   return branchGrants.some((grant) => grant.branchId === branchId);

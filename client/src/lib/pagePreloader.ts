@@ -1,6 +1,7 @@
 const pageImports: Record<string, () => Promise<any>> = {
   "platform-home": () => import("@/pages/platform-home"),
   "branch-operations": () => import("@/pages/branch-operations"),
+  "operations-center": () => import("@/pages/operations-center"),
   "branch-complaints": () => import("@/pages/branch-complaints"),
   "driver-deliveries": () => import("@/pages/driver-deliveries"),
   "floor-plan": () => import("@/pages/floor-plan"),
@@ -201,7 +202,7 @@ export function preloadPage(pageKey: string) {
 }
 
 const PRIORITY_WAVE_1 = [
-  "platform-home", "branch-operations", "dashboard", "cashier-journals", "operations-dashboard",
+  "platform-home", "branch-operations", "operations-center", "dashboard", "cashier-journals", "operations-dashboard",
 ];
 const PRIORITY_WAVE_2 = [
   "branch-employees", "sales-analytics", "products",
@@ -257,13 +258,14 @@ export function startAggressivePreload() {
 }
 
 const ADJACENT_PAGES: Record<string, string[]> = {
-  "/": ["branch-operations", "dashboard", "cashier-journals", "operations-dashboard"],
+  "/": ["branch-operations", "operations-center", "dashboard", "cashier-journals", "operations-dashboard"],
+  "/operations-center": ["branch-operations", "operations-dashboard"],
   "/branch-operations": ["branch-complaints", "operations-dashboard", "cashier-journals", "branch-employees"],
   "/branch-complaints": ["branch-operations"],
   "/driver-deliveries": ["platform-home"],
   "/dashboard": ["inventory", "manage", "reports"],
   "/cashier-journals": ["cashier-journal-form", "branch-daily-closures", "sales-analytics"],
-  "/operations": ["central-kitchen-orders", "products", "quality-control", "branch-shifts", "operations-reports-dashboard"],
+  "/operations": ["operations-center", "central-kitchen-orders", "products", "quality-control", "branch-shifts", "operations-reports-dashboard"],
   "/branch-employees": ["shift-management", "attendance-check", "timesheet", "employee-reports-dashboard"],
   "/production-dashboard": ["daily-production", "advanced-production-orders", "production-reports"],
   "/marketing": ["marketing-campaigns", "marketing-influencers", "marketing-calendar"],
@@ -288,6 +290,7 @@ const ROUTE_TO_PAGE: Record<string, string> = {
   "/": "platform-home",
   "/owner": "owner-portal",
   "/branch-operations": "branch-operations",
+  "/operations-center": "operations-center",
   "/branch-complaints": "branch-complaints",
   "/driver-deliveries": "driver-deliveries",
   "/dashboard": "dashboard",

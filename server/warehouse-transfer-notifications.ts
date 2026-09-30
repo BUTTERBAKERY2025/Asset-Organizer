@@ -73,7 +73,7 @@ function hasBranchAuthority(
   if (person.role === "admin" || person.role === "production_development_manager") return true;
   if (sourceSide && branchId === MAIN_WAREHOUSE && person.primaryBranchId !== MAIN_WAREHOUSE) return false;
   if (person.role === "financial_manager") return true;
-  if (person.role === "operations_manager" && person.branchIds.length === 0) return true;
+  if (person.role === "operations_manager") return person.branchIds.includes(branchId);
   return person.branchIds.length > 0
     ? person.branchIds.includes(branchId)
     : person.primaryBranchId === branchId;

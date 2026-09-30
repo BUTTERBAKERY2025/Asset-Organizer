@@ -41,7 +41,10 @@ describe("routing authorization", () => {
           { userId: receiver, module: "central_kitchen_orders", actions: ["view", "edit"] },
           { userId: ops, module: "central_kitchen_orders", actions: ["view", "approve", "edit"] },
         ]);
-        await tx.insert(schema.userBranchAccess).values({ userId: receiver, branchId: branch });
+        await tx.insert(schema.userBranchAccess).values([
+          { userId: receiver, branchId: branch },
+          { userId: ops, branchId: kitchen },
+        ]);
         await tx.insert(schema.centralKitchenRouting).values([
           { branchId: kitchen }, { branchId: branch, receiverUserId: receiver },
         ]);

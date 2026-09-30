@@ -1,7 +1,7 @@
-const CACHE_NAME = 'butter-v10';
-const STATIC_CACHE = 'butter-static-v10';
+const CACHE_NAME = 'butter-v11';
+const STATIC_CACHE = 'butter-static-v11';
 const FONT_CACHE = 'butter-fonts-v4';
-const API_CACHE = 'butter-api-v9';
+const API_CACHE = 'butter-api-v10';
 
 const STATIC_ASSETS = [
   '/',
@@ -55,56 +55,14 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  if (url.pathname.endsWith('.js') || url.pathname.endsWith('.css')) {
-    event.respondWith(networkFirstJs(event.request));
+  if (url.pathname.startsWith('/api/')) {
+    // API responses can contain branch-scoped data. Offline fallbacks and
+    // stale-while-revalidate cannot prove a grant still exists after revoke.
     return;
   }
 
-  if (url.pathname.startsWith('/api/')) {
-    if (url.pathname.includes('/export') || url.pathname.includes('/download') || url.pathname.includes('/preview') || url.pathname.includes('/pdf') || url.pathname.includes('/file/')) {
-      return;
-    }
-    if (url.pathname.startsWith('/api/auth/')) {
-      return;
-    }
-    // Permissions are security-sensitive: NEVER serve them from cache. A stale/empty
-    // cached response makes the client think the user has no modules and bounces them
-    // to /my-portal ("account not linked to employee"). Always go straight to network.
-    if (url.pathname === '/api/my-permissions') {
-      return;
-    }
-    // Notification state and push-subscription APIs are user/device-specific.
-    // Let the browser use the network directly; never read or write them here.
-    if (isNotificationApiPath(url.pathname)) {
-      return;
-    }
-    // Ticket access must be re-authorized, including private image downloads.
-    if (url.pathname === '/api/maintenance-tickets' || url.pathname.startsWith('/api/maintenance-tickets/')) {
-      return;
-    }
-    // Order status and allowed actions must come from the server, even on a slow
-    // connection. A cached approved detail can otherwise survive a prepare
-    // transition (and even a page reload) while the list shows prepared.
-    if (url.pathname === '/api/central-kitchen-orders' || url.pathname.startsWith('/api/central-kitchen-orders/')) {
-      return;
-    }
-    const SAFE_STALE_ENDPOINTS = [
-      '/api/branches', '/api/products', '/api/product-categories',
-      '/api/departments', '/api/roles', '/api/operations/products',
-      '/api/contractors', '/api/chart-of-accounts',
-      '/api/targets', '/api/construction-projects',
-      '/api/warehouse/items', '/api/branch-cashiers',
-      '/api/biometric-settings', '/api/point-settings',
-      '/api/product-commissions', '/api/checklist-templates',
-      '/api/users',
-      '/api/governance', '/api/security',
-    ];
-    const basePath = url.pathname.split('?')[0];
-    if (SAFE_STALE_ENDPOINTS.includes(basePath)) {
-      event.respondWith(apiStaleWhileRevalidate(event.request));
-    } else {
-      event.respondWith(networkFirstFast(event.request));
-    }
+  if (url.pathname.endsWith('.js') || url.pathname.endsWith('.css')) {
+    event.respondWith(networkFirstJs(event.request));
     return;
   }
 

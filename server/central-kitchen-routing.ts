@@ -56,8 +56,19 @@ export async function routingPeople(tx: RoutingExecutor, branchId?: string) {
     .from(userBranchAccess).where(inArray(userBranchAccess.userId, ids));
   for (const person of people as any[]) {
     const explicit = grants.filter((grant: any) => grant.userId === person.id);
-    person.authorizedBranchIds = explicit.length ? explicit.map((grant: any) => grant.branchId)
+    person.authorizedBranchIds = person.role === "operations_manager"
+      ? explicit.map((grant: any) => grant.branchId)
+      : explicit.length ? explicit.map((grant: any) => grant.branchId)
       : person.branchId ? [person.branchId] : [];
+  }
+  // A primary branch (or being in the global people query) is not a grant
+  // for operations managers. This also protects event/push recipient routing.
+  if (branchId) {
+    for (let index = people.length - 1; index >= 0; index--) {
+      if (people[index].role === "operations_manager" && !people[index].authorizedBranchIds.includes(branchId)) {
+        people.splice(index, 1);
+      }
+    }
   }
   const direct = await tx.select().from(userPermissions).where(inArray(userPermissions.userId, ids));
   const inherited = await tx.select({ userId: userAssignments.userId, action: permissions.action })
@@ -171,7 +182,8 @@ export async function kitchenActionAllowed(tx: RoutingExecutor, userId: string, 
   if (actor?.role === "branch_manager" && !receiving) return false;
   if (!actor || !routingPersonEligible(actor, action === "approve" ? "approve" : "edit")) return false;
   // Administration may intervene, but a revoked action is never restored by role.
-  if (["admin", "operations_manager"].includes(actor.role)) return true;
+  if (actor.role === "admin") return true;
+  if (actor.role === "operations_manager") return actor.authorizedBranchIds?.includes(branchId) === true;
   if (!receiving && kitchenManagerEligible(actor, action === "approve" ? "approve" : "edit")) return true;
   if (!receiving) return false;
   const people = await routingPeople(tx, branchId);
@@ -188,6 +200,11 @@ export function registerKitchenRoutingRoutes(app: any, db: any, auth: any, getUs
       if (typeof branchId !== "string" || !branchId) return res.status(400).json({ error: "الفرع مطلوب" });
       const actor = await routingActor(db, getUser(req).id);
       if (!actor || !routingPersonEligible(actor, "view")) return res.status(403).json({ error: "غير مصرح" });
+      // Even a central kitchen is an explicit branch for operations managers;
+      // role-level routing authority never overrides a revoked branch grant.
+      if (actor.role === "operations_manager" && !(await canAccessBranch(req, branchId))) {
+        return res.status(403).json({ error: "غير مصرح للفرع" });
+      }
       const [branch] = await db.select().from(branches).where(eq(branches.id, branchId));
       if (!branch) return res.status(404).json({ error: "الفرع غير موجود" });
       if (kind === "read") {

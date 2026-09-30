@@ -366,11 +366,11 @@ export function prefetchStaticData() {
 
 export function hydrateFromPersistentCache() {
   const endpoints = [
-    '/api/branches', '/api/products', '/api/product-categories',
+    '/api/products', '/api/product-categories',
     '/api/departments', '/api/roles',
     '/api/operations/products', '/api/branch-cashiers',
     '/api/chart-of-accounts', '/api/contractors',
-    '/api/dashboard/stats', '/api/command-center',
+    '/api/dashboard/stats',
     '/api/warehouse/items', '/api/targets',
     '/api/auth/me',
   ];

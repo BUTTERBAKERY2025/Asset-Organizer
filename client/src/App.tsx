@@ -29,6 +29,7 @@ import { installAutoReconnectOnVisibility, ensurePrinterConnection, getSavedPrin
 
 const PlatformHomePage = makeLazy("platform-home");
 const BranchOperationsPage = makeLazy("branch-operations");
+const OperationsCenterPage = makeLazy("operations-center");
 const BranchComplaintsPage = makeLazy("branch-complaints");
 const DriverDeliveriesPage = makeLazy("driver-deliveries");
 const DashboardPage = makeLazy("dashboard");
@@ -349,6 +350,7 @@ const Router = React.memo(function Router() {
       <Route path="/owner">{() => <OwnerPortalGate />}</Route>
       <Route path="/">{() => <ProtectedPage component={PlatformHomePage} />}</Route>
       <Route path="/branch-operations">{() => <ProtectedPage component={BranchOperationsPage} />}</Route>
+      <Route path="/operations-center">{() => <ModulePage component={OperationsCenterPage} module="operations" />}</Route>
       <Route path="/branch-complaints">{() => <ModulePage component={BranchComplaintsPage} module="branch_complaints" />}</Route>
       <Route path="/driver-deliveries">{() => <StandaloneDeliveryPage />}</Route>
       <Route path="/login">

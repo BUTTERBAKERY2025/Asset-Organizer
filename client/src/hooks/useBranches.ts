@@ -25,14 +25,15 @@ export function useBranches() {
       if (!res.ok) throw new Error(`${res.status}: request failed`);
       return res.json();
     },
-    staleTime: 1000 * 60 * 60, // 1 hour - branches rarely change
-    placeholderData: (prev) => prev,
+    // Branch rows rarely change, but membership is authorization data and
+    // must not survive a revoke, a remount, or an offline cache response.
+    staleTime: 0,
     refetchOnWindowFocus: false,
     // Auth init (or persisted data) may have seeded this key under an older
     // permission scope. Revalidate the manager's branch list on entry.
-    refetchOnMount: user?.role === "branch_manager" ? "always" : false,
+    refetchOnMount: ["branch_manager", "operations_manager"].includes(user?.role || "") ? "always" : false,
   });
-  const managerRefreshing = user?.role === "branch_manager" && isFetching;
+  const managerRefreshing = ["branch_manager", "operations_manager"].includes(user?.role || "") && isFetching;
   // A failed request must not expose stale branches or look like a confirmed
   // empty authorization scope.
   const branches = isError || managerRefreshing

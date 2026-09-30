@@ -87,6 +87,10 @@ const serviceYears = (hireDate?: string | null): number | null => {
 };
 
 export default function LeavesPage() {
+  const sourceParams = new URLSearchParams(window.location.search);
+  const linkedLeaveId = sourceParams.get("leaveId");
+  const linkedLeaveBranch = sourceParams.get("branchId");
+  const validLinkedLeave = linkedLeaveId !== null && /^[1-9]\d*$/.test(linkedLeaveId);
   const { toast } = useToast();
   const qc = useQueryClient();
   // تعديل أرصدة الإجازات (والترحيل) يتطلب صلاحية "تعديل" على وحدة الإجازات —
@@ -196,12 +200,19 @@ export default function LeavesPage() {
   const printRef = useRef<HTMLDivElement>(null);
   const { uploadFile, isUploading } = useUpload({ folder: "leaves" });
 
-  const { data: leaves = [], isLoading } = useQuery<Leave[]>({
-    queryKey: ["/api/hr/leaves", filterStatus, filterType],
+  const { data: leaves = [], isLoading, isFetching: leavesFetching, isError: leavesError } = useQuery<Leave[]>({
+    queryKey: ["/api/hr/leaves", filterStatus, filterType, validLinkedLeave ? linkedLeaveId : null, linkedLeaveBranch],
     queryFn: async () => {
       const params = new URLSearchParams();
-      if (filterStatus !== "all") params.set("status", filterStatus);
-      if (filterType !== "all") params.set("type", filterType);
+      if (validLinkedLeave) {
+        // Source queue contains pending leaves; fetch only that authorized
+        // branch/status cohort, never silently fall back to an unscoped list.
+        params.set("status", "pending");
+        if (linkedLeaveBranch) params.set("branchId", linkedLeaveBranch);
+      } else {
+        if (filterStatus !== "all") params.set("status", filterStatus);
+        if (filterType !== "all") params.set("type", filterType);
+      }
       const res = await apiRequest("GET", `/api/hr/leaves?${params}`);
       return res.json();
     },
@@ -615,6 +626,8 @@ td{border:1px solid #E5C98F;padding:8px}td:first-child{background:#FBF4E4;font-w
 
   const filtered = useMemo(() => {
     let list = leaves as any[];
+    if (linkedLeaveId) return validLinkedLeave && !leavesFetching && !leavesError
+      ? list.filter(l => String(l.id) === linkedLeaveId && l.branchId === linkedLeaveBranch) : [];
     if (filterBranch !== "all") list = list.filter((l) => l.branchId === filterBranch);
     if (filterMonth !== "all") {
       // مقارنة على مستوى الشهر (YYYY-MM) لتغطية كل أطوال الشهور
@@ -627,7 +640,7 @@ td{border:1px solid #E5C98F;padding:8px}td:first-child{background:#FBF4E4;font-w
       list = list.filter((l) => (l.employeeName || "").toLowerCase().includes(q));
     }
     return list;
-  }, [leaves, search, filterBranch, filterMonth]);
+  }, [leaves, search, filterBranch, filterMonth, linkedLeaveId, linkedLeaveBranch, leavesFetching, leavesError]);
 
   // إعادة ضبط "عرض المزيد" عند تغيير الفلاتر أو البحث
   useEffect(() => { setReqShown(50); }, [search, filterStatus, filterType, filterBranch, filterMonth]);
@@ -1676,6 +1689,7 @@ ${d.workflowStatus === "disbursed" ? `<div class="box"><b>الصرف:</b> تم �
 
         {/* ---------- REQUESTS TAB ---------- */}
         <TabsContent value="requests">
+          {linkedLeaveId && !leavesFetching && (leavesError || !filtered.length) && <p role="alert" className="rounded-lg border border-destructive p-3 text-sm text-destructive">تعذر فتح طلب الإجازة المحدد؛ قد لا يكون متاحًا أو لا تملك صلاحية الاطلاع عليه.</p>}
           <Card>
             <CardContent className="space-y-3 pt-6">
               <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-2">

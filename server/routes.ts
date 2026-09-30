@@ -8,6 +8,7 @@ import { authenticatedUploadMatchesActor, makeAuthenticatedUploadName, mayDownlo
 import { ProductionStockPostingError } from "./production-stock-posting";
 import { validateFinishedProductionTarget } from "./finished-production-target";
 import { registerBranchBarHandoffRoutes } from "./branch-bar-handoffs";
+import { registerOperationsCenterLive } from "./operations-center-live";
 import { registerCentralKitchenJourneyRoute } from "./central-kitchen-journey";
 import { InactiveBranchStockReferenceError } from "./catalogue-branch-stock";
 import { branchSupplyTransferAllowed } from "./branch-supply-transfer-policy";
@@ -234,6 +235,7 @@ import { registerAdvancedProductionExecutionRoutes, advancedExecutionRows } from
 import { registerCentralKitchenWorkplanRoute } from "./central-kitchen-workplan";
 import { registerProductionPlanningRoute } from "./production-planning";
 import { registerBranchOperationsRoute } from "./branch-operations";
+import { registerOperationsCenterRoutes } from "./operations-center";
 import { registerBranchComplaintRoutes } from "./branch-complaints";
 import { registerMaintenanceTicketRoutes } from "./maintenance-tickets";
 import { registerCentralKitchenDemandRoutes } from "./central-kitchen-demand-routes";
@@ -353,6 +355,7 @@ export async function registerRoutes(
   registerProductionRecipeModeRoutes(app);
   // قفل حساب المراجع الخارجي: مقصور على /api/audit/* و /api/auth/* فقط
   app.use(auditorApiLockdown);
+  registerOperationsCenterLive(app);
 
   app.get("/api/version", (_req, res) => {
     res.json({ version: "2026-02-23-v3", build: Date.now(), status: "ok" });
@@ -648,6 +651,7 @@ export async function registerRoutes(
   registerCentralKitchenWorkplanRoute(app);
   registerProductionPlanningRoute(app);
   registerBranchOperationsRoute(app);
+  registerOperationsCenterRoutes(app);
   registerBranchComplaintRoutes(app);
   registerMaintenanceTicketRoutes(app);
   registerCatalogueImporterRoutes(app);
@@ -741,6 +745,11 @@ export async function registerRoutes(
       const allowedBranchIds = userBranches.length > 0 
         ? userBranches.map(b => b.branchId) 
         : (currentUser.branchId ? [currentUser.branchId] : []);
+
+      if (currentUser.role === "operations_manager" && branchId && branchId !== "all"
+          && !userBranches.some(b => b.branchId === branchId)) {
+        return res.status(403).json({ error: "غير مصرح بالوصول لهذا الفرع" });
+      }
       
       if (allowedBranchIds.length === 0) {
         return res.json([]);
@@ -886,6 +895,13 @@ export async function registerRoutes(
         grantAllBranches = true;
       } else if (branchId && branchId !== "none") {
         assignedBranchId = branchId;
+        if (requestedRole === "operations_manager") {
+          const allBranches = await getCachedBranches();
+          if (!allBranches.some(b => b.id === branchId)) {
+            return res.status(400).json({ error: "فرع غير صالح" });
+          }
+          validBranchIds = [branchId]; // Admin explicitly selected this branch.
+        }
       }
       
       const user = await storage.createUser({
@@ -1061,6 +1077,13 @@ export async function registerRoutes(
           grantAllBranches = true;
         } else {
           updateData.branchId = branchId || null;
+          if ((role ?? beforeUpdate?.role) === "operations_manager") {
+            if (branchId && branchId !== "none" && !(await getCachedBranches()).some(b => b.id === branchId)) {
+              return res.status(400).json({ error: "فرع غير صالح" });
+            }
+            validBranchIds = branchId && branchId !== "none" ? [branchId] : [];
+            updateBranchAccess = true;
+          }
         }
       }
       
@@ -1765,15 +1788,10 @@ export async function registerRoutes(
         // Admins and the cross-branch Financial Manager can see all branches
         res.json(branches);
       } else if (user?.role === "operations_manager") {
-        // Operations Manager: all branches UNLESS the admin explicitly restricted
-        // the user to specific branches (user_branch_access rows) — then only those.
+        // Explicit grants only; zero rows is an empty scope, not global access.
         const opsAccess = await storage.getUserBranchAccess(user.id);
-        if (opsAccess.length > 0) {
-          const allowedIds = opsAccess.map((ba: any) => ba.branchId);
-          res.json(branches.filter((b: any) => allowedIds.includes(b.id)));
-        } else {
-          res.json(branches);
-        }
+        const allowedIds = new Set(opsAccess.map((ba: any) => ba.branchId));
+        res.json(branches.filter((b: any) => allowedIds.has(b.id)));
       } else if (user) {
         // Get user's allowed branches from user_branch_access table
         const userBranchAccess = await storage.getUserBranchAccess(user.id);
@@ -1826,6 +1844,9 @@ export async function registerRoutes(
 
   app.post("/api/branches", isAuthenticated, requirePermission("inventory", "create"), async (req, res) => {
     try {
+      if (req.currentUser?.role === "operations_manager") {
+        return res.status(403).json({ error: "إنشاء فروع جديدة خارج نطاق الفروع المسندة" });
+      }
       const validatedData = insertBranchSchema.parse(req.body);
       const branch = await storage.createBranch(validatedData);
       res.status(201).json(branch);
@@ -1900,6 +1921,9 @@ export async function registerRoutes(
   app.post("/api/branches/:id/validate-location", isAuthenticated, async (req, res) => {
     try {
       const { id } = req.params;
+      if (!isUserAdmin(req) && !(await canAccessBranch(req, id))) {
+        return res.status(403).json({ error: "غير مصرح بالوصول لهذا الفرع", valid: false });
+      }
       const { userLatitude, userLongitude } = req.body;
       
       if (!userLatitude || !userLongitude) {
@@ -10074,7 +10098,16 @@ export async function registerRoutes(
         filteredChecks = qualityChecks.filter((c: any) => branchFilter.branchIds!.includes(c.branchId));
       }
 
-      const totalProduced = filteredOrders.reduce((sum, o) => sum + (o.producedQuantity || 0), 0);
+      // Orders are the plan. Only finished daily batches represent actual
+      // posted production; never label an order's entered quantity "produced".
+      const dailyStats = await Promise.all(
+        branchFilter.branchIds === null
+          ? [storage.getDailyProductionStats("all", today)]
+          : branchFilter.branchIds.map(id => storage.getDailyProductionStats(id, today)),
+      );
+      const totalProduced = dailyStats.reduce((sum, row) => sum + row.totalQuantity, 0);
+      const finishedBatches = dailyStats.reduce((sum, row) => sum + row.totalBatches, 0);
+      const plannedQuantity = filteredOrders.reduce((sum, o) => sum + (o.targetQuantity || 0), 0);
       const totalWasted = filteredOrders.reduce((sum, o) => sum + (o.wastedQuantity || 0), 0);
       const completedOrders = filteredOrders.filter(o => o.status === 'completed').length;
       const passedChecks = filteredChecks.filter(c => c.result === 'passed').length;
@@ -10084,11 +10117,13 @@ export async function registerRoutes(
         todayShifts: filteredShifts.length,
         todayOrders: filteredOrders.length,
         completedOrders,
+        finishedBatches,
+        plannedQuantity,
         totalProduced,
         totalWasted,
         wastePercentage: totalProduced > 0 ? ((totalWasted / totalProduced) * 100).toFixed(1) : 0,
         qualityChecks: filteredChecks.length,
-        qualityPassRate: filteredChecks.length > 0 ? ((passedChecks / filteredChecks.length) * 100).toFixed(1) : 100,
+        qualityPassRate: filteredChecks.length > 0 ? ((passedChecks / filteredChecks.length) * 100).toFixed(1) : 0,
       });
     } catch (error) {
       console.error("Error fetching operations stats:", error);
@@ -18953,6 +18988,9 @@ export async function registerRoutes(
       if (!branchFilter.hasAccess) {
         return res.status(403).json({ error: "غير مصرح بالوصول" });
       }
+      if (req.currentUser?.role === "operations_manager" && !branchFilter.singleBranchId) {
+        return res.status(400).json({ error: "يجب تحديد فرع مصرح به لإحصائيات الطلبات" });
+      }
       
       const statsCacheKey = `prod_order_stats:${branchFilter.singleBranchId || 'all'}`;
       const cachedStats = getCachedResponse(statsCacheKey, 30000);
@@ -19117,6 +19155,10 @@ export async function registerRoutes(
       }
 
       const branchId = order.sourceBranchId;
+      if (req.currentUser?.role === "operations_manager" &&
+          (!branchId || !(await canAccessBranch(req, branchId)))) {
+        return res.status(403).json({ error: "غير مصرح بقراءة مبيعات فرع المصدر" });
+      }
       const salesData = await db.select().from(dailySalesData).where(eq(dailySalesData.branchId, branchId));
 
       if (!salesData || salesData.length === 0) {
@@ -23263,7 +23305,7 @@ export async function registerRoutes(
       // Calculate quality stats
       const passed = qualityChecks.filter(q => q.result === 'passed').length;
       const failed = qualityChecks.filter(q => q.result === 'failed').length;
-      const passRate = qualityChecks.length > 0 ? (passed / qualityChecks.length) * 100 : 100;
+      const passRate = qualityChecks.length > 0 ? (passed / qualityChecks.length) * 100 : 0;
       
       // Build real product performance from production batches
       // Use productionDate for timezone-independent filtering
@@ -23530,6 +23572,11 @@ export async function registerRoutes(
   // Unified Command Center API - aggregates all KPIs in one call
   app.get("/api/command-center", isAuthenticated, async (req, res) => {
     try {
+      // Storage's "all" is unscoped. It cannot be used for an operations
+      // manager with a subset of branches, even when the query omits branchId.
+      if (req.currentUser?.role === "operations_manager" && (!req.query.branchId || req.query.branchId === "all")) {
+        return res.status(400).json({ error: "يجب تحديد فرع مصرح به لمركز القيادة" });
+      }
       // SECURITY: Apply branch filter
       const queryBranchId = req.query.branchId as string | undefined;
       const branchFilter = getEffectiveBranchFilter(req, queryBranchId);
@@ -23541,7 +23588,7 @@ export async function registerRoutes(
       let effectiveBranchId: string;
       if (branchFilter.singleBranchId) {
         effectiveBranchId = branchFilter.singleBranchId;
-      } else if (queryBranchId && !isUserAdmin(req)) {
+      } else if (queryBranchId && queryBranchId !== "all" && !isUserAdmin(req)) {
         const hasAccess = await canAccessBranch(req, queryBranchId);
         if (!hasAccess) return res.status(403).json({ error: "غير مصرح بالوصول لهذا الفرع" });
         effectiveBranchId = queryBranchId;
@@ -23551,8 +23598,9 @@ export async function registerRoutes(
       
       const date = (req.query.date as string) || new Date().toISOString().split('T')[0];
       
-      const branchKey = branchFilter.branchIds ? branchFilter.branchIds.sort().join(',') : effectiveBranchId;
-      const cacheKey = `command_center:${branchKey}:${date}`;
+      // Key by effective selection, not just the grant set: two authorized
+      // branches must never share cached KPI responses.
+      const cacheKey = `command_center:${effectiveBranchId}:${date}`;
       const cached = getCachedResponse(cacheKey, 30000);
       if (cached) return res.json(cached);
 
@@ -23783,6 +23831,7 @@ export async function registerRoutes(
           }).onConflictDoNothing();
         }
         console.log("Branch access granted successfully");
+        invalidateAuthCache(userId);
       }
       
       const assignment = await storage.createUserAssignment({
@@ -30507,22 +30556,25 @@ export async function registerRoutes(
         startDate: today, 
         endDate: today 
       });
+      const scopedRecords = branchFilter.branchIds
+        ? records.filter(r => branchFilter.branchIds!.includes(r.branchId))
+        : records;
       
-      const present = records.filter(r => r.status === 'present').length;
-      const late = records.filter(r => r.status === 'late').length;
-      const absent = records.filter(r => r.status === 'absent').length;
-      const earlyLeave = records.filter(r => r.status === 'early_leave').length;
-      const onLeave = records.filter(r => r.status === 'on_leave').length;
+      const present = scopedRecords.filter(r => r.status === 'present').length;
+      const late = scopedRecords.filter(r => r.status === 'late').length;
+      const absent = scopedRecords.filter(r => r.status === 'absent').length;
+      const earlyLeave = scopedRecords.filter(r => r.status === 'early_leave').length;
+      const onLeave = scopedRecords.filter(r => r.status === 'on_leave').length;
       
       res.json({
         date: today,
-        total: records.length,
+        total: scopedRecords.length,
         present,
         late,
         absent,
         earlyLeave,
         onLeave,
-        attendanceRate: records.length > 0 ? Math.round((present / records.length) * 100) : 0
+        attendanceRate: scopedRecords.length > 0 ? Math.round((present / scopedRecords.length) * 100) : 0
       });
     } catch (error) {
       console.error("Error fetching today's attendance stats:", error);
@@ -30568,11 +30620,13 @@ export async function registerRoutes(
         }),
         storage.getAllScheduleTemplates(effectiveBranchId || undefined),
         storage.getAllSchedulePeriods(effectiveBranchId || undefined),
-        storage.getEmployeeSchedulesByBranchAndDateRange(
-          effectiveBranchId || '',
-          startOfMonth.toISOString().split('T')[0],
-          endOfMonth.toISOString().split('T')[0]
-        ),
+        branchFilter.branchIds && !effectiveBranchId
+          ? Promise.all(branchFilter.branchIds.map(id => storage.getEmployeeSchedulesByBranchAndDateRange(
+            id, startOfMonth.toISOString().split('T')[0], endOfMonth.toISOString().split('T')[0]
+          ))).then(groups => groups.flat())
+          : storage.getEmployeeSchedulesByBranchAndDateRange(
+            effectiveBranchId || '', startOfMonth.toISOString().split('T')[0], endOfMonth.toISOString().split('T')[0]
+          ),
         storage.getTimesheetReports({})
       ]);
 
@@ -30595,7 +30649,9 @@ export async function registerRoutes(
       const templatesCount = filteredTemplates.length;
       const periodsCount = filteredPeriods.length;
       const schedulesCount = schedules.length;
-      const reportsCount = reports.length;
+      const reportsCount = branchFilter.branchIds
+        ? reports.filter(report => branchFilter.branchIds!.includes(report.branchId || "")).length
+        : reports.length;
       
       const attendanceRate = totalEmployees > 0 
         ? Math.round((presentToday / totalEmployees) * 100) 
@@ -41524,6 +41580,13 @@ export async function registerRoutes(
       }
       const notification = await storage.getSystemNotification(notificationId);
       if (!notification) return res.status(404).json({ error: "الإشعار غير موجود" });
+      if (req.currentUser?.role === "operations_manager") {
+        const scopedBranches = notification.accessBranchIds?.length ? notification.accessBranchIds
+          : notification.targetAllBranches ? [] : notification.targetBranchIds || [];
+        if (scopedBranches.length && !(await Promise.all(scopedBranches.map(id => canAccessBranch(req, id)))).some(Boolean)) {
+          return res.status(403).json({ error: "لم تعد مصرحاً بالوصول إلى هذا الإشعار" });
+        }
+      }
       if (notification.accessModule === "central_kitchen_orders") {
         const { canUserAccessCentralKitchenNotification } = await import("./central-kitchen-notifications");
         if (!(await canUserAccessCentralKitchenNotification(db, notification, userId))) {
@@ -41552,6 +41615,13 @@ export async function registerRoutes(
       }
       const notification = await storage.getSystemNotification(notificationId);
       if (!notification) return res.status(404).json({ error: "الإشعار غير موجود" });
+      if (req.currentUser?.role === "operations_manager") {
+        const scopedBranches = notification.accessBranchIds?.length ? notification.accessBranchIds
+          : notification.targetAllBranches ? [] : notification.targetBranchIds || [];
+        if (scopedBranches.length && !(await Promise.all(scopedBranches.map(id => canAccessBranch(req, id)))).some(Boolean)) {
+          return res.status(403).json({ error: "لم تعد مصرحاً بالوصول إلى هذا الإشعار" });
+        }
+      }
       if (notification.accessModule === "central_kitchen_orders") {
         const { canUserAccessCentralKitchenNotification } = await import("./central-kitchen-notifications");
         if (!(await canUserAccessCentralKitchenNotification(db, notification, userId))) {

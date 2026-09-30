@@ -28,6 +28,6 @@ describe("branch manager desk branch scope", () => {
     expect(visibleBranchesForUser(serverAllowed, "operations_manager", null)).toEqual(serverAllowed);
     const hook = readFileSync(new URL("../client/src/hooks/useBranches.ts", import.meta.url), "utf8");
     expect(hook).toContain("isError || managerRefreshing");
-    expect(hook).toContain("refetchOnMount: user?.role === \"branch_manager\" ? \"always\" : false");
+    expect(hook).toContain('refetchOnMount: ["branch_manager", "operations_manager"].includes(user?.role || "") ? "always" : false');
   });
 });

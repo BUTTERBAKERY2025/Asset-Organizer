@@ -6279,13 +6279,16 @@ export class DatabaseStorage implements IStorage {
     const inProgressOrders = allOrders.filter(o => o.status === 'in_progress').length;
     const completedOrders = allOrders.filter(o => o.status === 'completed').length;
     const cancelledOrders = allOrders.filter(o => o.status === 'cancelled').length;
-    const totalQuantityProduced = allOrders
-      .filter(o => o.status === 'completed')
-      .reduce((sum, o) => sum + (o.producedQuantity || 0), 0);
+    // Legacy orders are plans. Actual output is counted from posted finished
+    // batches below, not from an order's manually entered producedQuantity.
+    const totalQuantityProduced = allBatches
+      .filter(b => b.status === 'finished')
+      .reduce((sum, b) => sum + (b.quantity || 0), 0);
 
     // OPTIMIZED: Quality checks with SQL WHERE using order IDs
     const orderIds = allOrders.map(o => o.id);
-    let qualityPassRate = 100;
+    let qualityPassRate = 0;
+    const qualityByBranch = new Map<string, { passed: number; total: number }>();
     let qualityChecksResult: { status: string; count: number }[] = [];
     
     if (orderIds.length > 0) {
@@ -6296,7 +6299,16 @@ export class DatabaseStorage implements IStorage {
       const passedChecks = relevantChecks.filter(qc => qc.result === 'passed').length;
       qualityPassRate = relevantChecks.length > 0 
         ? (passedChecks / relevantChecks.length) * 100 
-        : 100;
+        : 0;
+      const branchByOrder = new Map<number, string>(allOrders.map(order => [order.id, order.branchId] as const));
+      for (const check of relevantChecks) {
+        const branch = check.productionOrderId == null ? null : branchByOrder.get(check.productionOrderId);
+        if (!branch) continue;
+        const counts = qualityByBranch.get(branch) || { passed: 0, total: 0 };
+        counts.total++;
+        if (check.result === "passed") counts.passed++;
+        qualityByBranch.set(branch, counts);
+      }
       
       const qualityStatusCounts: Record<string, number> = {};
       relevantChecks.forEach(qc => {
@@ -6316,7 +6328,7 @@ export class DatabaseStorage implements IStorage {
           orderCount: 0
         };
       }
-      productOrderMap[order.productId].quantity += (order.producedQuantity || 0);
+      productOrderMap[order.productId].quantity += (order.targetQuantity || 0);
       productOrderMap[order.productId].orderCount += 1;
     }
     const ordersByProduct = Object.values(productOrderMap).sort((a, b) => b.quantity - a.quantity);
@@ -6329,10 +6341,15 @@ export class DatabaseStorage implements IStorage {
         dailyProductionMap[orderDate] = { quantity: 0, orders: 0 };
       }
       if (orderDate) {
-        dailyProductionMap[orderDate].quantity += (o.producedQuantity || 0);
         dailyProductionMap[orderDate].orders += 1;
       }
     });
+    for (const batch of allBatches) {
+      if (batch.status !== "finished" || !batch.productionDate) continue;
+      const day = dailyProductionMap[batch.productionDate] || { quantity: 0, orders: 0 };
+      day.quantity += batch.quantity || 0;
+      dailyProductionMap[batch.productionDate] = day;
+    }
     const dailyProduction = Object.entries(dailyProductionMap)
       .map(([date, data]) => ({ date, quantity: data.quantity, orders: data.orders }))
       .sort((a, b) => a.date.localeCompare(b.date));
@@ -6343,7 +6360,7 @@ export class DatabaseStorage implements IStorage {
     const totalActualQuantity = finishedBatches.reduce((sum, b) => sum + (b.quantity || 0), 0);
 
     const destMap: Record<string, { count: number; quantity: number }> = {};
-    allBatches.forEach(b => {
+    finishedBatches.forEach(b => {
       const dest = b.destination || 'other';
       if (!destMap[dest]) destMap[dest] = { count: 0, quantity: 0 };
       destMap[dest].count++;
@@ -6352,7 +6369,7 @@ export class DatabaseStorage implements IStorage {
     const byDestination = Object.entries(destMap).map(([destination, d]) => ({ destination, ...d }));
 
     const catMap: Record<string, { count: number; quantity: number }> = {};
-    allBatches.forEach(b => {
+    finishedBatches.forEach(b => {
       const cat = b.productCategory || 'أخرى';
       if (!catMap[cat]) catMap[cat] = { count: 0, quantity: 0 };
       catMap[cat].count++;
@@ -6361,7 +6378,7 @@ export class DatabaseStorage implements IStorage {
     const byCategory = Object.entries(catMap).map(([category, d]) => ({ category, ...d })).sort((a, b) => b.quantity - a.quantity);
 
     const prodMap: Record<string, { quantity: number; batchCount: number }> = {};
-    allBatches.forEach(b => {
+    finishedBatches.forEach(b => {
       const name = b.productName || 'غير معروف';
       if (!prodMap[name]) prodMap[name] = { quantity: 0, batchCount: 0 };
       prodMap[name].quantity += b.quantity || 0;
@@ -6370,7 +6387,7 @@ export class DatabaseStorage implements IStorage {
     const byProduct = Object.entries(prodMap).map(([productName, d]) => ({ productName, ...d })).sort((a, b) => b.quantity - a.quantity);
 
     const dailyActualMap: Record<string, { quantity: number; batches: number }> = {};
-    allBatches.forEach(b => {
+    finishedBatches.forEach(b => {
       const d = b.productionDate || '';
       if (!d) return;
       if (!dailyActualMap[d]) dailyActualMap[d] = { quantity: 0, batches: 0 };
@@ -6380,7 +6397,7 @@ export class DatabaseStorage implements IStorage {
     const dailyActual = Object.entries(dailyActualMap).map(([date, d]) => ({ date, ...d })).sort((a, b) => a.date.localeCompare(b.date));
 
     const chefMap: Record<string, { batchCount: number; totalQuantity: number }> = {};
-    allBatches.forEach(b => {
+    finishedBatches.forEach(b => {
       const name = b.chefName || b.recorderName || 'غير معروف';
       if (!chefMap[name]) chefMap[name] = { batchCount: 0, totalQuantity: 0 };
       chefMap[name].batchCount++;
@@ -6475,7 +6492,8 @@ export class DatabaseStorage implements IStorage {
         branchName: branch.name,
         totalSales: branchSales,
         totalOrders: branchOrders.length,
-        qualityPassRate: 100,
+        qualityPassRate: qualityByBranch.get(branch.id)?.total
+          ? qualityByBranch.get(branch.id)!.passed / qualityByBranch.get(branch.id)!.total * 100 : 0,
         averageTicket: branchTransactions > 0 ? branchSales / branchTransactions : 0,
       };
     });
@@ -18465,6 +18483,10 @@ export class DatabaseStorage implements IStorage {
     const now = new Date();
     const [userRow] = await db.select({ role: users.role }).from(users).where(eq(users.id, userId));
     const userRole = userRow?.role || null;
+    const operationsGrants = userRole === "operations_manager"
+      ? new Set((await this.getUserBranchAccess(userId)).map(grant => grant.branchId))
+      : null;
+    if (operationsGrants && operationsGrants.size === 0) return [];
 
     const allActive = await db.select().from(systemNotifications)
       .where(and(
@@ -18482,6 +18504,13 @@ export class DatabaseStorage implements IStorage {
     const visible = allActive.filter(n => {
       if (dismissedIds.has(n.id)) return false;
       if (n.showOnce && readOnceIds.has(n.id)) return false;
+      // A per-user target or global broadcast must not bypass an event's
+      // explicit access branch. Do not trust users.branchId/session on revoke.
+      if (operationsGrants) {
+        const scope = n.accessBranchIds?.length ? n.accessBranchIds
+          : !n.targetAllBranches ? n.targetBranchIds : null;
+        if (scope?.length && !scope.some(id => operationsGrants.has(id))) return false;
+      }
       // Per-user targeting — if targetUserIds is set & non-empty, ONLY those users see it,
       // regardless of their active branch or role (used for "specific person" messages).
       const userIdsTarget = (n as any).targetUserIds as string[] | null | undefined;

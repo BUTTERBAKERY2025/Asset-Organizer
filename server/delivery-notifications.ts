@@ -100,7 +100,7 @@ async function warehouseManagers(): Promise<string[]> {
   const { rows } = await pool.query(`SELECT u.id FROM users u
     WHERE u.is_active='active' AND
       (u.role='admin' OR (u.role='operations_manager'
-        AND NOT EXISTS (SELECT 1 FROM user_branch_access ba WHERE ba.user_id=u.id)))
+        AND EXISTS (SELECT 1 FROM user_branch_access ba WHERE ba.user_id=u.id AND ba.branch_id='main_warehouse')))
       AND NOT EXISTS (SELECT 1 FROM user_permission_overrides o
         JOIN permissions p ON p.id=o.permission_id
         WHERE o.user_id=u.id AND p.module='warehouse' AND p.action='edit'

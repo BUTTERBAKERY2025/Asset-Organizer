@@ -75,9 +75,26 @@ function currentMonth() {
 }
 
 export default function EmployeeAttendanceReportPage() {
+  const sourceParams = new URLSearchParams(window.location.search);
+  const linkedAttendanceId = sourceParams.get("attendanceId");
+  const linkedBranchId = sourceParams.get("branchId");
   const { isAuthenticated } = useAuth();
   const { branches, canSelectBranch, userBranchId, isLoading: branchesLoading } = useBranches();
   const navigationBranch = useBranchNavigation(branches, branchesLoading, userBranchId);
+  const authorizedLinkedBranch = !branchesLoading && branches.some(b => b.id === linkedBranchId);
+  const linkedAttendance = useQuery<{ id: number; branchId: string; attendanceDate: string; status: string; employeeId: string }>({
+    queryKey: ["/api/attendance", linkedAttendanceId, linkedBranchId],
+    enabled: !!linkedAttendanceId && /^[1-9]\d*$/.test(linkedAttendanceId) && authorizedLinkedBranch,
+    retry: false,
+    staleTime: 0,
+    queryFn: async ({ signal }) => {
+      const response = await fetch(`/api/attendance/${linkedAttendanceId}`, { credentials: "include", signal });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const row = await response.json();
+      if (String(row.id) !== linkedAttendanceId || row.branchId !== linkedBranchId) throw new Error("Source scope mismatch");
+      return row;
+    },
+  });
   const branchFilterInitialized = useRef(false);
   const [search, setSearch] = useState("");
   const [branchFilter, setBranchFilter] = useState("");
@@ -290,6 +307,13 @@ export default function EmployeeAttendanceReportPage() {
           description="يجمع حضور الموظف من كل الفروع خلال الشهر — مفيد عند نقل الموظف بين الفروع"
           backHref="/attendance-dashboard"
         />
+        {linkedAttendanceId && <section className="rounded-xl border bg-card p-4 text-sm" aria-label="سجل الحضور المحدد">
+          <h2 className="font-bold">سجل الحضور #{linkedAttendanceId}</h2>
+          {linkedAttendance.isLoading || branchesLoading ? <p role="status">جار التحقق من السجل…</p> : !authorizedLinkedBranch || linkedAttendance.isError || !linkedAttendance.data ? <p role="alert" className="text-destructive">السجل غير متاح أو لا تملك صلاحية الوصول إليه.</p> : <>
+            <p>الفرع: {branches.find(b => b.id === linkedBranchId)?.name} · التاريخ: {linkedAttendance.data.attendanceDate}</p>
+            <p>الحالة: {statusInfo(linkedAttendance.data.status).label} · معرف الموظف: {linkedAttendance.data.employeeId}</p>
+          </>}
+        </section>}
 
         {/* Controls */}
         <SectionCard title="اختر الموظف والشهر" data-testid="section-controls">

@@ -125,7 +125,7 @@ export default function OperationsDashboardPage() {
           />
           <KpiCard
             label={t('dashboard.qualityRate')}
-            value={stats?.qualityPassRate || 100}
+            value={stats?.qualityPassRate ?? 0}
             unit="%"
             icon={CheckCircle}
             tone="violet"

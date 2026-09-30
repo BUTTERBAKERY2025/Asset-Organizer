@@ -33,6 +33,10 @@ const CHECK_RESULTS = {
 };
 
 export default function QualityControlPage() {
+  const sourceParams = new URLSearchParams(window.location.search);
+  const linkedCheckId = sourceParams.get("checkId");
+  const linkedBranchId = sourceParams.get("branchId");
+  const validLinkedCheck = !!linkedCheckId && /^[1-9]\d*$/.test(linkedCheckId);
   const [searchTerm, setSearchTerm] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [formData, setFormData] = useState({
@@ -52,10 +56,24 @@ export default function QualityControlPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const { branches, userBranchId, canSelectBranch } = useBranches();
+  const { branches, userBranchId, canSelectBranch, isLoading: branchesLoading } = useBranches();
 
   const { data: checks, isLoading } = useQuery<QualityCheck[]>({
     queryKey: ["/api/quality-checks"],
+    enabled: !linkedCheckId,
+  });
+  const linkedCheck = useQuery<QualityCheck>({
+    queryKey: ["/api/quality-checks", linkedCheckId, linkedBranchId],
+    enabled: validLinkedCheck && !branchesLoading && branches.some(b => b.id === linkedBranchId),
+    retry: false,
+    staleTime: 0,
+    queryFn: async ({ signal }) => {
+      const response = await fetch(`/api/quality-checks/${linkedCheckId}`, { credentials: "include", signal });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const record: QualityCheck = await response.json();
+      if (record.branchId !== linkedBranchId || String(record.id) !== linkedCheckId) throw new Error("Source scope mismatch");
+      return record;
+    },
   });
 
   useEffect(() => {
@@ -106,7 +124,7 @@ export default function QualityControlPage() {
   const getBranchName = (branchId: string) => branches?.find(b => b.id === branchId)?.name || branchId;
   const getCheckTypeLabel = (type: string) => CHECK_TYPES.find(t => t.value === type)?.label || type;
 
-  const filteredChecks = checks?.filter(c =>
+  const filteredChecks = (linkedCheckId ? linkedCheck.isFetching || linkedCheck.isError ? [] : linkedCheck.data ? [linkedCheck.data] : [] : checks)?.filter(c =>
     getCheckTypeLabel(c.checkType).toLowerCase().includes(searchTerm.toLowerCase()) ||
     getBranchName(c.branchId).toLowerCase().includes(searchTerm.toLowerCase())
   );
@@ -335,13 +353,14 @@ export default function QualityControlPage() {
           </div>
         </div>
 
-        {isLoading ? (
+        {linkedCheckId && !branchesLoading && (!validLinkedCheck || !branches.some(b => b.id === linkedBranchId) || linkedCheck.isError) && <p role="alert" className="rounded-lg border border-destructive p-3 text-sm text-destructive">تعذر فتح فحص الجودة المحدد؛ السجل غير متاح أو لا تملك صلاحية الوصول إليه.</p>}
+        {(isLoading || (linkedCheckId && (branchesLoading || linkedCheck.isLoading))) ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-4">
             {[1, 2, 3, 4, 5, 6].map(i => (
               <Skeleton key={i} className="h-40" />
             ))}
           </div>
-        ) : filteredChecks?.length === 0 ? (
+        ) : linkedCheckId && !linkedCheck.data ? null : filteredChecks?.length === 0 ? (
           <Card>
             <CardContent className="flex flex-col items-center justify-center py-8 sm:py-12">
               <ClipboardCheck className="w-10 h-10 sm:w-12 sm:h-12 text-muted-foreground mb-4" />

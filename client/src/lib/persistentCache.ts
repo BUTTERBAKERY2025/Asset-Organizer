@@ -1,6 +1,6 @@
 const CACHE_PREFIX = 'btr_qc_';
 const MAX_ENTRIES = 60;
-const CACHE_VERSION = 4;
+const CACHE_VERSION = 5;
 
 interface CacheEntry {
   d: any;
@@ -133,7 +133,6 @@ export function setCachedData(queryKey: string, data: any, ttlMs: number) {
 }
 
 const PERSIST_ENDPOINTS = new Set([
-  '/api/branches',
   '/api/products',
   '/api/product-categories',
   '/api/departments',
@@ -143,7 +142,6 @@ const PERSIST_ENDPOINTS = new Set([
   '/api/branch-cashiers',
   '/api/chart-of-accounts',
   '/api/dashboard/stats',
-  '/api/command-center',
   '/api/warehouse/items',
   '/api/targets',
   '/api/construction-projects',
