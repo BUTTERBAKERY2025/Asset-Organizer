@@ -206,6 +206,7 @@ const PublicGreetingPage = makeLazy("public-greeting");
 const InvitationPage = makeLazy("invitation");
 const FloorPlanPage = makeLazy("floor-plan");
 const HRHubPage = makeLazy("hr-hub");
+const OperationsHRPage = makeLazy("operations-hr");
 const MyPortalPage = makeLazy("my-portal");
 const OwnerPortalPage = makeLazy("owner-portal");
 const ShareholderPortalPage = makeLazy("shareholder-portal");
@@ -395,7 +396,9 @@ const Router = React.memo(function Router() {
       <Route path="/my-portal">{() => <ProtectedPage component={MyPortalPage} />}</Route>
       <Route path="/shareholder-portal">{() => <ProtectedPage component={ShareholderPortalPage} />}</Route>
       <Route path="/audit-portal">{() => <ProtectedPage component={AuditPortalPage} />}</Route>
-      <Route path="/hr-hub">{() => <ModulePage component={HRHubPage} module="hr_management" />}</Route>
+      <Route path="/hr-hub">{() => user?.role === "operations_manager"
+        ? <ModulePage component={OperationsHRPage} module="operations_hr" />
+        : <ModulePage component={HRHubPage} module="hr_management" />}</Route>
       <Route path="/hr/employee-documents">{() => <ModulePage component={HREmployeeDocumentsPage} module="hr_documents" />}</Route>
       <Route path="/hr/leaves">{() => <ModulePage component={HRLeavesPage} module="hr_leaves" />}</Route>
       <Route path="/hr/warnings">{() => <ModulePage component={HRWarningsPage} module="hr_warnings" />}</Route>

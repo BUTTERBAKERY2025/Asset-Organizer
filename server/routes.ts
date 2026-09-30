@@ -17,6 +17,8 @@ import {
   ManualProductionOperationError,
 } from "./manual-production-operations";
 import { db, pool } from "./db";
+import { operationsPayrollReviews } from "@shared/schema";
+import { operationsHrManagerOnly, operationsPayrollCsv, registerOperationsHrRoutes } from "./operations-hr-routes";
 import { registerReverseLogisticsRoutes } from "./reverse-logistics-routes";
 import { registerKitchenWarehouseShippingRoutes } from "./kitchen-warehouse-shipping-routes";
 import { assertDeliveryDispatchReady, cancelDeliveryAssignmentForSource, DeliveryDispatchConflict } from "./delivery-dispatch-guard";
@@ -629,6 +631,7 @@ export async function registerRoutes(
   registerAuditPortalRoutes(app);
   registerJobOfferRoutes(app);
   registerOnboardingRoutes(app);
+  registerOperationsHrRoutes(app);
   registerHrRoutes(app);
   registerSelfServiceRoutes(app);
   registerShareholderPortalRoutes(app);
@@ -32508,6 +32511,79 @@ export async function registerRoutes(
     return { ...result, closure: existing || null, isLocked };
   };
 
+  // Operations may inspect the same live calculation / immutable closed snapshot
+  // as HR, without access to any of the salary closing mutation endpoints.
+  const operationsPayrollManagerOnly = operationsHrManagerOnly;
+  const operationsPayrollScope = async (req: any, res: any) => {
+    const branchId = req.query.branchId ?? req.body?.branchId;
+    const month = req.query.month ?? req.body?.month;
+    if (typeof branchId !== "string" || branchId === "all" || !isValidMonth(month)) {
+      res.status(400).json({ error: "حدد فرعاً وشهراً صحيحين" });
+      return null;
+    }
+    if (branchId === HQ_BRANCH_ID) {
+      res.status(403).json({ error: "الإدارة العامة خارج نطاق التشغيل" });
+      return null;
+    }
+    if (!(await canAccessBranch(req, branchId))) {
+      res.status(403).json({ error: "الفرع خارج نطاق الصلاحية" });
+      return null;
+    }
+    return { branchId, month };
+  };
+  app.get("/api/operations-hr/payroll", isAuthenticated, operationsPayrollManagerOnly, requirePermission("operations_hr", "view"), requirePermission("operations_payroll", "view"), async (req, res) => {
+    try {
+      const scope = await operationsPayrollScope(req, res);
+      if (!scope) return;
+      const [report, reviews] = await Promise.all([
+        buildBranchPreview(scope.branchId, scope.month),
+        db.select().from(operationsPayrollReviews).where(and(
+          eq(operationsPayrollReviews.branchId, scope.branchId),
+          eq(operationsPayrollReviews.month, scope.month),
+        )),
+      ]);
+      res.set("Cache-Control", "no-store");
+      res.json({ ...report, reviews });
+    } catch (error) {
+      console.error("Operations payroll report error:", error);
+      res.status(500).json({ error: "تعذر تحميل تقرير الرواتب" });
+    }
+  });
+  app.get("/api/operations-hr/payroll/export", isAuthenticated, operationsPayrollManagerOnly, requirePermission("operations_hr", "view"), requirePermission("operations_payroll", "export"), async (req, res) => {
+    try {
+      const scope = await operationsPayrollScope(req, res);
+      if (!scope) return;
+      const report = await buildBranchPreview(scope.branchId, scope.month);
+      res.set("Cache-Control", "no-store");
+      res.type("text/csv; charset=utf-8");
+      res.attachment(`operations-payroll-${scope.month}.csv`).send(operationsPayrollCsv(report.lines));
+    } catch (error) {
+      console.error("Operations payroll export error:", error);
+      res.status(500).json({ error: "تعذر تصدير تقرير الرواتب" });
+    }
+  });
+  app.post("/api/operations-hr/payroll/review", isAuthenticated, operationsPayrollManagerOnly, requirePermission("operations_hr", "view"), requirePermission("operations_payroll", "approve"), async (req, res) => {
+    try {
+      if (req.currentUser?.role !== "operations_manager") return res.status(403).json({ error: "المراجعة مخصصة لمدير التشغيل" });
+      const scope = await operationsPayrollScope(req, res);
+      if (!scope) return;
+      const note = req.body?.note;
+      if (note != null && (typeof note !== "string" || note.length > 1000))
+        return res.status(400).json({ error: "الملاحظة يجب ألا تتجاوز 1000 حرف" });
+      const [review] = await db.insert(operationsPayrollReviews).values({
+        branchId: scope.branchId, month: scope.month, reviewedBy: req.currentUser.id, note: note || null,
+      }).onConflictDoUpdate({
+        target: [operationsPayrollReviews.branchId, operationsPayrollReviews.month, operationsPayrollReviews.reviewedBy],
+        set: { reviewedAt: new Date(), note: note || null },
+      }).returning();
+      // Advisory only: salary closing remains available to HR regardless of review.
+      res.json(review);
+    } catch (error) {
+      console.error("Operations payroll review error:", error);
+      res.status(500).json({ error: "تعذر تسجيل مراجعة الرواتب" });
+    }
+  });
+
   // معاينة (احتساب حيّ على الخادم — غير محفوظ) قبل الإغلاق
   app.get("/api/salary-closing/preview", isAuthenticated, requirePermission("salary_closing", "view"), async (req, res) => {
     try {
@@ -32601,8 +32677,19 @@ export async function registerRoutes(
 
       const hasAccess = await canAccessBranch(req, branchId);
       if (!hasAccess) return res.status(403).json({ error: "غير مصرح بالوصول لهذا الفرع" });
-      const result = await buildBranchPreview(branchId, month);
-      res.json(result);
+      const [result, operationsReviews] = await Promise.all([
+        buildBranchPreview(branchId, month),
+        db.select({
+          reviewedBy: operationsPayrollReviews.reviewedBy,
+          reviewedAt: operationsPayrollReviews.reviewedAt,
+          note: operationsPayrollReviews.note,
+          reviewerName: sql<string>`coalesce(nullif(concat_ws(' ', ${users.firstName}, ${users.lastName}), ''), ${users.username})`,
+        }).from(operationsPayrollReviews).innerJoin(users, eq(operationsPayrollReviews.reviewedBy, users.id)).where(and(
+          eq(operationsPayrollReviews.branchId, branchId),
+          eq(operationsPayrollReviews.month, month),
+        )),
+      ]);
+      res.json({ ...result, operationsReviews });
     } catch (error) {
       console.error("Error computing salary closing preview:", error);
       res.status(500).json({ error: "فشل في حساب معاينة الإغلاق" });

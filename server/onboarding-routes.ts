@@ -1,7 +1,7 @@
 import type { Express, Request } from "express";
 import { db } from "./db";
-import { eq, and, desc, sql, inArray } from "drizzle-orm";
-import { isAuthenticated, requirePermission, getEffectiveBranchFilter } from "./auth";
+import { eq, and, desc, sql, inArray, isNull } from "drizzle-orm";
+import { isAuthenticated, requirePermission, getEffectiveBranchFilter, getAllowedBranchIds } from "./auth";
 import {
   onboardingNotifications,
   onboardingTokens,
@@ -14,6 +14,7 @@ import {
 import crypto from "crypto";
 import { storage } from "./storage";
 import { sendWhatsAppMessage, isTwilioConfigured } from "./twilio-service";
+import { operationsHrManagerOnly } from "./operations-hr-routes";
 
 const PERMISSION_MODULE = "hr_onboarding" as const;
 
@@ -112,6 +113,109 @@ _With our warmest regards,_
 }
 
 export function registerOnboardingRoutes(app: Express) {
+  // Restricted operations-manager initiation of the EXISTING accepted-offer
+  // commencement flow. No candidate offers from another branch, HQ, or generic
+  // HR editing/confirmation powers are exposed through this capability.
+  const operationsJoiningScope = operationsHrManagerOnly;
+  const operationsJoiningBranches = (req: any): string[] => {
+    const ids = getAllowedBranchIds(req);
+    return Array.isArray(ids) ? ids.filter(id => id !== "main_warehouse") : [];
+  };
+  app.get("/api/operations-hr/joining", isAuthenticated, operationsJoiningScope, requirePermission("operations_hr", "view"), requirePermission("operations_joining", "view"), async (req, res) => {
+    try {
+      const allowed = operationsJoiningBranches(req);
+      if (!allowed.length) return res.json([]);
+      const offers = await db.select({
+        id: jobOffers.id, candidateName: jobOffers.candidateName,
+        branchId: jobOffers.branchId, position: jobOffers.position,
+      }).from(jobOffers).where(and(eq(jobOffers.status, "accepted"), isNull(jobOffers.hiredEmployeeId), inArray(jobOffers.branchId, allowed))).orderBy(desc(jobOffers.id));
+      if (!offers.length) return res.json([]);
+      const notifications = await db.select({
+        id: onboardingNotifications.id, jobOfferId: onboardingNotifications.jobOfferId,
+        branchId: onboardingNotifications.branchId, status: onboardingNotifications.status,
+        actualStartDate: onboardingNotifications.actualStartDate,
+      }).from(onboardingNotifications).where(inArray(onboardingNotifications.jobOfferId, offers.map(o => o.id)));
+      res.set("Cache-Control", "no-store");
+      res.json(offers.map(offer => ({
+        ...offer,
+        notification: notifications.find(n => n.jobOfferId === offer.id && n.branchId === offer.branchId) ?? null,
+      })));
+    } catch (error) {
+      console.error("Operations joining list error:", error);
+      res.status(500).json({ error: "تعذر تحميل عروض المباشرة" });
+    }
+  });
+  app.post("/api/operations-hr/joining", isAuthenticated, operationsJoiningScope, requirePermission("operations_hr", "view"), requirePermission("operations_joining", "create"), async (req, res) => {
+    try {
+      const offerId = req.body?.offerId;
+      const actualStartDate = req.body?.actualStartDate;
+      const parsedDate = typeof actualStartDate === "string" ? Date.parse(`${actualStartDate}T00:00:00Z`) : NaN;
+      if (!Number.isSafeInteger(offerId) || !/^\d{4}-\d{2}-\d{2}$/.test(actualStartDate ?? "")
+          || !Number.isFinite(parsedDate) || new Date(parsedDate).toISOString().slice(0, 10) !== actualStartDate)
+        return res.status(400).json({ error: "حدد عرضاً مقبولاً وتاريخ مباشرة صحيحاً" });
+      const allowed = operationsJoiningBranches(req);
+      const result = await db.transaction(async tx => {
+        // Serialize creation for this offer; re-check branch and conversion
+        // after the lock so simultaneous requests cannot create two links.
+        await tx.execute(sql`SELECT id FROM job_offers WHERE id = ${offerId} FOR UPDATE`);
+        const [offer] = await tx.select().from(jobOffers).where(eq(jobOffers.id, offerId)).limit(1);
+        if (!offer) return { error: "NOT_FOUND" };
+        if (offer.status !== "accepted" || offer.hiredEmployeeId || !offer.branchId || !allowed.includes(offer.branchId))
+          return { error: "OUT_OF_SCOPE" };
+        const [existing] = await tx.select({ id: onboardingNotifications.id })
+          .from(onboardingNotifications).where(eq(onboardingNotifications.jobOfferId, offer.id)).limit(1);
+        if (existing) return { error: "EXISTS", notificationId: existing.id };
+        const [created] = await tx.insert(onboardingNotifications).values({
+          notificationNumber: await generateNotificationNumber(), jobOfferId: offer.id,
+          candidateName: offer.candidateName, phone: offer.phone, position: offer.position,
+          branchId: offer.branchId, branchName: offer.branchName, actualStartDate,
+          workingHours: offer.workingHours || null, createdBy: req.currentUser.id,
+        }).returning();
+        return { id: created.id, status: created.status };
+      });
+      if (result.error === "NOT_FOUND") return res.status(404).json({ error: "العرض غير موجود" });
+      if (result.error === "OUT_OF_SCOPE") return res.status(403).json({ error: "العرض خارج نطاق فروع التشغيل أو غير مقبول" });
+      if (result.error === "EXISTS") return res.status(409).json({ error: "إشعار المباشرة موجود بالفعل", notificationId: result.notificationId });
+      res.status(201).json(result);
+    } catch (error) {
+      console.error("Operations joining create error:", error);
+      res.status(500).json({ error: "تعذر إنشاء إشعار المباشرة" });
+    }
+  });
+  app.post("/api/operations-hr/joining/:id/send", isAuthenticated, operationsJoiningScope, requirePermission("operations_hr", "view"), requirePermission("operations_joining", "create"), async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      if (!Number.isSafeInteger(id) || id < 1) return res.status(400).json({ error: "الإشعار غير صالح" });
+      const [entry] = await db.select({ notification: onboardingNotifications, offer: jobOffers })
+        .from(onboardingNotifications).innerJoin(jobOffers, eq(onboardingNotifications.jobOfferId, jobOffers.id))
+        .where(eq(onboardingNotifications.id, id)).limit(1);
+      if (!entry) return res.status(404).json({ error: "الإشعار غير موجود" });
+      const n = entry.notification;
+      if (entry.offer.status !== "accepted" || entry.offer.hiredEmployeeId || !n.branchId || n.branchId !== entry.offer.branchId
+        || !operationsJoiningBranches(req).includes(n.branchId))
+        return res.status(403).json({ error: "الإشعار خارج نطاق فروع التشغيل" });
+      if (!["pending", "sent"].includes(n.status)) return res.status(409).json({ error: "المباشرة موقعة أو منتهية ولا يمكن إعادة الإرسال" });
+      const token = crypto.randomBytes(24).toString("base64url");
+      const expiresAt = new Date(Date.now() + n.validityDays * 86400000);
+      await db.transaction(async tx => {
+        const updated = await tx.update(onboardingNotifications).set({ status: "sent", sentAt: new Date(), expiresAt, updatedAt: new Date() })
+          .where(and(eq(onboardingNotifications.id, n.id), inArray(onboardingNotifications.status, ["pending", "sent"]))).returning({ id: onboardingNotifications.id });
+        if (!updated.length) throw new Error("JOINING_ALREADY_COMPLETED");
+        await tx.update(onboardingTokens).set({ revokedAt: new Date() })
+          .where(and(eq(onboardingTokens.notificationId, n.id), sql`${onboardingTokens.usedAt} IS NULL`, sql`${onboardingTokens.revokedAt} IS NULL`));
+        await tx.insert(onboardingTokens).values({ notificationId: n.id, token, expiresAt });
+      });
+      const link = `${req.protocol}://${req.get("host")}/onboarding/${token}`;
+      let whatsapp: any = { success: false, skipped: !isTwilioConfigured() };
+      if (isTwilioConfigured()) whatsapp = await sendWhatsAppMessage(n.phone, buildOnboardingMessage(n, link, n.branchName ?? undefined));
+      res.json({ link, phone: n.phone, whatsapp });
+    } catch (error) {
+      if (error instanceof Error && error.message === "JOINING_ALREADY_COMPLETED")
+        return res.status(409).json({ error: "المباشرة موقعة أو منتهية" });
+      console.error("Operations joining send error:", error);
+      res.status(500).json({ error: "تعذر إرسال رابط المباشرة" });
+    }
+  });
   // ===== List: accepted offers (مع ربط إشعار المباشرة إن وجد) =====
   app.get(
     "/api/hr/onboarding",

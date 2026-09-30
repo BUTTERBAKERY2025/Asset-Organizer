@@ -1041,6 +1041,7 @@ export default function SalaryClosingPage() {
   const salaryClosingPreviewQuery = useQuery<{
     lines: any[];
     totals: any;
+    operationsReviews?: { reviewedBy: string; reviewerName: string; reviewedAt: string; note: string | null }[];
     unlinked: AttendanceRecord[];
     unlinkedSummary: { totalRecords: number; presentRecords: number; totalHours: number };
     warnings: Array<{ branchEmployeeId: number | null; employeeName: string; code: string; message: string }>;
@@ -2341,6 +2342,16 @@ export default function SalaryClosingPage() {
           description="تقرير شهري شامل للرواتب يتضمن الحضور والغياب وساعات العمل، مع بحث وفلترة متقدمة"
           backHref="/employee-reports"
         />
+        {branch !== "all" && salaryClosingPreview?.operationsReviews?.length ? (
+          <div role="status" className="rounded-lg border border-primary/30 bg-primary/5 px-4 py-3 text-sm">
+            <strong>مراجعة مدير التشغيل (استشارية):</strong>
+            {salaryClosingPreview.operationsReviews.map(review => <p key={review.reviewedBy}>
+              {review.reviewerName} · {new Date(review.reviewedAt).toLocaleString("ar-SA-u-nu-latn", { timeZone: "Asia/Riyadh" })}
+              {review.note ? ` · ${review.note}` : ""}
+            </p>)}
+            <p>لا تمنع هذه المراجعة اعتماد شؤون الموظفين أو إغلاق الرواتب.</p>
+          </div>
+        ) : null}
 
         {/* شريط التحكم: الفرع + الشهر + الإجراءات */}
         <Card data-testid="card-controls">

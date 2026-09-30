@@ -131,7 +131,7 @@ export default function PlatformHomePage() {
   });
 
   const apps: (AppTileProps & { module?: SystemModule })[] = [
-    { title: "مركز الموارد البشرية",          icon: UsersRound,     href: "/hr-hub",                  color: "people",     module: "hr_management" },
+    { title: "مركز الموارد البشرية",          icon: UsersRound,     href: "/hr-hub",                  color: "people",     module: user?.role === "operations_manager" ? "operations_hr" : "hr_management" },
     { title: t("modules.sales.title"),       icon: Receipt,        href: "/cashier-journals",        color: "money",      module: "cashier_journal" },
     { title: t("modules.operations.title"),  icon: Factory,        href: user?.role === "operations_manager" ? "/operations-center" : "/operations", color: "production", module: "operations" },
     { title: "شكاوى الفروع",                 icon: MessageSquareWarning, href: "/branch-complaints",   color: "people",     module: "branch_complaints" },

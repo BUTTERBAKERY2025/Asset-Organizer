@@ -1176,6 +1176,10 @@ export const SYSTEM_MODULES = [
   "employee_reports",
   "employee_transfers",
   "hr_management",
+  "operations_hr",
+  "operations_payroll",
+  "operations_joining",
+  "operations_employee_transfer",
   // وحدات الموارد البشرية التفصيلية (تحكم منفصل لكل صفحة)
   "hr_employment_applications",
   "hr_job_offers",
@@ -1395,6 +1399,10 @@ export const MODULE_LABELS: Record<SystemModule, string> = {
   employee_reports: "تقارير الموظفين",
   employee_transfers: "تحويلات الموظفين",
   hr_management: "إدارة الموارد البشرية",
+  operations_hr: "مركز موارد التشغيل (عرض الموظفين)",
+  operations_payroll: "مراجعة رواتب التشغيل",
+  operations_joining: "روابط مباشرة موظفي التشغيل",
+  operations_employee_transfer: "نقل موظفي التشغيل بين الفروع",
   hr_employment_applications: "طلبات التوظيف",
   hr_job_offers: "عروض العمل",
   hr_onboarding: "مباشرة العمل (إشعار)",
@@ -1608,6 +1616,10 @@ export const MODULE_GROUPS: { label: string; modules: SystemModule[] }[] = [
       "employee_reports",
       "employee_transfers",
       "hr_management",
+      "operations_hr",
+      "operations_payroll",
+      "operations_joining",
+      "operations_employee_transfer",
       "hr_employment_applications",
       "hr_job_offers",
       "hr_onboarding",
@@ -1883,6 +1895,7 @@ export const ROLE_PERMISSION_TEMPLATES: Record<
   // أو الاعتماد المالي/إغلاق الرواتب (نطاق المدير المالي).
   operations_manager: [
     { module: "dashboard", actions: ["view", "export"] },
+    { module: "operations_hr", actions: ["view"] },
     // التشغيل والإنتاج والجودة
     { module: "operations", actions: ["view", "create", "edit", "delete", "export", "print"] },
     { module: "branch_complaints", actions: ["view", "create", "edit", "approve"] },
@@ -6175,6 +6188,18 @@ export const SALARY_PAYMENT_METHOD_LABELS: Record<string, string> = {
 };
 
 // =====================================================
+// Operations review is an advisory audit marker, never a salary closing gate.
+export const operationsPayrollReviews = pgTable("operations_payroll_reviews", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
+  month: varchar("month", { length: 7 }).notNull(),
+  reviewedBy: varchar("reviewed_by").notNull().references(() => users.id),
+  reviewedAt: timestamp("reviewed_at").defaultNow().notNull(),
+  note: text("note"),
+}, (table) => [
+  uniqueIndex("idx_operations_payroll_reviews_month_reviewer").on(table.branchId, table.month, table.reviewedBy),
+]);
+
 // Salary Closures - إغلاق الرواتب الشهري (لقطة ثابتة + قفل)
 // =====================================================
 // عند إغلاق رواتب شهر/فرع، نحفظ "لقطة" ثابتة من الأرقام المحسوبة على الخادم

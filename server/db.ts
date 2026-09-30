@@ -485,6 +485,45 @@ export async function runStartupMigrations() {
     for (const mig of migrations) {
       try { await pool.query(mig); } catch (e) { /* index may already exist or table not found */ }
     }
+    // Core operations HR audit tables are required, not optional legacy
+    // migrations. Let failures surface rather than silently losing reviews or
+    // completing a branch transfer without its history.
+    await pool.query(`CREATE TABLE IF NOT EXISTS operations_payroll_reviews (
+      id serial PRIMARY KEY,
+      branch_id varchar NOT NULL REFERENCES branches(id),
+      month varchar(7) NOT NULL,
+      reviewed_by varchar NOT NULL REFERENCES users(id),
+      reviewed_at timestamp NOT NULL DEFAULT now(),
+      note text,
+      UNIQUE (branch_id, month, reviewed_by)
+    )`);
+    await pool.query(`CREATE TABLE IF NOT EXISTS employee_transfer_requests (
+      id serial PRIMARY KEY,
+      employee_id integer NOT NULL REFERENCES branch_employees(id),
+      source_branch_id varchar NOT NULL REFERENCES branches(id),
+      destination_branch_id varchar NOT NULL REFERENCES branches(id),
+      requested_by varchar NOT NULL REFERENCES users(id),
+      requested_at timestamp NOT NULL DEFAULT now(),
+      effective_date text NOT NULL,
+      reason text NOT NULL,
+      status text NOT NULL DEFAULT 'pending',
+      current_approver_role text DEFAULT 'source_manager',
+      rejection_reason text,
+      completed_at timestamp,
+      notes text,
+      created_at timestamp NOT NULL DEFAULT now(),
+      updated_at timestamp NOT NULL DEFAULT now()
+    )`);
+    await pool.query(`CREATE TABLE IF NOT EXISTS transfer_history (
+      id serial PRIMARY KEY,
+      transfer_id integer NOT NULL REFERENCES employee_transfer_requests(id) ON DELETE CASCADE,
+      event_type text NOT NULL,
+      performed_by varchar REFERENCES users(id),
+      details jsonb,
+      event_timestamp timestamp NOT NULL DEFAULT now()
+    )`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_operations_transfer_source_dest ON employee_transfer_requests(source_branch_id, destination_branch_id)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_operations_transfer_history_transfer ON transfer_history(transfer_id)`);
 
     try {
       // STEP 1: Remove cross-group duplicates — old records with branch_employee_id IS NULL

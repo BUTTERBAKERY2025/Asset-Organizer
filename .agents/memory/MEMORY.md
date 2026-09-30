@@ -83,3 +83,4 @@
 - [Branch request cycle](branch-request-cycle-boundary.md) — branch manager requests and receives for its primary branch; tracking is not source shipping or warehouse administration.
 - [Owner portal boundary](owner-portal-boundary.md) — minimal oversight, explicit branch grants, honest journal-sales labels, and fresh-role bootstrap before operational UI.
 - [Staff organization boundary](staff-organization-boundary.md) — headquarters staff belong to general administration; departments remain unassigned until explicitly chosen, without changing grants.
+- [Operations HR boundary](operations-hr-boundary.md) — user defines operations employees by granted branches excluding HQ, not department; payroll review is advisory, never a closing prerequisite.

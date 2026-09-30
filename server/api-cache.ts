@@ -138,6 +138,10 @@ function evictOldest() {
 }
 
 export function apiCacheMiddleware(req: Request, res: Response, next: NextFunction) {
+  if (req.path.startsWith("/api/operations-hr/")) {
+    res.set("Cache-Control", "no-store");
+    return next();
+  }
   if (req.method !== "GET") {
     return next();
   }

@@ -36,6 +36,9 @@ export function getCachedPermissionsForUser(_userId: string): any[] | null {
 export function hasCrossBranchHrReadAccess(req: any): boolean {
   const user = (req as any).currentUser;
   if (!user) return false;
+  // A manually granted HR module must never override the operations manager's
+  // explicit branch boundary.
+  if (user.role === "operations_manager") return false;
   if (user.role === "admin") return true;
   if (user.role === "hr_manager") return true;
   if (user.role === "hr_specialist") return true;
@@ -1314,6 +1317,11 @@ export const requirePermission = (module: string, action?: string): RequestHandl
     // only in explicitly granted branches (scope handled by branch guards). Modules
     // not in the map fall through to the standard explicit-permission check below.
     if (user.role === "operations_manager") {
+      // These legacy modules contain unscoped HR administration and financial
+      // mutations. Use the purpose-built operations HR permissions instead.
+      if (["hr_management", "salary_closing", "hr_onboarding", "hr_job_offers", "employee_transfers"].includes(module)) {
+        return res.status(403).json({ error: "استخدم صلاحيات موارد التشغيل المحددة" });
+      }
       const allowed = operationsManagerActionsFor(module);
       if (allowed && (action == null || allowed.includes(action))) {
         return next();
@@ -1528,7 +1536,7 @@ export async function canAccessBranch(req: any, branchId: string): Promise<boole
   // Operations Manager: request-local, DB-fresh explicit grants only.
   if (user.role === "operations_manager") {
     const opsBranches = await storage.getUserBranchAccess(user.id);
-    return opsBranches.some((access: any) => access.branchId === branchId);
+    return branchId !== "main_warehouse" && opsBranches.some((access: any) => access.branchId === branchId);
   }
   
   // Check if user has the required permission for the module linked to this branch
@@ -1669,7 +1677,7 @@ export function getAllowedBranchIds(req: any): string[] | null {
   // loads these grants from the database on EVERY request.
   if (user.role === "operations_manager") {
     const opsAccess = req.userBranchAccess || [];
-    return Array.isArray(opsAccess) ? opsAccess.map((access: any) => access.branchId) : [];
+    return Array.isArray(opsAccess) ? opsAccess.map((access: any) => access.branchId).filter((id: string) => id !== "main_warehouse") : [];
   }
   
   // Check if user has explicit branch access
