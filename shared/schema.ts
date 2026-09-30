@@ -6200,6 +6200,23 @@ export const operationsPayrollReviews = pgTable("operations_payroll_reviews", {
   uniqueIndex("idx_operations_payroll_reviews_month_reviewer").on(table.branchId, table.month, table.reviewedBy),
 ]);
 
+// Operational monthly review only: it does not lock source days or financial modules.
+export const operationsMonthReviews = pgTable("operations_month_reviews", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
+  month: varchar("month", { length: 7 }).notNull(),
+  status: text("status").default("open").notNull(),
+  revision: integer("revision").default(0).notNull(),
+  declarations: jsonb("declarations").default([]).notNull(),
+  history: jsonb("history").default([]).notNull(),
+  fingerprint: text("fingerprint"),
+  snapshot: jsonb("snapshot"),
+  closedAt: timestamp("closed_at", { withTimezone: true }),
+  closedBy: varchar("closed_by").references(() => users.id),
+  closedByName: text("closed_by_name"),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, table => [uniqueIndex("operations_month_reviews_branch_id_month_key").on(table.branchId, table.month)]);
+
 // Salary Closures - إغلاق الرواتب الشهري (لقطة ثابتة + قفل)
 // =====================================================
 // عند إغلاق رواتب شهر/فرع، نحفظ "لقطة" ثابتة من الأرقام المحسوبة على الخادم

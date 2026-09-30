@@ -1,13 +1,14 @@
 import { useMemo, useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { Activity, AlertTriangle, ArrowLeft, ArrowUpLeft, CalendarDays, ChartNoAxesCombined, ChevronLeft, ChevronRight, CircleHelp, ClipboardList, Factory, MapPinned, Search, ShieldCheck, Sparkles, Users, Wrench } from "lucide-react";
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { operationsDecisionQueue, type OperationsCenterResponse, type OperationsMonthResponse, type OperationsQueueItem, type OperationsCard } from "@shared/operations-center";
+import { operationsDecisionQueue, type OperationsCenterResponse, type OperationsQueueItem, type OperationsCard } from "@shared/operations-center";
 import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { operationsSourceLabel, queueQualifier } from "@/lib/operations-center-presentation";
 import { Metric, time } from "./record-sheet";
+import { OperationsMonthWorkspace } from "./month-workflow";
 import "./decision-board.css";
 
 const fmt = (value: number) => new Intl.NumberFormat("en-US").format(value);
@@ -20,7 +21,7 @@ const domains = [
   { id: "sales", label: "المبيعات والأداء", hint: "المبيعات ويوميات الكاشير", icon: ChartNoAxesCombined, types: ["cashier_journal", "daily_closure"], modules: ["sales_analytics", "cashier_journal", "daily_closures"] },
 ] as const;
 type Workspace = "urgent" | "followup" | "decision" | "today" | "monthly" | "branches" | "people" | "production" | "quality" | "sales" | "analysis" | null;
-type Selected = { kind: "record"; id: string } | { kind: "card"; id: string; branchId: string } | { kind: "branch"; id: string } | { kind: "month"; id: string } | null;
+type Selected = { kind: "record"; id: string } | { kind: "card"; id: string; branchId: string } | { kind: "branch"; id: string } | null;
 type Insight = { title: string; explanation: string; sourceType: string; sourceId: string; branchId: string; href: string; evidence?: { label: string; source: string; period: string; value: number | null; unit?: string } };
 type InsightResponse = { kind: "ai"; generatedAt: string; insights: Insight[] };
 const reasonFor = (item: OperationsQueueItem) => item.decision?.reason || item.reason || (item.priorityReason ? "أولوية عاجلة مسجلة في المصدر." : `الحالة المسجلة: ${item.status}`);
@@ -42,7 +43,6 @@ export function OperationsDecisionBoard({ data, actorId, offset, onOffset, open,
   const [selected, setSelected] = useState<Selected>(null);
   const [search, setSearch] = useState("");
   const [mobileDetail, setMobileDetail] = useState(false);
-  const [month, setMonth] = useState(() => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Riyadh", year: "numeric", month: "2-digit" }).format(new Date()));
   const ids = data.scope.branchIds;
   const scopeKey = [...ids].sort().join(",");
   const branchName = (id: string) => data.branches.find(branch => branch.id === id)?.name ?? id;
@@ -63,17 +63,6 @@ export function OperationsDecisionBoard({ data, actorId, offset, onOffset, open,
     data.modules.some(module => (entry.modules as readonly string[]).includes(module));
   const unavailable = Object.values(data.coverage.queue).some(value => value === "unavailable");
   const qualified = queueQualifier(data.coverage.truncated, data.coverage.nextOffset, offset, unavailable);
-  const monthQuery = useQuery<OperationsMonthResponse>({
-    queryKey: ["/api/operations-center/monthly", month, scopeKey, actorId],
-    enabled: view === "monthly" && !!scopeKey && /^\d{4}-(0[1-9]|1[0-2])$/.test(month),
-    retry: false, staleTime: 60_000, refetchOnWindowFocus: false,
-    queryFn: async ({ signal }) => {
-      const response = await fetch(`/api/operations-center/monthly?${new URLSearchParams({ month, branchIds: scopeKey })}`, { credentials: "include", signal, cache: "no-store" });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      return response.json();
-    },
-  });
-  const monthData = monthQuery.data?.month === month && monthQuery.data.branchIds.length === ids.length && monthQuery.data.branchIds.every(id => ids.includes(id)) ? monthQuery.data : null;
   const analysis = data.analytics;
   const salesPoints = (analysis?.sales.daily || []).map(point => ({ date: point.date.slice(5), value: point.value }));
   const branchPoints = (analysis?.followups.byBranch || []).filter(point => ids.includes(point.branchId)).map(point => ({ name: branchName(point.branchId), value: point.count }));
@@ -91,7 +80,6 @@ export function OperationsDecisionBoard({ data, actorId, offset, onOffset, open,
   const urgentCase = critical[0];
   const record = selected?.kind === "record" ? queue.find(item => item.id === selected.id) : undefined;
   const card = selected?.kind === "card" ? cards.find(item => item.id === selected.id && item.branchId === selected.branchId) : undefined;
-  const section = selected?.kind === "month" ? monthData?.sections.find(item => item.id === selected.id) : undefined;
   const filtered = (text: string) => text.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase());
   const rows = (view && view in cohorts ? cohorts[view as keyof typeof cohorts] : domainRows).filter(item => filtered(`${item.title} ${item.status} ${branchName(item.branchId)}`));
   const sources = domainCards.filter(item => filtered(`${item.title} ${branchName(item.branchId)}`));
@@ -165,18 +153,9 @@ export function OperationsDecisionBoard({ data, actorId, offset, onOffset, open,
           <DialogTitle className="text-right text-xl font-bold">{view === "urgent" ? "حالات طارئة" : view === "followup" ? "يحتاج متابعة" : view === "decision" ? "بانتظار قراري" : view === "today" ? "مهام اليوم" : view === "monthly" ? "الإغلاقات الشهرية" : view === "analysis" ? "الأداء والتحليل" : domain?.label || "مجال التشغيل"}</DialogTitle>
           <DialogDescription className="text-right text-xs">نطاق الفروع المختار · عرض السجل لا يغيّر حالته</DialogDescription>
         </DialogHeader>
-        <div className="oc-workspace-grid" data-detail={mobileDetail}>
+        {view === "monthly" ? <OperationsMonthWorkspace key={`${actorId}:${scopeKey}`} branches={data.branches.filter(branch => ids.includes(branch.id))} actorId={actorId} open={open} /> : <div className="oc-workspace-grid" data-detail={mobileDetail}>
           <div className="oc-workspace-list space-y-2">
-            {view === "monthly" ? <>
-              <label className="block text-xs font-bold">الشهر <input type="month" value={month} onChange={event => { setMonth(event.target.value); setSelected(null); setMobileDetail(false); }} className="mt-1 block min-h-10 w-full rounded-lg border border-violet-200 bg-[#fdfbff] px-3 text-sm" /></label>
-              {monthQuery.isPending && <div role="status" className="space-y-2"><div className="h-16 animate-pulse rounded-lg bg-violet-100" /><div className="h-16 animate-pulse rounded-lg bg-violet-100" /><span className="sr-only">جار تحميل ملفات الشهر</span></div>}
-              {monthQuery.isError && <p role="alert" className="text-sm text-red-700">تعذر تحميل ملفات الشهر. <Button variant="outline" size="sm" onClick={() => monthQuery.refetch()}>إعادة المحاولة</Button></p>}
-              {(["payroll", "expenses", "closing", "sales"] as const).map(id => {
-                const item = monthData?.sections.find(section => section.id === id);
-                const label = { payroll: "الرواتب والصرف", expenses: "المصروفات", closing: "الإغلاقات التشغيلية", sales: "المبيعات والنتائج" }[id];
-                return <button key={id} type="button" onClick={() => choose({ kind: "month", id })} className="oc-list-item" data-active={selected?.kind === "month" && selected.id === id}><span className="flex justify-between gap-2"><strong className="text-sm">{label}</strong><span className="text-xs text-violet-700">{item?.status === "recorded" ? "مسجل" : item?.status === "needs_review" ? "يحتاج مراجعة" : item?.coverage === "partial" ? "فجوات بيانات" : "غير متاح"}</span></span><span className="mt-1 block text-xs text-muted-foreground">{item?.summary || "لا توجد بيانات موثقة لهذا الملف"}</span></button>;
-              })}
-            </> : view === "analysis" ? <div className="space-y-3 text-sm">
+            {view === "analysis" ? <div className="space-y-3 text-sm">
               <strong>الأدلة ومصدر التحليل</strong>
               <p className="text-xs text-muted-foreground">المبيعات من السجلات المؤكدة فقط. المتابعات من السجلات المرئية ضمن هذا النطاق. البيانات الناقصة لا تُعرض كصفر.</p>
               <p>{analysis ? `مصدر المبيعات: ${analysis.sales.source} · مصدر المتابعات: ${analysis.followups.source}` : "لا توجد أدلة تحليل متاحة من الخادم لهذا النطاق."}</p>
@@ -215,35 +194,10 @@ export function OperationsDecisionBoard({ data, actorId, offset, onOffset, open,
                 {view === "people" && canOpenEmployees ? <Button onClick={() => open("/hr-hub", selected.id)}>فتح إدارة الموظفين <ArrowUpLeft className="mr-2 size-4" /></Button> :
                   <Button onClick={() => openBranch(selected.id)}>فتح تشغيل الفرع <ArrowUpLeft className="mr-2 size-4" /></Button>}
               </div> :
-              selected?.kind === "month" ? <div className="space-y-4">
-                <h3 className="text-xl font-bold">{section?.label || "ملف الشهر"}</h3>
-                <p className="text-sm text-muted-foreground">{section?.summary || "لا توجد بيانات موثقة لهذا الملف."}</p>
-                {section && <>
-                  <div className="oc-panel p-4"><span className="text-xs text-muted-foreground">القيمة المسجلة · ليست اعتماد إغلاق مالي</span>
-                    <strong className="mt-1 block text-xl">{section.value === null ? "غير متاح" : `${fmt(section.value)}${["payroll", "expenses", "sales"].includes(section.id) ? " ر.س" : ""}`}</strong>
-                    <p className="mt-2 text-xs">التغطية: {section.coverage === "complete" ? "البيانات متاحة" : section.coverage === "partial" ? "توجد فجوات" : "المصدر غير متاح"} · المصدر: {section.source}</p>
-                  </div>
-                  <div className="oc-panel space-y-2 p-4 text-sm"><strong>المسؤول والخطوة التالية</strong>
-                    <p>الجهة المسؤولة: {section.responsibleRole || "غير معروفة من المصدر"}</p>
-                    <p>{section.nextStep?.label || "راجع سجلات الفروع للتحقق من حالة الملف"}</p>
-                    {!!section.verifiedGaps?.length && <><strong className="block">فجوات مثبتة</strong><ul className="list-inside list-disc">{section.verifiedGaps.map((gap, index) => <li key={index}>{gap}</li>)}</ul></>}
-                  </div>
-                  <h4 className="font-bold">تفصيل الفروع</h4>
-                  {section.branches?.filter(entry => ids.includes(entry.branchId)).map(entry => <div key={entry.branchId} className="oc-panel space-y-2 p-4">
-                    <div className="flex justify-between gap-2 text-sm"><strong>{branchName(entry.branchId)}</strong><strong>{entry.value === null ? "غير متاح" : fmt(entry.value)}</strong></div>
-                    <p className="text-sm text-muted-foreground">{entry.summary}</p>
-                    <p className="text-xs">الحالة: {entry.status === "recorded" ? "مسجل" : entry.status === "needs_review" ? "يحتاج مراجعة" : entry.status === "unknown" ? "غير معروف" : "غير متاح"}</p>
-                    <p className="text-xs">الجهة المسؤولة: {entry.responsibleRole || "غير معروفة من المصدر"} · الخطوة التالية: {entry.nextStep?.label || "غير محددة في المصدر"}</p>
-                    {!!entry.verifiedGaps?.length && <ul className="list-inside list-disc text-xs">{entry.verifiedGaps.map((gap, index) => <li key={index}>{gap}</li>)}</ul>}
-                    {entry.href && <Button variant="outline" size="sm" onClick={() => open(entry.href!, entry.branchId)}>فتح مصدر الفرع <ArrowUpLeft className="mr-1 size-4" /></Button>}
-                  </div>)}
-                  {section.href && ids.length === 1 && <Button variant="outline" onClick={() => open(section.href!, ids[0])}>فتح المصدر <ArrowUpLeft className="mr-1 size-4" /></Button>}
-                </>}
-              </div> :
               view === "analysis" ? <div className="space-y-4"><h3 className="text-lg font-bold">كيف نقرأ الأداء؟</h3><p className="text-sm text-muted-foreground">تظهر الرسوم على الصفحة الرئيسية. افتح سجلًا من قراءة المساعد لمراجعة الوقائع في المصدر؛ الاقتراح لا يغير السجل.</p><p className="text-sm">تغطية المبيعات: {analysis?.sales.coverage || "غير معروفة"} · تغطية المتابعات: {analysis?.followups.coverage || qualified}</p>{aiResult && <p className="text-xs text-muted-foreground">آخر طلب تحليل: {time(aiResult.generatedAt)}</p>}</div> :
               <div className="flex h-full flex-col items-center justify-center gap-3 text-center text-muted-foreground"><CircleHelp className="size-9 text-violet-400" /><p className="max-w-sm text-sm">اختر سجلًا من القائمة لعرض السبب والمسؤول والموعد وتفاصيل المصدر هنا.</p></div>}
           </div>
-        </div>
+        </div>}
       </DialogContent>
     </Dialog>
   </div>;

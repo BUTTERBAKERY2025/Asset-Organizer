@@ -21,8 +21,8 @@ Use distinct decision icons and domain icons. Selecting a case opens a wide list
 
 **How to apply:** Show “بانتظار قراري” only from current actor authority plus the actual source stage, never from owner assignment. Hide empty decision icons, retain authorized tools, and show a single factual urgent alert instead of a repeated priority list.
 
-Monthly closing is a grouped evidence view, not a new financial approval lifecycle. Salary snapshot totals, salary payment records and recorded expenses are different facts.
+The monthly workspace must provide an actual saved operational review lifecycle, not just grouped evidence and links. Keep that review separate from existing payroll closing, salary payment controls, and financial approval. Salary snapshot totals, recorded payments, and recorded expenses are different facts.
 
-**Why:** The user wants a unified monthly workspace, but existing sources do not establish one consolidated month-close status or cash-disbursement total.
+**Why:** The user explicitly rejected the report-only monthly view and authorized completing the functional workflow without another redesign. They previously required operations payroll review to remain advisory, not a prerequisite for HR closing or payment.
 
-**How to apply:** Keep source/period/coverage visible; never invent final closure, payment, urgency or approval authority. Explicitly requested AI suggestions must use authorized evidence and cannot execute actions.
+**How to apply:** Operational review may close/reopen with an audit trail but must not lock or approve financial sources. Unrecorded calendar days need evidence or a documented nonoperating declaration; changes after review require reconciliation. Preserve existing financial authority. Never treat a legacy payment flag without an amount as full payment, or match historical payroll by an employee's current branch after transfer. Explicitly requested AI suggestions cannot execute actions.

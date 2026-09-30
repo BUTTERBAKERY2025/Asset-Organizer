@@ -17,6 +17,7 @@ import { canAccessDeliveryWorkspace } from "@shared/delivery-workspace-access";
 import { getAllowedBranchIds, isAuthenticated, requirePermission, HR_SPECIALIST_PERMISSIONS } from "./auth";
 import { branchOperationsDefinitions, hasEffectiveViewPermission, loadAuthorizedBranchOperationsCard } from "./branch-operations";
 import { resolveReviewerJobTitle, reviewerMatchesStep } from "./leave-helpers";
+import { registerOperationsMonthWorkflow } from "./operations-month-workflow";
 
 const MAX_BRANCHES = 30;
 const SOURCE_LIMIT = 101;
@@ -463,6 +464,7 @@ export async function projectOperationsCenter(req: Request, requested: string[] 
 }
 
 export function registerOperationsCenterRoutes(app: Express): void {
+  registerOperationsMonthWorkflow(app);
   const auth = [isAuthenticated, requirePermission("operations", "view")] as const;
   app.get("/api/operations-center/notifications", ...auth, async (req, res, next) => {
     res.set("Cache-Control", "no-store");
