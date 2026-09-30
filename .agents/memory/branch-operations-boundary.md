@@ -17,6 +17,12 @@ The manager center must be a compact control-and-follow-up workspace, not a long
 
 **How to apply:** Keep branch context and actionable priorities immediately accessible; reveal record/domain detail on selection instead of repeating every metric, source explanation and table on the initial screen. Preserve the deeper views and truthful coverage information without making them compete with the primary work.
 
+For multi-branch viewing, group repeated source cards by operational domain before drilling into a branch; do not flatten the branch-by-module product into the manager's initial list or keep every detail pane open.
+
+**Why:** The user rejected the subsequent three-pane design too: real multi-branch data made it a dense source browser instead of an operational overview.
+
+**How to apply:** Default to overview, expose compact searchable branch selection, and open details deliberately. Grouping presentation does not authorize adding heterogeneous metrics or inferring a healthy branch from absent follow-ups. Use branch-plus-source identity for selections.
+
 **Why:** The user approved a familiar branch-staff entry point while explicitly requiring every piece of information to match the real system structure. Similar labels are not interchangeable: asset maintenance status is not a maintenance ticket, visitor logs are not supervisory visits, and cashier closing is not a cash-custody ledger.
 
 **How to apply:** Verify domain semantics before reusing a source. Navigation-only cards are acceptable until trustworthy counters exist; never invent metrics or silently substitute a different workflow. Keep missing-domain development staged according to the branch operations roadmap.

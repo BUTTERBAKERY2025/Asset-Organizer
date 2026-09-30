@@ -31,6 +31,7 @@ export default function OperationsCenterPage() {
   const [invalidSelection, setInvalidSelection] = useState(false);
   const [offset, setOffset] = useState(0);
   const [message, setMessage] = useState("");
+  const [scopeSearch, setScopeSearch] = useState("");
   const allowedIds = useMemo(() => branches.map(branch => branch.id), [branches]);
   // An empty selection means the server's current authorized scope, not cached client-side "all".
   const effectiveIds = selected.filter(id => allowedIds.includes(id));
@@ -147,14 +148,17 @@ export default function OperationsCenterPage() {
   };
   return <Layout><main dir="rtl" className="page-container mx-auto max-w-[1550px] space-y-4 pb-8 pt-4" data-testid="operations-center-page">
     <header className="relative rounded-2xl bg-[#3e2b3a] text-[#fff8f3] shadow-[0_12px_28px_rgba(48,27,42,0.12)]">
-      <div className="flex flex-col gap-4 px-5 py-5 lg:flex-row lg:items-center lg:justify-between lg:px-7">
-        <div className="min-w-0"><p className="text-[11px] font-bold tracking-[.12em] text-[#e4b6a4]">BUTTER BAKERY / OPERATIONS</p><h1 className="mt-1 text-2xl font-extrabold tracking-tight sm:text-3xl">مركز إدارة التشغيل</h1><p className="mt-1 text-xs text-[#d9c9cd]">المتابعات والسجلات التشغيلية للفروع المسموح بها</p></div>
+      <div className="flex flex-col gap-3 px-5 py-4 lg:flex-row lg:items-center lg:justify-between lg:px-7">
+        <div className="min-w-0"><p className="text-[11px] font-bold tracking-[.12em] text-[#e4b6a4]">BUTTER BAKERY / OPERATIONS</p><h1 className="mt-1 text-2xl font-extrabold tracking-tight">مركز إدارة التشغيل</h1></div>
         <div className="flex flex-wrap items-center gap-2">
           <details className="relative min-w-[175px] flex-1 rounded-xl border border-[#765d6b] bg-[#523b4e] lg:flex-none">
             <summary className="min-h-10 cursor-pointer px-3 py-2.5 text-xs font-bold">نطاق الفروع · {effectiveIds.length ? `${effectiveIds.length} مختارة` : `${allowedIds.length} مسموح بها`}</summary>
-            <div className="absolute left-0 right-0 z-30 mt-1 max-h-64 min-w-[240px] overflow-y-auto rounded-xl border border-[#e5d9d8] bg-[#fffdfa] p-2 text-[#342832] shadow-xl">
+            <div className="absolute left-0 right-0 z-30 mt-1 min-w-[260px] rounded-xl border border-[#e5d9d8] bg-[#fffdfa] p-2 text-[#342832] shadow-xl">
+              <input aria-label="بحث نطاق الفروع" value={scopeSearch} onChange={event => setScopeSearch(event.target.value)} placeholder="ابحث عن فرع" className="mb-2 min-h-10 w-full rounded-lg border border-[#e5d9d8] bg-[#fffdfa] px-3 text-sm outline-none" />
+              <div className="max-h-52 overflow-y-auto">
               <Button variant="ghost" className="w-full justify-start text-xs" onClick={() => changeScope([])}>كل الفروع المسموح بها</Button>
-              {branches.map(branch => <label key={branch.id} className="flex min-h-10 cursor-pointer items-center gap-2 rounded px-2 text-xs hover:bg-[#f4ece8]"><input type="checkbox" checked={effectiveIds.includes(branch.id)} onChange={event => changeScope(event.target.checked ? [...effectiveIds, branch.id] : effectiveIds.length ? effectiveIds.filter(id => id !== branch.id) : allowedIds.filter(id => id !== branch.id))} />{branch.name}</label>)}
+              {branches.filter(branch => branch.name.toLocaleLowerCase().includes(scopeSearch.toLocaleLowerCase().trim())).map(branch => <label key={branch.id} className="flex min-h-10 cursor-pointer items-center gap-2 rounded px-2 text-xs hover:bg-[#f4ece8]"><input type="checkbox" checked={effectiveIds.includes(branch.id)} onChange={event => changeScope(event.target.checked ? [...effectiveIds, branch.id] : effectiveIds.length ? effectiveIds.filter(id => id !== branch.id) : allowedIds.filter(id => id !== branch.id))} />{branch.name}</label>)}
+              </div>
             </div>
           </details>
           <Button variant="outline" size="sm" className="min-h-10 border-[#765d6b] bg-[#523b4e] text-[#fff8f3] hover:bg-[#694d60] hover:text-[#fff8f3]" disabled={!data || center.isFetching} onClick={() => center.refetch()}><RefreshCw className={`ml-2 h-4 w-4 ${center.isFetching ? "animate-spin" : ""}`} />تحديث</Button>
