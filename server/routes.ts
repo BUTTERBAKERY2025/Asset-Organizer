@@ -25,6 +25,7 @@ import { evaluateWasteGovernance, checkApprovalGate } from "./waste-governance";
 import type { AuthenticatedRequest } from "./types/express";
 import { eq, and, desc, inArray, gte, lte, lt, gt, sql, or, isNull, like, notLike, type SQL } from "drizzle-orm";
 import type { User } from "@shared/schema";
+import { HQ_BRANCH_ID, isHeadquartersEmployee } from "@shared/employee-organization";
 import { groupPreparationSheet, invalidPreparationSheetOrderIds } from "@shared/central-kitchen-preparation-sheet";
 import { matchesCentralKitchenCatalogIdentity } from "@shared/central-kitchen-catalog";
 import { buildCentralKitchenCounts, centralKitchenPageMeta } from "@shared/central-kitchen-list";
@@ -10111,7 +10112,7 @@ export async function registerRoutes(
       
       const users = await storage.getAllUsers();
       let employees = users
-        .filter(u => (u.role === "employee" || u.branchId || u.jobTitle) && u.isActive === "active")
+        .filter(u => !isHeadquartersEmployee(u) && (u.role === "employee" || u.branchId || u.jobTitle) && u.isActive === "active")
         .map(({ password, ...user }) => user);
       
       // Filter by branch
@@ -10126,10 +10127,41 @@ export async function registerRoutes(
     }
   });
 
+  // HQ account directory is read-only. Department assignment is deliberately not inferred
+  // from job title, role, or the user's HR profile.
+  app.get("/api/administration-employees", isAuthenticated, requirePermission("users", "view"), async (req, res) => {
+    try {
+      if (!isUserAdmin(req) && !(await canAccessBranch(req, HQ_BRANCH_ID))) {
+        return res.status(403).json({ error: "غير مصرح بالوصول إلى المركز الرئيسي" });
+      }
+
+      const users = await storage.getAllUsers();
+      res.json(users.filter(isHeadquartersEmployee).map(user => ({
+        id: user.id,
+        username: user.username,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        branchId: user.branchId,
+        jobTitle: user.jobTitle,
+        isActive: user.isActive,
+        phone: user.phone,
+        email: user.email,
+        role: user.role,
+        departmentName: "غير محدد الإدارة",
+      })));
+    } catch (error) {
+      console.error("Error fetching administration employees:", error);
+      res.status(500).json({ error: "Failed to fetch administration employees" });
+    }
+  });
+
   // Create operations employee
   app.post("/api/operations-employees", isAuthenticated, requirePermission("operations", "create"), async (req, res) => {
     try {
       const { username, password, firstName, lastName, phone, email, branchId, jobTitle, role } = req.body;
+      if (isHeadquartersEmployee({ branchId })) {
+        return res.status(403).json({ error: "موظفو المركز الرئيسي خارج إدارة موظفي العمليات" });
+      }
       
       if (!username || !password) {
         return res.status(400).json({ error: "اسم المستخدم وكلمة المرور مطلوبان" });
@@ -10208,15 +10240,21 @@ export async function registerRoutes(
     try {
       const { firstName, lastName, phone, email, branchId, jobTitle, isActive, password } = req.body;
       const updateData: any = {};
+
+      const existingUser = await storage.getUser(req.params.id);
+      if (!existingUser) return res.status(404).json({ error: "Employee not found" });
+      if (isHeadquartersEmployee(existingUser) || isHeadquartersEmployee({ branchId })) {
+        return res.status(403).json({ error: "موظفو المركز الرئيسي خارج إدارة موظفي العمليات" });
+      }
       
       // SECURITY: Verify current employee's branch access for non-admin users
       if (!isUserAdmin(req)) {
-        const existingUser = await storage.getUser(req.params.id);
-        if (existingUser?.branchId) {
-          const hasAccess = await canAccessBranch(req, existingUser.branchId);
-          if (!hasAccess) {
-            return res.status(403).json({ error: "غير مصرح بتعديل هذا الموظف" });
-          }
+        if (!existingUser.branchId || !(await canAccessBranch(req, existingUser.branchId))) {
+          return res.status(403).json({ error: "غير مصرح بتعديل هذا الموظف" });
+        }
+        // A falsey destination must not remove the branch that scopes this account.
+        if (branchId !== undefined && (typeof branchId !== "string" || !branchId.trim())) {
+          return res.status(403).json({ error: "غير مصرح بنقل الموظف لهذا الفرع" });
         }
         // Also check if trying to move to a different branch
         if (branchId && branchId !== existingUser?.branchId) {
@@ -10257,14 +10295,15 @@ export async function registerRoutes(
   // Delete operations employee
   app.delete("/api/operations-employees/:id", isAuthenticated, requirePermission("operations", "delete"), async (req, res) => {
     try {
+      const existingUser = await storage.getUser(req.params.id);
+      if (!existingUser) return res.status(404).json({ error: "Employee not found" });
+      if (isHeadquartersEmployee(existingUser)) {
+        return res.status(403).json({ error: "موظفو المركز الرئيسي خارج إدارة موظفي العمليات" });
+      }
       // SECURITY: Verify employee's branch access for non-admin users
       if (!isUserAdmin(req)) {
-        const existingUser = await storage.getUser(req.params.id);
-        if (existingUser?.branchId) {
-          const hasAccess = await canAccessBranch(req, existingUser.branchId);
-          if (!hasAccess) {
-            return res.status(403).json({ error: "غير مصرح بحذف هذا الموظف" });
-          }
+        if (!existingUser.branchId || !(await canAccessBranch(req, existingUser.branchId))) {
+          return res.status(403).json({ error: "غير مصرح بحذف هذا الموظف" });
         }
       }
       
@@ -10313,6 +10352,12 @@ export async function registerRoutes(
       const employee = await storage.getUser(req.params.id);
       if (!employee) {
         return res.status(404).json({ error: "Employee not found" });
+      }
+      if (isHeadquartersEmployee(employee)) {
+        return res.status(403).json({ error: "موظفو المركز الرئيسي خارج إدارة موظفي العمليات" });
+      }
+      if (!isUserAdmin(req) && (!employee.branchId || !(await canAccessBranch(req, employee.branchId)))) {
+        return res.status(403).json({ error: "غير مصرح بتعديل هذا الموظف" });
       }
       
       if (!employee.jobTitle) {

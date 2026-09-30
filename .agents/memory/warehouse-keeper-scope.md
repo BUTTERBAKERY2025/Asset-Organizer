@@ -8,8 +8,8 @@ Warehouse keeper authority is limited to the main warehouse, including its outbo
 
 **How to apply:** Check source ownership for approve/dispatch/assignment and destination ownership for receipt. Retain branch receipt inside its source request. Branch managers now also use the standalone delivery workspace for branch-only tracking and receipt approval, not warehouse or driver management; see branch-request-cycle-boundary.md.
 
-The main warehouse is a virtual scope, not a persisted primary branch. Store a keeper's primary branch as null and derive the operational warehouse scope from the role; do not create a synthetic branch row or write the sentinel into the user's branch foreign key.
+Warehouse-keeper authority uses a virtual scope. Store a keeper's primary branch as null and derive the operational warehouse scope from the role; do not create a synthetic branch row or assign the sentinel merely to grant warehouse authority.
 
-**Why:** The user branch field references real branches, while legacy main-warehouse inventory uses a sentinel and canonical catalogue stock. Persisting that sentinel can fail the foreign key; a synthetic branch would conflate separate identities.
+**Why:** Legacy main-warehouse inventory uses a sentinel and canonical catalogue stock. Production also contains a real headquarters branch with the same identifier. That organizational branch must not be confused with the keeper's virtual inventory authority.
 
 **How to apply:** Keep account editing, fresh authorization, branch bootstrap and UI scope consistent. Ignore old branch grants for this role, preserve explicit permission revocation, and never infer ownership from an ambiguous historical null movement-log branch.

@@ -78,6 +78,7 @@ const BranchDailyClosingPage = makeLazy("branch-daily-closing");
 const BranchDailyClosuresPage = makeLazy("branch-daily-closures");
 const BranchDailyClosureDetailPage = makeLazy("branch-daily-closure-detail");
 const OperationsEmployeesPage = makeLazy("operations-employees");
+const AdministrationEmployeesPage = makeLazy("administration-employees");
 const TargetsPlanningPage = makeLazy("targets-planning");
 const TargetsDashboardPage = makeLazy("targets-dashboard");
 const IncentivesManagementPage = makeLazy("incentives-management");
@@ -439,6 +440,7 @@ const Router = React.memo(function Router() {
       <Route path="/quality-control">{() => <ModulePage component={QualityControlPage} module="quality_control" />}</Route>
       <Route path="/display-bar-waste">{() => <ModulePage component={DisplayBarWastePage} module="waste_tracking" />}</Route>
       <Route path="/operations-employees">{() => <AdminPage component={OperationsEmployeesPage} module="operations" />}</Route>
+      <Route path="/administration-employees">{() => <AdminPage component={AdministrationEmployeesPage} module="users" />}</Route>
       <Route path="/operations-reports">{() => <ModulePage component={OperationsReportsDashboardPage} module="operations" />}</Route>
       
       {/* Sales - المبيعات والكاشير */}

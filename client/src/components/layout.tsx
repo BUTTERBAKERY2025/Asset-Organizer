@@ -78,6 +78,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     "/organizational-structure": "hr", "/attendance-dashboard": "hr",
     "/shift-management": "hr", "/attendance-check": "hr", "/timesheet": "hr", "/employee-reports": "hr",
     "/floor-plan": "hr", "/biometric-settings": "hr", "/operations-employees": "hr",
+    "/administration-employees": "administration",
     "/incentives-management": "hr",
     "/hr/job-offers": "hr", "/hr/applications": "hr", "/hr/onboarding": "hr",
     "/hr/employee-documents": "hr", "/hr/leaves": "hr", "/hr/warnings": "hr",
@@ -120,7 +121,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
   const getInitialOpenGroups = useCallback(() => {
     const groups: Record<string, boolean> = {
-      hr: false, production: false, operations: false, sales: false,
+      hr: false, administration: false, production: false, operations: false, sales: false,
       assets: false, construction: false, marketing: false, warehouse: false,
       executive: false, settings: false,
     };
@@ -459,6 +460,16 @@ export function Layout({ children }: { children: React.ReactNode }) {
           { href: "/visitors", label: t("sidebar.visitors"), icon: UserCheck, module: "executive_visitors", indent: true },
           { href: "/travel-requests", label: t("sidebar.travelRequests"), icon: MapPin, module: "executive_travel", indent: true },
           { href: "/executive/reports", label: t("sidebar.executiveReports"), icon: BarChart3, module: "executive_reports", indent: true },
+        ],
+      },
+    },
+    {
+      key: "administration",
+      group: {
+        label: "الإدارة العامة",
+        icon: Building2,
+        items: [
+          { href: "/administration-employees", label: "موظفو الإدارة العامة", icon: Users, module: "users", isHeader: true },
         ],
       },
     },

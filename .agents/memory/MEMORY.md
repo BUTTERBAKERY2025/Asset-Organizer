@@ -82,3 +82,4 @@
 - [Warehouse keeper scope](warehouse-keeper-scope.md) — main warehouse is virtual; persist no branch sentinel, isolate source authority from branch receipt and driver execution.
 - [Branch request cycle](branch-request-cycle-boundary.md) — branch manager requests and receives for its primary branch; tracking is not source shipping or warehouse administration.
 - [Owner portal boundary](owner-portal-boundary.md) — minimal oversight, explicit branch grants, honest journal-sales labels, and fresh-role bootstrap before operational UI.
+- [Staff organization boundary](staff-organization-boundary.md) — headquarters staff belong to general administration; departments remain unassigned until explicitly chosen, without changing grants.

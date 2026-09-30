@@ -18,6 +18,7 @@ import type { User } from "@shared/schema";
 import React, { useState, useEffect } from "react";
 import { TablePagination } from "@/components/ui/pagination";
 import { ExportButtons } from "@/components/export-buttons";
+import { HQ_BRANCH_ID, isHeadquartersEmployee } from "@shared/employee-organization";
 
 const exportColumns = [
   { header: "الاسم", key: "name", width: 20 },
@@ -61,7 +62,7 @@ export default function OperationsEmployeesPage() {
   const [currentPage, setCurrentPage] = useState(1);
 
   useEffect(() => {
-    if (userBranchId) {
+    if (userBranchId && userBranchId !== HQ_BRANCH_ID) {
       setFilterBranch(userBranchId);
     } else if (canSelectBranch) {
       setFilterBranch("all");
@@ -107,7 +108,9 @@ export default function OperationsEmployeesPage() {
   });
 
 
+  const operatingBranches = branches.filter(branch => branch.id !== HQ_BRANCH_ID);
   const filteredEmployees = employees.filter(emp => {
+    if (isHeadquartersEmployee(emp)) return false;
     if (filterBranch !== "all" && emp.branchId !== filterBranch) return false;
     if (filterJobTitle !== "all" && emp.jobTitle !== filterJobTitle) return false;
     if (filterStatus !== "all" && emp.isActive !== filterStatus) return false;
@@ -305,6 +308,11 @@ export default function OperationsEmployeesPage() {
               <p className="text-xs sm:text-sm text-muted-foreground mt-1">إدارة موظفي الفروع وتعيين المهام والصلاحيات</p>
             </div>
           </div>
+          {canViewOperations("users") && (
+            <Link href="/administration-employees">
+              <Button variant="outline" className="h-11 sm:h-9">موظفو الإدارة العامة</Button>
+            </Link>
+          )}
           {canCreate && (
             <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
               <DialogTrigger asChild>
@@ -393,7 +401,7 @@ export default function OperationsEmployeesPage() {
                           <SelectValue placeholder="اختر الفرع" />
                         </SelectTrigger>
                         <SelectContent>
-                          {branches.map((branch) => (
+                          {operatingBranches.map((branch) => (
                             <SelectItem key={branch.id} value={branch.id}>
                               {branch.name}
                             </SelectItem>
@@ -471,7 +479,7 @@ export default function OperationsEmployeesPage() {
                 </SelectTrigger>
                 <SelectContent>
                   {canSelectBranch && <SelectItem value="all">جميع الفروع</SelectItem>}
-                  {branches.map((branch) => (
+                  {operatingBranches.map((branch) => (
                     <SelectItem key={branch.id} value={branch.id}>
                       {branch.name}
                     </SelectItem>
@@ -682,7 +690,7 @@ export default function OperationsEmployeesPage() {
                       <SelectValue placeholder="اختر الفرع" />
                     </SelectTrigger>
                     <SelectContent>
-                      {branches.map((branch) => (
+                        {operatingBranches.map((branch) => (
                         <SelectItem key={branch.id} value={branch.id}>
                           {branch.name}
                         </SelectItem>
