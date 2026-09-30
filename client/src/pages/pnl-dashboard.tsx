@@ -1,6 +1,7 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
+import { useBranchNavigation } from "@/hooks/use-branch-navigation";
 import { useBranches } from "@/hooks/useBranches";
 import { useAuth } from "@/hooks/useAuth";
 import { apiRequest } from "@/lib/queryClient";
@@ -1858,6 +1859,7 @@ export default function PnLDashboard() {
   const [fixedCostsEntries, setFixedCostsEntries] = useState<Array<{ costType: string; notes: string; amount: number }>>([]);
 
   const { branches, canSelectBranch, userBranchId, isLoading: loadingBranches } = useBranches();
+  const navigationBranch = useBranchNavigation(branches, loadingBranches, userBranchId);
   const { isAdmin } = useAuth();
 
   // Admin-configurable COGS ratio (system-wide). Default 30%.
@@ -1889,10 +1891,21 @@ export default function PnLDashboard() {
   });
 
   useEffect(() => {
-    if (userBranchId && !canSelectBranch) {
+    if (navigationBranch.hasBranchParam) {
+      if (!navigationBranch.isResolving && navigationBranch.branchId) setSelectedBranchId(navigationBranch.branchId);
+    } else if (userBranchId && !canSelectBranch) {
       setSelectedBranchId(userBranchId);
     }
-  }, [userBranchId, canSelectBranch]);
+  }, [navigationBranch.hasBranchParam, navigationBranch.branchId, navigationBranch.isResolving, userBranchId, canSelectBranch]);
+
+  useEffect(() => {
+    const requested = new URLSearchParams(window.location.search).get("month");
+    if (requested && /^\d{4}-(0[1-9]|1[0-2])$/.test(requested)) {
+      setSelectedYear(Number(requested.slice(0, 4)));
+      setSelectedMonth(Number(requested.slice(5)));
+      setActiveTab("expense-ledger");
+    }
+  }, []);
 
   const { data: periods = [], isLoading: loadingPeriods, refetch: refetchPeriods } = useQuery<FinancialPeriod[]>({
     queryKey: ["/api/financials/periods", { branchId: selectedBranchId, year: selectedYear }],
@@ -1904,6 +1917,7 @@ export default function PnLDashboard() {
       if (!res.ok) throw new Error("Failed to fetch periods");
       return res.json();
     },
+    enabled: !navigationBranch.hasBranchParam || (!navigationBranch.isResolving && !!selectedBranchId && branches.some(b => b.id === selectedBranchId)),
   });
 
   const { data: completePnL, isLoading: loadingPnL, refetch: refetchPnL } = useQuery<CompletePnLData>({
@@ -2165,7 +2179,7 @@ export default function PnLDashboard() {
       if (!res.ok) throw new Error("Failed to fetch expense ledger");
       return res.json();
     },
-    enabled: activeTab === "expense-ledger",
+    enabled: activeTab === "expense-ledger" && (!navigationBranch.hasBranchParam || (!navigationBranch.isResolving && !!selectedBranchId && branches.some(b => b.id === selectedBranchId))),
     staleTime: 60_000,
   });
 
@@ -2288,7 +2302,7 @@ export default function PnLDashboard() {
       if (!res.ok) throw new Error("Failed to fetch enhanced P&L");
       return res.json();
     },
-    enabled: !!selectedYear && !!selectedMonth,
+    enabled: !!selectedYear && !!selectedMonth && (!navigationBranch.hasBranchParam || (!navigationBranch.isResolving && !!selectedBranchId && branches.some(b => b.id === selectedBranchId))),
   });
 
   // Import Excel data

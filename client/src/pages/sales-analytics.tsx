@@ -63,8 +63,10 @@ import { Riyal } from "@/components/ui/riyal";
 
 export default function SalesAnalytics() {
   const currentDate = new Date();
-  const [selectedYear, setSelectedYear] = useState(currentDate.getFullYear().toString());
-  const [selectedMonth, setSelectedMonth] = useState((currentDate.getMonth() + 1).toString().padStart(2, "0"));
+  const requestedMonth = new URLSearchParams(window.location.search).get("month");
+  const initialMonth = requestedMonth && /^\d{4}-(0[1-9]|1[0-2])$/.test(requestedMonth) ? requestedMonth : null;
+  const [selectedYear, setSelectedYear] = useState(initialMonth?.slice(0, 4) ?? currentDate.getFullYear().toString());
+  const [selectedMonth, setSelectedMonth] = useState(initialMonth?.slice(5) ?? (currentDate.getMonth() + 1).toString().padStart(2, "0"));
   const [selectedBranch, setSelectedBranch] = useState<string>("");
   const [activeTab, setActiveTab] = useState("overview");
   const [journalStatus, setJournalStatus] = useState<string>("all");

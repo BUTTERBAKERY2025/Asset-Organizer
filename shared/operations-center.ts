@@ -60,6 +60,39 @@ export type OperationsCenterResponse = {
   coverage: { queue: Record<string, "complete" | "unavailable">; truncated: boolean; nextOffset: number | null };
 };
 
+export type OperationsMonthSection = {
+  id: "payroll" | "expenses" | "closing" | "sales";
+  label: string;
+  source: string;
+  coverage: "complete" | "partial" | "unavailable";
+  summary: string;
+  value: number | null;
+  href: string | null;
+  /** A multi-branch value is read-only; each destination is a single authorized branch. */
+  branches?: { branchId: string; summary: string; value: number | null; href: string | null }[];
+};
+
+export type OperationsMonthResponse = {
+  month: string;
+  branchIds: string[];
+  sections: OperationsMonthSection[];
+};
+
+/** These are display cohorts, not approvals or inferred outstanding work. */
+export function operationsDecisionQueue(rows: OperationsQueueItem[], actorId: string | undefined, asOf: string) {
+  const seen = new Set<string>();
+  const unique = rows.filter(item => {
+    const key = `${item.branchId}:${item.sourceType}:${item.sourceId}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  const urgent = unique.filter(item => item.dueAt && Number.isFinite(Date.parse(item.dueAt)) && Date.parse(item.dueAt) < Date.parse(asOf));
+  const assigned = unique.filter(item => actorId && item.ownerId === actorId && !urgent.includes(item));
+  const followup = unique.filter(item => !urgent.includes(item) && !assigned.includes(item));
+  return { unique, urgent, assigned, followup };
+}
+
 /** A zero-sized observed cohort has no meaningful pass rate. */
 export function qualityPassRate(results: readonly string[]): number | null {
   return results.length ? results.filter(result => result === "passed").length / results.length * 100 : null;

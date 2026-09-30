@@ -104,7 +104,7 @@ function persist() {
 }
 
 export function getCachedData(queryKey: string): any | undefined {
-  if (queryKey.toLowerCase().startsWith('/api/owner/') || queryKey.toLowerCase().startsWith('/api/operations-hr/')) return undefined;
+  if (queryKey.toLowerCase().startsWith('/api/owner/') || queryKey.toLowerCase().startsWith('/api/operations-hr/') || queryKey.toLowerCase().startsWith('/api/operations-center/')) return undefined;
   const store = getStore();
   const entry = store.e[queryKey];
   if (!entry) return undefined;
@@ -116,7 +116,7 @@ export function getCachedData(queryKey: string): any | undefined {
 }
 
 export function setCachedData(queryKey: string, data: any, ttlMs: number) {
-  if (queryKey.toLowerCase().startsWith('/api/owner/') || queryKey.toLowerCase().startsWith('/api/operations-hr/')) return;
+  if (queryKey.toLowerCase().startsWith('/api/owner/') || queryKey.toLowerCase().startsWith('/api/operations-hr/') || queryKey.toLowerCase().startsWith('/api/operations-center/')) return;
   if (queryKey === '/api/auth/me' && data?.role === 'business_owner') return;
   const store = getStore();
   store.e[queryKey] = { d: data, t: Date.now(), ttl: ttlMs };

@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { useBranches } from "@/hooks/useBranches";
+import { useBranchNavigation } from "@/hooks/use-branch-navigation";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
@@ -159,7 +160,8 @@ export default function BranchDailyClosuresPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { user } = useAuth();
-  const { branches, userBranchId, canSelectBranch } = useBranches();
+  const { branches, userBranchId, canSelectBranch, isLoading: loadingBranches } = useBranches();
+  const navigationBranch = useBranchNavigation(branches, loadingBranches, userBranchId);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -170,12 +172,23 @@ export default function BranchDailyClosuresPage() {
   }, [searchTerm]);
 
   useEffect(() => {
-    if (userBranchId) {
+    if (navigationBranch.hasBranchParam) {
+      if (!navigationBranch.isResolving && navigationBranch.branchId) setBranchFilter(navigationBranch.branchId);
+    } else if (userBranchId) {
       setBranchFilter(userBranchId);
     } else if (canSelectBranch) {
       setBranchFilter("all");
     }
-  }, [userBranchId, canSelectBranch]);
+  }, [userBranchId, canSelectBranch, navigationBranch.hasBranchParam, navigationBranch.branchId, navigationBranch.isResolving]);
+
+  useEffect(() => {
+    const requested = new URLSearchParams(window.location.search).get("month");
+    if (requested && /^\d{4}-(0[1-9]|1[0-2])$/.test(requested)) {
+      const [year, month] = requested.split("-").map(Number);
+      setDateFrom(`${requested}-01`);
+      setDateTo(`${requested}-${new Date(year, month, 0).getDate().toString().padStart(2, "0")}`);
+    }
+  }, []);
 
   const queryParams = useMemo(() => {
     const params = new URLSearchParams();
@@ -199,6 +212,7 @@ export default function BranchDailyClosuresPage() {
     },
     staleTime: 30000,
     placeholderData: (prev) => prev,
+    enabled: !navigationBranch.hasBranchParam || (!navigationBranch.isResolving && !!branchFilter && (branchFilter === "all" ? canSelectBranch : branches.some(b => b.id === branchFilter))),
   });
 
   const closures = data?.closures || [];

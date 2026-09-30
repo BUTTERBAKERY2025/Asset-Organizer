@@ -138,7 +138,7 @@ function evictOldest() {
 }
 
 export function apiCacheMiddleware(req: Request, res: Response, next: NextFunction) {
-  if (req.path.startsWith("/api/operations-hr/")) {
+  if (req.path.startsWith("/api/operations-hr/") || req.path.startsWith("/api/operations-center")) {
     res.set("Cache-Control", "no-store");
     return next();
   }

@@ -1,0 +1,49 @@
+.oc-board {
+  --oc-ink: #27213b;
+  --oc-violet: #6941ad;
+  --oc-line: #e7def0;
+  --oc-wash: #f8f5fc;
+  color: var(--oc-ink);
+}
+.oc-board .oc-panel {
+  background: #fdfcff;
+  border: 1px solid var(--oc-line);
+  border-radius: 18px;
+  box-shadow: 0 4px 22px -18px rgba(65, 38, 110, .38);
+}
+.oc-board .oc-hero {
+  background: linear-gradient(112deg, #f1eaf9 0%, #faf7fe 57%, #fdfcff 100%);
+  border: 1px solid #e7daf5;
+  border-radius: 20px;
+}
+.oc-board .oc-kicker { letter-spacing: .045em; color: var(--oc-violet); }
+.oc-board .oc-stat {
+  background: #fdfcff;
+  border: 1px solid var(--oc-line);
+  border-radius: 14px;
+  transition: transform .22s ease, background-color .22s ease, border-color .22s ease;
+}
+.oc-board .oc-stat:hover, .oc-board .oc-stat[data-active="true"] {
+  background: #f2ebfa;
+  border-color: #c9b5e5;
+  transform: translateY(-2px);
+}
+.oc-board .oc-row {
+  transition: transform .2s ease, background-color .2s ease;
+}
+.oc-board .oc-row:hover { transform: translateX(-3px); background: #f7f2fc; }
+.oc-board .oc-domain {
+  transition: transform .2s ease, background-color .2s ease, border-color .2s ease;
+}
+.oc-board .oc-domain:hover { transform: translateY(-2px); background: #f7f2fc; border-color: #cbb5e5; }
+.oc-board .oc-in {
+  animation: oc-enter .42s cubic-bezier(.2,.8,.2,1) both;
+}
+@keyframes oc-enter {
+  from { opacity: 0; transform: translateY(9px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .oc-board .oc-in { animation: none; }
+  .oc-board .oc-stat, .oc-board .oc-row, .oc-board .oc-domain { transition: none; }
+}

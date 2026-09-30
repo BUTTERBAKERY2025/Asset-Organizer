@@ -27,8 +27,12 @@ type Payroll = {
 export default function OperationsHrPage() {
   const client = useQueryClient();
   const { canView, canCreate, canApprove, canExport } = usePermissions();
-  const [branchSelection, setBranchSelection] = useState("");
-  const [month, setMonth] = useState(() => new Date(Date.now() + 3 * 3600000).toISOString().slice(0, 7));
+  const [branchSelection, setBranchSelection] = useState(() => new URLSearchParams(window.location.search).get("branchId") || "");
+  const [month, setMonth] = useState(() => {
+    const requested = new URLSearchParams(window.location.search).get("month");
+    return requested && /^\d{4}-(0[1-9]|1[0-2])$/.test(requested)
+      ? requested : new Date(Date.now() + 3 * 3600000).toISOString().slice(0, 7);
+  });
   const [employeeSelection, setEmployeeSelection] = useState("");
   const [destination, setDestination] = useState("");
   const [reason, setReason] = useState("");

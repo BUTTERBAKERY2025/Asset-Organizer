@@ -3,12 +3,12 @@ import { and, desc, eq, gte, inArray, lte, or, sql } from "drizzle-orm";
 import {
   branches, maintenanceTickets, centralKitchenOrders, materialTransfers, reverseMovements,
   leaveRequests, advanceRequests, qualityChecks, branchDailyClosures, cashierSalesJournals,
-  branchShifts, timesheetReports,
+  branchShifts, timesheetReports, salaryClosures, salaryPayments, operationsPayrollReviews, pnlMonthlyInputs,
   attendanceRecords,
 } from "@shared/schema";
 import { qualityPassRate, deduplicateOperationsQueue, validateOperationsBranches, availableCardMetrics, makeOperationsQueueItem as queueItem } from "@shared/operations-center";
 import { noticeInSelectedScope, publicCenterNotice } from "@shared/operations-center-notifications";
-import type { OperationsCenterResponse, OperationsMetric, OperationsQueueItem, OperationsEvidenceDay } from "@shared/operations-center";
+import type { OperationsCenterResponse, OperationsMetric, OperationsQueueItem, OperationsEvidenceDay, OperationsMonthSection } from "@shared/operations-center";
 import { db } from "./db";
 import { pool } from "./db";
 import { storage } from "./storage";
@@ -23,6 +23,10 @@ const PAGE_LIMIT = 100;
 const CARD_CONCURRENCY = 6;
 const SOURCE_CONCURRENCY = 4;
 const PERMISSION_CONCURRENCY = 6;
+const INSIGHT_COOLDOWN_MS = 60_000;
+const lastInsightRequest = new Map<string, number>();
+let activeInsightRequests = 0;
+const MAX_ACTIVE_INSIGHTS = 3;
 const dateInRiyadh = (date: Date) => date.toLocaleDateString("en-CA", { timeZone: "Asia/Riyadh" });
 const asIso = (value: Date | string | null | undefined) => value ? new Date(value).toISOString() : null;
 const link = (path: string, branchId: string) => `${path}${path.includes("?") ? "&" : "?"}branchId=${encodeURIComponent(branchId)}`;
@@ -402,4 +406,165 @@ export function registerOperationsCenterRoutes(app: Express): void {
   };
   app.get("/api/operations-center", isAuthenticated, requirePermission("operations", "view"), handler(false));
   app.get("/api/operations-center/export", isAuthenticated, requirePermission("operations", "export"), handler(true));
+  // Monthly evidence is deliberately not a fabricated unified financial close.
+  app.get("/api/operations-center/monthly", isAuthenticated, requirePermission("operations", "view"), async (req, res, next) => {
+    try {
+      res.set("Cache-Control", "no-store");
+      const month = req.query.month;
+      const input = req.query.branchIds;
+      if (typeof month !== "string" || !/^\d{4}-(0[1-9]|1[0-2])$/.test(month) ||
+          typeof input !== "string" || !input || input === "all")
+        return res.status(400).json({ message: "حدد الشهر والفروع صراحة" });
+      const ids = input.split(",");
+      if (ids.length > MAX_BRANCHES || ids.some(id => !id || id === "all") || new Set(ids).size !== ids.length)
+        return res.status(400).json({ message: "نطاق غير صالح" });
+      const allowed = getAllowedBranchIds(req);
+      if (allowed !== null && ids.some(id => !allowed.includes(id)))
+        return res.status(403).json({ message: "فرع خارج صلاحياتك" });
+      const existing = await db.select({ id: branches.id }).from(branches).where(inArray(branches.id, ids));
+      if (!validateOperationsBranches(ids, allowed, existing.map(row => row.id)))
+        return res.status(403).json({ message: "فرع غير موجود أو خارج النطاق" });
+      const sections: OperationsMonthSection[] = [];
+      const section = async (id: OperationsMonthSection["id"], label: string, source: string, href: string | null, load: () => Promise<Omit<OperationsMonthSection, "id" | "label" | "source" | "href">>) => {
+        try { sections.push({ id, label, source, href, ...await load() }); }
+        catch (error) {
+          console.error(`Operations monthly ${id} unavailable`, error);
+          sections.push({ id, label, source, href, summary: "تعذر تحميل المصدر؛ لا يعني ذلك عدم وجود سجلات", value: null, coverage: "unavailable" });
+        }
+      };
+      // A multi-branch selection is a report, never a mutation-capable "all" destination.
+      const salaryPage = req.currentUser?.role === "operations_manager" ? "/hr-hub" : "/salary-closing";
+      const monthlyLink = (path: string, branchId: string) => `${path}?${new URLSearchParams({ branchId, month })}`;
+      const salaryLink = (branchId: string) => `${salaryPage}?${new URLSearchParams({
+        [salaryPage === "/hr-hub" ? "branchId" : "branch"]: branchId, month,
+      })}`;
+      if (await hasEffectiveViewPermission(req, req.currentUser?.role === "operations_manager" ? "operations_payroll" : "salary_closing")
+          && await hasEffectiveViewPermission(req, req.currentUser?.role === "operations_manager" ? "operations_hr" : "employee_reports"))
+        await section("payroll", "الرواتب", "لقطات الرواتب وسجلات الصرف للشهر المحدد", ids.length === 1
+          ? salaryLink(ids[0]) : null, async () => {
+          const rows = await db.select({ branchId: salaryClosures.branchId, status: salaryClosures.status, totalNet: salaryClosures.totalNet })
+            .from(salaryClosures).where(and(inArray(salaryClosures.branchId, ids), eq(salaryClosures.month, month)));
+          const closed = rows.filter(row => row.status === "closed");
+          const payments = await db.select({ branchId: salaryPayments.branchId, employeeId: salaryPayments.branchEmployeeId })
+            .from(salaryPayments).where(and(inArray(salaryPayments.branchId, ids), eq(salaryPayments.month, month)));
+          // An unlocked month may have work-in-progress salary data; do not label it zero.
+          let reviewed = 0;
+          if (req.currentUser?.role === "operations_manager") {
+            const reviews = await db.select({ branchId: operationsPayrollReviews.branchId }).from(operationsPayrollReviews)
+              .where(and(inArray(operationsPayrollReviews.branchId, ids), eq(operationsPayrollReviews.month, month), eq(operationsPayrollReviews.reviewedBy, req.currentUser.id)));
+            reviewed = new Set(reviews.map(row => row.branchId)).size;
+          }
+          const fmt = (n: number) => n.toLocaleString("en-US");
+          const branchSummary = (id: string) => {
+            const closure = rows.find(row => row.branchId === id);
+            const count = new Set(payments.filter(row => row.branchId === id).map(row => row.employeeId)).size;
+            return `${closure?.status === "closed" ? "لقطة مغلقة" : closure ? "لقطة أعيد فتحها" : "لم تسجل لقطة إغلاق"} · ${fmt(count)} سجلات صرف مثبتة. لا يعني غياب السجل عدم الاستحقاق.`;
+          };
+          return { coverage: closed.length === ids.length ? "complete" as const : "partial" as const,
+            summary: `${fmt(closed.length)} من ${fmt(ids.length)} فروع لديها لقطة رواتب مغلقة · ${fmt(payments.length)} سجل صرف مثبت للشهر${req.currentUser?.role === "operations_manager" ? ` · مراجعاتك الاستشارية: ${fmt(reviewed)}` : ""}. إجمالي اللقطات المغلقة ليس مبلغ المصروف.`,
+            value: closed.length ? closed.reduce((sum, row) => sum + row.totalNet, 0) : null,
+            branches: ids.map(id => ({ branchId: id, summary: branchSummary(id),
+              value: rows.find(row => row.branchId === id)?.status === "closed" ? rows.find(row => row.branchId === id)!.totalNet : null,
+               href: salaryLink(id) })) };
+        });
+      if (await hasEffectiveViewPermission(req, "pnl_dashboard") && await hasEffectiveViewPermission(req, "pnl"))
+        await section("expenses", "المصروفات", "مدخلات الأرباح والخسائر والإيجار والعقود المتكررة (دون COGS)", ids.length === 1 ? monthlyLink("/pnl-dashboard", ids[0]) : null, async () => {
+          const year = Number(month.slice(0, 4)), monthNumber = Number(month.slice(5, 7));
+          // Match the existing expense ledger formula. Never add salary closures
+          // or cost of goods here: those are independent, easily double-counted.
+          const expenseRows = await mapOperationsBounded(ids, 3, async branchId => {
+            const [input, rent, recurring] = await Promise.all([
+              storage.getPnlMonthlyInputs(branchId, year, monthNumber),
+              storage.getRentForPeriod(branchId, year, monthNumber),
+              storage.getRecurringExpensesForPeriod(branchId, year, monthNumber),
+            ]);
+            const columns = ["electricityCost", "waterCost", "utilitiesOther", "internetCost", "governmentFees", "insuranceCost",
+              "subscriptionsCost", "securityCost", "bankFees", "fuelCost", "maintenanceCost", "marketingCost", "suppliesCost", "otherCosts"] as const;
+            const value = input || rent || recurring.length ? columns.reduce((sum, key) => sum + Number(input?.[key] || 0), 0)
+              + Number(rent || 0) + recurring.reduce((sum, row) => sum + Number(row.monthlyAmount || 0), 0) : null;
+            return { branchId, value, summary: value === null ? "لا توجد مدخلات مصروفات شهرية أو إيجار أو عقود متكررة مسجلة" :
+               "مدخلات وتكاليف شهرية مسجلة؛ لا تشمل COGS ولا تعني مصروفاً مدفوعاً", href: monthlyLink("/pnl-dashboard", branchId) };
+          });
+          const available = expenseRows.filter(row => row.value !== null);
+          return { coverage: "partial" as const, summary: `مصروفات P&L مدخلة لـ ${available.length.toLocaleString("en-US")} من ${ids.length.toLocaleString("en-US")} فروع؛ ليست تسوية نهائية أو دفتر صرف نقدي. لا تتضمن تكلفة البضاعة ولا الرواتب حتى لا تتكرر.`,
+            value: available.length ? available.reduce((sum, row) => sum + (row.value ?? 0), 0) : null, branches: expenseRows };
+        });
+      if (await hasEffectiveViewPermission(req, "daily_closures"))
+        await section("closing", "الإغلاقات التشغيلية", "سجلات إغلاق الفروع اليومية", ids.length === 1 ? monthlyLink("/branch-daily-closures", ids[0]) : null, async () => {
+          const rows = await db.select({ id: branchDailyClosures.id, branchId: branchDailyClosures.branchId, status: branchDailyClosures.status }).from(branchDailyClosures)
+            .where(and(inArray(branchDailyClosures.branchId, ids), gte(branchDailyClosures.closureDate, `${month}-01`), lte(branchDailyClosures.closureDate, `${month}-31`)));
+          const closed = rows.filter(row => row.status === "closed").length;
+          return { coverage: "partial" as const, summary: `${closed.toLocaleString("en-US")} إغلاق مسجل من ${rows.length.toLocaleString("en-US")} سجل يومي. الأيام بلا سجلات غير مصنّفة متأخرة دون موعد معتمد.`, value: rows.length ? closed : null,
+             branches: ids.map(branchId => ({ branchId, summary: `${rows.filter(row => row.branchId === branchId && row.status === "closed").length.toLocaleString("en-US")} إغلاق مؤكد من ${rows.filter(row => row.branchId === branchId).length.toLocaleString("en-US")} سجل`, value: rows.some(row => row.branchId === branchId) ? rows.filter(row => row.branchId === branchId && row.status === "closed").length : null, href: monthlyLink("/branch-daily-closures", branchId) })) };
+        });
+      if (await hasEffectiveViewPermission(req, "sales_analytics"))
+        await section("sales", "المبيعات المسجلة", "إجمالي المبيعات من إغلاقات الأيام المسجلة", ids.length === 1 ? monthlyLink("/sales-analytics", ids[0]) : null, async () => {
+          const rows = await db.select({ branchId: branchDailyClosures.branchId, sales: branchDailyClosures.totalSales, status: branchDailyClosures.status })
+            .from(branchDailyClosures).where(and(inArray(branchDailyClosures.branchId, ids), gte(branchDailyClosures.closureDate, `${month}-01`), lte(branchDailyClosures.closureDate, `${month}-31`)));
+          const closed = rows.filter(row => row.status === "closed");
+          return { coverage: "partial" as const, summary: `مبيعات ${closed.length.toLocaleString("en-US")} أيام مغلقة فقط؛ الأيام غير المغلقة لا تدخل في الإجمالي ولا تعني صفراً.`,
+            value: closed.length ? closed.reduce((sum, row) => sum + row.sales, 0) : null,
+            branches: ids.map(branchId => { const confirmed = closed.filter(row => row.branchId === branchId); return {
+              branchId, summary: `مبيعات ${confirmed.length.toLocaleString("en-US")} إغلاق يومي مسجل فقط`,
+               value: confirmed.length ? confirmed.reduce((sum, row) => sum + row.sales, 0) : null, href: monthlyLink("/sales-analytics", branchId) }; }) };
+        });
+      return res.json({ month, branchIds: ids, sections });
+    } catch (error) { next(error); }
+  });
+  app.post("/api/operations-center/insights", isAuthenticated, requirePermission("operations", "view"), async (req, res, next) => {
+    let acquired = false;
+    try {
+      res.set("Cache-Control", "no-store");
+      const input = req.body?.branchIds;
+      if (!Array.isArray(input) || !input.length || input.length > MAX_BRANCHES || input.some(id => typeof id !== "string" || !id || id === "all") || new Set(input).size !== input.length)
+        return res.status(400).json({ message: "حدد فروعاً صريحة للتحليل" });
+      const key = process.env.OPENAI_API_KEY;
+      if (!key) return res.status(503).json({ message: "التحليل الذكي غير مفعّل؛ لم يُضبط مفتاح الخدمة." });
+      const userId = req.currentUser!.id;
+      const now = Date.now();
+      if (now - (lastInsightRequest.get(userId) ?? 0) < INSIGHT_COOLDOWN_MS) {
+        res.set("Retry-After", "60");
+        return res.status(429).json({ message: "انتظر دقيقة قبل إعادة طلب التحليل الذكي." });
+      }
+      if (activeInsightRequests >= MAX_ACTIVE_INSIGHTS)
+        return res.status(503).json({ message: "التحليل الذكي مشغول الآن؛ أعد المحاولة لاحقاً." });
+      // Reserve synchronously before the first await, including the database
+      // projection: concurrent clicks cannot generate parallel paid calls.
+      activeInsightRequests++;
+      acquired = true;
+      lastInsightRequest.set(userId, now);
+      if (lastInsightRequest.size > 1024) {
+        for (const [id, stamp] of lastInsightRequest)
+          if (now - stamp > INSIGHT_COOLDOWN_MS) lastInsightRequest.delete(id);
+      }
+      const data = await projectOperationsCenter(req, input, 0);
+      const records = data.queue.slice(0, 35);
+      // No employee names, IDs, URLs, or raw record text leave this server.
+      // The model returns only an index; all provenance is reattached below.
+      const rows = records.map(item => ({ sourceType: item.sourceType,
+        status: /^[\p{L}\s_-]{1,30}$/u.test(item.status) ? item.status : "غير محدد",
+        dueAt: item.dueAt }));
+      if (!rows.length) return res.json({ kind: "ai", generatedAt: data.generatedAt, insights: [], coverage: data.coverage });
+      const OpenAI = (await import("openai")).default;
+      const completion = await new OpenAI({ apiKey: key, timeout: 15_000, maxRetries: 0 }).chat.completions.create({
+        model: "gpt-5", max_completion_tokens: 1000, response_format: { type: "json_object" },
+        messages: [
+          { role: "system", content: "حلل سجلات تشغيل حقيقية مجهولة الهوية. أعد JSON فقط: {\"insights\":[{\"index\":0,\"title\":\"نص عربي قصير\",\"explanation\":\"اقتراح موجز\"}]}. index فهرس سجل من المدخلات. اختر حتى 3 سجلات فقط، لا تختلق أرقاماً أو مواعيد أو أولوية غير مؤكدة؛ اقتراحك لا ينفذ إجراءً، ونقص التغطية ليس صفراً." },
+          { role: "user", content: JSON.stringify({ businessDate: data.businessDate, rows, coverage: data.coverage }) },
+        ],
+      });
+      const parsed = JSON.parse(completion.choices[0]?.message?.content || "{}");
+      const insights = (Array.isArray(parsed.insights) ? parsed.insights : []).slice(0, 3).flatMap((entry: any) => {
+        if (!Number.isInteger(entry.index) || !rows[entry.index] || typeof entry.title !== "string" || typeof entry.explanation !== "string") return [];
+        const record = records[entry.index];
+        // AI cannot choose identity or URLs; only suggest text about a real
+        // authorized record. Suppress unsupported numeric claims.
+        const safeText = (value: string) => value.replace(/[0-9٠-٩۰-۹]+(?:[.,][0-9٠-٩۰-۹]+)*/g, "").trim();
+        return [{ title: safeText(entry.title).slice(0, 90), explanation: safeText(entry.explanation).slice(0, 220),
+          sourceType: record.sourceType, sourceId: record.sourceId, branchId: record.branchId, href: record.href }];
+      });
+      return res.json({ kind: "ai", generatedAt: data.generatedAt, insights, coverage: data.coverage });
+    } catch (error) { next(error); }
+    finally { if (acquired) activeInsightRequests--; }
+  });
 }
