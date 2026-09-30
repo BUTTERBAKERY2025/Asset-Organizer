@@ -21,6 +21,12 @@ Owner sales must show the recorded gross amount inclusive of VAT, without adding
 
 **How to apply:** Preserve the recorded gross amount and honest journal-source label. Any accounting-generator reconciliation is separate work, not a reason to recalculate historical owner totals or expose accounting details.
 
+The home quick view defaults to yesterday in Riyadh; returning from sales to home resets that quick view to yesterday. Sales presets belong directly below the sales heading, not inside horizontally scrolling filters.
+
+**Why:** The user prioritizes yesterday's reported sales for quick owner oversight and needs all three presets visible on mobile without horizontal scrolling.
+
+**How to apply:** Keep yesterday, today and month-to-date buttons prominent and distinguish the selected preset; show the actual date and missing-report state without silently substituting an older day.
+
 Do not infer journal lifecycle states from the schema comment alone: production uses `posted` for most completed journals, although the comment lists `submitted` instead.
 
 **Why:** A production read on 2026-09-30 found thousands of posted journals omitted by the initial owner report. Selecting today's date also legitimately had no journals although yesterday had sales.

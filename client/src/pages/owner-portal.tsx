@@ -78,8 +78,9 @@ export default function OwnerPortal() {
     return tabList.some(t => t.id === saved) ? saved as Tab : "home";
   });
   const [branchId, setBranchId] = useState("all");
-  const [dateFrom, setDateFrom] = useState(today);
-  const [dateTo, setDateTo] = useState(today);
+  const [dateFrom, setDateFrom] = useState(() => previousDay(today()));
+  const [dateTo, setDateTo] = useState(() => previousDay(today()));
+  const [selectedPeriod, setSelectedPeriod] = useState<"today" | "yesterday" | "month" | null>("yesterday");
   const [searches, setSearches] = useState<Record<string, string>>({});
   const [pages, setPages] = useState<Record<string, number>>({});
   const [section, setSection] = useState<OwnerMarketingSection>("campaigns");
@@ -121,8 +122,16 @@ export default function OwnerPortal() {
   const setSearch = (value: string) => { if (exporting) return; setSearches(v => ({ ...v, [searchKey]: value })); setPages(v => ({ ...v, [searchKey]: 1 })); };
   const setPage = (value: number) => { if (!exporting) setPages(v => ({ ...v, [searchKey]: value })); };
   const changeBranch = (value: string) => { setBranchId(value); setPages({}); };
-  const selectReportDate = (date: string) => { setDateFrom(date); setDateTo(date); };
+  const selectReportDate = (date: string) => { setSelectedPeriod(null); setDateFrom(date); setDateTo(date); };
+  const navigateTab = (next: Tab) => {
+    if (next === "home" && tab !== "home") {
+      const yesterday = previousDay(today());
+      setDateFrom(yesterday); setDateTo(yesterday); setSelectedPeriod("yesterday");
+    }
+    setTab(next);
+  };
   const chooseSalesPeriod = (period: "today" | "yesterday" | "month") => {
+    setSelectedPeriod(period);
     const end = period === "yesterday" ? previousDay(today()) : today();
     setDateFrom(period === "month" ? `${end.slice(0, 7)}-01` : end);
     setDateTo(end);
@@ -176,13 +185,15 @@ export default function OwnerPortal() {
       <header className="owner-head"><div className="owner-brand"><img src={logo} alt="شعار باتر بيكري" /><div><strong>باتر بيكري</strong><small>OWNER PORTAL</small></div></div>
         <div className="owner-tools"><button className="owner-icon" title="تحديث البيانات" aria-label="تحديث البيانات" onClick={retry}><RefreshCw size={18} /></button><button className="owner-icon" title="تسجيل الخروج" aria-label="تسجيل الخروج" disabled={isLoggingOut} onClick={async () => { try { await logout(); window.location.assign("/login"); } catch { setExportError("تعذر تسجيل الخروج؛ حاول مرة أخرى"); } }}><LogOut size={18} /></button></div></header>
       <div className="owner-kicker">مساحة المالك · {dateText(today())}</div>
-      <h1 className="owner-title">{tab === "home" ? dateTo === today() ? "صورة اليوم، بوضوح." : "صورة الفترة، بوضوح." : activeName}</h1>
+      <h1 className="owner-title">{tab === "home" ? dateTo === previousDay(today()) ? "مبيعات أمس" : "مبيعات التاريخ المحدد" : activeName}</h1>
+      {tab === "sales" && <div className="owner-sales-periods" role="group" aria-label="فترة المبيعات">
+        {([{ id: "yesterday", label: "مبيعات أمس" }, { id: "today", label: "مبيعات اليوم" }, { id: "month", label: "إجمالي مبيعات الشهر" }] as const).map(period => <button key={period.id} disabled={exporting} type="button" className="owner-sales-period" aria-pressed={selectedPeriod === period.id} onClick={() => chooseSalesPeriod(period.id)}>{period.label}</button>)}
+      </div>}
       <p className="owner-sub">{tab === "home" || tab === "sales" ? "إجمالي المبيعات (شامل الضريبة) كما سُجلت في يوميات الكاشير، وليست صافي الربح." : tab === "marketing" ? "نشاط التسويق على مستوى الشركة · للعرض فقط" : "بيانات أساسية للعرض فقط"}</p>
       {(tab === "home" || tab === "sales" || tab === "assets") && <div className="owner-filters" aria-label="تصفية البيانات">
         <label className="owner-field"><MapPin size={15} /><select disabled={exporting} aria-label="الفرع" value={branchId} onChange={e => changeBranch(e.target.value)}><option value="all">جميع الفروع</option>{branches.data?.branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}</select></label>
-        {tab === "sales" && <label className="owner-field"><CalendarDays size={15} /><span>من</span><input disabled={exporting} type="date" aria-label="من تاريخ" value={dateFrom} max={dateTo} onChange={e => setDateFrom(e.target.value)} /></label>}
-        {tab !== "assets" && <label className="owner-field"><span>{tab === "home" ? "التاريخ" : "إلى"}</span><input disabled={exporting} type="date" aria-label="إلى تاريخ" value={dateTo} min={tab === "sales" ? dateFrom : undefined} onChange={e => setDateTo(e.target.value)} /></label>}
-        {tab === "sales" && <><button disabled={exporting} type="button" className="owner-action" onClick={() => chooseSalesPeriod("today")}>اليوم</button><button disabled={exporting} type="button" className="owner-action" onClick={() => chooseSalesPeriod("yesterday")}>مبيعات أمس</button><button disabled={exporting} type="button" className="owner-action" onClick={() => chooseSalesPeriod("month")}>مبيعات إجمالي الشهر</button></>}
+        {tab === "sales" && <label className="owner-field"><CalendarDays size={15} /><span>من</span><input disabled={exporting} type="date" aria-label="من تاريخ" value={dateFrom} max={dateTo} onChange={e => { setSelectedPeriod(null); setDateFrom(e.target.value); }} /></label>}
+        {tab !== "assets" && <label className="owner-field"><span>{tab === "home" ? "التاريخ" : "إلى"}</span><input disabled={exporting} type="date" aria-label="إلى تاريخ" value={dateTo} min={tab === "sales" ? dateFrom : undefined} onChange={e => { setSelectedPeriod(null); setDateTo(e.target.value); if (tab === "home") setDateFrom(e.target.value); }} /></label>}
       </div>}
       {branches.isError && (tab === "home" || tab === "sales" || tab === "assets") && <div className="owner-section"><ErrorState retry={retry} /></div>}
       {tab === "home" && (overview.isLoading ? <Loading /> : overview.isError ? <ErrorState retry={retry} /> : overview.data ? <>
@@ -208,7 +219,7 @@ export default function OwnerPortal() {
       <div className="owner-section owner-actions"><button className="owner-action" disabled={exporting || activeQuery.isLoading || !currentData || (tab === "sales" && !validDates)} onClick={onExport}><Download size={15} style={{ display: "inline", marginLeft: 7 }} />{exporting ? "جارٍ تجهيز الملف..." : "تصدير PDF"}</button><small style={{ color: "var(--muted)" }}>ملخص عام + {tab === "home" ? "الرئيسية" : tab === "sales" ? "الفروع" : "الصفحة المعروضة فقط"}</small></div>
       {exportError && <p role="alert" className="owner-sub" style={{ color: "#9e3d41" }}>{exportError}</p>}
     </div>
-     <nav className="owner-bottom" aria-label="تنقل بوابة المالك">{tabList.map(item => <button key={item.id} disabled={exporting} className="owner-nav" aria-current={tab === item.id ? "page" : undefined} data-active={tab === item.id} onClick={() => setTab(item.id)}><item.icon aria-hidden="true" />{item.label}</button>)}</nav>
+     <nav className="owner-bottom" aria-label="تنقل بوابة المالك">{tabList.map(item => <button key={item.id} disabled={exporting} className="owner-nav" aria-current={tab === item.id ? "page" : undefined} data-active={tab === item.id} onClick={() => navigateTab(item.id)}><item.icon aria-hidden="true" />{item.label}</button>)}</nav>
      {detail && !revoked && <dialog ref={dialogRef} className="owner-dialog" aria-label={detail.kind === "asset" ? detail.item.name : detail.kind === "shareholder" ? detail.item.name : detail.item.title} onClose={() => setDetail(null)} onClick={e => { if (e.target === dialogRef.current) setDetail(null); }}><div className="owner-section-head"><h2>{detail.kind === "marketing" ? detail.item.title : detail.item.name}</h2><button className="owner-icon" autoFocus onClick={() => setDetail(null)} aria-label="إغلاق"><X size={18} /></button></div>
       {detail.kind === "asset" ? <><Thumbnail src={detail.item.imageUrl} alt={detail.item.name} /><p><strong>الفرع:</strong> {detail.item.branchName}</p><p><strong>الحالة:</strong> {statusText(detail.item.status)}</p><p><strong>التصنيف:</strong> {detail.item.category || "غير محدد"}</p><p><strong>الصيانة:</strong> {detail.item.maintenanceSummary || "لا توجد ملاحظة صيانة مسجلة"}</p></> :
         detail.kind === "shareholder" ? <><p><strong>الأسهم المسجلة:</strong> {ownerNumber(detail.item.shares)} سهم</p><p><strong>نسبة الملكية:</strong> {detail.item.ownershipPercent === null ? "غير متاحة" : `${ownerNumber(detail.item.ownershipPercent)}%`}</p><p><strong>أساس النسبة:</strong> {detail.basis}؛ لا تمثل قيمة رأس المال القانوني.</p></> :
