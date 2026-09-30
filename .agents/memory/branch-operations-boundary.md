@@ -11,6 +11,12 @@ The approved manager center extends this composition across explicitly granted b
 
 **How to apply:** Separate actual user assignment from role labels; link each queue item to its exact source record. Daily/weekly evidence is not a persisted historical snapshot, and live connection timestamps are not data freshness. Keep periodic refresh as recovery for process-local update hints.
 
+The manager center must be a compact control-and-follow-up workspace, not a long page stacking all domain reports.
+
+**Why:** The user explicitly rejected the initial center as boring, overfilled and too long, and requested a practical distinctive control screen that serves daily operational decisions.
+
+**How to apply:** Keep branch context and actionable priorities immediately accessible; reveal record/domain detail on selection instead of repeating every metric, source explanation and table on the initial screen. Preserve the deeper views and truthful coverage information without making them compete with the primary work.
+
 **Why:** The user approved a familiar branch-staff entry point while explicitly requiring every piece of information to match the real system structure. Similar labels are not interchangeable: asset maintenance status is not a maintenance ticket, visitor logs are not supervisory visits, and cashier closing is not a cash-custody ledger.
 
 **How to apply:** Verify domain semantics before reusing a source. Navigation-only cards are acceptable until trustworthy counters exist; never invent metrics or silently substitute a different workflow. Keep missing-domain development staged according to the branch operations roadmap.

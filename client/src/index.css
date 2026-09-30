@@ -1,6 +1,22 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+/* Operations center: a compact editorial command desk, rather than a report stack. */
+.oc-workspace { min-height: 540px; }
+.oc-scroll { scrollbar-width: thin; scrollbar-color: #c9bdc0 transparent; }
+.oc-selected { box-shadow: inset -3px 0 0 #8e493c; }
+@media (max-width: 1023px) {
+  .oc-branch-list { display: flex; overflow-x: auto; scrollbar-width: none; padding: .25rem .75rem .5rem; gap: .4rem; }
+  .oc-branch-list > button, .oc-branch-entry { flex: 0 0 auto; width: 155px; border: 1px solid #e9dfe0; border-radius: .65rem; background: #fffdfa; }
+  .oc-branch-list > button { padding-inline: .75rem; }
+  .oc-branch-entry > button:first-child { padding-inline: .65rem; }
+  .oc-branch-entry > button:last-child { margin-inline-start: 0; }
+}
+@media (min-width: 1024px) {
+  .oc-workspace { height: min(720px, calc(100dvh - 280px)); min-height: 500px; }
+  .oc-pane { min-height: 0; overflow-y: auto; }
+}
+
 /* Kitchen operations is deliberately an inbox on a phone: one decision at a
    time, with dense scan lines rather than a shrunken desktop report. */
 @media (max-width: 767px) {
