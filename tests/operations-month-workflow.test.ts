@@ -5,7 +5,7 @@ import { monthlyEvidence, monthCalendar, payrollBalance } from "../shared/operat
 const mocks = vi.hoisted(() => ({
   query: vi.fn(), connect: vi.fn(), release: vi.fn(),
   monthlyInputs: vi.fn(), rent: vi.fn(), recurring: vi.fn(),
-  grants: new Set(["operations:view", "operations:edit", "daily_closures:view"]),
+  grants: new Set(["operations:view", "operations:edit", "daily_closures:view"]), permissionRead: vi.fn(),
 }));
 vi.mock("../server/db", () => ({
   pool: { query: mocks.query, connect: mocks.connect },
@@ -18,10 +18,12 @@ vi.mock("../server/storage", () => ({ storage: {
 vi.mock("../server/auth", () => ({
   isAuthenticated: (_req: any, _res: any, next: any) => next(),
   getAllowedBranchIds: (req: any) => req.allowed,
-  requirePermission: (module: string, action: string) => async (_req: any, res: any, next: any) =>
-    mocks.grants.has(`${module}:${action}`) ? next() : res.status(403).json({ error: "denied" }),
+  requirePermission: (module: string, action: string) => async (_req: any, res: any, next: any) => {
+    mocks.permissionRead(module, action);
+    return mocks.grants.has(`${module}:${action}`) ? next() : res.status(403).json({ error: "denied" });
+  },
 }));
-import { registerOperationsMonthWorkflow } from "../server/operations-month-workflow";
+import { refreshCommittedMonth, registerOperationsMonthWorkflow } from "../server/operations-month-workflow";
 
 const handlers: Record<string, any[]> = {};
 registerOperationsMonthWorkflow({
@@ -106,6 +108,8 @@ describe("monthly review endpoint authorization and transaction guards", () => {
   let records: any[];
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.permissionRead.mockReset();
+    mocks.release.mockReset();
     mocks.monthlyInputs.mockResolvedValue([]);
     mocks.rent.mockResolvedValue({ amount: 0, found: false });
     mocks.recurring.mockResolvedValue([]);
@@ -204,7 +208,8 @@ describe("monthly review endpoint authorization and transaction guards", () => {
     const response = await call("close", { branchId: "b1", month: "2025-02", revision: 0, note: "retry closing" });
     expect(response.failure).toBeUndefined();
     expect(mocks.query.mock.calls.some(call => call[0].startsWith("UPDATE"))).toBe(false);
-    expect(response.result.closing.drifted).toBe(false);
+    expect(response.result.workflow.closing.drifted).toBe(false);
+    expect(response.result.command).toMatchObject({ committed: true, revision: 1, changed: false });
   });
   it("repeated same-day declaration is harmless after a lost response", async () => {
     records.shift();
@@ -297,6 +302,212 @@ describe("monthly review endpoint authorization and transaction guards", () => {
       expect(response.result.expenses).toMatchObject({ available: false, recorded: null, paid: null });
       expect(response.result.expenses.reason).toContain("غير مهيأ");
       expect(response.result.closing.available).toBe(true);
+    } finally { log.mockRestore(); }
+  });
+  it.each(["salary_closures", "salary_closure_lines", "salary_payments"])(
+    "isolates a failed %s read without inventing payroll amounts or disabling daily review",
+    async table => {
+      for (const grant of ["salary_closing:view", "salary_closing:edit", "sales_analytics:view", "pnl:view", "pnl_dashboard:view"]) mocks.grants.add(grant);
+      mocks.rent.mockResolvedValue({ amount: 50, found: true });
+      const prior = mocks.query.getMockImplementation()!;
+      mocks.query.mockImplementation(async (sql: string, ...args: any[]) => {
+        if (sql.includes(`FROM ${table} `)) throw Object.assign(new Error("injected payroll read failure"), { code: "42P01" });
+        if (sql.includes("FROM salary_closures")) return { rows: [{ id: 8, status: "closed", total_net: 100 }] };
+        if (sql.includes("FROM salary_closure_lines")) return { rows: [{ employeeId: 1, name: "Saved", due: 100 }] };
+        return prior(sql, ...args);
+      });
+      const log = vi.spyOn(console, "error").mockImplementation(() => {});
+      try {
+        const response = await call("", { branchId: "b1", month: "2025-02" });
+        expect(response.failure).toBeUndefined();
+        expect(response.result.payroll).toMatchObject({ available: false, status: "unavailable", due: null,
+          paid: null, recordedPaid: null, remaining: null, overpaid: null, canManage: false,
+          unknownPaymentAmounts: null, unreconciledPaymentCount: null, employees: [], payments: [] });
+        expect(response.result.payroll.reason).toContain("تعذر تحميل");
+        expect(response.result.sourceFailures).toEqual(["payroll"]);
+        expect(response.result.expenses).toMatchObject({ available: true, recorded: 50 });
+        expect(response.result.sales).toMatchObject({ available: true, confirmed: 2800, closedDays: 28 });
+        expect(response.result.closing).toMatchObject({ available: true, canClose: true, dailyEvidenceAvailable: true, reviewEvidenceAvailable: true });
+      } finally { log.mockRestore(); }
+    },
+  );
+  it("a failed review read leaves daily records and confirmed sales usable, without a fake open revision", async () => {
+    mocks.grants.add("sales_analytics:view");
+    const prior = mocks.query.getMockImplementation()!;
+    mocks.query.mockImplementation(async (sql: string, ...args: any[]) => {
+      if (sql.includes("SELECT * FROM operations_month_reviews")) throw new Error("injected review failure");
+      return prior(sql, ...args);
+    });
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const response = await call("", { branchId: "b1", month: "2025-02" });
+      expect(response.failure).toBeUndefined();
+      expect(response.result.sales).toMatchObject({ available: true, confirmed: 2800, closedDays: 28 });
+      expect(response.result.closing).toMatchObject({ available: true, status: "unavailable", revision: null,
+        drifted: null, canClose: false, canReopen: false, canDeclare: false,
+        dailyEvidenceAvailable: true, reviewEvidenceAvailable: false, missingDates: [] });
+      expect(response.result.closing.dailyRecords).toHaveLength(28);
+      expect(response.result.closing.blockers.join(" ")).toContain("تعذر تحميل ملف المراجعة");
+      expect(response.result.sourceFailures).toEqual(["review"]);
+    } finally { log.mockRestore(); }
+  });
+  it("a failed daily read retains the saved review and independent files but cannot prove sales or close", async () => {
+    for (const grant of ["sales_analytics:view", "salary_closing:view", "pnl:view", "pnl_dashboard:view"]) mocks.grants.add(grant);
+    state = { ...state, status: "closed", revision: 3, closed_at: "2025-03-01",
+      history: [{ action: "close", actor: "actor", at: "2025-03-01", note: "reviewed" }] };
+    const prior = mocks.query.getMockImplementation()!;
+    mocks.query.mockImplementation(async (sql: string, ...args: any[]) => {
+      if (sql.includes("FROM branch_daily_closures")) throw new Error("injected daily read failure");
+      return prior(sql, ...args);
+    });
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const response = await call("", { branchId: "b1", month: "2025-02" });
+      expect(response.failure).toBeUndefined();
+      expect(response.result.sales).toMatchObject({ available: false, confirmed: null, closedDays: null });
+      expect(response.result.sales.reason).toContain("تعذر تحميل أدلة الأيام");
+      expect(response.result.closing).toMatchObject({ available: true, status: "closed", revision: 3,
+        drifted: null, dailyEvidenceAvailable: false, reviewEvidenceAvailable: true,
+        canClose: false, canReopen: false, canDeclare: false, missingDates: [], dailyRecords: [] });
+      expect(response.result.closing.history).toHaveLength(1);
+      expect(response.result.payroll.available).toBe(true);
+      expect(response.result.expenses.available).toBe(true);
+      expect(response.result.sourceFailures).toEqual(["daily"]);
+    } finally { log.mockRestore(); }
+  });
+  it("sales-only access neither reads nor depends on the monthly review source", async () => {
+    mocks.grants.delete("daily_closures:view"); mocks.grants.add("sales_analytics:view");
+    const response = await call("", { branchId: "b1", month: "2025-02" });
+    expect(response.result.sales).toMatchObject({ available: true, confirmed: 2800 });
+    expect(response.result.closing).toMatchObject({ available: false, revision: null, status: "unavailable" });
+    expect(mocks.query.mock.calls.some(call => call[0].includes("operations_month_reviews"))).toBe(false);
+  });
+  it("both evidence sources can fail without discarding independently loaded financial files", async () => {
+    for (const grant of ["salary_closing:view", "sales_analytics:view", "pnl:view", "pnl_dashboard:view"]) mocks.grants.add(grant);
+    const prior = mocks.query.getMockImplementation()!;
+    mocks.query.mockImplementation(async (sql: string, ...args: any[]) => {
+      if (sql.includes("FROM branch_daily_closures") || sql.includes("SELECT * FROM operations_month_reviews"))
+        throw new Error("injected evidence failure");
+      return prior(sql, ...args);
+    });
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const response = await call("", { branchId: "b1", month: "2025-02" });
+      expect(response.failure).toBeUndefined();
+      expect(response.result.payroll.available).toBe(true);
+      expect(response.result.expenses.available).toBe(true);
+      expect(response.result.sales).toMatchObject({ available: false, confirmed: null, closedDays: null });
+      expect(response.result.closing).toMatchObject({ available: false, status: "unavailable", revision: null,
+        dailyEvidenceAvailable: false, reviewEvidenceAvailable: false, canClose: false, canDeclare: false, canReopen: false });
+      expect(response.result.closing.reason).toContain("تعذر تحميل");
+    } finally { log.mockRestore(); }
+  });
+  it("failed required evidence rolls back with an explicit unavailable error and no committed metadata", async () => {
+    const prior = mocks.query.getMockImplementation()!;
+    mocks.query.mockImplementation(async (sql: string, ...args: any[]) => {
+      if (sql.includes("FROM branch_daily_closures")) throw new Error("injected required read failure");
+      return prior(sql, ...args);
+    });
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const response = await call("close", { branchId: "b1", month: "2025-02", revision: 0, note: "reviewed" });
+      expect(response.failure).toMatchObject({ status: 503 });
+      expect(response.failure.message).toContain("لم نحفظ الإجراء");
+      expect(response.result).toBeUndefined();
+      expect(mocks.query.mock.calls.some(call => call[0] === "ROLLBACK")).toBe(true);
+      expect(mocks.query.mock.calls.some(call => call[0] === "COMMIT")).toBe(false);
+    } finally { log.mockRestore(); }
+  });
+  it("returns a committed receipt and saved/refresh-unavailable feedback when a postcommit load rejects", async () => {
+    let committed = false;
+    const prior = mocks.query.getMockImplementation()!;
+    mocks.query.mockImplementation(async (sql: string, ...args: any[]) => {
+      if (sql === "COMMIT") committed = true;
+      return prior(sql, ...args);
+    });
+    mocks.permissionRead.mockImplementation(() => {
+      if (committed) throw new Error("injected postcommit permission load failure");
+    });
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const response = await call("close", { branchId: "b1", month: "2025-02", revision: 0, note: "reviewed" });
+      expect(response.failure).toBeUndefined();
+      expect(response.result).toMatchObject({ command: { committed: true, branchId: "b1", month: "2025-02",
+        action: "close", revision: 1, changed: true }, refresh: "unavailable", workflow: null });
+      expect(response.result.message).toContain("تم حفظ الإجراء");
+      expect(response.result.message).toContain("لا تُعد إرسال");
+      expect(mocks.query.mock.calls.some(call => call[0] === "COMMIT")).toBe(true);
+      expect(mocks.query.mock.calls.some(call => call[0] === "ROLLBACK")).toBe(false);
+      expect(mocks.release).toHaveBeenCalledOnce();
+    } finally { log.mockRestore(); }
+  });
+  it("a failed COMMIT is not claimed committed and retains the precommit rollback path", async () => {
+    const prior = mocks.query.getMockImplementation()!;
+    mocks.query.mockImplementation(async (sql: string, ...args: any[]) => {
+      if (sql === "COMMIT") throw new Error("commit rejected");
+      return prior(sql, ...args);
+    });
+    const response = await call("close", { branchId: "b1", month: "2025-02", revision: 0, note: "reviewed" });
+    expect(response.failure?.message).toBe("commit rejected");
+    expect(response.result).toBeUndefined();
+    expect(mocks.query.mock.calls.some(call => call[0] === "ROLLBACK")).toBe(true);
+    expect(mocks.release).toHaveBeenCalledOnce();
+  });
+  it("payroll refresh failure after commit preserves a usable daily workflow and a saved command receipt", async () => {
+    mocks.grants.add("salary_closing:view");
+    const prior = mocks.query.getMockImplementation()!;
+    mocks.query.mockImplementation(async (sql: string, ...args: any[]) => {
+      if (sql.includes("FROM salary_closures")) throw new Error("injected postcommit payroll read failure");
+      return prior(sql, ...args);
+    });
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const response = await call("close", { branchId: "b1", month: "2025-02", revision: 0, note: "reviewed" });
+      expect(response.failure).toBeUndefined();
+      expect(response.result).toMatchObject({ command: { committed: true, revision: 1 }, refresh: "partial" });
+      expect(response.result.workflow.payroll).toMatchObject({ available: false, due: null, paid: null, remaining: null });
+      expect(response.result.workflow.closing.dailyRecords).toHaveLength(28);
+      expect(response.result.workflow.closing.dailyEvidenceAvailable).toBe(true);
+      expect(mocks.query.mock.calls.some(call => call[0] === "ROLLBACK")).toBe(false);
+    } finally { log.mockRestore(); }
+  });
+  it("a postcommit evidence read failure returns a partial saved workflow, never a rollback error", async () => {
+    let committed = false;
+    const prior = mocks.query.getMockImplementation()!;
+    mocks.query.mockImplementation(async (sql: string, ...args: any[]) => {
+      if (sql === "COMMIT") committed = true;
+      if (committed && sql.includes("SELECT * FROM operations_month_reviews")) throw new Error("postcommit review read failure");
+      return prior(sql, ...args);
+    });
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const response = await call("close", { branchId: "b1", month: "2025-02", revision: 0, note: "reviewed" });
+      expect(response.failure).toBeUndefined();
+      expect(response.result).toMatchObject({ command: { committed: true, revision: 1, changed: true }, refresh: "partial" });
+      expect(response.result.workflow.closing).toMatchObject({ revision: null, canClose: false, dailyEvidenceAvailable: true });
+      expect(response.result.message).toContain("تم حفظ الإجراء");
+      expect(mocks.query.mock.calls.some(call => call[0] === "ROLLBACK")).toBe(false);
+    } finally { log.mockRestore(); }
+  });
+  it("a postcommit release error also cannot be reported as an unsaved command", async () => {
+    mocks.release.mockImplementationOnce(() => { throw new Error("release failed"); });
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const response = await call("close", { branchId: "b1", month: "2025-02", revision: 0, note: "reviewed" });
+      expect(response.failure).toBeUndefined();
+      expect(response.result).toMatchObject({ command: { committed: true, revision: 1 }, refresh: "unavailable" });
+      expect(mocks.query.mock.calls.some(call => call[0] === "ROLLBACK")).toBe(false);
+    } finally { log.mockRestore(); }
+  });
+  it("postcommit recovery preserves an idempotent receipt when an injected refresh rejects", async () => {
+    const command = { committed: true as const, branchId: "b1", month: "2025-02",
+      action: "reopen" as const, revision: 4, changed: false };
+    const reload = vi.fn().mockRejectedValue(new Error("injected refresh failure"));
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      expect(await refreshCommittedMonth(command, reload)).toMatchObject({ command, refresh: "unavailable", workflow: null });
+      expect(reload).toHaveBeenCalledOnce();
+      expect(mocks.query).not.toHaveBeenCalled();
     } finally { log.mockRestore(); }
   });
   it("unmatched payments surface reconciliation state and no invented employee name", async () => {

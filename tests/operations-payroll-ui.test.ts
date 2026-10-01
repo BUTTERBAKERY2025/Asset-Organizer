@@ -200,11 +200,15 @@ describe("current-scope settled rendering and explicit loading/error states", ()
   it("wires every real query to explicit no-placeholder/retry/fresh-mount options and only operations-scoped detail endpoints", () => {
     const page = readFileSync("client/src/pages/operations-hr.tsx", "utf8");
     const evidence = readFileSync("client/src/components/operations-hr/payroll-attendance.tsx", "utf8");
-    for (const text of [page, evidence]) {
+    const employees = readFileSync("client/src/components/operations-hr/employees-workspace.tsx", "utf8");
+    const joining = readFileSync("client/src/components/operations-hr/joining-workspace.tsx", "utf8");
+    const transfers = readFileSync("client/src/components/operations-hr/transfer-history.tsx", "utf8");
+    const querySources = [page, evidence, employees, joining, transfers];
+    for (const text of querySources) {
       const parsed = ts.createSourceFile("ui.tsx", text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
       const queries: ts.CallExpression[] = [];
       function visit(node: ts.Node) {
-        if (ts.isCallExpression(node) && node.expression.getText(parsed) === "useQuery") queries.push(node);
+        if (ts.isCallExpression(node) && ["useQuery", "useInfiniteQuery"].includes(node.expression.getText(parsed))) queries.push(node);
         ts.forEachChild(node, visit);
       }
       visit(parsed);
@@ -219,12 +223,19 @@ describe("current-scope settled rendering and explicit loading/error states", ()
     expect(page).toContain('queryKey: ["/api/operations-hr/payroll", branch?.id, month]');
     expect(page).toContain("reportReady && branch && payroll.data");
     expect(page).toContain('key={`${branch.id}:${month}`}');
-    expect(page).toContain('joiningState === "ready"');
-    expect(page).toContain('transfersState === "ready"');
+    expect(page).toContain('authorizedBranch && branch && activeTab === "employees"');
+    expect(employees).toContain("enabled: employeesNeeded");
+    expect(employees).toContain('employeesState === "ready" && employees.data');
+    expect(joining).toContain('const rows = state === "ready"');
+    expect(joining).toContain('queryKey: ["/api/operations-hr/joining", branch.id]');
+    expect(joining).toContain("new URLSearchParams({ branchId: branch.id })");
+    expect(transfers).toContain('const rows = state === "ready"');
+    expect(transfers).toContain('queryKey: ["/api/operations-hr/transfers", branch.id, scope]');
+    expect(transfers).toContain('new URLSearchParams({ branchId: branch.id, limit: "50" })');
     expect(evidence).toContain('queryKey: ["/api/operations-hr/payroll/attendance", branchId, month, branchEmployeeId]');
     expect(evidence).toContain("enabled: open");
     for (const path of ["/api/salary-closing", "/api/salary-payments", "/api/attendance-records"])
-      expect(page + evidence).not.toContain(path);
+      expect(querySources.join("\n")).not.toContain(path);
     expect(evidence).toContain("ليست لقطة تاريخية مجمّدة");
     expect(evidence).not.toContain("useMutation");
     const table = readFileSync("client/src/components/operations-hr/payroll-report.tsx", "utf8");

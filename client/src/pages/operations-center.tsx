@@ -7,8 +7,9 @@ import { parseNoticeAction } from "@shared/operations-center-notifications";
 import { Layout } from "@/components/layout";
 import { time } from "@/components/operations-center/workspace";
 import { OperationsDecisionBoard } from "@/components/operations-center/decision-board";
+import { performanceDataForRange, type PerformanceDays } from "@/components/operations-center/analytics-model";
 import { OperationsCenterScreen } from "@/components/operations-center/operations-screen";
-import { attachCenterContext } from "@/lib/operations-center-navigation";
+import { attachCenterContext, performanceDaysIntent } from "@/lib/operations-center-navigation";
 import { hrHubModule } from "@/lib/hr-hub-route";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -137,13 +138,14 @@ export default function OperationsCenterPage() {
   const [selected, setSelected] = useState<string[]>(() => new URLSearchParams(window.location.search).get("branchIds")?.split(",").filter(Boolean) ?? []);
   const [invalidSelection, setInvalidSelection] = useState(false);
   const [offset, setOffset] = useState(0);
+  const [performanceDays, setPerformanceDays] = useState<PerformanceDays>(() => performanceDaysIntent(window.location.search) || 7);
   const [message, setMessage] = useState("");
   const [scopeSearch, setScopeSearch] = useState("");
   const [scopeOpen, setScopeOpen] = useState(false);
   const allowedIds = useMemo(() => branches.map(branch => branch.id), [branches]);
   // An empty selection means the server's current authorized scope, not cached client-side "all".
   const effectiveIds = selected.filter(id => allowedIds.includes(id));
-  const key = ["/api/operations-center", user?.id, [...effectiveIds].sort().join(","), offset];
+  const key = ["/api/operations-center", user?.id, [...effectiveIds].sort().join(","), offset, performanceDays];
   const allowed = !permissionsLoading && canView("operations");
   // Keep the last validated scope while useBranches temporarily hides rows
   // during an authorization refetch; a transient empty list is not a revoke.
@@ -204,6 +206,7 @@ export default function OperationsCenterPage() {
     enabled: !!user?.id && allowed && scopeChecked && !invalidSelection && !branchesLoading && !branchesError && allowedIds.length > 0,
     queryFn: async ({ signal }) => {
       const params = new URLSearchParams();
+      params.set("performanceDays", String(performanceDays));
       if (effectiveIds.length) params.set("branchIds", effectiveIds.join(","));
       if (offset) params.set("offset", String(offset));
       const res = await fetch(`/api/operations-center${params.size ? `?${params}` : ""}`, { credentials: "include", signal });
@@ -212,13 +215,22 @@ export default function OperationsCenterPage() {
     },
     retry: false, staleTime: 0, refetchInterval: liveEnabled ? false : 60_000,
     refetchOnWindowFocus: false, refetchOnReconnect: false,
-    placeholderData: undefined,
+    // Only a performance-range transition may retain workflow snapshots.
+    // Actor, branch scope and queue page transitions never inherit old data.
+    placeholderData: (previous, previousQuery) =>
+      JSON.stringify(previousQuery?.queryKey.slice(0, 4)) === JSON.stringify(key.slice(0, 4)) ? previous : undefined,
   });
   const data = scopeChecked && allowed && !invalidSelection && !branchesLoading && !branchesError && !center.isError &&
     center.data?.scope.branchIds.every(id => allowedIds.includes(id)) &&
     center.data.scope.branchIds.length === (effectiveIds.length ? effectiveIds.length : allowedIds.length) &&
     (effectiveIds.length ? effectiveIds : allowedIds).every(id => center.data.scope.branchIds.includes(id))
-    ? center.data : undefined;
+    ? performanceDataForRange(center.data, performanceDays) : undefined;
+  const changePerformanceDays = (days: PerformanceDays) => {
+    setPerformanceDays(days);
+    const params = new URLSearchParams(window.location.search);
+    params.set("performanceDays", String(days));
+    navigate(`/operations-center?${params}`, { replace: true });
+  };
   const changeScope = (ids: string[]) => {
     setScopeOpen(false);
     setScopeSearch("");
@@ -231,12 +243,15 @@ export default function OperationsCenterPage() {
     client.removeQueries({ queryKey: ["/api/operations-center/notifications"] });
     const next = ids.filter(id => allowedIds.includes(id));
     setSelected(next);
-    navigate(`/operations-center${next.length ? `?${new URLSearchParams({ branchIds: next.join(",") })}` : ""}`, { replace: true });
+    const params = new URLSearchParams({ performanceDays: String(performanceDays) });
+    if (next.length) params.set("branchIds", next.join(","));
+    navigate(`/operations-center?${params}`, { replace: true });
   };
   const go = (href: string, branchId: string, item?: OperationsQueueItem) => {
     if (!data?.scope.branchIds.includes(branchId)) return;
     try {
       const url = new URL(href, window.location.origin);
+      const analyticReturn = url.searchParams.get("centerWorkspace") === "analysis";
       if (url.origin !== window.location.origin || !url.pathname.startsWith("/") || url.pathname.startsWith("//")) throw new Error();
       if (item) {
         const parameter = RECORD_PARAMS[item.sourceType];
@@ -252,7 +267,8 @@ export default function OperationsCenterPage() {
         url.pathname = `/branch-daily-closures/${item.sourceId}`;
         url.search = "";
       }
-      attachCenterContext(url, branchId, effectiveIds);
+      if (analyticReturn) url.searchParams.set("centerWorkspace", "analysis");
+      attachCenterContext(url, branchId, effectiveIds, performanceDays);
       navigate(`${url.pathname}${url.search}${url.hash}`);
     } catch { setMessage("رابط المصدر غير صالح؛ لم يتم فتحه."); }
   };
@@ -261,6 +277,7 @@ export default function OperationsCenterPage() {
     setMessage("");
     try {
       const params = new URLSearchParams();
+       params.set("performanceDays", String(performanceDays));
       if (effectiveIds.length) params.set("branchIds", effectiveIds.join(","));
       const res = await fetch(`/api/operations-center/export?${params}`, { credentials: "include" });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -289,7 +306,7 @@ export default function OperationsCenterPage() {
     </>}>
     {message && <p role="alert" className="rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">{message}</p>}
      {branchesError ? <div className="rounded-xl border bg-card p-6 text-center"><AlertTriangle className="mx-auto mb-2 h-6 w-6 text-destructive" /><p>تعذر التحقق من الفروع المسموح بها.</p><Button variant="outline" className="mt-3" onClick={() => { setScopeChecked(false); void refetchBranches().then(result => setScopeChecked(!result.isError)); }}>إعادة المحاولة</Button></div> : !allowed && !permissionsLoading ? <Empty message="لا تملك صلاحية عرض مركز التشغيل." /> : invalidSelection && !branchesLoading && scopeChecked ? <Empty message="تغير نطاق الصلاحيات أو الفرع المطلوب غير مسموح. اختر نطاقًا جديدًا من الفروع المتاحة أعلاه." /> : !branchesLoading && scopeChecked && !allowedIds.length ? <Empty message="لا توجد فروع مسموح بها لهذا الحساب." /> : branchesLoading || !scopeChecked || center.isLoading ? <div role="status" className="grid gap-3 rounded-xl border border-border bg-card p-5"><div className="h-6 w-48 animate-pulse rounded-lg bg-muted" /><div className="grid gap-3 md:grid-cols-2">{[0, 1].map(index => <div key={index} className="h-36 animate-pulse rounded-xl bg-muted" />)}</div><span className="sr-only">جار تحميل نطاق الفروع والبيانات</span></div> : center.isError ? <div className="rounded-xl border bg-card p-6 text-center"><AlertTriangle className="mx-auto mb-2 h-6 w-6 text-destructive" /><p>تعذر تحميل المركز ({center.error instanceof Error ? center.error.message : "خطأ غير معروف"}). لم نعرض بيانات قديمة.</p><Button variant="outline" className="mt-3" onClick={() => center.refetch()}>إعادة المحاولة</Button></div> : data ?
-      <OperationsDecisionBoard key={effectiveIds.slice().sort().join(",")} data={data} actorId={user?.id} offset={offset} onOffset={setOffset} open={go} openBranch={id => navigate(`/branch-operations?branchId=${encodeURIComponent(id)}`)} retry={() => { void center.refetch(); }} canOpenEmployees={canView(hrHubModule(user?.role))} />
+      <OperationsDecisionBoard key={effectiveIds.slice().sort().join(",")} data={data} actorId={user?.id} offset={offset} onOffset={setOffset} open={go} openBranch={id => navigate(`/branch-operations?branchId=${encodeURIComponent(id)}`)} retry={() => { void center.refetch(); }} canOpenEmployees={canView(hrHubModule(user?.role))} performanceDays={performanceDays} onPerformanceDays={changePerformanceDays} performanceLoading={center.isPlaceholderData} evidenceRefreshing={center.isFetching} />
       : <Empty message="تعذر التحقق من نطاق الاستجابة. حدّث الصفحة بعد مراجعة صلاحيات الفروع." />}
   </OperationsCenterScreen></Layout>;
 }

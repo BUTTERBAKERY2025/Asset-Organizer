@@ -10,10 +10,13 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { useBranches } from "@/hooks/useBranches";
 import { useBranchNavigation } from "@/hooks/use-branch-navigation";
+import { usePermissions } from "@/hooks/usePermissions";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation, useSearch } from "wouter";
-import { branchDeskDate, updateBranchDeskScope } from "@/lib/branch-operation-navigation";
+import { branchDeskDate } from "@/lib/branch-operation-navigation";
+import { dailyClosureHref, dailyClosureIntent, dailyClosureScopeReady } from "@/lib/daily-closure-navigation";
+import { operationsCenterReturnHref } from "@/lib/operations-center-navigation";
 import { Link } from "wouter";
 import { 
   Calendar, 
@@ -95,6 +98,7 @@ const PAYMENT_METHOD_LABELS: Record<string, string> = {
 };
 
 type JournalPreviewResponse = {
+  scopeKey: string;
   existingClosure: any | null;
   journals: CashierSalesJournal[];
   totals: {
@@ -124,28 +128,35 @@ type JournalPreviewResponse = {
 };
 
 export default function BranchDailyClosingPage() {
-  const [selectedDate, setSelectedDate] = useState(format(new Date(), "yyyy-MM-dd"));
+  const linkedSearch = useSearch();
+  const intent = dailyClosureIntent(linkedSearch);
+  const [appliedSearch, setAppliedSearch] = useState(linkedSearch);
+  const [selectedDate, setSelectedDate] = useState(() => intent.invalidDate ? "" : intent.date || (intent.month ? `${intent.month}-01` : format(new Date(), "yyyy-MM-dd")));
   const [selectedBranch, setSelectedBranch] = useState<string>("");
   const [selectedJournals, setSelectedJournals] = useState<number[]>([]);
   const [notes, setNotes] = useState("");
   const [expandedJournals, setExpandedJournals] = useState<number[]>([]);
+  const [selectionScope, setSelectionScope] = useState("");
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { user } = useAuth();
-  const { branches, userBranchId, canSelectBranch, isLoading: branchesLoading } = useBranches();
+  const permissions = usePermissions();
+  const permissionState = useQuery({ queryKey: ["/api/my-permissions"], enabled: false });
+  const permissionsReady = !permissions.isLoading && permissionState.isSuccess && !permissionState.isFetching && !permissionState.isError;
+  const { branches, userBranchId, canSelectBranch, isLoading: branchesLoading, isError: branchesFailed, error: branchError, refetch: refetchBranches } = useBranches();
   const navigationBranch = useBranchNavigation(branches, branchesLoading, userBranchId);
   const [, navigate] = useLocation();
-  const linkedSearch = useSearch();
   useEffect(() => {
-    const params = new URLSearchParams(linkedSearch);
-    const date = branchDeskDate(params.get("date"));
-    if (params.get("from") === "branch-operations" && date) {
-      setSelectedDate(date);
-      setSelectedJournals([]);
-      setExpandedJournals([]);
-      setNotes("");
-    }
+    const requested = dailyClosureIntent(linkedSearch);
+    if (requested.invalidDate) setSelectedDate("");
+    else if (requested.date) setSelectedDate(requested.date);
+    else if (requested.month) setSelectedDate(`${requested.month}-01`);
+    setAppliedSearch(linkedSearch);
+    setSelectedJournals([]);
+    setExpandedJournals([]);
+    setSelectionScope("");
+    setNotes("");
   }, [linkedSearch]);
 
   useEffect(() => {
@@ -156,34 +167,53 @@ export default function BranchDailyClosingPage() {
     }
   }, [navigationBranch.hasBranchParam, navigationBranch.branchId, userBranchId]);
 
-  const { data: journalPreview, isLoading: isLoadingPreview } = useQuery<JournalPreviewResponse | null>({
-    queryKey: ["/api/branch-daily-closures/journals-preview", selectedBranch, selectedDate],
-    queryFn: async (): Promise<JournalPreviewResponse | null> => {
-      if (!selectedBranch || !selectedDate) return null;
-      const response = await fetch(`/api/branch-daily-closures/journals-preview?branchId=${selectedBranch}&date=${selectedDate}`, {
-        credentials: 'include'
+  const allowedIds = branches.map(branch => branch.id);
+  const requestedBranch = new URLSearchParams(linkedSearch).get("branchId");
+  const scopeReady = appliedSearch === linkedSearch && !intent.invalidDate && !!branchDeskDate(selectedDate)
+    && (requestedBranch === null || allowedIds.includes(requestedBranch))
+    && dailyClosureScopeReady(selectedBranch, allowedIds, branchesLoading, navigationBranch.hasBranchParam,
+      navigationBranch.isResolving, navigationBranch.branchId, false);
+  const scopeKey = `${user?.id}:${selectedBranch}:${selectedDate}`;
+  const { data: previewData, isLoading: isLoadingPreview, isFetching: isFetchingPreview, isError: previewFailed, error: previewError, refetch: refetchPreview } = useQuery<JournalPreviewResponse>({
+    queryKey: ["/api/branch-daily-closures/journals-preview", user?.id, selectedBranch, selectedDate],
+    queryFn: async ({ signal }): Promise<JournalPreviewResponse> => {
+      const response = await fetch(`/api/branch-daily-closures/journals-preview?${new URLSearchParams({ branchId: selectedBranch, date: selectedDate })}`, {
+        credentials: 'include', signal, cache: "no-store",
       });
-      if (!response.ok) return null;
-      return response.json();
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        throw new Error(body?.error || body?.message || `تعذر تحميل يوميات اليوم (${response.status})`);
+      }
+      return { ...await response.json(), scopeKey };
     },
-    enabled: !!selectedBranch && !!selectedDate && !navigationBranch.isResolving
-      && (!navigationBranch.hasBranchParam || selectedBranch === navigationBranch.branchId),
+    staleTime: 0,
+    enabled: scopeReady,
   });
+  const journalPreview = scopeReady && !previewFailed && previewData?.scopeKey === scopeKey ? previewData : undefined;
 
   useEffect(() => {
     if (journalPreview?.journals) {
       setSelectedJournals(journalPreview.journals.map((j: any) => j.id));
+      setSelectionScope(scopeKey);
+      setExpandedJournals([]);
+      setNotes("");
     }
-  }, [journalPreview]);
+  }, [journalPreview, scopeKey]);
 
   const createClosureMutation = useMutation({
     mutationFn: async (data: { branchId: string; closureDate: string; journalIds: number[]; notes: string }) => {
-      return apiRequest("POST", "/api/branch-daily-closures", data);
+      if (!canCreateClosure) throw new Error("لم يعد إنشاء الإغلاق متاحًا للفرع والتاريخ المحددين.");
+      const response = await apiRequest("POST", "/api/branch-daily-closures", data);
+      return response.json();
     },
-    onSuccess: (data) => {
+    onSuccess: (data, request) => {
       queryClient.invalidateQueries({ queryKey: ["/api/branch-daily-closures"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/branch-daily-closures/journals-preview"] });
+      if (data?.id) queryClient.invalidateQueries({ queryKey: [`/api/branch-daily-closures/${data.id}`], exact: true });
+      queryClient.invalidateQueries({ queryKey: ["/api/operations-center/month-workflow"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/operations-center"] });
       toast({ title: "تم إنشاء الإغلاق اليومي بنجاح" });
-      navigate(`/branch-daily-closures`);
+      navigate(dailyClosureHref("list", linkedSearch, request.branchId, request.closureDate, request.closureDate.slice(0, 7)));
     },
     onError: (error: any) => {
       toast({ 
@@ -194,8 +224,24 @@ export default function BranchDailyClosingPage() {
     },
   });
 
+  const canCreateClosure: boolean = permissionsReady && permissions.canCreate("daily_closures") && scopeReady
+    && !isFetchingPreview && !createClosureMutation.isPending && !!journalPreview
+    && !journalPreview.existingClosure && selectionScope === scopeKey && selectedJournals.length > 0
+    && selectedJournals.every(id => journalPreview.journals.some(journal => journal.id === id));
+  const listHref = dailyClosureHref("list", linkedSearch, selectedBranch,
+    branchDeskDate(selectedDate), intent.month && (!selectedDate || selectedDate.startsWith(`${intent.month}-`)) ? intent.month : selectedDate.slice(0, 7));
+  const changeScope = (branchId: string, date: string) => {
+    setSelectedBranch(branchId);
+    setSelectedDate(date);
+    setSelectedJournals([]);
+    setExpandedJournals([]);
+    setSelectionScope("");
+    setNotes("");
+    navigate(dailyClosureHref("create", linkedSearch, branchId, date, date ? date.slice(0, 7) : intent.month));
+  };
+
   const handleCreateClosure = () => {
-    if (!selectedBranch || !selectedDate || selectedJournals.length === 0) {
+    if (!canCreateClosure) {
       toast({ 
         title: "خطأ", 
         description: "يرجى اختيار الفرع والتاريخ واليوميات", 
@@ -240,7 +286,8 @@ export default function BranchDailyClosingPage() {
     return 'balanced';
   };
 
-  const selectedJournalsList = journalPreview?.journals?.filter((j: any) => selectedJournals.includes(j.id)) || [];
+  const selectedJournalsList = selectionScope === scopeKey
+    ? journalPreview?.journals?.filter((j: any) => selectedJournals.includes(j.id)) || [] : [];
   
   const selectedPaymentMethodTotals: Record<string, {
     totalAmount: number;
@@ -322,7 +369,7 @@ export default function BranchDailyClosingPage() {
             <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900">إغلاق يومي جديد</h1>
             <p className="text-xs sm:text-sm text-gray-500 mt-1">تجميع يوميات الكاشير في إغلاق يومي واحد</p>
           </div>
-          <Link href="/branch-daily-closures">
+          <Link href={listHref}>
             <Button variant="outline" className="gap-2 h-11 sm:h-10 text-xs sm:text-sm w-full sm:w-auto">
               <ArrowLeft className="h-4 w-4" />
               <span className="hidden sm:inline">عرض الإغلاقات السابقة</span>
@@ -330,6 +377,13 @@ export default function BranchDailyClosingPage() {
             </Button>
           </Link>
         </div>
+
+        {new URLSearchParams(linkedSearch).get("from") === "operations-center" && <Link href={operationsCenterReturnHref(linkedSearch, allowedIds)}><Button variant="outline" size="sm">العودة إلى ملف الشهر التشغيلي</Button></Link>}
+        {branchesFailed && <div role="alert" className="space-y-2 text-destructive"><p>{branchError?.message || "تعذر التحقق من الفروع المسموحة."}</p><Button variant="outline" onClick={() => refetchBranches()}>إعادة التحقق من الفروع</Button></div>}
+        {!branchesLoading && requestedBranch !== null && !allowedIds.includes(requestedBranch) && <p role="alert" className="text-sm text-destructive">الفرع في الرابط غير مسموح. اختر فرعًا متاحًا قبل إنشاء الإغلاق.</p>}
+        {intent.invalidDate && <p role="alert" className="text-sm text-destructive">تاريخ الإغلاق في الرابط غير صالح أو لا يطابق الشهر المختار. اختر تاريخًا صالحًا قبل المتابعة.</p>}
+        {previewFailed && <div role="alert" className="space-y-2 text-destructive"><p>{previewError.message}</p><Button variant="outline" onClick={() => refetchPreview()}>إعادة المحاولة</Button></div>}
+        {permissionsReady && !permissions.canCreate("daily_closures") && <p role="status" className="text-sm text-muted-foreground">عرض فقط؛ لا تتوفر صلاحية إنشاء إغلاق يومي.</p>}
 
         <Card>
           <CardHeader className="p-3 sm:p-4 md:p-6">
@@ -341,8 +395,8 @@ export default function BranchDailyClosingPage() {
           <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 p-3 sm:p-4 md:p-6 pt-0">
             <div className="space-y-1 sm:space-y-2">
               <Label className="text-xs sm:text-sm">الفرع</Label>
-              <Select value={selectedBranch} onValueChange={value => { setSelectedBranch(value); updateBranchDeskScope(value); }}>
-                <SelectTrigger disabled={!canSelectBranch} className="h-11 sm:h-10 text-xs sm:text-sm">
+              <Select value={selectedBranch} onValueChange={value => changeScope(value, selectedDate)}>
+                <SelectTrigger disabled={!canSelectBranch || createClosureMutation.isPending} className="h-11 sm:h-10 text-xs sm:text-sm">
                   <SelectValue placeholder="اختر الفرع" />
                 </SelectTrigger>
                 <SelectContent>
@@ -359,7 +413,8 @@ export default function BranchDailyClosingPage() {
               <Input 
                 type="date" 
                 value={selectedDate} 
-                onChange={(e) => setSelectedDate(e.target.value)}
+                onChange={(e) => changeScope(selectedBranch, e.target.value)}
+                disabled={createClosureMutation.isPending}
                 className="w-full h-11 sm:h-10 text-xs sm:text-sm"
               />
             </div>
@@ -378,10 +433,10 @@ export default function BranchDailyClosingPage() {
               </CardDescription>
             </CardHeader>
             <CardFooter>
-              <Link href={`/branch-daily-closures`}>
+              <Link href={listHref}>
                 <Button variant="outline" className="gap-2">
                   <Eye className="h-4 w-4" />
-                  عرض الإغلاق الموجود
+                  {journalPreview.existingClosure.status === "open" ? "مراجعة واعتماد الإغلاق الموجود" : "عرض الإغلاق الموجود"}
                 </Button>
               </Link>
             </CardFooter>
@@ -785,14 +840,14 @@ export default function BranchDailyClosingPage() {
                   </div>
                 </CardContent>
                 <CardFooter className="flex justify-end gap-3">
-                  <Button variant="outline" onClick={() => navigate("/branch-daily-closures")}>
+                  <Button variant="outline" disabled={createClosureMutation.isPending} onClick={() => navigate(listHref)}>
                     إلغاء
                   </Button>
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
                       <Button 
                         className="gap-2 bg-amber-600 hover:bg-amber-700"
-                        disabled={createClosureMutation.isPending}
+                        disabled={!canCreateClosure}
                       >
                         <Save className="h-4 w-4" />
                         إنشاء الإغلاق اليومي
@@ -808,6 +863,7 @@ export default function BranchDailyClosingPage() {
                       <AlertDialogFooter className="flex-row-reverse gap-2">
                         <AlertDialogAction 
                           onClick={handleCreateClosure}
+                          disabled={!canCreateClosure}
                           className="bg-amber-600 hover:bg-amber-700"
                         >
                           تأكيد الإنشاء
@@ -828,9 +884,9 @@ export default function BranchDailyClosingPage() {
               <Receipt className="h-16 w-16 text-gray-300 mx-auto mb-4" />
               <h3 className="text-lg font-medium text-gray-900 mb-2">لا توجد يوميات</h3>
               <p className="text-gray-500">لا توجد يوميات كاشير لهذا الفرع في التاريخ المحدد</p>
-              <Link href="/cashier-journal-form">
+              <Link href={listHref}>
                 <Button className="mt-4 gap-2">
-                  إنشاء يومية جديدة
+                  العودة إلى إغلاقات اليوم
                 </Button>
               </Link>
             </CardContent>

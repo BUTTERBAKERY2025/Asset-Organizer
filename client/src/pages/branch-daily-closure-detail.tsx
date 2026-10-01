@@ -5,7 +5,10 @@ import { Badge } from "@/components/ui/badge";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { useBranches } from "@/hooks/useBranches";
-import { useRoute, Link } from "wouter";
+import { useBranchNavigation } from "@/hooks/use-branch-navigation";
+import { useRoute, Link, useSearch } from "wouter";
+import { dailyClosureHref, dailyClosureIntent } from "@/lib/daily-closure-navigation";
+import { operationsCenterReturnHref } from "@/lib/operations-center-navigation";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
@@ -92,12 +95,34 @@ export default function BranchDailyClosureDetailPage() {
   const [, params] = useRoute("/branch-daily-closures/:id");
   const closureId = params?.id;
   const { user } = useAuth();
-  const { branches } = useBranches();
+  const linkedSearch = useSearch();
+  const intent = dailyClosureIntent(linkedSearch);
+  const { branches, isLoading: branchesLoading, userBranchId, isError: branchesFailed, error: branchError, refetch: refetchBranches } = useBranches();
+  const navigationBranch = useBranchNavigation(branches, branchesLoading, userBranchId);
+  const requestedBranch = new URLSearchParams(linkedSearch).get("branchId");
+  const allowedIds = branches.map(branch => branch.id);
+  const scopeReady = !branchesLoading && !navigationBranch.isResolving && allowedIds.length > 0
+    && !intent.invalidDate && (!navigationBranch.hasBranchParam || allowedIds.includes(requestedBranch || ""));
 
-  const { data: closure, isLoading } = useQuery<any>({
+  const { data: closureData, isLoading, isError, error, refetch } = useQuery<any>({
     queryKey: [`/api/branch-daily-closures/${closureId}`],
-    enabled: !!closureId,
+    queryFn: async ({ signal }) => {
+      const response = await fetch(`/api/branch-daily-closures/${closureId}`, { credentials: "include", signal, cache: "no-store" });
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        throw new Error(body?.error || body?.message || `تعذر تحميل الإغلاق (${response.status})`);
+      }
+      return response.json();
+    },
+    staleTime: 0,
+    enabled: !!closureId && scopeReady,
   });
+  const closure = scopeReady && !isError && String(closureData?.id) === closureId
+    && allowedIds.includes(closureData?.branchId)
+    && (!requestedBranch || closureData.branchId === requestedBranch)
+    && (!intent.date || closureData.closureDate === intent.date) ? closureData : undefined;
+  const listHref = dailyClosureHref("list", linkedSearch, requestedBranch && allowedIds.includes(requestedBranch)
+    ? requestedBranch : closure?.branchId || "", intent.date, intent.month);
 
   const branchName = branches?.find((b: any) => b.id === closure?.branchId)?.name || closure?.branchId;
 
@@ -469,7 +494,7 @@ export default function BranchDailyClosureDetailPage() {
     } catch { return dateStr; }
   };
 
-  if (isLoading) {
+  if (isLoading || branchesLoading || navigationBranch.isResolving) {
     return (
       <Layout>
         <div className="p-6 space-y-4" dir="rtl">
@@ -487,8 +512,11 @@ export default function BranchDailyClosureDetailPage() {
       <Layout>
         <div className="p-6 text-center" dir="rtl">
           <AlertTriangle className="w-12 h-12 mx-auto text-amber-500 mb-4" />
-          <h2 className="text-xl font-bold mb-2">الإغلاق غير موجود</h2>
-          <Link href="/branch-daily-closures">
+          <h2 className="text-xl font-bold mb-2">{isError ? "تعذر تحميل الإغلاق" : "الإغلاق غير موجود أو لا يطابق الفرع والتاريخ المختارين"}</h2>
+          {branchesFailed && <div role="alert" className="mb-3 space-y-2"><p>{branchError?.message || "تعذر التحقق من الفروع المسموحة."}</p><Button variant="outline" onClick={() => refetchBranches()}>إعادة التحقق من الفروع</Button></div>}
+          {isError && <div role="alert" className="mb-3 space-y-2"><p>{error.message}</p><Button variant="outline" onClick={() => refetch()}>إعادة المحاولة</Button></div>}
+          {intent.invalidDate && <p role="alert" className="mb-3 text-destructive">تاريخ الإغلاق في الرابط غير صالح.</p>}
+          <Link href={listHref}>
             <Button variant="outline" className="gap-2">
               <ArrowRight className="w-4 h-4" />
               العودة للقائمة
@@ -511,7 +539,7 @@ export default function BranchDailyClosureDetailPage() {
       <div className="p-4 md:p-6 space-y-6" dir="rtl">
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div className="flex items-center gap-3">
-            <Link href="/branch-daily-closures">
+            <Link href={listHref}>
               <Button variant="ghost" size="sm" className="gap-1" data-testid="button-back-closures">
                 <ArrowRight className="w-4 h-4" />
                 العودة
@@ -532,6 +560,8 @@ export default function BranchDailyClosureDetailPage() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {closure.status === "open" && <Link href={dailyClosureHref("list", linkedSearch, closure.branchId, closure.closureDate, intent.month || closure.closureDate.slice(0, 7))}><Button variant="outline" size="sm" data-testid="button-review-closure">مراجعة واعتماد الإغلاق في قائمة اليوم</Button></Link>}
+            {new URLSearchParams(linkedSearch).get("from") === "operations-center" && <Link href={operationsCenterReturnHref(linkedSearch, allowedIds)}><Button variant="outline" size="sm">ملف الشهر التشغيلي</Button></Link>}
             <Button variant="outline" size="sm" className="gap-1" onClick={exportClosurePdf} data-testid="button-export-pdf">
               <Download className="w-4 h-4" />
               تصدير PDF

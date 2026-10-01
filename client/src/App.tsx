@@ -30,7 +30,7 @@ import { installAutoReconnectOnVisibility, ensurePrinterConnection, getSavedPrin
 
 const PlatformHomePage = makeLazy("platform-home");
 const BranchOperationsPage = makeLazy("branch-operations");
-const OperationsCenterPage = makeLazy("operations-center");
+import OperationsCenterPage from "@/pages/operations-center";
 const BranchComplaintsPage = makeLazy("branch-complaints");
 const DriverDeliveriesPage = makeLazy("driver-deliveries");
 const DashboardPage = makeLazy("dashboard");

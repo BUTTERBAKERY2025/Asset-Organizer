@@ -48,6 +48,8 @@ vi.mock("../server/branch-operations", async (original) => ({
 import { hasEffectiveViewPermission } from "../server/branch-operations";
 import { mapOperationsBounded, projectOperationsCenter } from "../server/operations-center";
 import { storage } from "../server/storage";
+import { operationsEvidenceRevision } from "../server/operations-performance";
+import { assistantResponseMatches } from "../client/src/components/operations-center/analytics-model";
 
 const request = () => ({ currentUser: { id: "viewer-1", role: "viewer" } }) as Request;
 const deferred = <T,>() => {
@@ -178,5 +180,45 @@ describe("operations center bounded projection", () => {
     expect(loaded).toBe(196);
     expect(state.permissions.filter(key => key === "maintenance:view")).toHaveLength(1);
     expect(state.queries.filter(name => name === "maintenance")).toHaveLength(1);
+  });
+
+  it("keeps AI evidence revision invariant across queue pages but invalidates changed off-page source data", async () => {
+    for (const module of ["maintenance", "central_kitchen_orders"]) state.definitions.push({
+      id: "maintenance", module, title: "", group: "operations", href: "/",
+      load: async () => ({ metrics: [], alerts: [] }),
+    });
+    const created = new Date("2026-09-28T10:00:00Z");
+    const maintenance = Array.from({ length: 100 }, (_, index) => ({
+      id: index + 1, branchId: "b1", status: "open", assignee: null, due: null, priority: "normal",
+      created, updated: created,
+    }));
+    const kitchen = Array.from({ length: 6 }, (_, index) => ({
+      id: index + 1001, branchId: "b1", status: "requested",
+    }));
+    state.queueLoads = {
+      maintenance: async () => maintenance,
+      kitchen: async () => kitchen,
+    };
+    const first = await projectOperationsCenter(request(), ["b1"], 0);
+    const later = await projectOperationsCenter(request(), ["b1"], 100);
+    expect(first.queue).toHaveLength(100);
+    expect(later.queue).toHaveLength(6);
+    expect(first.coverage).toMatchObject({ truncated: true, nextOffset: 100 });
+    expect(later.coverage).toMatchObject({ truncated: false, nextOffset: null });
+    expect(first.analytics!.followups.scan.truncated).toBe(false);
+    expect(later.analytics!.evidenceRevision).toBe(first.analytics!.evidenceRevision);
+    expect(assistantResponseMatches({
+      kind: "ai", status: "no_evidence", insights: [], generatedAt: first.generatedAt,
+      evidenceRevision: first.analytics!.evidenceRevision, period: first.analytics!.period,
+      scope: { branchIds: ["b1"] },
+    }, later)).toBe(true);
+    // The helper itself must ignore page-only coverage flags too.
+    const loaded = [...first.queue, ...later.queue];
+    expect(operationsEvidenceRevision({ ...first, queue: loaded }, first.analytics!))
+      .toBe(operationsEvidenceRevision({ ...later, queue: loaded }, later.analytics!));
+    const offPageRecord = later.queue.find(row => row.sourceType === "maintenance")!;
+    maintenance.find(row => String(row.id) === offPageRecord.sourceId)!.status = "in_progress";
+    const changed = await projectOperationsCenter(request(), ["b1"], 0);
+    expect(changed.analytics!.evidenceRevision).not.toBe(first.analytics!.evidenceRevision);
   });
 });

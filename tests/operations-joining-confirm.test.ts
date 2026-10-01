@@ -138,7 +138,7 @@ describe("operations joining confirmation and real bell notification", () => {
     expect(state.alerts).toHaveLength(1);
     expect((await confirm()).body.alreadyConfirmed).toBe(true);
     expect(state.alerts).toHaveLength(1);
-    expect(state.locks).toHaveLength(3);
+    expect(state.locks).toHaveLength(6);
   });
   it("does not save approval when no permitted HR recipient exists or alert write fails", async () => {
     state.managers = [];

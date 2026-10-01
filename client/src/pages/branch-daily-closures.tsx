@@ -9,9 +9,12 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { useBranches } from "@/hooks/useBranches";
 import { useBranchNavigation } from "@/hooks/use-branch-navigation";
+import { usePermissions } from "@/hooks/usePermissions";
+import { canApproveDailyClosure, dailyClosureDateRange, dailyClosureHref, dailyClosureIntent, dailyClosureScopeReady } from "@/lib/daily-closure-navigation";
+import { operationsCenterReturnHref } from "@/lib/operations-center-navigation";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Link } from "wouter";
+import { Link, useLocation, useSearch } from "wouter";
 import { 
   Plus, 
   Search, 
@@ -112,6 +115,7 @@ type BranchDailyClosure = {
 };
 
 type PaginatedResponse = {
+  scopeKey: string;
   closures: BranchDailyClosure[];
   pagination: {
     page: number;
@@ -147,20 +151,28 @@ const exportColumns = [
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
 
 export default function BranchDailyClosuresPage() {
+  const linkedSearch = useSearch();
+  const [, navigate] = useLocation();
+  const intent = dailyClosureIntent(linkedSearch);
+  const initialRange = dailyClosureDateRange(linkedSearch);
+  const [filterSearch, setFilterSearch] = useState(linkedSearch);
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [branchFilter, setBranchFilter] = useState<string>("");
   const [discrepancyFilter, setDiscrepancyFilter] = useState<string>("all");
-  const [dateFrom, setDateFrom] = useState<string>("");
-  const [dateTo, setDateTo] = useState<string>("");
+  const [dateFrom, setDateFrom] = useState(initialRange.startDate);
+  const [dateTo, setDateTo] = useState(initialRange.endDate);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { user } = useAuth();
-  const { branches, userBranchId, canSelectBranch, isLoading: loadingBranches } = useBranches();
+  const permissions = usePermissions();
+  const permissionState = useQuery({ queryKey: ["/api/my-permissions"], enabled: false });
+  const permissionsReady = !permissions.isLoading && permissionState.isSuccess && !permissionState.isFetching && !permissionState.isError;
+  const { branches, userBranchId, canSelectBranch, isLoading: loadingBranches, isError: branchesFailed, error: branchError, refetch: refetchBranches } = useBranches();
   const navigationBranch = useBranchNavigation(branches, loadingBranches, userBranchId);
 
   useEffect(() => {
@@ -182,13 +194,20 @@ export default function BranchDailyClosuresPage() {
   }, [userBranchId, canSelectBranch, navigationBranch.hasBranchParam, navigationBranch.branchId, navigationBranch.isResolving]);
 
   useEffect(() => {
-    const requested = new URLSearchParams(window.location.search).get("month");
-    if (requested && /^\d{4}-(0[1-9]|1[0-2])$/.test(requested)) {
-      const [year, month] = requested.split("-").map(Number);
-      setDateFrom(`${requested}-01`);
-      setDateTo(`${requested}-${new Date(year, month, 0).getDate().toString().padStart(2, "0")}`);
-    }
-  }, []);
+    const range = dailyClosureDateRange(linkedSearch);
+    setDateFrom(range.startDate);
+    setDateTo(range.endDate);
+    setFilterSearch(linkedSearch);
+    setCurrentPage(1);
+  }, [linkedSearch]);
+
+  const allowedIds = branches.map(branch => branch.id);
+  const requestedBranch = new URLSearchParams(linkedSearch).get("branchId");
+  const scopeReady = filterSearch === linkedSearch && !intent.invalidDate
+    && (requestedBranch === null || allowedIds.includes(requestedBranch)) && dailyClosureScopeReady(
+    branchFilter, allowedIds, loadingBranches, navigationBranch.hasBranchParam,
+    navigationBranch.isResolving, navigationBranch.branchId, canSelectBranch,
+  );
 
   const queryParams = useMemo(() => {
     const params = new URLSearchParams();
@@ -203,19 +222,24 @@ export default function BranchDailyClosuresPage() {
     return params.toString();
   }, [currentPage, pageSize, branchFilter, statusFilter, discrepancyFilter, dateFrom, dateTo, debouncedSearch]);
 
-  const { data, isLoading, isFetching } = useQuery<PaginatedResponse>({
-    queryKey: ["/api/branch-daily-closures", queryParams],
-    queryFn: async () => {
-      const response = await fetch(`/api/branch-daily-closures?${queryParams}`, { credentials: 'include' });
-      if (!response.ok) throw new Error("Failed to fetch");
-      return response.json();
+  const { data: responseData, isLoading, isFetching, isError, error, refetch } = useQuery<PaginatedResponse>({
+    queryKey: ["/api/branch-daily-closures", user?.id, queryParams],
+    queryFn: async ({ signal }) => {
+      const response = await fetch(`/api/branch-daily-closures?${queryParams}`, { credentials: 'include', signal, cache: "no-store" });
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        throw new Error(body?.error || body?.message || `تعذر تحميل الإغلاقات (${response.status})`);
+      }
+      return { ...await response.json(), scopeKey: queryParams };
     },
-    staleTime: 30000,
-    placeholderData: (prev) => prev,
-    enabled: !navigationBranch.hasBranchParam || (!navigationBranch.isResolving && !!branchFilter && (branchFilter === "all" ? canSelectBranch : branches.some(b => b.id === branchFilter))),
+    staleTime: 0,
+    enabled: scopeReady,
   });
 
-  const closures = data?.closures || [];
+  const data = scopeReady && !isError && responseData?.scopeKey === queryParams ? responseData : undefined;
+  const closures = (data?.closures || []).filter(closure => allowedIds.includes(closure.branchId)
+    && (branchFilter === "all" || closure.branchId === branchFilter)
+    && (!dateFrom || closure.closureDate >= dateFrom) && (!dateTo || closure.closureDate <= dateTo));
   const pagination = data?.pagination || { page: 1, limit: 25, total: 0, totalPages: 0 };
   const totals = data?.totals || {
     totalSales: 0, cashTotal: 0, networkTotal: 0,
@@ -224,20 +248,34 @@ export default function BranchDailyClosuresPage() {
   };
 
   const closeMutation = useMutation({
-    mutationFn: async (id: number) => apiRequest(`/api/branch-daily-closures/${id}/close`, "POST", {}),
-    onSuccess: () => {
+    mutationFn: async (closure: BranchDailyClosure) => {
+      if (!canClose(closure)) throw new Error("لم يعد الاعتماد متاحًا لهذا السجل أو لهذا الفرع.");
+      return apiRequest("POST", `/api/branch-daily-closures/${closure.id}/close`, {});
+    },
+    onSuccess: (_result, closure) => {
       queryClient.invalidateQueries({ queryKey: ["/api/branch-daily-closures"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/branch-daily-closures/${closure.id}`], exact: true });
+      queryClient.invalidateQueries({ queryKey: ["/api/operations-center/month-workflow"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/operations-center"] });
       toast({ title: "تم إغلاق اليومية بنجاح" });
     },
-    onError: () => {
-      toast({ title: "خطأ", description: "فشل في إغلاق اليومية", variant: "destructive" });
+    onError: (cause) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/branch-daily-closures"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/my-permissions"] });
+      toast({ title: "خطأ", description: cause.message || "فشل في إغلاق اليومية", variant: "destructive" });
     },
   });
 
   const deleteMutation = useMutation({
-    mutationFn: async (id: number) => apiRequest(`/api/branch-daily-closures/${id}`, "DELETE"),
-    onSuccess: () => {
+    mutationFn: async (closure: BranchDailyClosure) => {
+      if (!canDelete(closure)) throw new Error("لم يعد الحذف متاحًا لهذا السجل.");
+      return apiRequest("DELETE", `/api/branch-daily-closures/${closure.id}`);
+    },
+    onSuccess: (_result, closure) => {
       queryClient.invalidateQueries({ queryKey: ["/api/branch-daily-closures"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/branch-daily-closures/${closure.id}`], exact: true });
+      queryClient.invalidateQueries({ queryKey: ["/api/operations-center/month-workflow"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/operations-center"] });
       toast({ title: "تم حذف الإغلاق اليومي بنجاح" });
     },
     onError: (error: any) => {
@@ -248,6 +286,22 @@ export default function BranchDailyClosuresPage() {
       });
     },
   });
+
+  const canClose = (closure: BranchDailyClosure): boolean => closures.some(row => row.id === closure.id)
+    && canApproveDailyClosure(closure, {
+      actorId: user?.id, permitted: permissionsReady && permissions.canApprove("daily_closures"),
+      scopeReady, pending: closeMutation.isPending || deleteMutation.isPending, fetching: isFetching,
+      allowedIds, branchId: branchFilter, startDate: dateFrom, endDate: dateTo,
+    });
+  const canDelete = (closure: BranchDailyClosure): boolean => user?.role === "admin" && permissionsReady
+    && permissions.canDelete("daily_closures") && scopeReady && !isFetching
+    && !closeMutation.isPending && !deleteMutation.isPending
+    && closure.status === "open" && closures.some(row => row.id === closure.id);
+  const selectedDay = dateFrom && dateFrom === dateTo ? dateFrom : "";
+  const destination = (target: "list" | "create" | number, branch = branchFilter, day = selectedDay) =>
+    dailyClosureHref(target, linkedSearch, branch, day,
+      day && intent.month && !day.startsWith(`${intent.month}-`) ? day.slice(0, 7) : intent.month);
+  const fromCenter = new URLSearchParams(linkedSearch).get("from") === "operations-center";
 
   const getBranchName = (branchId: string) => {
     return branches?.find(b => b.id === branchId)?.name || branchId;
@@ -267,7 +321,10 @@ export default function BranchDailyClosuresPage() {
     setDiscrepancyFilter("all");
     setDateFrom("");
     setDateTo("");
-    if (canSelectBranch) setBranchFilter("all");
+    if (canSelectBranch) {
+      setBranchFilter("all");
+    }
+    navigate(dailyClosureHref("list", linkedSearch, canSelectBranch ? "all" : branchFilter, "", ""));
     setCurrentPage(1);
   };
 
@@ -284,7 +341,7 @@ export default function BranchDailyClosuresPage() {
           tone="inventory"
           title="الإغلاقات اليومية للفروع"
           description={pagination.total > 0 ? `${pagination.total} إغلاق` : undefined}
-          backHref="/cashier-journals"
+          backHref={fromCenter ? operationsCenterReturnHref(linkedSearch, allowedIds) : "/cashier-journals"}
           actions={
             <>
               <Button 
@@ -297,12 +354,12 @@ export default function BranchDailyClosuresPage() {
               >
                 <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
               </Button>
-              <Link href="/branch-daily-closing">
+              {scopeReady && permissionsReady && permissions.canCreate("daily_closures") && <Link href={destination("create", branchFilter, selectedDay || dateFrom)}>
                 <Button size="sm" className="gap-2 bg-amber-600 hover:bg-amber-700 text-white h-9" data-testid="button-new-closure">
                   <Plus className="h-4 w-4" />
                   إغلاق يومي جديد
                 </Button>
-              </Link>
+              </Link>}
             </>
           }
         />
@@ -405,7 +462,11 @@ export default function BranchDailyClosuresPage() {
               </div>
 
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
-                <Select value={branchFilter} onValueChange={handleFilterChange(setBranchFilter)}>
+                <Select value={branchFilter} onValueChange={value => {
+                  setBranchFilter(value);
+                  setCurrentPage(1);
+                  navigate(destination("list", value));
+                }}>
                   <SelectTrigger disabled={!canSelectBranch} className="h-9 text-xs sm:text-sm">
                     <SelectValue placeholder="جميع الفروع" />
                   </SelectTrigger>
@@ -457,7 +518,15 @@ export default function BranchDailyClosuresPage() {
             </div>
 
             <div className="mt-3">
-              {isLoading ? (
+              {branchesFailed ? (
+                <div role="alert" className="space-y-2 py-6 text-destructive"><p>{branchError?.message || "تعذر التحقق من الفروع المسموحة."}</p><Button variant="outline" onClick={() => refetchBranches()}>إعادة التحقق من الفروع</Button></div>
+              ) : intent.invalidDate ? (
+                <p role="alert" className="py-6 text-destructive">تاريخ الإغلاق في الرابط غير صالح أو لا يطابق الشهر المختار. افتح اليوم من ملف الشهر مجددًا.</p>
+              ) : isError ? (
+                <div role="alert" className="space-y-2 py-6 text-destructive"><p>{error.message}</p><Button variant="outline" onClick={() => refetch()}>إعادة المحاولة</Button></div>
+              ) : !scopeReady && !loadingBranches && !navigationBranch.isResolving && filterSearch === linkedSearch && branchFilter ? (
+                <p role="alert" className="py-6 text-destructive">الفرع المحدد غير متاح ضمن نطاقك الحالي. اختر فرعًا مسموحًا؛ لا يمكن تنفيذ إجراء على سجلات فرع سابق.</p>
+              ) : isLoading || !scopeReady ? (
                 <div className="space-y-3">
                   {[...Array(5)].map((_, i) => (
                     <Skeleton key={i} className="h-12 w-full" />
@@ -537,12 +606,12 @@ export default function BranchDailyClosuresPage() {
                                 </TableCell>
                                 <TableCell className="py-2.5">
                                   <div className="flex items-center justify-center gap-0.5">
-                                    <Link href={`/branch-daily-closures/${closure.id}`}>
+                                    <Link href={destination(closure.id, closure.branchId)}>
                                       <Button variant="ghost" size="sm" className="h-7 w-7 p-0" data-testid={`button-view-${closure.id}`}>
                                         <Eye className="h-3.5 w-3.5" />
                                       </Button>
                                     </Link>
-                                    {closure.status === 'open' && (
+                                    {canClose(closure) && (
                                       <AlertDialog>
                                         <AlertDialogTrigger asChild>
                                           <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-green-600 hover:text-green-700" data-testid={`button-close-${closure.id}`}>
@@ -558,7 +627,8 @@ export default function BranchDailyClosuresPage() {
                                           </AlertDialogHeader>
                                           <AlertDialogFooter className="flex-row-reverse gap-2">
                                             <AlertDialogAction 
-                                              onClick={() => closeMutation.mutate(closure.id)}
+                                              disabled={!canClose(closure)}
+                                              onClick={() => { if (canClose(closure)) closeMutation.mutate(closure); }}
                                               className="bg-green-600 hover:bg-green-700"
                                             >
                                               تأكيد الإغلاق
@@ -568,7 +638,7 @@ export default function BranchDailyClosuresPage() {
                                         </AlertDialogContent>
                                       </AlertDialog>
                                     )}
-                                    {user?.role === 'admin' && closure.status === 'open' && (
+                                    {canDelete(closure) && (
                                       <AlertDialog>
                                         <AlertDialogTrigger asChild>
                                           <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-red-600 hover:text-red-700" data-testid={`button-delete-${closure.id}`}>
@@ -584,7 +654,8 @@ export default function BranchDailyClosuresPage() {
                                           </AlertDialogHeader>
                                           <AlertDialogFooter className="flex-row-reverse gap-2">
                                             <AlertDialogAction 
-                                              onClick={() => deleteMutation.mutate(closure.id)}
+                                              disabled={!canDelete(closure)}
+                                              onClick={() => { if (canDelete(closure)) deleteMutation.mutate(closure); }}
                                               className="bg-red-600 hover:bg-red-700"
                                             >
                                               حذف

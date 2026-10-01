@@ -12,10 +12,13 @@ import {
   branchEmployees,
   systemNotifications,
 } from "@shared/schema";
-import crypto from "crypto";
 import { storage } from "./storage";
 import { sendWhatsAppMessage, isTwilioConfigured } from "./twilio-service";
 import { operationsHrManagerOnly } from "./operations-hr-routes";
+import {
+  BLOCKED_JOINING_REASON, deliverOnboardingLink, generateNotificationNumber,
+  isUniqueConflict, lockOnboardingCreation, prepareOnboardingSend,
+} from "./onboarding-lifecycle";
 
 const PERMISSION_MODULE = "hr_onboarding" as const;
 
@@ -31,23 +34,6 @@ const ALLOWED_CONVERT_ROLES = ["employee", "viewer", "attendance_clerk"] as cons
 
 function isAdmin(req: any): boolean {
   return (req as any).user?.role === "admin";
-}
-
-async function generateNotificationNumber(): Promise<string> {
-  const year = new Date().getFullYear();
-  const prefix = `ONB-${year}-`;
-  const [last] = await db
-    .select({ n: onboardingNotifications.notificationNumber })
-    .from(onboardingNotifications)
-    .where(sql`${onboardingNotifications.notificationNumber} LIKE ${prefix + "%"}`)
-    .orderBy(desc(onboardingNotifications.id))
-    .limit(1);
-  let next = 1;
-  if (last?.n) {
-    const m = last.n.match(/-(\d+)$/);
-    if (m) next = parseInt(m[1], 10) + 1;
-  }
-  return `${prefix}${String(next).padStart(4, "0")}`;
 }
 
 function haversineMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
@@ -125,16 +111,26 @@ export function registerOnboardingRoutes(app: Express) {
   app.get("/api/operations-hr/joining", isAuthenticated, operationsJoiningScope, requirePermission("operations_hr", "view"), requirePermission("operations_joining", "view"), async (req, res) => {
     try {
       const allowed = operationsJoiningBranches(req);
+      const selected = req.query.branchId;
+      res.set("Cache-Control", "no-store");
+      if (selected !== undefined && (typeof selected !== "string" || !selected.trim()))
+        return res.status(400).json({ error: "حدد فرعاً صحيحاً" });
+      if (typeof selected === "string" && !allowed.includes(selected))
+        return res.status(403).json({ error: "الفرع خارج نطاق فروع التشغيل" });
       if (!allowed.length) return res.json([]);
       const offers = await db.select({
         id: jobOffers.id, candidateName: jobOffers.candidateName,
         branchId: jobOffers.branchId, position: jobOffers.position,
-      }).from(jobOffers).where(and(eq(jobOffers.status, "accepted"), isNull(jobOffers.hiredEmployeeId), inArray(jobOffers.branchId, allowed))).orderBy(desc(jobOffers.id));
+        hiredEmployeeId: jobOffers.hiredEmployeeId,
+      }).from(jobOffers).where(and(eq(jobOffers.status, "accepted"), inArray(jobOffers.branchId, typeof selected === "string" ? [selected] : allowed))).orderBy(desc(jobOffers.id));
       if (!offers.length) return res.json([]);
       const notifications = await db.select({
         id: onboardingNotifications.id, jobOfferId: onboardingNotifications.jobOfferId,
         branchId: onboardingNotifications.branchId, status: onboardingNotifications.status,
+        notificationNumber: onboardingNotifications.notificationNumber,
         actualStartDate: onboardingNotifications.actualStartDate,
+        sentAt: onboardingNotifications.sentAt,
+        expiresAt: onboardingNotifications.expiresAt,
         signedAt: onboardingNotifications.signedAt,
         confirmedAt: onboardingNotifications.confirmedAt,
         confirmedBy: onboardingNotifications.confirmedBy,
@@ -143,11 +139,17 @@ export function registerOnboardingRoutes(app: Express) {
       }).from(onboardingNotifications)
         .leftJoin(users, eq(onboardingNotifications.confirmedBy, users.id))
         .where(inArray(onboardingNotifications.jobOfferId, offers.map(o => o.id)));
-      res.set("Cache-Control", "no-store");
-      res.json(offers.map(offer => ({
-        ...offer,
-        notification: notifications.find(n => n.jobOfferId === offer.id && n.branchId === offer.branchId) ?? null,
-      })));
+      res.json(offers.map(({ hiredEmployeeId, ...offer }) => {
+        const existing = notifications.find(n => n.jobOfferId === offer.id);
+        const blockedExisting = !!existing && existing.branchId !== offer.branchId;
+        const notification = existing && !blockedExisting ? existing : null;
+        const status = hiredEmployeeId || notification?.status === "converted" ? "converted" : notification?.status || "pending";
+        return {
+          ...offer, status, blockedExisting,
+          blockedReason: blockedExisting ? BLOCKED_JOINING_REASON : null,
+          notification: notification ? { ...notification, status } : null,
+        };
+      }));
     } catch (error) {
       console.error("Operations joining list error:", error);
       res.status(500).json({ error: "تعذر تحميل عروض المباشرة" });
@@ -163,29 +165,36 @@ export function registerOnboardingRoutes(app: Express) {
         return res.status(400).json({ error: "حدد عرضاً مقبولاً وتاريخ مباشرة صحيحاً" });
       const allowed = operationsJoiningBranches(req);
       const result = await db.transaction(async tx => {
+        await lockOnboardingCreation(tx);
         // Serialize creation for this offer; re-check branch and conversion
         // after the lock so simultaneous requests cannot create two links.
         await tx.execute(sql`SELECT id FROM job_offers WHERE id = ${offerId} FOR UPDATE`);
         const [offer] = await tx.select().from(jobOffers).where(eq(jobOffers.id, offerId)).limit(1);
         if (!offer) return { error: "NOT_FOUND" };
-        if (offer.status !== "accepted" || offer.hiredEmployeeId || !offer.branchId || !allowed.includes(offer.branchId))
+        if (offer.status !== "accepted" || !offer.branchId || !allowed.includes(offer.branchId))
           return { error: "OUT_OF_SCOPE" };
-        const [existing] = await tx.select({ id: onboardingNotifications.id })
+        if (offer.hiredEmployeeId) return { error: "CONVERTED" };
+        const [existing] = await tx.select({ id: onboardingNotifications.id, branchId: onboardingNotifications.branchId })
           .from(onboardingNotifications).where(eq(onboardingNotifications.jobOfferId, offer.id)).limit(1);
-        if (existing) return { error: "EXISTS", notificationId: existing.id };
+        if (existing) return existing.branchId === offer.branchId
+          ? { error: "EXISTS", notificationId: existing.id }
+          : { error: "BLOCKED_EXISTING" };
         const [created] = await tx.insert(onboardingNotifications).values({
-          notificationNumber: await generateNotificationNumber(), jobOfferId: offer.id,
+          notificationNumber: await generateNotificationNumber(tx), jobOfferId: offer.id,
           candidateName: offer.candidateName, phone: offer.phone, position: offer.position,
           branchId: offer.branchId, branchName: offer.branchName, actualStartDate,
-          workingHours: offer.workingHours || null, createdBy: req.currentUser.id,
+          workingHours: offer.workingHours || null, createdBy: req.currentUser!.id,
         }).returning();
         return { id: created.id, status: created.status };
       });
       if (result.error === "NOT_FOUND") return res.status(404).json({ error: "العرض غير موجود" });
       if (result.error === "OUT_OF_SCOPE") return res.status(403).json({ error: "العرض خارج نطاق فروع التشغيل أو غير مقبول" });
+      if (result.error === "CONVERTED") return res.status(409).json({ error: "تم تحويل صاحب العرض إلى موظف ولا يمكن إنشاء إشعار جديد" });
+      if (result.error === "BLOCKED_EXISTING") return res.status(409).json({ error: BLOCKED_JOINING_REASON, blockedExisting: true, blockedReason: BLOCKED_JOINING_REASON });
       if (result.error === "EXISTS") return res.status(409).json({ error: "إشعار المباشرة موجود بالفعل", notificationId: result.notificationId });
       res.status(201).json(result);
     } catch (error) {
+      if (isUniqueConflict(error)) return res.status(409).json({ error: "تعارض مع إنشاء إشعار آخر؛ حدّث القائمة قبل المحاولة مجدداً" });
       console.error("Operations joining create error:", error);
       res.status(500).json({ error: "تعذر إنشاء إشعار المباشرة" });
     }
@@ -194,31 +203,24 @@ export function registerOnboardingRoutes(app: Express) {
     try {
       const id = Number(req.params.id);
       if (!Number.isSafeInteger(id) || id < 1) return res.status(400).json({ error: "الإشعار غير صالح" });
-      const [entry] = await db.select({ notification: onboardingNotifications, offer: jobOffers })
-        .from(onboardingNotifications).innerJoin(jobOffers, eq(onboardingNotifications.jobOfferId, jobOffers.id))
-        .where(eq(onboardingNotifications.id, id)).limit(1);
-      if (!entry) return res.status(404).json({ error: "الإشعار غير موجود" });
-      const n = entry.notification;
-      if (entry.offer.status !== "accepted" || entry.offer.hiredEmployeeId || !n.branchId || n.branchId !== entry.offer.branchId
-        || !operationsJoiningBranches(req).includes(n.branchId))
-        return res.status(403).json({ error: "الإشعار خارج نطاق فروع التشغيل" });
-      if (!["pending", "sent"].includes(n.status)) return res.status(409).json({ error: "المباشرة موقعة أو منتهية ولا يمكن إعادة الإرسال" });
-      const token = crypto.randomBytes(24).toString("base64url");
-      const expiresAt = new Date(Date.now() + n.validityDays * 86400000);
-      await db.transaction(async tx => {
-        const updated = await tx.update(onboardingNotifications).set({ status: "sent", sentAt: new Date(), expiresAt, updatedAt: new Date() })
-          .where(and(eq(onboardingNotifications.id, n.id), inArray(onboardingNotifications.status, ["pending", "sent"]))).returning({ id: onboardingNotifications.id });
-        if (!updated.length) throw new Error("JOINING_ALREADY_COMPLETED");
-        await tx.update(onboardingTokens).set({ revokedAt: new Date() })
-          .where(and(eq(onboardingTokens.notificationId, n.id), sql`${onboardingTokens.usedAt} IS NULL`, sql`${onboardingTokens.revokedAt} IS NULL`));
-        await tx.insert(onboardingTokens).values({ notificationId: n.id, token, expiresAt });
-      });
+      if (req.body?.replaceToken !== undefined && typeof req.body.replaceToken !== "boolean")
+        return res.status(400).json({ error: "خيار استبدال الرابط يجب أن يكون صحيحاً أو خطأ" });
+      const result = await prepareOnboardingSend(id, req.body?.replaceToken === true,
+        (n, offer) => offer.status === "accepted" && !!n.branchId && n.branchId === offer.branchId && operationsJoiningBranches(req).includes(n.branchId));
+      if ("error" in result) {
+        if (result.error === "NOT_FOUND") return res.status(404).json({ error: "الإشعار غير موجود" });
+        if (result.error === "OUT_OF_SCOPE") return res.status(403).json({ error: "الإشعار خارج نطاق فروع التشغيل" });
+        return res.status(409).json({ error: "المباشرة موقعة أو منتهية ولا يمكن إعادة الإرسال" });
+      }
+      const n = result.notification;
+      const token = result.token;
       const link = `${req.protocol}://${req.get("host")}/onboarding/${token}`;
-      let whatsapp: any = { success: false, skipped: !isTwilioConfigured() };
-      if (isTwilioConfigured()) whatsapp = await sendWhatsAppMessage(n.phone, buildOnboardingMessage(n, link, n.branchName ?? undefined));
-      res.json({ link, phone: n.phone, whatsapp });
+      const whatsapp = await deliverOnboardingLink(isTwilioConfigured,
+        () => sendWhatsAppMessage(n.phone, buildOnboardingMessage(n, link, n.branchName ?? undefined)));
+      res.set("Cache-Control", "no-store").json({ link, phone: n.phone, whatsapp,
+        notificationNumber: n.notificationNumber, sentAt: n.sentAt, expiresAt: n.expiresAt, tokenReused: result.tokenReused });
     } catch (error) {
-      if (error instanceof Error && error.message === "JOINING_ALREADY_COMPLETED")
+      if (error instanceof Error && error.message === "JOINING_SEND_STATE_CHANGED")
         return res.status(409).json({ error: "المباشرة موقعة أو منتهية" });
       console.error("Operations joining send error:", error);
       res.status(500).json({ error: "تعذر إرسال رابط المباشرة" });
@@ -234,7 +236,9 @@ export function registerOnboardingRoutes(app: Express) {
       const result = await db.transaction(async tx => {
         // Lock both offer and notification. Conversion/cancellation and a second
         // confirmation cannot race the state check or create duplicate bell alerts.
-        await tx.execute(sql`SELECT n.id FROM onboarding_notifications n JOIN job_offers o ON o.id = n.job_offer_id WHERE n.id = ${id} FOR UPDATE OF n, o`);
+        await tx.execute(sql`SELECT id FROM onboarding_notifications WHERE id = ${id} FOR UPDATE`);
+        await tx.execute(sql`SELECT id FROM job_offers WHERE id =
+          (SELECT job_offer_id FROM onboarding_notifications WHERE id = ${id}) FOR UPDATE`);
         const [entry] = await tx.select({ notification: onboardingNotifications, offer: jobOffers })
           .from(onboardingNotifications).innerJoin(jobOffers, eq(onboardingNotifications.jobOfferId, jobOffers.id))
           .where(eq(onboardingNotifications.id, id)).limit(1);
@@ -264,7 +268,7 @@ export function registerOnboardingRoutes(app: Express) {
         if (!recipients.length) return { error: "NO_HR_RECIPIENT" };
         const at = new Date();
         const [confirmed] = await tx.update(onboardingNotifications).set({
-          status: "confirmed", confirmedAt: at, confirmedBy: req.currentUser.id,
+          status: "confirmed", confirmedAt: at, confirmedBy: req.currentUser!.id,
           confirmedNotes: notes?.trim() || null, updatedAt: at,
         }).where(and(eq(onboardingNotifications.id, id), eq(onboardingNotifications.status, "signed"))).returning();
         if (!confirmed) throw new Error("CONFIRMATION_CHANGED");
@@ -276,7 +280,7 @@ export function registerOnboardingRoutes(app: Express) {
           content: "اعتمد مدير التشغيل مباشرة عمل بعد توقيع الموظف. راجع سجل المباشرات المصرّح لك به لاستكمال إجراءات شؤون الموظفين.",
           messageType: "announcement", displayStyle: "banner", priority: 3,
           targetAllBranches: false, targetBranchIds: [n.branchId], targetRoleIds: ["hr_manager"],
-          targetUserIds: recipients, createdBy: req.currentUser.id,
+          targetUserIds: recipients, createdBy: req.currentUser!.id,
           autoGenerated: true, autoSource: "operations_joining_confirmed",
           dedupeKey: `operations-joining-confirmed:${n.id}`,
           buttonText: "مراجعة المباشرة المعتمدة", buttonAction: `/hr/onboarding?notificationId=${n.id}`,
@@ -477,55 +481,47 @@ export function registerOnboardingRoutes(app: Express) {
         if (!jobOfferId || !actualStartDate) {
           return res.status(400).json({ error: "رقم العرض وتاريخ المباشرة مطلوبان" });
         }
+        const offerId = Number(jobOfferId);
+        if (!Number.isSafeInteger(offerId) || offerId < 1) return res.status(400).json({ error: "رقم العرض غير صالح" });
+        const result = await db.transaction(async tx => {
+          await lockOnboardingCreation(tx);
+          await tx.execute(sql`SELECT id FROM job_offers WHERE id = ${offerId} FOR UPDATE`);
+          const [offer] = await tx.select().from(jobOffers).where(eq(jobOffers.id, offerId)).limit(1);
+          if (!offer) return { status: 404, error: "عرض العمل غير موجود" };
+          if (offer.status !== "accepted") return { status: 400, error: "العرض لم يُقبل بعد" };
 
-        const [offer] = await db.select().from(jobOffers).where(eq(jobOffers.id, Number(jobOfferId))).limit(1);
-        if (!offer) return res.status(404).json({ error: "عرض العمل غير موجود" });
-        if (offer.status !== "accepted") return res.status(400).json({ error: "العرض لم يُقبل بعد" });
-
-        // الفرع: إن أُرسل فرع من النموذج نعتمده (يتيح تغيير الفرع قبل الإرسال)، وإلا نستخدم فرع العرض
-        let effectiveBranchId: string | null = offer.branchId;
-        let effectiveBranchName: string | null = offer.branchName;
-        if (bodyBranchId) {
-          const [b] = await db.select().from(branches).where(eq(branches.id, String(bodyBranchId))).limit(1);
-          if (!b) return res.status(400).json({ error: "الفرع المحدد غير موجود" });
-          effectiveBranchId = b.id;
-          effectiveBranchName = b.name;
-        }
-        if (!effectiveBranchId) {
-          return res.status(400).json({ error: "العرض بدون فرع — اختر الفرع في النموذج" });
-        }
-
-        if (!checkBranchAccess(req, effectiveBranchId)) return res.status(403).json({ error: "لا تملك صلاحية على هذا الفرع" });
-
-        const [existing] = await db
-          .select()
-          .from(onboardingNotifications)
-          .where(eq(onboardingNotifications.jobOfferId, offer.id))
-          .limit(1);
-        if (existing) return res.status(409).json({ error: "يوجد إشعار مباشرة لهذا العرض مسبقاً", notification: existing });
-
-        const number = await generateNotificationNumber();
-        const user: any = (req as any).user;
-        const [created] = await db
-          .insert(onboardingNotifications)
-          .values({
-            notificationNumber: number,
-            jobOfferId: offer.id,
-            candidateName: offer.candidateName,
-            phone: offer.phone,
-            position: offer.position,
-            branchId: effectiveBranchId,
-            branchName: effectiveBranchName,
-            actualStartDate,
+          // Preserve HR's existing branch selection and branch authorization.
+          let effectiveBranchId: string | null = offer.branchId;
+          let effectiveBranchName: string | null = offer.branchName;
+          if (bodyBranchId) {
+            const [b] = await tx.select().from(branches).where(eq(branches.id, String(bodyBranchId))).limit(1);
+            if (!b) return { status: 400, error: "الفرع المحدد غير موجود" };
+            effectiveBranchId = b.id;
+            effectiveBranchName = b.name;
+          }
+          if (!effectiveBranchId) return { status: 400, error: "العرض بدون فرع — اختر الفرع في النموذج" };
+          if (!checkBranchAccess(req, effectiveBranchId)) return { status: 403, error: "لا تملك صلاحية على هذا الفرع" };
+          if (offer.hiredEmployeeId) return { status: 409, error: "تم تحويل صاحب العرض إلى موظف" };
+          const [existing] = await tx.select().from(onboardingNotifications)
+            .where(eq(onboardingNotifications.jobOfferId, offer.id)).limit(1);
+          if (existing) return {
+            status: 409, error: "يوجد إشعار مباشرة لهذا العرض مسبقاً",
+            notification: checkBranchAccess(req, existing.branchId) ? existing : undefined,
+          };
+          const [created] = await tx.insert(onboardingNotifications).values({
+            notificationNumber: await generateNotificationNumber(tx), jobOfferId: offer.id,
+            candidateName: offer.candidateName, phone: offer.phone, position: offer.position,
+            branchId: effectiveBranchId, branchName: effectiveBranchName, actualStartDate,
             workingHours: workingHours || offer.workingHours || null,
-            reportingTo: reportingTo || null,
-            notes: notes || null,
-            validityDays: Number(validityDays) || 7,
-            createdBy: user?.id || null,
-          })
-          .returning();
-        res.status(201).json(created);
+            reportingTo: reportingTo || null, notes: notes || null,
+            validityDays: Number(validityDays) || 7, createdBy: (req as any).user?.id || null,
+          }).returning();
+          return { created };
+        });
+        if (result.error) return res.status(result.status).json({ error: result.error, notification: result.notification });
+        res.status(201).json(result.created);
       } catch (e: any) {
+        if (isUniqueConflict(e)) return res.status(409).json({ error: "تعارض مع إنشاء إشعار آخر؛ حدّث القائمة قبل المحاولة مجدداً" });
         console.error("[onboarding] create error:", e);
         res.status(500).json({ error: e.message });
       }
@@ -558,8 +554,10 @@ export function registerOnboardingRoutes(app: Express) {
             ...(validityDays !== undefined ? { validityDays: Number(validityDays) } : {}),
             updatedAt: new Date(),
           })
-          .where(eq(onboardingNotifications.id, id))
+          .where(and(eq(onboardingNotifications.id, id), eq(onboardingNotifications.status, existing.status),
+            existing.branchId ? eq(onboardingNotifications.branchId, existing.branchId) : isNull(onboardingNotifications.branchId)))
           .returning();
+        if (!updated) return res.status(409).json({ error: "تغيرت حالة الإشعار ولا يمكن تعديله؛ حدّث الصفحة" });
         res.json(updated);
       } catch (e: any) {
         console.error("[onboarding] update error:", e);
@@ -576,45 +574,33 @@ export function registerOnboardingRoutes(app: Express) {
     async (req, res) => {
       try {
         const id = Number(req.params.id);
-        const [n] = await db.select().from(onboardingNotifications).where(eq(onboardingNotifications.id, id)).limit(1);
-        if (!n) return res.status(404).json({ error: "غير موجود" });
-        if (!checkBranchAccess(req, n.branchId)) return res.status(403).json({ error: "لا تملك صلاحية على هذا الفرع" });
-        if (!["pending", "sent"].includes(n.status)) {
-          return res.status(400).json({ error: "لا يمكن إرسال إشعار في هذه الحالة" });
+        if (!Number.isSafeInteger(id) || id < 1) return res.status(400).json({ error: "الإشعار غير صالح" });
+        if (req.body?.replaceToken !== undefined && typeof req.body.replaceToken !== "boolean")
+          return res.status(400).json({ error: "خيار استبدال الرابط يجب أن يكون صحيحاً أو خطأ" });
+        const result = await prepareOnboardingSend(id, req.body?.replaceToken === true,
+          n => checkBranchAccess(req, n.branchId));
+        if ("error" in result) {
+          if (result.error === "NOT_FOUND") return res.status(404).json({ error: "غير موجود" });
+          if (result.error === "OUT_OF_SCOPE") return res.status(403).json({ error: "لا تملك صلاحية على هذا الفرع" });
+          return res.status(409).json({ error: "لا يمكن إرسال إشعار موقّع أو منتهٍ" });
         }
-
-        // إلغاء توكنات سابقة
-        await db
-          .update(onboardingTokens)
-          .set({ revokedAt: new Date() })
-          .where(and(eq(onboardingTokens.notificationId, n.id), sql`${onboardingTokens.usedAt} IS NULL`, sql`${onboardingTokens.revokedAt} IS NULL`));
-
-        const token = crypto.randomBytes(24).toString("base64url");
-        const expiresAt = new Date(Date.now() + n.validityDays * 24 * 60 * 60 * 1000);
-        await db.insert(onboardingTokens).values({ notificationId: n.id, token, expiresAt });
-
-        const baseUrl = `${req.protocol}://${req.get("host")}`;
-        const link = `${baseUrl}/onboarding/${token}`;
-
-        await db
-          .update(onboardingNotifications)
-          .set({ status: n.status === "pending" ? "sent" : n.status, sentAt: new Date(), expiresAt, updatedAt: new Date() })
-          .where(eq(onboardingNotifications.id, n.id));
-
-        // إرسال واتساب
-        let waResult: any = { success: false, skipped: !isTwilioConfigured() };
-        if (isTwilioConfigured()) {
+        const n = result.notification;
+        const link = `${req.protocol}://${req.get("host")}/onboarding/${result.token}`;
+        const waResult = await deliverOnboardingLink(isTwilioConfigured, async () => {
           let branchName: string | undefined = n.branchName || undefined;
           if (n.branchId) {
             const [b] = await db.select({ name: branches.name }).from(branches).where(eq(branches.id, n.branchId)).limit(1);
             if (b) branchName = b.name;
           }
           const message = buildOnboardingMessage(n, link, branchName);
-          waResult = await sendWhatsAppMessage(n.phone, message);
-        }
+          return sendWhatsAppMessage(n.phone, message);
+        });
 
-        res.json({ link, phone: n.phone, whatsapp: waResult, channel: "whatsapp" });
+        res.set("Cache-Control", "no-store").json({ link, phone: n.phone, whatsapp: waResult, channel: "whatsapp",
+          notificationNumber: n.notificationNumber, sentAt: n.sentAt, expiresAt: n.expiresAt, tokenReused: result.tokenReused });
       } catch (e: any) {
+        if (e instanceof Error && e.message === "JOINING_SEND_STATE_CHANGED")
+          return res.status(409).json({ error: "تغيرت حالة المباشرة؛ حدّث الصفحة" });
         console.error("[onboarding] send error:", e);
         res.status(500).json({ error: e.message });
       }
@@ -644,8 +630,10 @@ export function registerOnboardingRoutes(app: Express) {
             confirmedNotes: req.body?.notes || null,
             updatedAt: new Date(),
           })
-          .where(eq(onboardingNotifications.id, id))
+          .where(and(eq(onboardingNotifications.id, id), eq(onboardingNotifications.status, "signed"),
+            n.branchId ? eq(onboardingNotifications.branchId, n.branchId) : isNull(onboardingNotifications.branchId)))
           .returning();
+        if (!updated) return res.status(409).json({ error: "تغيرت حالة المباشرة ولا يمكن تأكيدها؛ حدّث الصفحة" });
         res.json(updated);
       } catch (e: any) {
         console.error("[onboarding] confirm error:", e);
@@ -667,14 +655,20 @@ export function registerOnboardingRoutes(app: Express) {
         if (!checkBranchAccess(req, n.branchId)) return res.status(403).json({ error: "لا تملك صلاحية على هذا الفرع" });
         if (n.status === "converted") return res.status(400).json({ error: "لا يمكن إلغاء إشعار تم تحويله" });
 
-        await db
-          .update(onboardingNotifications)
-          .set({ status: "cancelled", cancelledAt: new Date(), cancelReason: req.body?.reason || null, updatedAt: new Date() })
-          .where(eq(onboardingNotifications.id, id));
-        await db
-          .update(onboardingTokens)
-          .set({ revokedAt: new Date() })
-          .where(and(eq(onboardingTokens.notificationId, id), sql`${onboardingTokens.revokedAt} IS NULL`));
+        const cancelled = await db.transaction(async tx => {
+          // CAS the state that HR reviewed; a concurrent signature/conversion
+          // must not be silently cancelled. Token revocation commits with it.
+          const updated = await tx.update(onboardingNotifications)
+            .set({ status: "cancelled", cancelledAt: new Date(), cancelReason: req.body?.reason || null, updatedAt: new Date() })
+            .where(and(eq(onboardingNotifications.id, id), eq(onboardingNotifications.status, n.status),
+              n.branchId ? eq(onboardingNotifications.branchId, n.branchId) : isNull(onboardingNotifications.branchId)))
+            .returning({ id: onboardingNotifications.id });
+          if (!updated.length) return false;
+          await tx.update(onboardingTokens).set({ revokedAt: new Date() })
+            .where(and(eq(onboardingTokens.notificationId, id), isNull(onboardingTokens.revokedAt)));
+          return true;
+        });
+        if (!cancelled) return res.status(409).json({ error: "تغيرت حالة المباشرة ولا يمكن إلغاؤها؛ حدّث الصفحة" });
         res.json({ success: true });
       } catch (e: any) {
         console.error("[onboarding] cancel error:", e);

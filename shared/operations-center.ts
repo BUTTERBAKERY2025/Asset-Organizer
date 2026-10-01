@@ -79,23 +79,55 @@ export type OperationsCenterResponse = {
 
 export type OperationsDeskAnalytics = {
   generatedAt: string;
-  period: { from: string; to: string };
+  period: OperationsPerformancePeriod;
+  scope: { branchIds: string[] };
+  evidenceRevision: string;
   /** Deterministic source observations, explicitly not AI output. */
-  observations?: { kind: "evidence"; title: string; explanation: string; source: string; branchId?: string; href: string | null }[];
-  sales: {
-    source: string;
-    coverage: "partial" | "unavailable";
-    /** Null means no confirmed evidence, never a fabricated zero. */
-    daily: { date: string; value: number | null; recordedBranches: number }[];
-    total: number | null;
-    byBranch?: { branchId: string; daily: { date: string; value: number | null; recordedBranches: number }[]; total: number | null }[];
-    hrefs: { branchId: string; href: string }[];
-  };
+  observations?: OperationsObservation[];
+  sales: OperationsRegisteredSales;
   followups: {
     source: string;
     coverage: "complete" | "partial" | "unavailable";
+    period: "current";
+    scan: { sourceLimit: number; truncated: boolean; unavailableSources: string[] };
     byBranch: { branchId: string; count: number; awaitingDecision: number; emergency: number }[];
   };
+};
+
+export type OperationsPerformanceDays = 7 | 30;
+export type OperationsPerformancePeriod = {
+  from: string; to: string; days: OperationsPerformanceDays;
+  timeZone: "Asia/Riyadh"; kind: "rolling_inclusive";
+};
+export type OperationsSourceRef = { sourceType: string; sourceId: string; branchId: string; href: string };
+export type OperationsObservation = {
+  kind: "evidence"; title: string; explanation: string; source: string;
+  category?: "backlog" | "decision" | "emergency" | "quality" | "sales_comparison";
+  branchId: string; href: string | null; sourceRefs: OperationsSourceRef[];
+};
+export type OperationsSalesState = "recorded" | "no_records" | "unavailable" | "forbidden";
+export type OperationsSalesDay = {
+  date: string; value: number | null; recordedBranches: number; recordedCount: number | null;
+};
+export type OperationsSalesSummary = {
+  state: OperationsSalesState; total: number | null; daily: OperationsSalesDay[];
+  recordedCount: number | null; recordedBranchDays: number | null; lastRecordedDate: string | null;
+};
+export type OperationsRegisteredSales = OperationsSalesSummary & {
+  source: string; definition: string; coverage: "partial" | "unavailable";
+  byBranch: (OperationsSalesSummary & { branchId: string })[];
+  hrefs: { branchId: string; href: string }[];
+};
+export type OperationsInsight = {
+  title: string; explanation: string; sourceType: string; sourceId: string; branchId: string; href: string;
+  evidence: { label: string; source: string; period: string; value: number | null; unit?: string };
+  sourceRefs: OperationsSourceRef[];
+};
+export type OperationsInsightsResponse = {
+  kind: "ai"; status: "ready" | "no_evidence" | "unavailable" | "cooldown" | "error" | "forbidden";
+  generatedAt: string; evidenceRevision: string | null; period: OperationsPerformancePeriod;
+  scope: { branchIds: string[] }; insights: OperationsInsight[];
+  coverage?: OperationsCenterResponse["coverage"]; message?: string; retryAfterSeconds?: number;
 };
 
 export type OperationsMonthSection = {
@@ -122,6 +154,11 @@ export type OperationsMonthResponse = {
   sections: OperationsMonthSection[];
 };
 
+/** Quality results are observations; the source has no resolution lifecycle. */
+export function isOperationsInvestigationEvidence(item: OperationsQueueItem): boolean {
+  return item.sourceType === "quality_check";
+}
+
 /** These are display cohorts, not approvals or inferred outstanding work. */
 export function operationsDecisionQueue(rows: OperationsQueueItem[], actorId: string | undefined, asOf: string) {
   const seen = new Set<string>();
@@ -131,13 +168,27 @@ export function operationsDecisionQueue(rows: OperationsQueueItem[], actorId: st
     seen.add(key);
     return true;
   });
-  const critical = unique.filter(item => item.priorityReason === "urgent" || item.priorityReason === "critical");
-  const awaitingDecision = unique.filter(item => item.decision?.awaitingActor === true && item.decision.actorId === actorId);
-  const urgent = unique.filter(item => !critical.includes(item) && item.dueAt && Number.isFinite(Date.parse(item.dueAt)) && Date.parse(item.dueAt) < Date.parse(asOf));
-  const assigned = unique.filter(item => actorId && item.ownerId === actorId && !critical.includes(item) && !urgent.includes(item));
-  const followup = unique.filter(item => !critical.includes(item) && !urgent.includes(item) && !assigned.includes(item));
+  const evidence = unique.filter(isOperationsInvestigationEvidence);
+  const tasks = unique.filter(item => !isOperationsInvestigationEvidence(item));
+  const critical = tasks.filter(item => item.priorityReason === "urgent" || item.priorityReason === "critical");
+  const awaitingDecision = tasks.filter(item => item.decision?.awaitingActor === true && item.decision.actorId === actorId);
+  const overdue = tasks.filter(item => !critical.includes(item) && item.dueAt && Number.isFinite(Date.parse(item.dueAt)) && Date.parse(item.dueAt) < Date.parse(asOf));
+  const assigned = tasks.filter(item => actorId && item.ownerId === actorId && !critical.includes(item) && !overdue.includes(item));
+  const followup = tasks.filter(item => !critical.includes(item) && !overdue.includes(item) && !assigned.includes(item));
   // Keep urgent as the legacy deadline cohort for existing consumers.
-  return { unique, critical, urgent, assigned, followup, awaitingDecision };
+  return { unique, critical, overdue, urgent: overdue, assigned, followup, awaitingDecision, evidence };
+}
+
+/** The actual board consumes this projection, including scope and deadline cohorts. */
+export function operationsDecisionBoardProjection(rows: OperationsQueueItem[], branchIds: readonly string[],
+  actorId: string | undefined, asOf: string, businessDate: string) {
+  const cohorts = operationsDecisionQueue(rows.filter(item => branchIds.includes(item.branchId)), actorId, asOf);
+  const { unique, critical, overdue, awaitingDecision: decision, evidence } = cohorts;
+  const priority = [...critical, ...overdue];
+  const followup = unique.filter(item => !isOperationsInvestigationEvidence(item) && !priority.includes(item) && !decision.includes(item));
+  const today = unique.filter(item => !isOperationsInvestigationEvidence(item) && item.dueAt && Number.isFinite(Date.parse(item.dueAt))
+    && new Date(item.dueAt).toLocaleDateString("en-CA", { timeZone: "Asia/Riyadh" }) === businessDate);
+  return { queue: unique, critical, overdue, priority, followup, decision, today, evidence };
 }
 
 /** Actor assignment alone never establishes an approval step. */

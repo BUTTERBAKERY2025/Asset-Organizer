@@ -36,6 +36,7 @@ describe("operations center projection invariants", () => {
   });
   it.each([
     ["maintenance", "/maintenance", "ticketId"],
+    ["branch_complaint", "/branch-complaints", "complaintId"],
     ["kitchen_order", "/central-kitchen-orders?stage=dispatched", "orderId"],
     ["transfer", "/transfer-requests?direction=incoming", "transferId"],
     ["reverse_movement", "/reverse-logistics", "movementId"],

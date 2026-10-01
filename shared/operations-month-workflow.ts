@@ -3,14 +3,15 @@ export interface OperationsMonthWorkflow {
   branchId: string;
   month: string;
   generatedAt: string;
+  sourceFailures: ("payroll" | "expenses" | "daily" | "review")[];
   payroll: {
     available: boolean; reason?: string;
     status: "closed" | "reopened" | "not_closed" | "unavailable";
     due: number | null; paid: number | null; remaining: number | null;
     overpaid: number | null; recordedPaid: number | null;
     settlementStatus: "unavailable" | "not_closed" | "unreconciled" | "unknown_amount" | "unpaid" | "partial" | "paid" | "overpaid";
-    unreconciledPaymentCount: number; unreconciledPaymentAmount: number | null;
-    unknownPaymentAmounts: number; sourceHref: string | null; canManage: boolean;
+    unreconciledPaymentCount: number | null; unreconciledPaymentAmount: number | null;
+    unknownPaymentAmounts: number | null; sourceHref: string | null; canManage: boolean;
     employees: { employeeId: number; name: string; due: number; paid: number | null; remaining: number | null; overpaid: number | null }[];
     payments: { id: number; employeeId: number; amount: number | null; method: string; paidAt: string; actor: string | null; note: string | null; reconciled: boolean }[];
   };
@@ -20,25 +21,45 @@ export interface OperationsMonthWorkflow {
   };
   closing: {
     available: boolean; reason?: string;
-    status: "open" | "closed" | "reopened"; ended: boolean; drifted: boolean;
+    status: "open" | "closed" | "reopened" | "unavailable"; ended: boolean; drifted: boolean | null;
+    dailyEvidenceAvailable: boolean; reviewEvidenceAvailable: boolean;
     canClose: boolean; canReopen: boolean; canDeclare: boolean;
-    revision: number; closedAt: string | null; closedBy: string | null;
+    revision: number | null; closedAt: string | null; closedBy: string | null;
     dailyRecords: { id: number; date: string; status: string; sales: number; href: string }[];
     missingDates: string[];
     declarations: { date: string; note: string; actor: string; at: string }[];
     blockers: string[]; sourceHref: string;
     history: { action: "close" | "reopen" | "declare" | "remove_declaration"; at: string; actor: string; note: string }[];
   };
-  sales: { available: boolean; reason?: string; confirmed: number | null; closedDays: number; sourceHref: string | null };
+  sales: { available: boolean; reason?: string; confirmed: number | null; closedDays: number | null; sourceHref: string | null };
 }
 
 /** POST /month-workflow/{close,reopen,declare,remove-declaration}.
  * close/reopen require revision; all require a nonempty note.
  * declare/remove-declaration additionally require date (YYYY-MM-DD).
- * Successful mutations return a freshly loaded OperationsMonthWorkflow.
+ * Once committed, a command returns OperationsMonthCommandResult even when
+ * loading the fresh workflow fails. Never treat a refresh failure as rollback.
  */
 export interface OperationsMonthCommand {
   branchId: string; month: string; revision: number; note: string; date?: string;
+}
+
+export type OperationsMonthAction = "close" | "reopen" | "declare" | "remove-declaration";
+
+export interface OperationsMonthCommit {
+  committed: true;
+  branchId: string;
+  month: string;
+  action: OperationsMonthAction;
+  revision: number;
+  changed: boolean;
+}
+
+export interface OperationsMonthCommandResult {
+  command: OperationsMonthCommit;
+  refresh: "available" | "partial" | "unavailable";
+  message: string;
+  workflow: OperationsMonthWorkflow | null;
 }
 
 export function monthCalendar(month: string): string[] {

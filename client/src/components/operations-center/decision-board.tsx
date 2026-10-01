@@ -1,9 +1,6 @@
 import { useMemo, useState } from "react";
-import { useMutation } from "@tanstack/react-query";
 import { Activity, AlertTriangle, ArrowLeft, ArrowUpLeft, CalendarDays, ChartNoAxesCombined, ChevronLeft, ChevronRight, CircleHelp, ClipboardList, Factory, MapPinned, Search, ShieldCheck, Sparkles, Users, Wrench } from "lucide-react";
-import { Area, AreaChart, Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { operationsDecisionQueue, type OperationsCenterResponse, type OperationsQueueItem, type OperationsCard } from "@shared/operations-center";
-import { apiRequest } from "@/lib/queryClient";
+import { isOperationsInvestigationEvidence, operationsDecisionBoardProjection, type OperationsCenterResponse, type OperationsQueueItem, type OperationsCard } from "@shared/operations-center";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { operationsSourceLabel, queueQualifier } from "@/lib/operations-center-presentation";
@@ -11,9 +8,11 @@ import { Metric, time } from "./record-sheet";
 import { OperationsMonthWorkspace } from "./month-workflow";
 import "./decision-board.css";
 import { monthlyReturnIntent } from "@/lib/operations-center-navigation";
+import { analyticsSource, validatedInsightHref, type AnalyticsChart, type PerformanceDays } from "./analytics-model";
+import { PerformanceDetail, PerformancePanel, PerformancePeriod, PerformanceRange, PerformanceSummary } from "./performance-panels";
+import { AnalyticsAssistant, useOperationsAssistant } from "./analytics-assistant";
 
 const fmt = (value: number) => new Intl.NumberFormat("en-US").format(value);
-const dayKey = (value: string) => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Riyadh", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(value));
 const domains = [
   { id: "branches", label: "الفروع والتشغيل اليومي", hint: "حالة الفروع والإغلاقات", icon: MapPinned, types: ["daily_closure", "cashier_journal", "branch_complaint"], modules: ["daily_closures", "cashier_journal", "branch_complaints"] },
   { id: "people", label: "الموظفون", hint: "الحضور والإجازات والسلف", icon: Users, types: ["attendance_record", "leave", "advance"], modules: ["attendance", "hr_leaves", "hr_advances"] },
@@ -23,37 +22,28 @@ const domains = [
 ] as const;
 type Workspace = "urgent" | "followup" | "decision" | "today" | "monthly" | "branches" | "people" | "production" | "quality" | "sales" | "analysis" | null;
 type Selected = { kind: "record"; id: string } | { kind: "card"; id: string; branchId: string } | { kind: "branch"; id: string } | null;
-type Insight = { title: string; explanation: string; sourceType: string; sourceId: string; branchId: string; href: string; evidence?: { label: string; source: string; period: string; value: number | null; unit?: string } };
-type InsightResponse = { kind: "ai"; generatedAt: string; insights: Insight[] };
 const reasonFor = (item: OperationsQueueItem) => item.decision?.reason || item.reason || (item.priorityReason ? "أولوية عاجلة مسجلة في المصدر." : `الحالة المسجلة: ${item.status}`);
 
-function ChartPanel({ title, note, children, onClick }: { title: string; note: string; children: React.ReactNode; onClick: () => void }) {
-  return <button type="button" onClick={onClick} className="oc-panel min-w-0 p-4 text-right hover:border-violet-300 focus-visible:outline-2 focus-visible:outline-violet-600">
-    <span className="flex items-center justify-between gap-2"><strong className="text-sm">{title}</strong><ArrowUpLeft className="size-4 text-violet-700" /></span>
-    <span className="block text-xs text-muted-foreground">{note}</span>
-    <div className="oc-chart mt-2 pointer-events-none" dir="ltr">{children}</div>
-  </button>;
-}
-
-export function OperationsDecisionBoard({ data, actorId, offset, onOffset, open, openBranch, retry, canOpenEmployees = false }: {
+export function OperationsDecisionBoard({ data, actorId, offset, onOffset, open, openBranch, retry, canOpenEmployees = false, performanceDays = 7, onPerformanceDays, performanceLoading = false, evidenceRefreshing = false }: {
   data: OperationsCenterResponse; actorId?: string; offset: number; onOffset: (value: number) => void; canOpenEmployees?: boolean;
+  performanceDays?: PerformanceDays; onPerformanceDays?: (value: PerformanceDays) => void;
+  performanceLoading?: boolean; evidenceRefreshing?: boolean;
   open: (href: string, branchId: string, item?: OperationsQueueItem) => void;
   openBranch: (id: string) => void; retry: () => void;
 }) {
-  const [view, setView] = useState<Workspace>(() => monthlyReturnIntent(window.location.search, data.scope.branchIds).monthly ? "monthly" : null);
+  const [view, setView] = useState<Workspace>(() => monthlyReturnIntent(window.location.search, data.scope.branchIds).monthly ? "monthly" : new URLSearchParams(window.location.search).get("workspace") === "analysis" ? "analysis" : null);
   const [selected, setSelected] = useState<Selected>(null);
   const [search, setSearch] = useState("");
-  const [mobileDetail, setMobileDetail] = useState(false);
+  const [mobileDetail, setMobileDetail] = useState(() => new URLSearchParams(window.location.search).get("workspace") === "analysis");
+  const [analysisTab, setAnalysisTab] = useState<AnalyticsChart | "assistant">("sales");
+  const [analysisLinkError, setAnalysisLinkError] = useState("");
   const ids = data.scope.branchIds;
   const scopeKey = [...ids].sort().join(",");
   const branchName = (id: string) => data.branches.find(branch => branch.id === id)?.name ?? id;
-  const { unique: queue, critical, awaitingDecision } = useMemo(
-    () => operationsDecisionQueue(data.queue.filter(item => ids.includes(item.branchId)), actorId, data.generatedAt),
-    [data.queue, data.generatedAt, actorId, scopeKey]);
-  const decision = awaitingDecision;
-  const today = queue.filter(item => item.dueAt && Number.isFinite(Date.parse(item.dueAt)) && dayKey(item.dueAt) === data.businessDate);
-  const followup = queue.filter(item => !critical.includes(item) && !decision.includes(item));
-  const cohorts = { urgent: critical, followup, decision, today };
+  const { queue, critical, overdue, priority, followup, decision, today, evidence } = useMemo(
+    () => operationsDecisionBoardProjection(data.queue, ids, actorId, data.generatedAt, data.businessDate),
+    [data.queue, data.generatedAt, data.businessDate, actorId, scopeKey]);
+  const cohorts = { urgent: priority, followup, decision, today };
   const cards = data.cards.filter(card => ids.includes(card.branchId));
   const domain = domains.find(item => item.id === view);
   const domainRows = domain ? queue.filter(item => (domain.types as readonly string[]).includes(item.sourceType)) : [];
@@ -65,17 +55,7 @@ export function OperationsDecisionBoard({ data, actorId, offset, onOffset, open,
   const unavailable = Object.values(data.coverage.queue).some(value => value === "unavailable");
   const qualified = queueQualifier(data.coverage.truncated, data.coverage.nextOffset, offset, unavailable);
   const analysis = data.analytics;
-  const salesPoints = (analysis?.sales.daily || []).map(point => ({ date: point.date.slice(5), value: point.value }));
-  const branchPoints = (analysis?.followups.byBranch || []).filter(point => ids.includes(point.branchId)).map(point => ({ name: branchName(point.branchId), value: point.count }));
-  const insights = useMutation({
-    mutationFn: async (request: { scope: string; branchIds: string[] }) => {
-      const response = await apiRequest("POST", "/api/operations-center/insights", { branchIds: request.branchIds });
-      return { scope: request.scope, result: await response.json() as InsightResponse };
-    },
-  });
-  const aiResult = insights.data?.scope === scopeKey ? insights.data.result : null;
-  const aiError = insights.variables?.scope === scopeKey && insights.isError;
-  const aiLoading = insights.variables?.scope === scopeKey && insights.isPending;
+  const assistant = useOperationsAssistant(data, actorId, performanceDays, evidenceRefreshing);
   const choose = (next: Selected) => { setSelected(next); setMobileDetail(true); };
   const enter = (next: Workspace, selection: Selected = null) => { setSearch(""); setView(next); setSelected(selection); setMobileDetail(!!selection); };
   const urgentCase = critical[0];
@@ -84,24 +64,13 @@ export function OperationsDecisionBoard({ data, actorId, offset, onOffset, open,
   const filtered = (text: string) => text.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase());
   const rows = (view && view in cohorts ? cohorts[view as keyof typeof cohorts] : domainRows).filter(item => filtered(`${item.title} ${item.status} ${branchName(item.branchId)}`));
   const sources = domainCards.filter(item => filtered(`${item.title} ${branchName(item.branchId)}`));
-  const aiOpen = (insight: Insight) => {
-    if (!ids.includes(insight.branchId)) return;
-    const found = queue.find(item => item.sourceType === insight.sourceType && item.sourceId === insight.sourceId && item.branchId === insight.branchId);
-    if (found && found.href === insight.href) { enter("analysis", { kind: "record", id: found.id }); return; }
-    const source = cards.find(item => item.branchId === insight.branchId && item.href === insight.href);
-    if (source) { enter("analysis", { kind: "card", id: source.id, branchId: source.branchId }); return; }
-    // Server-attached analytic/monthly provenance only; never navigate a URL supplied by model text.
-    const expectedPaths: Record<string, string[]> = { sales_trend: ["/sales-analytics"], payroll_month: ["/hr-hub", "/salary-closing"], expenses_month: ["/pnl-dashboard"] };
-    if (!expectedPaths[insight.sourceType]) return;
-    try {
-      const destination = new URL(insight.href, window.location.origin);
-      const month = insight.evidence?.period?.slice(0, 7);
-      if (destination.origin === window.location.origin &&
-        expectedPaths[insight.sourceType].includes(destination.pathname) &&
-        destination.searchParams.get(destination.pathname === "/salary-closing" ? "branch" : "branchId") === insight.branchId &&
-        /^\d{4}-(0[1-9]|1[0-2])$/.test(month || "") &&
-        destination.searchParams.get("month") === month) open(insight.href, insight.branchId);
-    } catch { /* Invalid provenance link is not navigable. */ }
+  const showAnalysis = (tab: AnalyticsChart | "assistant") => {
+    enter("analysis"); setAnalysisTab(tab); setMobileDetail(true); setAnalysisLinkError("");
+  };
+  const openAnalytics = (href: string, branchId: string, item?: OperationsQueueItem) => {
+    const destination = new URL(href, window.location.origin);
+    destination.searchParams.set("centerWorkspace", "analysis");
+    open(`${destination.pathname}${destination.search}${destination.hash}`, branchId, item);
   };
   const tile = (key: Workspace, label: string, hint: string, Icon: typeof Activity, count?: number, accent?: string) =>
     <button key={key} type="button" onClick={() => enter(key)} className={`oc-tile ${accent || ""}`}><span className="oc-tile-icon"><Icon size={23} strokeWidth={1.9} /></span><span className="min-w-0 flex-1"><strong className="block text-[14px] font-bold leading-6">{label}</strong><small className="block text-xs leading-5 text-muted-foreground">{hint}</small></span>{count !== undefined && <b className="self-start rounded-full bg-violet-100 px-2 py-0.5 text-xs tabular-nums text-violet-800">{fmt(count)}</b>}</button>;
@@ -116,12 +85,13 @@ export function OperationsDecisionBoard({ data, actorId, offset, onOffset, open,
     <section aria-labelledby="oc-daily-heading">
       <div className="mb-2 flex items-end justify-between gap-3"><div><p className="text-xs font-bold text-violet-700">01 / مسار القرار</p><h2 id="oc-daily-heading" className="text-lg font-bold">ما يحتاج منك اليوم</h2></div><span className="text-xs text-muted-foreground">{qualified}</span></div>
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-5">
-        {critical.length > 0 && tile("urgent", "طارئ", "أولوية صريحة من المصدر", AlertTriangle, critical.length, "oc-tile-urgent")}
+         {priority.length > 0 && tile("urgent", "الأولوية", `طارئ ${fmt(critical.length)} · متأخر ${fmt(overdue.length)}`, AlertTriangle, priority.length, "oc-tile-urgent")}
         {followup.length > 0 && tile("followup", "يحتاج متابعة", "سجلات تشغيل مفتوحة", Activity, followup.length)}
         {decision.length > 0 && tile("decision", "بانتظار قراري", "قرار مطلوب صراحةً", ShieldCheck, decision.length, "oc-tile-decision")}
         {today.length > 0 && tile("today", "مهام اليوم", "مواعيد مسجلة لهذا اليوم", ClipboardList, today.length)}
         {tile("monthly", "الإغلاقات الشهرية", "ملفات الشهر الأربعة", CalendarDays)}
       </div>
+       {evidence.length > 0 && <button type="button" onClick={() => enter("quality")} className="mt-2 text-right text-xs font-semibold text-violet-700 hover:underline">{fmt(evidence.length)} دليل جودة يحتاج التحقيق · فحوص اليوم ملاحظات وليست مهام قابلة للإكمال <ArrowUpLeft className="inline size-3.5" /></button>}
       {unavailable && <p role="status" className="mt-2 text-xs text-amber-900">بعض المصادر غير متاحة؛ الأعداد تخص السجلات المعروضة فقط وليست دليل اكتمال.</p>}
     </section>
 
@@ -131,48 +101,53 @@ export function OperationsDecisionBoard({ data, actorId, offset, onOffset, open,
     </section>
 
     <section aria-labelledby="oc-evidence-heading">
-      <div className="mb-2 flex items-end justify-between"><div><p className="text-xs font-bold text-violet-700">03 / قراءة الأداء</p><h2 id="oc-evidence-heading" className="text-lg font-bold">أدلة من التشغيل</h2></div><button type="button" className="text-xs font-bold text-violet-700 hover:underline" onClick={() => enter("analysis")}>تفاصيل التحليل <ArrowUpLeft className="inline size-3.5" /></button></div>
+      <div className="mb-2 flex flex-wrap items-end justify-between gap-2"><div><p className="text-xs font-bold text-violet-700">03 / قراءة الأداء</p><h2 id="oc-evidence-heading" className="text-lg font-bold">أدلة من التشغيل</h2></div>
+        <div className="flex flex-wrap items-center gap-3">{onPerformanceDays && <PerformanceRange days={performanceDays} onChange={onPerformanceDays} />}<button type="button" className="text-xs font-bold text-violet-700 hover:underline" onClick={() => showAnalysis("sales")}>تفاصيل التحليل <ArrowUpLeft className="inline size-3.5" /></button></div>
+      </div>
+      <div className="mb-2"><PerformancePeriod data={data} /></div>
       <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(230px,.7fr)]">
-        <ChartPanel title="اتجاه المبيعات المسجلة" note="من السجلات المتاحة فقط · غياب اليوم ليس صفرًا" onClick={() => enter("analysis")}>
-          {salesPoints.length ? <ResponsiveContainer width="100%" height="100%"><AreaChart data={salesPoints} margin={{ top: 10, right: 10, bottom: 0, left: 0 }}><CartesianGrid vertical={false} stroke="#eee8f3" /><XAxis dataKey="date" tick={{ fontSize: 10 }} /><YAxis tick={{ fontSize: 10 }} width={46} tickFormatter={fmt} /><Tooltip formatter={value => [`${fmt(Number(value))} ر.س`, "مبيعات مسجلة"]} /><Area type="monotone" dataKey="value" stroke="#6941a5" fill="#e8ddf4" strokeWidth={2} connectNulls={false} /></AreaChart></ResponsiveContainer> : <div className="flex h-full items-center justify-center text-xs text-muted-foreground">{analysis ? "لا توجد نقاط مبيعات مؤكدة قابلة للرسم" : "دليل المبيعات غير متاح"}</div>}
-        </ChartPanel>
-        <ChartPanel title="المتابعات حسب الفرع" note="سجلات متابعة ظاهرة · ليست إجمالي كل المهام" onClick={() => enter("analysis")}>
-          {branchPoints.length ? <ResponsiveContainer width="100%" height="100%"><BarChart data={branchPoints} margin={{ top: 10, right: 8, bottom: 0, left: 0 }}><CartesianGrid vertical={false} stroke="#eee8f3" /><XAxis dataKey="name" tick={{ fontSize: 10 }} /><YAxis allowDecimals={false} tick={{ fontSize: 10 }} width={28} /><Tooltip formatter={value => [fmt(Number(value)), "متابعات"]} /><Bar dataKey="value" fill="#7953ae" radius={[4, 4, 0, 0]} maxBarSize={38} /></BarChart></ResponsiveContainer> : <div className="flex h-full items-center justify-center text-xs text-muted-foreground">{analysis ? "لا توجد متابعات مرئية قابلة للرسم" : "دليل المتابعات غير متاح"}</div>}
-        </ChartPanel>
+        <PerformancePanel chart="sales" data={data} loading={performanceLoading} onExpand={() => showAnalysis("sales")} />
+        <PerformancePanel chart="followups" data={data} onExpand={() => showAnalysis("followups")} />
       <div className="oc-panel flex flex-col gap-3 p-4 md:col-span-2 md:flex-row md:items-center lg:col-span-1 lg:items-start">
         <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-violet-100 text-violet-700"><Sparkles size={19} /></span>
-        <div className="min-w-0 flex-1"><strong className="text-sm">القراءة التشغيلية</strong><p className="mt-0.5 text-sm text-muted-foreground">{analysis?.observations?.[0]?.explanation || (aiResult?.insights.length ? aiResult.insights[0].explanation : analysis ? `${analysis.sales.total === null ? "المبيعات المؤكدة غير متاحة" : `المبيعات المسجلة ${fmt(analysis.sales.total)} ر.س`} · ${analysis.followups.coverage === "unavailable" ? "المتابعات غير متاحة" : `${fmt(analysis.followups.byBranch.reduce((total, branch) => total + branch.count, 0))} متابعة في الفروع المعروضة`}. ${analysis.sales.coverage === "partial" ? "بيانات المبيعات جزئية." : ""}` : "الأدلة التشغيلية غير متاحة بعد. طلب تحليل المساعد يدوي فقط ولا يعمل تلقائيًا.")}</p></div>
-        <Button variant="outline" size="sm" onClick={() => enter("analysis")}>عرض الأدلة</Button>
+        <div className="min-w-0 flex-1 space-y-2"><PerformanceSummary data={data} />
+          {assistant.result?.insights[0] && <p className="border-t border-violet-100 pt-2 text-xs leading-6"><strong className="text-violet-700">اقتراح المساعد (ليس حقيقة تشغيلية): </strong>{assistant.result.insights[0].explanation}</p>}
+          <Button variant="outline" size="sm" onClick={() => showAnalysis("assistant")}>المساعد ومراجعة الأدلة</Button>
+        </div>
       </div>
       </div>
     </section>
 
     <Dialog open={!!view} onOpenChange={openState => { if (!openState) { setView(null); setSelected(null); setMobileDetail(false); } }}>
-      <DialogContent dir="rtl" className="oc-board oc-workspace">
-        <DialogHeader className="shrink-0 border-b border-[#e7def0] bg-[#fdfbff] px-5 py-4 text-right">
+      <DialogContent dir="rtl" className={`oc-board oc-workspace ${view === "analysis" ? "oc-analytics-workspace" : ""}`}>
+        <DialogHeader className="oc-workspace-heading shrink-0 border-b border-[#e7def0] bg-[#fdfbff] px-5 py-4 text-right">
           <p className="text-[11px] font-bold text-violet-700">BUTTER BAKERY / مركز التشغيل</p>
-          <DialogTitle className="text-right text-xl font-bold">{view === "urgent" ? "حالات طارئة" : view === "followup" ? "يحتاج متابعة" : view === "decision" ? "بانتظار قراري" : view === "today" ? "مهام اليوم" : view === "monthly" ? "الإغلاقات الشهرية" : view === "analysis" ? "الأداء والتحليل" : domain?.label || "مجال التشغيل"}</DialogTitle>
+           <DialogTitle className="text-right text-xl font-bold">{view === "urgent" ? "الأولوية: طارئ ومتأخر" : view === "followup" ? "يحتاج متابعة" : view === "decision" ? "بانتظار قراري" : view === "today" ? "مهام اليوم" : view === "monthly" ? "الإغلاقات الشهرية" : view === "analysis" ? "الأداء والتحليل" : domain?.label || "مجال التشغيل"}</DialogTitle>
           <DialogDescription className="text-right text-xs">نطاق الفروع المختار · عرض السجل لا يغيّر حالته</DialogDescription>
+          {view === "analysis" && onPerformanceDays && <PerformanceRange days={performanceDays} onChange={onPerformanceDays} />}
         </DialogHeader>
         {view === "monthly" ? <OperationsMonthWorkspace key={`${actorId}:${scopeKey}`} branches={data.branches.filter(branch => ids.includes(branch.id))} actorId={actorId} open={open} /> : <div className="oc-workspace-grid" data-detail={mobileDetail}>
           <div className="oc-workspace-list space-y-2">
             {view === "analysis" ? <div className="space-y-3 text-sm">
               <strong>الأدلة ومصدر التحليل</strong>
-              <p className="text-xs text-muted-foreground">المبيعات من السجلات المؤكدة فقط. المتابعات من السجلات المرئية ضمن هذا النطاق. البيانات الناقصة لا تُعرض كصفر.</p>
-              <p>{analysis ? `مصدر المبيعات: ${analysis.sales.source} · مصدر المتابعات: ${analysis.followups.source}` : "لا توجد أدلة تحليل متاحة من الخادم لهذا النطاق."}</p>
+              <PerformancePeriod data={data} />
+              <p className="text-xs text-muted-foreground">إجمالي يوميات المبيعات المعتمدة أو المرحلة، وليس صافي المبيعات. المتابعات لقطة حالية من السجلات المحمّلة. البيانات الناقصة لا تُعرض كصفر.</p>
+              {(["sales", "followups", "assistant"] as const).map(tab => <button type="button" className="oc-list-item" key={tab} data-active={!selected && analysisTab === tab} onClick={() => { setSelected(null); setAnalysisTab(tab); setMobileDetail(true); }}>
+                <strong>{tab === "sales" ? "المبيعات · الرسم والأيام والفروع" : tab === "followups" ? "المتابعات · الرسم ومصادر الفروع" : "تحليل المساعد · اقتراحات لا حقائق"}</strong><ChevronLeft className="inline size-4 text-violet-700" />
+              </button>)}
+              <h3 className="text-xs font-bold">ملاحظات من السجلات · ليست استجابة المساعد</h3>
               {analysis?.observations?.map((observation, index) => <div className="oc-panel p-3" key={index}>
-                <strong>{observation.title}</strong><p className="text-xs text-muted-foreground">{observation.explanation}</p><small>المصدر: {observation.source}</small>
-                {observation.href && observation.branchId && ids.includes(observation.branchId) &&
-                  (queue.some(item => item.branchId === observation.branchId && (item.href === observation.href || item.decision?.href === observation.href)) || analysis.sales.hrefs.some(item => item.branchId === observation.branchId && item.href === observation.href)) &&
-                  <Button variant="outline" size="sm" className="mt-2 block" onClick={() => open(observation.href!, observation.branchId!)}>فتح المصدر</Button>}
+                <strong>{observation.title}</strong><p className="text-xs leading-6 text-muted-foreground">{observation.explanation}</p><small>المصدر: {analyticsSource(observation.source)}</small>
+                <details className="mt-2"><summary className="cursor-pointer text-xs font-bold text-violet-700">مصادر الدليل ({observation.sourceRefs?.length || 0})</summary>
+                {observation.sourceRefs?.map((reference, sourceIndex) => <Button key={`${reference.sourceType}:${reference.sourceId}:${sourceIndex}`} variant="outline" size="sm" className="mt-2 block" onClick={() => {
+                  const href = validatedInsightHref({ ...reference, evidence: { label: "", source: observation.source, value: null, period: `${analysis.period.from}/${analysis.period.to}` } }, data, window.location.origin);
+                  if (!href) { setAnalysisLinkError("رابط المصدر لا يطابق الدليل أو النطاق والفترة؛ لم يتم فتحه."); return; }
+                  setAnalysisLinkError("");
+                  openAnalytics(href, reference.branchId, queue.find(item => item.sourceType === reference.sourceType && item.sourceId === reference.sourceId && item.branchId === reference.branchId));
+                }}>فتح مصدر الدليل {observation.sourceRefs.length > 1 ? sourceIndex + 1 : ""}</Button>)}
+                </details>
               </div>)}
-              <Button variant="outline" size="sm" disabled={aiLoading} onClick={() => insights.mutate({ scope: scopeKey, branchIds: [...ids] })}>{aiLoading ? "جار التحليل…" : "طلب تحليل مساعد"}</Button>
-              {aiError && <p role="alert" className="text-xs text-red-700">تعذر التحليل. لم يُشغّل الطلب مجددًا تلقائيًا.</p>}
-              {aiResult?.insights.map((insight, index) => <div className="oc-panel space-y-2 p-3" key={`${insight.sourceType}:${insight.sourceId}:${index}`}>
-                <strong className="text-sm">{insight.title}</strong><p className="text-xs text-muted-foreground">{insight.explanation}</p>
-                {insight.evidence && <div className="rounded-lg bg-violet-50 p-3 text-xs"><strong>الدليل المسجل: {insight.evidence.label}</strong><p>{insight.evidence.value === null ? "القيمة غير متاحة" : `${fmt(insight.evidence.value)} ${insight.evidence.unit || ""}`} · الفترة: {insight.evidence.period}</p><p>المصدر: {insight.evidence.source}</p></div>}
-                <Button variant="outline" size="sm" onClick={() => aiOpen(insight)}>مراجعة المصدر <ArrowUpLeft className="mr-1 size-4" /></Button>
-              </div>)}
+              {analysisLinkError && <p role="alert" className="text-xs text-red-700">{analysisLinkError}</p>}
             </div> : view === "branches" ? data.branches.filter(item => ids.includes(item.id)).map(item => <button type="button" key={item.id} onClick={() => choose({ kind: "branch", id: item.id })} className="oc-list-item" data-active={selected?.kind === "branch" && selected.id === item.id}><strong>{item.name}</strong><span className="mt-1 block text-xs text-muted-foreground">{queue.filter(row => row.branchId === item.id).length} سجلات في الصفحة الحالية</span></button>) : <>
               {view === "people" && canOpenEmployees && <div className="space-y-2 rounded-xl border border-violet-200 bg-violet-50 p-3">
                 <strong className="text-sm">إدارة الموظفين · اختر الفرع</strong>
@@ -180,7 +155,13 @@ export function OperationsDecisionBoard({ data, actorId, offset, onOffset, open,
                 {data.branches.filter(branch => ids.includes(branch.id)).map(branch => <button key={branch.id} type="button" className="oc-list-item" onClick={() => choose({ kind: "branch", id: branch.id })} data-active={selected?.kind === "branch" && selected.id === branch.id}>{branch.name} <ChevronLeft className="inline size-4 text-violet-700" /></button>)}
               </div>}
               <label className="relative block"><Search className="absolute right-3 top-3 size-4 text-violet-500" /><input value={search} onChange={event => setSearch(event.target.value)} placeholder="بحث في السجلات" aria-label="بحث في السجلات" className="min-h-10 w-full rounded-lg border border-violet-200 bg-[#fdfbff] pr-10 pl-3 text-sm" /></label>
-              {rows.map(item => <button key={item.id} type="button" onClick={() => choose({ kind: "record", id: item.id })} className="oc-list-item" data-active={selected?.kind === "record" && selected.id === item.id}><strong className="block text-sm">{item.title}</strong><span className="mt-1 block text-xs text-muted-foreground">{branchName(item.branchId)} · {operationsSourceLabel(item.sourceType)} · {item.status}</span></button>)}
+               {view === "urgent" ? [
+                 { key: "critical", label: "طارئ · أولوية صريحة من المصدر", items: rows.filter(item => critical.includes(item)) },
+                 { key: "overdue", label: "متأخر · تجاوز الموعد المسجل", items: rows.filter(item => overdue.includes(item)) },
+               ].filter(group => group.items.length).map(group => <section key={group.key} aria-label={group.label} className="space-y-2">
+                 <h3 className="text-xs font-bold text-violet-800">{group.label} ({fmt(group.items.length)})</h3>
+                 {group.items.map(item => <button key={item.id} type="button" onClick={() => choose({ kind: "record", id: item.id })} className="oc-list-item" data-active={selected?.kind === "record" && selected.id === item.id}><strong className="block text-sm">{item.title}</strong><span className="mt-1 block text-xs text-muted-foreground">{branchName(item.branchId)} · {operationsSourceLabel(item.sourceType)} · {item.status}</span></button>)}
+               </section>) : rows.map(item => <button key={item.id} type="button" onClick={() => choose({ kind: "record", id: item.id })} className="oc-list-item" data-active={selected?.kind === "record" && selected.id === item.id}><strong className="block text-sm">{item.title}</strong><span className="mt-1 block text-xs text-muted-foreground">{branchName(item.branchId)} · {operationsSourceLabel(item.sourceType)} · {item.status}{isOperationsInvestigationEvidence(item) ? " · دليل للتحقيق، لا حالة معالجة" : ""}</span></button>)}
               {sources.map(item => <button key={`${item.branchId}:${item.id}`} type="button" onClick={() => choose({ kind: "card", id: item.id, branchId: item.branchId })} className="oc-list-item" data-active={selected?.kind === "card" && selected.id === item.id && selected.branchId === item.branchId}><strong className="block text-sm">{item.title}</strong><span className="mt-1 block text-xs text-muted-foreground">{branchName(item.branchId)} · مصدر المجال</span></button>)}
               {!rows.length && !sources.length && !(view === "people" && canOpenEmployees) && <p className="rounded-xl border border-dashed border-violet-200 p-5 text-center text-sm text-muted-foreground">{search ? "لا نتائج تطابق البحث." : "لا سجلات ظاهرة في هذه الصفحة؛ الغياب لا يعني اكتمال العمل."}</p>}
               {view !== "decision" && view !== "today" && <div className="flex gap-2 pt-2"><Button variant="outline" size="sm" disabled={offset === 0} onClick={() => { setSelected(null); setMobileDetail(false); onOffset(Math.max(0, offset - data.scope.limit)); }}><ChevronRight className="size-4" />السابقة</Button><Button variant="outline" size="sm" disabled={data.coverage.nextOffset === null} onClick={() => { setSelected(null); setMobileDetail(false); onOffset(data.coverage.nextOffset!); }}>التالية<ChevronLeft className="size-4" /></Button></div>}
@@ -192,10 +173,10 @@ export function OperationsDecisionBoard({ data, actorId, offset, onOffset, open,
               card ? <CardDetail card={card} branch={branchName(card.branchId)} open={open} retry={retry} /> :
               selected?.kind === "branch" ? <div className="space-y-4"><h3 className="text-xl font-bold">{branchName(selected.id)}</h3>
                 <p className="text-sm text-muted-foreground">{view === "people" ? "مسار الموظفين والرواتب والمباشرة والنقل لهذا الفرع. الإجراءات تخضع لصلاحيات المصدر." : "عرض تفاصيل التشغيل اليومية لهذا الفرع في مسار المصدر المخصص."}</p>
-                {view === "people" && canOpenEmployees ? <Button onClick={() => open("/hr-hub", selected.id)}>فتح إدارة الموظفين <ArrowUpLeft className="mr-2 size-4" /></Button> :
+                {view === "people" && canOpenEmployees ? <Button onClick={() => open("/hr-hub?tab=employees", selected.id)}>فتح إدارة الموظفين <ArrowUpLeft className="mr-2 size-4" /></Button> :
                   <Button onClick={() => openBranch(selected.id)}>فتح تشغيل الفرع <ArrowUpLeft className="mr-2 size-4" /></Button>}
               </div> :
-              view === "analysis" ? <div className="space-y-4"><h3 className="text-lg font-bold">كيف نقرأ الأداء؟</h3><p className="text-sm text-muted-foreground">تظهر الرسوم على الصفحة الرئيسية. افتح سجلًا من قراءة المساعد لمراجعة الوقائع في المصدر؛ الاقتراح لا يغير السجل.</p><p className="text-sm">تغطية المبيعات: {analysis?.sales.coverage || "غير معروفة"} · تغطية المتابعات: {analysis?.followups.coverage || qualified}</p>{aiResult && <p className="text-xs text-muted-foreground">آخر طلب تحليل: {time(aiResult.generatedAt)}</p>}</div> :
+              view === "analysis" ? analysisTab === "assistant" ? <AnalyticsAssistant data={data} assistant={assistant} open={openAnalytics} /> : <PerformanceDetail chart={analysisTab} data={data} loading={performanceLoading} open={openAnalytics} /> :
               <div className="flex h-full flex-col items-center justify-center gap-3 text-center text-muted-foreground"><CircleHelp className="size-9 text-violet-400" /><p className="max-w-sm text-sm">اختر سجلًا من القائمة لعرض السبب والمسؤول والموعد وتفاصيل المصدر هنا.</p></div>}
           </div>
         </div>}
@@ -206,8 +187,10 @@ export function OperationsDecisionBoard({ data, actorId, offset, onOffset, open,
 
 function RecordDetail({ item, branch, open }: { item: OperationsQueueItem; branch: string; open: (href: string, branchId: string, item?: OperationsQueueItem) => void }) {
   const history = item.history || [];
+  const investigation = isOperationsInvestigationEvidence(item);
   return <div className="space-y-5"><div><p className="text-xs font-bold text-violet-700">{branch} / {operationsSourceLabel(item.sourceType)}</p><h3 className="mt-1 text-xl font-bold">{item.title}</h3><p className="mt-1 text-sm text-muted-foreground">{item.status}</p></div>
     <div className="oc-panel border-r-4 border-r-violet-500 p-4"><strong className="text-sm">لماذا يحتاج الانتباه؟</strong><p className="mt-1 text-sm leading-7">{reasonFor(item)}</p></div>
+    {investigation && <p className="oc-panel bg-violet-50 p-4 text-sm">دليل جودة يحتاج التحقيق، وليس مهمة غير محلولة. لا يسجل المصدر دورة معالجة أو إغلاق؛ اختفاء الفحص من فحوص اليوم لا يثبت معالجة الملاحظة.</p>}
     {item.decision?.awaitingActor && <div className="oc-panel border-r-4 border-r-[#6941a5] bg-violet-50 p-4">
       <strong className="text-sm text-violet-900">بانتظار قرارك الآن</strong>
       <p className="mt-1 text-sm leading-7">{item.decision.reason}</p>
@@ -218,10 +201,10 @@ function RecordDetail({ item, branch, open }: { item: OperationsQueueItem; branc
       ["الجهة المسؤولة", item.owner || "غير معروفة"],
       ["الإسناد الفردي للسجل", item.ownerId ? "مسجل في المصدر" : "غير معروف من المصدر؛ منفصل عن صلاحية قرارك"],
       ["الموعد", item.dueAt ? time(item.dueAt) : "غير معروف"],
-      ["الحالة / الخطوة", `${item.status} · ${item.step}`],
+       [investigation ? "نتيجة الفحص (ليست حالة معالجة)" : "الحالة / الخطوة", `${item.status} · ${item.step}`],
     ].map(([label, value]) => <div className="flex justify-between gap-4 p-3" key={label}><dt className="text-muted-foreground">{label}</dt><dd className="text-left font-semibold">{value}</dd></div>)}</dl>
     <div><h4 className="text-sm font-bold">سجل الوقائع</h4>{history.length ? <div className="mt-2 space-y-2">{history.map((fact, index) => <p className="oc-panel p-3 text-sm" key={index}>{fact.label} {fact.at && <span className="block text-xs text-muted-foreground">{time(fact.at)}</span>}</p>)}</div> : <p className="mt-1 text-sm text-muted-foreground">لا يقدم هذا المصدر سجل وقائع تفصيليًا هنا؛ راجع السجل الأصلي قبل اتخاذ القرار.</p>}</div>
-    <Button className="min-h-11 bg-[#6941a5] hover:bg-[#4a2c75]" onClick={() => open(item.decision?.awaitingActor ? item.decision.href : item.href, item.branchId, item)}>{item.decision?.awaitingActor ? `${item.decision.label} في المسار المختص` : "فتح السجل للمتابعة"} <ArrowUpLeft className="mr-2 size-4" /></Button>
+    <Button className="min-h-11 bg-[#6941a5] hover:bg-[#4a2c75]" onClick={() => open(item.decision?.awaitingActor ? item.decision.href : item.href, item.branchId, item)}>{item.decision?.awaitingActor ? `${item.decision.label} في المسار المختص` : investigation ? "فتح دليل الجودة للتحقيق" : "فتح السجل للمتابعة"} <ArrowUpLeft className="mr-2 size-4" /></Button>
   </div>;
 }
 function CardDetail({ card, branch, open, retry }: { card: OperationsCard; branch: string; open: (href: string, branchId: string) => void; retry: () => void }) {

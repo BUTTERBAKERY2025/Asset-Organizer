@@ -85,3 +85,4 @@
 - [Staff organization boundary](staff-organization-boundary.md) — headquarters staff belong to general administration; departments remain unassigned until explicitly chosen, without changing grants.
 - [Operations HR boundary](operations-hr-boundary.md) — user defines operations employees by granted branches excluding HQ, not department; payroll review is advisory, never a closing prerequisite.
 - [Operations decision desk](operations-decision-desk.md) — compact daily icon workflow; distinguish overdue from emergency, assignments from approval, monthly evidence from financial close.
+- [Operations performance evidence](operations-performance-evidence.md) — journal sales, exact source periods, null versus zero, and pagination-independent assistant evidence.

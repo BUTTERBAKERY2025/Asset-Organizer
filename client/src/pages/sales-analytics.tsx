@@ -2,7 +2,8 @@ import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Layout } from "@/components/layout";
 import { useBranches } from "@/hooks/useBranches";
-import { useBranchNavigation } from "@/hooks/use-branch-navigation";
+import { operationsCenterReturnHref } from "@/lib/operations-center-navigation";
+import { resolveSalesAnalyticsBranch, salesAnalyticsMonthPeriod, salesAnalyticsRequestParams, salesAnalyticsSelection } from "@/lib/sales-analytics-navigation";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -41,7 +42,7 @@ import {
   ChevronsRight,
   ArrowRight
 } from "lucide-react";
-import { Link } from "wouter";
+import { Link, useSearch } from "wouter";
 import {
   BarChart,
   Bar,
@@ -63,11 +64,25 @@ import { Riyal } from "@/components/ui/riyal";
 
 export default function SalesAnalytics() {
   const currentDate = new Date();
-  const requestedMonth = new URLSearchParams(window.location.search).get("month");
-  const initialMonth = requestedMonth && /^\d{4}-(0[1-9]|1[0-2])$/.test(requestedMonth) ? requestedMonth : null;
-  const [selectedYear, setSelectedYear] = useState(initialMonth?.slice(0, 4) ?? currentDate.getFullYear().toString());
-  const [selectedMonth, setSelectedMonth] = useState(initialMonth?.slice(5) ?? (currentDate.getMonth() + 1).toString().padStart(2, "0"));
-  const [selectedBranch, setSelectedBranch] = useState<string>("");
+  const search = useSearch();
+  const defaultMonth = `${currentDate.getFullYear()}-${(currentDate.getMonth() + 1).toString().padStart(2, "0")}`;
+  const [selection, setSelection] = useState(() => salesAnalyticsSelection(search, null, defaultMonth));
+  const activeSelection = salesAnalyticsSelection(search, selection, defaultMonth);
+  const period = activeSelection.period;
+  const selectedYear = period.month.slice(0, 4);
+  const selectedMonth = period.month.slice(5);
+  const selectMonth = (month: string) => setSelection({ ...activeSelection, period: salesAnalyticsMonthPeriod(month) });
+  useEffect(() => {
+    setSelection(activeSelection);
+  }, [search]);
+  const { branches, userBranchId, canSelectBranch, isLoading: branchesLoading, isError: branchesError } = useBranches();
+  const allowedIds = branches.map(branch => branch.id);
+  const branchIntent = resolveSalesAnalyticsBranch(search, allowedIds, userBranchId, canSelectBranch, activeSelection.branchOverride);
+  const selectedBranch = branchIntent.branchId;
+  const setSelectedBranch = (branchId: string) => setSelection({ ...activeSelection, branchOverride: branchId });
+  const { fromDate, toDate } = period;
+  const analyticsEnabled = !branchesLoading && !branchesError && !branchIntent.denied && !!selectedBranch && !period.error;
+  const fromCenter = new URLSearchParams(search).get("from") === "operations-center";
   const [activeTab, setActiveTab] = useState("overview");
   const [journalStatus, setJournalStatus] = useState<string>("all");
   const [discrepancyType, setDiscrepancyType] = useState<string>("all");
@@ -81,7 +96,7 @@ export default function SalesAnalytics() {
 
   useEffect(() => {
     let interval: NodeJS.Timeout;
-    if (autoRefresh) {
+    if (autoRefresh && analyticsEnabled) {
       interval = setInterval(() => {
         handleRefresh();
       }, 60000);
@@ -89,98 +104,100 @@ export default function SalesAnalytics() {
     return () => {
       if (interval) clearInterval(interval);
     };
-  }, [autoRefresh]);
+  }, [autoRefresh, analyticsEnabled, selectedBranch, fromDate, toDate, journalStatus, discrepancyType]);
 
   // Reset pagination when filters change
   useEffect(() => {
     setDailyPerformancePage(1);
     setCashierLeaderboardPage(1);
-  }, [selectedBranch, selectedMonth, selectedYear, journalStatus, discrepancyType]);
+  }, [selectedBranch, fromDate, toDate, journalStatus, discrepancyType]);
 
   const yearMonth = `${selectedYear}-${selectedMonth}`;
-  const daysInMonth = new Date(parseInt(selectedYear), parseInt(selectedMonth), 0).getDate();
-  const fromDate = `${yearMonth}-01`;
-  const toDate = `${yearMonth}-${daysInMonth.toString().padStart(2, "0")}`;
+  const exportPeriod = period.exact ? `${fromDate}_${toDate}` : yearMonth;
+  const requestParams = (groupBy?: string) => {
+    if (!analyticsEnabled) throw new Error("فترة التحليل أو نطاق الفرع غير صالح.");
+    return salesAnalyticsRequestParams(period, selectedBranch, journalStatus, discrepancyType, groupBy);
+  };
 
-  const { branches, userBranchId, canSelectBranch, isLoading: branchesLoading } = useBranches();
-  const navigationBranch = useBranchNavigation(branches, branchesLoading, userBranchId);
-
-  useEffect(() => {
-    if (navigationBranch.hasBranchParam) {
-      if (navigationBranch.branchId) setSelectedBranch(navigationBranch.branchId);
-    } else if (userBranchId) {
-      setSelectedBranch(userBranchId);
-    } else if (canSelectBranch) {
-      setSelectedBranch("all");
-    }
-  }, [navigationBranch.hasBranchParam, navigationBranch.branchId, userBranchId, canSelectBranch]);
-
-  const { data: targetsVsActuals = [], isLoading: loadingTargets, refetch: refetchTargets } = useQuery<any[]>({
+  const { data: targetsData, isLoading: loadingTargets, isError: targetsError, refetch: refetchTargets } = useQuery<any[]>({
     queryKey: ["/api/analytics/targets-vs-actuals", selectedBranch, fromDate, toDate, journalStatus, discrepancyType],
-    queryFn: async () => {
-      const params = new URLSearchParams({ fromDate, toDate });
-      if (selectedBranch !== "all") params.append("branchId", selectedBranch);
-      if (journalStatus !== "all") params.append("status", journalStatus);
-      if (discrepancyType !== "all") params.append("discrepancyType", discrepancyType);
-      const res = await fetch(`/api/analytics/targets-vs-actuals?${params}`);
+    enabled: analyticsEnabled,
+    placeholderData: undefined,
+    staleTime: 0,
+    refetchOnMount: "always",
+    queryFn: async ({ signal }) => {
+      const params = requestParams();
+      const res = await fetch(`/api/analytics/targets-vs-actuals?${params}`, { signal });
       if (!res.ok) throw new Error("Failed to fetch targets vs actuals");
       return res.json();
     },
   });
 
-  const { data: shiftAnalytics = [], isLoading: loadingShifts, refetch: refetchShifts } = useQuery<any[]>({
+  const { data: shiftsData, isLoading: loadingShifts, isError: shiftsError, refetch: refetchShifts } = useQuery<any[]>({
     queryKey: ["/api/analytics/shifts", selectedBranch, fromDate, toDate, journalStatus, discrepancyType],
-    queryFn: async () => {
-      const params = new URLSearchParams({ fromDate, toDate });
-      if (selectedBranch !== "all") params.append("branchId", selectedBranch);
-      if (journalStatus !== "all") params.append("status", journalStatus);
-      if (discrepancyType !== "all") params.append("discrepancyType", discrepancyType);
-      const res = await fetch(`/api/analytics/shifts?${params}`);
+    enabled: analyticsEnabled,
+    placeholderData: undefined,
+    staleTime: 0,
+    refetchOnMount: "always",
+    queryFn: async ({ signal }) => {
+      const params = requestParams();
+      const res = await fetch(`/api/analytics/shifts?${params}`, { signal });
       if (!res.ok) throw new Error("Failed to fetch shift analytics");
       return res.json();
     },
   });
 
-  const { data: cashierLeaderboard = [], isLoading: loadingLeaderboard, refetch: refetchLeaderboard } = useQuery<any[]>({
+  const { data: leaderboardData, isLoading: loadingLeaderboard, isError: leaderboardError, refetch: refetchLeaderboard } = useQuery<any[]>({
     queryKey: ["/api/analytics/cashier-leaderboard", selectedBranch, fromDate, toDate, journalStatus, discrepancyType],
-    queryFn: async () => {
-      const params = new URLSearchParams({ fromDate, toDate });
-      if (selectedBranch !== "all") params.append("branchId", selectedBranch);
-      if (journalStatus !== "all") params.append("status", journalStatus);
-      if (discrepancyType !== "all") params.append("discrepancyType", discrepancyType);
-      const res = await fetch(`/api/analytics/cashier-leaderboard?${params}`);
+    enabled: analyticsEnabled,
+    placeholderData: undefined,
+    staleTime: 0,
+    refetchOnMount: "always",
+    queryFn: async ({ signal }) => {
+      const params = requestParams();
+      const res = await fetch(`/api/analytics/cashier-leaderboard?${params}`, { signal });
       if (!res.ok) throw new Error("Failed to fetch cashier leaderboard");
       return res.json();
     },
   });
 
-  const { data: avgTicketByShift = [], isLoading: loadingAvgTicket, refetch: refetchAvgTicket } = useQuery<any[]>({
+  const { data: avgTicketData, isLoading: loadingAvgTicket, isError: avgTicketError, refetch: refetchAvgTicket } = useQuery<any[]>({
     queryKey: ["/api/analytics/average-ticket", selectedBranch, "shift", fromDate, toDate, journalStatus, discrepancyType],
-    queryFn: async () => {
-      const params = new URLSearchParams({ fromDate, toDate, groupBy: "shift" });
-      if (selectedBranch !== "all") params.append("branchId", selectedBranch);
-      if (journalStatus !== "all") params.append("status", journalStatus);
-      if (discrepancyType !== "all") params.append("discrepancyType", discrepancyType);
-      const res = await fetch(`/api/analytics/average-ticket?${params}`);
+    enabled: analyticsEnabled,
+    placeholderData: undefined,
+    staleTime: 0,
+    refetchOnMount: "always",
+    queryFn: async ({ signal }) => {
+      const params = requestParams("shift");
+      const res = await fetch(`/api/analytics/average-ticket?${params}`, { signal });
       if (!res.ok) throw new Error("Failed to fetch average ticket");
       return res.json();
     },
   });
 
-  const { data: branchCompetition = [], isLoading: loadingBranches, refetch: refetchBranches } = useQuery<any[]>({
+  const { data: competitionData, isLoading: loadingBranches, isError: competitionError, refetch: refetchBranches } = useQuery<any[]>({
     queryKey: ["/api/analytics/branch-competition", selectedBranch, fromDate, toDate, journalStatus, discrepancyType],
-    queryFn: async () => {
-      const params = new URLSearchParams({ fromDate, toDate });
-      if (selectedBranch && selectedBranch !== "all") params.append("branchId", selectedBranch);
-      if (journalStatus !== "all") params.append("status", journalStatus);
-      if (discrepancyType !== "all") params.append("discrepancyType", discrepancyType);
-      const res = await fetch(`/api/analytics/branch-competition?${params}`);
+    enabled: analyticsEnabled,
+    placeholderData: undefined,
+    staleTime: 0,
+    refetchOnMount: "always",
+    queryFn: async ({ signal }) => {
+      const params = requestParams();
+      const res = await fetch(`/api/analytics/branch-competition?${params}`, { signal });
       if (!res.ok) throw new Error("Failed to fetch branch competition");
       return res.json();
     },
   });
 
+  const targetsVsActuals = analyticsEnabled && !targetsError ? targetsData ?? [] : [];
+  const shiftAnalytics = analyticsEnabled && !shiftsError ? shiftsData ?? [] : [];
+  const cashierLeaderboard = analyticsEnabled && !leaderboardError ? leaderboardData ?? [] : [];
+  const avgTicketByShift = analyticsEnabled && !avgTicketError ? avgTicketData ?? [] : [];
+  const branchCompetition = analyticsEnabled && !competitionError ? competitionData ?? [] : [];
+  const analyticsError = targetsError || shiftsError || leaderboardError || avgTicketError || competitionError;
+
   const handleRefresh = () => {
+    if (!analyticsEnabled) return;
     refetchTargets();
     refetchShifts();
     refetchLeaderboard();
@@ -255,7 +272,7 @@ export default function SalesAnalytics() {
       'مستوى الحافز': c.incentiveTier?.name || '-',
       'المكافأة المتوقعة': c.calculatedReward || 0
     }));
-    exportToExcel(exportData, 'ترتيب الكاشيرين', `cashier-leaderboard-${yearMonth}`);
+    exportToExcel(exportData, 'ترتيب الكاشيرين', `cashier-leaderboard-${exportPeriod}`);
   };
 
   const exportBranchCompetition = () => {
@@ -272,7 +289,7 @@ export default function SalesAnalytics() {
       'مستوى الحافز': b.incentiveTier?.name || '-',
       'المكافأة المتوقعة': b.calculatedReward || 0
     }));
-    exportToExcel(exportData, 'منافسة الفروع', `branch-competition-${yearMonth}`);
+    exportToExcel(exportData, 'منافسة الفروع', `branch-competition-${exportPeriod}`);
   };
 
   const exportDailyPerformance = () => {
@@ -283,7 +300,7 @@ export default function SalesAnalytics() {
       'نسبة الإنجاز': `${d.achievementPercent.toFixed(1)}%`,
       'الفرق': d.variance
     }));
-    exportToExcel(exportData, 'الأداء اليومي', `daily-performance-${yearMonth}`);
+    exportToExcel(exportData, 'الأداء اليومي', `daily-performance-${exportPeriod}`);
   };
 
   const totalActualSales = targetsVsActuals.reduce((sum, d) => sum + d.actualSales, 0);
@@ -332,10 +349,9 @@ export default function SalesAnalytics() {
     { value: "12", label: "ديسمبر" },
   ];
 
-  const years = Array.from({ length: 5 }, (_, i) => {
-    const year = currentDate.getFullYear() - 2 + i;
-    return { value: year.toString(), label: year.toString() };
-  });
+  const years = [...new Set([Number(selectedYear), ...Array.from({ length: 5 }, (_, i) => currentDate.getFullYear() - 2 + i)])]
+    .sort((a, b) => a - b)
+    .map(year => ({ value: year.toString().padStart(4, "0"), label: year.toString().padStart(4, "0") }));
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("en-US", {
@@ -358,9 +374,10 @@ export default function SalesAnalytics() {
         <div className="space-y-4 sm:space-y-6">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <div className="flex items-center gap-3">
-              <Link href="/cashier-journals">
+              <Link href={fromCenter ? operationsCenterReturnHref(search, allowedIds) : "/cashier-journals"}>
                 <Button variant="ghost" size="icon" className="h-11 w-11 sm:h-8 sm:w-8" data-testid="btn-back">
                   <ArrowRight className="h-4 w-4" />
+                  <span className="sr-only">{fromCenter ? "العودة إلى مركز إدارة التشغيل" : "العودة إلى اليوميات"}</span>
                 </Button>
               </Link>
               <div>
@@ -382,6 +399,7 @@ export default function SalesAnalytics() {
               <Button 
                 variant={autoRefresh ? "default" : "outline"} 
                 onClick={() => setAutoRefresh(!autoRefresh)}
+                disabled={!analyticsEnabled}
                 className={`h-11 sm:h-9 text-xs sm:text-sm ${autoRefresh ? "bg-green-600 hover:bg-green-700" : ""}`}
                 data-testid="button-auto-refresh"
               >
@@ -391,6 +409,14 @@ export default function SalesAnalytics() {
               </Button>
             </div>
           </div>
+
+          {period.error && <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive" data-testid="analytics-period-error">{period.error}</p>}
+          {analyticsEnabled && analyticsError && <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">تعذر تحميل بعض بيانات التحليل للفترة المحددة؛ أعد المحاولة بزر التحديث.</p>}
+          {!branchesLoading && (branchesError || branchIntent.denied || !selectedBranch) && (
+            <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive" data-testid="analytics-branch-error">
+              {branchesError ? "تعذر التحقق من صلاحية الفروع؛ لم يتم تحميل بيانات التحليل." : branchIntent.denied ? "الفرع المحدد في الرابط غير متاح ضمن صلاحياتك؛ اختر فرعاً مسموحاً دون توسيع النطاق تلقائياً." : "لا يوجد فرع متاح لتحميل بيانات التحليل."}
+            </p>
+          )}
 
           <Card className="bg-white/80 backdrop-blur border-violet-100">
             <CardHeader className="pb-3 p-3 sm:p-4 md:p-6">
@@ -402,7 +428,7 @@ export default function SalesAnalytics() {
             <CardContent className="p-3 sm:p-4 md:p-6 pt-0">
               <div className="flex flex-col sm:flex-row flex-wrap gap-2 sm:gap-3 items-stretch sm:items-center">
                 <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2 sm:gap-3 w-full sm:w-auto">
-                  <Select value={selectedYear} onValueChange={setSelectedYear}>
+                  <Select value={selectedYear} onValueChange={year => selectMonth(`${year}-${selectedMonth}`)}>
                     <SelectTrigger className="w-full sm:w-24 h-11 sm:h-10 text-xs sm:text-sm" data-testid="select-year">
                       <SelectValue placeholder="السنة" />
                     </SelectTrigger>
@@ -413,7 +439,7 @@ export default function SalesAnalytics() {
                     </SelectContent>
                   </Select>
 
-                  <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+                  <Select value={selectedMonth} onValueChange={month => selectMonth(`${selectedYear}-${month}`)}>
                     <SelectTrigger className="w-full sm:w-28 h-11 sm:h-10 text-xs sm:text-sm" data-testid="select-month">
                       <SelectValue placeholder="الشهر" />
                     </SelectTrigger>
@@ -463,22 +489,26 @@ export default function SalesAnalytics() {
                     </SelectContent>
                   </Select>
 
-                  <Button variant="outline" onClick={handleRefresh} className="h-11 w-11 sm:h-10 sm:w-10 p-0 shrink-0" data-testid="button-refresh">
+                  <Button variant="outline" onClick={handleRefresh} disabled={!analyticsEnabled} className="h-11 w-11 sm:h-10 sm:w-10 p-0 shrink-0" data-testid="button-refresh">
                     <RefreshCw className="h-4 w-4" />
                   </Button>
                 </div>
 
                 <div className="w-full sm:w-auto sm:mr-auto flex items-center justify-center sm:justify-end gap-2">
-                  <Badge className={`text-[10px] sm:text-xs ${
-                    currentSeason.factor > 1.2 ? "bg-emerald-100 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300" :
-                    currentSeason.factor < 0.9 ? "bg-amber-100 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300" :
-                    "bg-muted text-foreground"
-                  }`}>
-                    <Sparkles className="h-3 w-3 ml-1" />
-                    {currentSeason.label} ({currentSeason.factor > 1 ? "+" : ""}{((currentSeason.factor - 1) * 100).toFixed(0)}%)
-                  </Badge>
+                  {!period.error && <Badge variant="outline" className="text-[10px] sm:text-xs" dir="ltr" data-testid="analytics-selected-period">{fromDate} → {toDate}</Badge>}
+                  {!period.exact && (
+                    <Badge className={`text-[10px] sm:text-xs ${
+                      currentSeason.factor > 1.2 ? "bg-emerald-100 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300" :
+                      currentSeason.factor < 0.9 ? "bg-amber-100 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300" :
+                      "bg-muted text-foreground"
+                    }`}>
+                      <Sparkles className="h-3 w-3 ml-1" />
+                      {currentSeason.label} ({currentSeason.factor > 1 ? "+" : ""}{((currentSeason.factor - 1) * 100).toFixed(0)}%)
+                    </Badge>
+                  )}
                 </div>
               </div>
+              {period.exact && <p className="mt-2 text-xs text-muted-foreground">الفترة المحددة في الرابط محفوظة كما هي؛ تغيير الشهر أو السنة يستبدلها بالشهر الكامل.</p>}
             </CardContent>
           </Card>
 
@@ -493,12 +523,12 @@ export default function SalesAnalytics() {
             data-testid="text-total-sales"
           />
           <KpiCard
-            label="الهدف الشهري"
+            label={period.exact ? "هدف الفترة" : "الهدف الشهري"}
             value={Number(totalTargetAmount) || 0}
             unit={<Riyal />}
             icon={Target}
             tone="production"
-            subLabel={currentSeason.label}
+            subLabel={period.exact ? `${fromDate} → ${toDate}` : currentSeason.label}
             data-testid="text-total-target"
           />
           <KpiCard
@@ -679,7 +709,7 @@ export default function SalesAnalytics() {
                 <CardHeader className="pb-2 flex flex-row items-center justify-between">
                   <CardTitle className="text-base">المبيعات اليومية</CardTitle>
                   <Badge variant="outline" className="text-[10px] border-violet-200 text-primary bg-primary/5">
-                    {months.find(m => m.value === selectedMonth)?.label} {selectedYear}
+                    {fromDate} → {toDate}
                   </Badge>
                 </CardHeader>
                 <CardContent>
@@ -816,7 +846,7 @@ export default function SalesAnalytics() {
                       'الفعلي': b.totalSales,
                       'نسبة الإنجاز': `${b.achievementPercent.toFixed(1)}%`
                     }));
-                    exportToCSV(exportData, `branch-competition-${yearMonth}`);
+                    exportToCSV(exportData, `branch-competition-${exportPeriod}`);
                   }} data-testid="button-export-branches-csv">
                     <FileText className="h-4 w-4 ml-1" />
                     CSV
@@ -989,7 +1019,7 @@ export default function SalesAnalytics() {
                       'نسبة الإنجاز': `${(c.achievementPercent || 0).toFixed(1)}%`,
                       'المساهمة': `${c.contribution.toFixed(1)}%`
                     }));
-                    exportToCSV(exportData, `cashier-leaderboard-${yearMonth}`);
+                    exportToCSV(exportData, `cashier-leaderboard-${exportPeriod}`);
                   }} data-testid="button-export-cashiers-csv">
                     <FileText className="h-4 w-4 ml-1" />
                     CSV
@@ -1093,7 +1123,7 @@ export default function SalesAnalytics() {
                       'الفعلي': d.actualSales,
                       'نسبة الإنجاز': `${d.achievementPercent.toFixed(1)}%`
                     }));
-                    exportToCSV(exportData, `daily-performance-${yearMonth}`);
+                    exportToCSV(exportData, `daily-performance-${exportPeriod}`);
                   }} data-testid="button-export-daily-csv">
                     <FileText className="h-4 w-4 ml-1" />
                     CSV

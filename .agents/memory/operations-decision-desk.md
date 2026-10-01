@@ -7,6 +7,12 @@ The user explicitly requested a comprehensive icon-led daily operating workspace
 
 **Why:** The prior source-oriented tab structure did not help the operations manager decide what to do next.
 
+The user subsequently confirmed the center is good and requested deeper operational completion rather than another redesign.
+
+**Why:** The next priority is completing real action, follow-up and closure paths, not adding more summary cards.
+
+**How to apply:** Preserve the current presentation; prioritize missing lifecycle transitions, context-preserving source actions and truthful recovery. A quality inspection without a source-owned resolution lifecycle is evidence to investigate, not a task that can be marked complete.
+
 **How to apply:** Preserve the existing violet system identity, Arabic text and Latin digits. Keep basic authorized tools accessible even when their task count is zero. Deduplicate actual source identities rather than URLs.
 
 Evaluate the full page, including its outer shell, not just the decision-board component. Keep a single title/scope control and compact notification entry. The user subsequently explicitly required two compact visible charts and a visible evidence/AI summary beside them; only expanded analysis belongs behind an entry.

@@ -26,3 +26,9 @@ Operations payroll must expose the same substantive detailed report as HR salary
 **Why:** The user rejected the summary as incomplete and explicitly requested the actual HR salary report within the manager's granted scope.
 
 **How to apply:** Reuse the authoritative calculation and closed snapshots, retain detailed financial and attendance visibility, but never infer HR editing or financial closing authority from report access.
+
+Ordinary joining-link resend is a retry, not an instruction to invalidate an existing valid link. Explicit replacement is a separate intent, and all send surfaces must respect signing/confirmation state.
+
+**Why:** Automatic replacement on every retry can send a link that a simultaneous request has already revoked. A provider failure after link creation does not mean creation failed.
+
+**How to apply:** Keep link generation distinct from channel delivery feedback. A conflicting notification on another branch should prompt HR coordination without revealing its private details or offering an impossible second creation.

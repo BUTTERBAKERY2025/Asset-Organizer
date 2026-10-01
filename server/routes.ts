@@ -18,7 +18,7 @@ import {
 } from "./manual-production-operations";
 import { db, pool } from "./db";
 import { operationsPayrollReviews } from "@shared/schema";
-import { operationsHrManagerOnly, operationsPayrollCsv, registerOperationsHrRoutes } from "./operations-hr-routes";
+import { completeHrEmployeeTransfer, employeeTransferSchemaNotReady, EMPLOYEE_TRANSFER_SCHEMA_ERROR, operationsHrManagerOnly, operationsPayrollCsv, registerOperationsHrRoutes } from "./operations-hr-routes";
 import { payrollAttendanceEvidence, payrollReadError, readPayrollSource } from "./operations-payroll-report";
 import { registerReverseLogisticsRoutes } from "./reverse-logistics-routes";
 import { registerKitchenWarehouseShippingRoutes } from "./kitchen-warehouse-shipping-routes";
@@ -34628,44 +34628,28 @@ export async function registerRoutes(
   // Complete transfer (execute the transfer) - requires hr_management edit permission
   app.post("/api/employee-transfers/:id/complete", isAuthenticated, requirePermission("hr_management", "edit"), async (req, res) => {
     try {
-      const id = parseInt(req.params.id);
-      if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
-      
-      const userId = (req as any).user?.id;
-      
-      const transfer = await storage.getTransferRequest(id);
-      if (!transfer) {
-        return res.status(404).json({ error: "طلب النقل غير موجود" });
-      }
-      
-      if (transfer.status !== "hr_approved") {
-        return res.status(400).json({ error: "طلب النقل غير معتمد بالكامل" });
-      }
-      
-      // Update employee's branch
-      await storage.updateBranchEmployee(transfer.employeeId, {
-        branchId: transfer.destinationBranchId
-      });
-      
-      // Mark transfer as completed
-      const updated = await storage.updateTransferRequest(id, {
-        status: "completed"
-      });
-      
-      // Log history
-      await storage.createTransferHistoryEntry({
-        transferId: id,
-        eventType: "completed",
-        performedBy: userId,
-        details: { 
-          message: "تم تنفيذ النقل",
-          fromBranch: transfer.sourceBranchId,
-          toBranch: transfer.destinationBranchId
-        }
-      });
-      
+      const id = Number(req.params.id);
+      if (!/^\d+$/.test(req.params.id) || !Number.isSafeInteger(id) || id < 1)
+        return res.status(400).json({ error: "معرف غير صالح" });
+      const userId = (req as any).currentUser?.id ?? (req as any).user?.id;
+      if (!userId) return res.status(401).json({ error: "غير مصرح" });
+      // Serialize with operations transfers and validate the recorded source
+      // inside the transaction. Stale HR requests must never move an employee back.
+      const updated = await completeHrEmployeeTransfer(id, userId);
       res.json(updated);
-    } catch (error) {
+    } catch (error: any) {
+      if (employeeTransferSchemaNotReady(error)) return res.status(503).json(EMPLOYEE_TRANSFER_SCHEMA_ERROR);
+      if (error?.message === "TRANSFER_NOT_FOUND") return res.status(404).json({ error: "طلب النقل غير موجود" });
+      if (error?.message === "EMPLOYEE_NOT_FOUND") return res.status(404).json({ error: "الموظف غير موجود" });
+      if (error?.message === "TRANSFER_NOT_APPROVED") return res.status(400).json({ error: "طلب النقل غير معتمد بالكامل" });
+      if (error?.message === "STALE_SOURCE")
+        return res.status(409).json({ error: "تغير فرع الموظف عن مصدر طلب النقل؛ راجع الطلب قبل إعادة المحاولة" });
+      if (error?.message === "INACTIVE_EMPLOYEE")
+        return res.status(409).json({ error: "لا يمكن نقل موظف غير نشط؛ راجع شؤون الموظفين" });
+      if (error?.message === "LINKED_ACCOUNT_NEEDS_HR")
+        return res.status(409).json({ error: "حساب الموظف مرتبط بصلاحيات فروع؛ يجب تسوية وصوله قبل إتمام النقل" });
+      if (error?.message === "INVALID_DESTINATION")
+        return res.status(400).json({ error: "الفرع المصدر والوجهة يجب أن يكونا مختلفين" });
       console.error("Error completing transfer:", error);
       res.status(500).json({ error: "فشل في إتمام النقل" });
     }
