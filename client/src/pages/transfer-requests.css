@@ -1,0 +1,246 @@
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap");
+
+/* Source-page presentation only. Keep shared headers, semantic icon artwork,
+   role gates, stock workflows and portalled transfer documents untouched. */
+.transfer-desk {
+  --transfer-ink: #302840;
+  --transfer-accent: #6941a5;
+  --transfer-line: #e7def0;
+  --transfer-paper: #fdfbff;
+  --transfer-wash: #f6f2fa;
+  color: var(--transfer-ink);
+  font-family: "IBM Plex Sans Arabic", sans-serif;
+  min-width: 0;
+}
+.transfer-desk.page-container {
+  padding-block: .65rem 1.5rem;
+}
+.transfer-desk > * + * { margin-top: .75rem; }
+.transfer-desk .transfer-desk-header {
+  padding-block: .25rem .75rem;
+  border-bottom: 1px solid var(--transfer-line);
+  gap: .65rem 1rem;
+}
+.transfer-desk-header > div:first-child { gap: .65rem; }
+.transfer-desk-header > div:first-child > div.shrink-0 {
+  width: 36px;
+  height: 36px;
+  border-radius: .75rem;
+}
+.transfer-desk-header > div:first-child > div.shrink-0 > svg {
+  width: 18px;
+  height: 18px;
+}
+.transfer-desk [data-testid="text-page-title"] {
+  color: var(--transfer-ink);
+  font-size: 1.25rem;
+  line-height: 1.6;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  word-break: normal;
+}
+.transfer-desk-header h1 + p {
+  color: #706579;
+  font-size: .75rem;
+  line-height: 1.8;
+  display: block;
+  overflow: visible;
+  -webkit-line-clamp: unset;
+}
+.transfer-desk .transfer-desk-actions {
+  flex-wrap: wrap;
+  gap: .4rem;
+}
+.transfer-desk button,
+.transfer-desk a,
+.transfer-desk input {
+  font-family: inherit;
+}
+.transfer-desk button,
+.transfer-desk a {
+  word-break: normal;
+  overflow-wrap: normal;
+}
+.transfer-desk button svg,
+.transfer-desk a svg { flex-shrink: 0; }
+.transfer-desk [data-testid="btn-create-transfer"],
+.transfer-desk [data-testid="request-from-warehouse"] {
+  background: var(--transfer-accent);
+  color: var(--transfer-paper);
+}
+.transfer-desk [data-testid="btn-create-transfer"]:hover,
+.transfer-desk [data-testid="request-from-warehouse"]:hover { background: #4a2c75; }
+.transfer-desk [data-testid="button-page-back"] { color: #706579; }
+.transfer-desk [data-testid="button-page-back"] svg { width: 18px; height: 18px; }
+.transfer-desk [data-testid="branch-supply-sources"] { margin-top: .65rem; }
+.transfer-desk [data-testid="branch-supply-sources"] > * + * { margin-top: .5rem; }
+.transfer-desk [data-testid="branch-supply-sources"] h2 {
+  color: var(--transfer-accent);
+  font-size: .75rem;
+  line-height: 1.8;
+}
+.transfer-desk [data-testid="branch-supply-sources"] p {
+  font-size: .75rem;
+  line-height: 1.8;
+}
+.transfer-desk [data-testid="branch-supply-sources"] > div.grid { gap: .5rem; }
+.transfer-desk [data-testid="branch-supply-sources"] article {
+  padding: .65rem .85rem;
+  border-color: var(--transfer-line);
+  border-radius: .875rem;
+  background: var(--transfer-paper);
+  box-shadow: none;
+}
+.transfer-desk [data-testid="supply-source-warehouse"] {
+  border-color: #cdb9e4;
+  background: #faf6ff;
+}
+.transfer-desk [data-testid="branch-supply-sources"] article h3 {
+  color: var(--transfer-ink);
+  font-size: .875rem;
+  line-height: 1.65;
+}
+.transfer-desk [data-testid="branch-supply-sources"] article > p,
+.transfer-desk [data-testid="branch-supply-sources"] article > div:last-child { margin-top: .4rem; }
+.transfer-desk [data-testid="branch-supply-sources"] .platform-app-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: .75rem;
+}
+.transfer-desk [data-testid="branch-supply-sources"] .platform-app-icon svg {
+  width: 21px;
+  height: 21px;
+}
+.transfer-desk .transfer-desk-lifecycle,
+.transfer-desk .transfer-desk-statuses,
+.transfer-desk .transfer-desk-list {
+  border: 1px solid var(--transfer-line);
+  border-radius: .875rem;
+  background: var(--transfer-paper);
+  box-shadow: none;
+}
+.transfer-desk .transfer-desk-lifecycle { background: var(--transfer-wash); }
+.transfer-desk-lifecycle > div { padding: .6rem .85rem; }
+.transfer-desk-lifecycle > div > div:first-child { color: var(--transfer-ink); font-size: .8125rem; line-height: 1.7; }
+.transfer-desk-lifecycle > div > div:last-child { font-size: .75rem; line-height: 1.8; }
+.transfer-desk .transfer-desk-statuses { gap: .25rem; padding: .25rem; }
+.transfer-desk-statuses button { min-height: 34px; padding: .35rem .7rem; line-height: 1.7; }
+.transfer-desk-statuses button[aria-pressed="true"] {
+  background: var(--transfer-accent);
+  color: var(--transfer-paper);
+  box-shadow: none;
+}
+.transfer-desk .transfer-desk-filters { gap: .5rem; }
+.transfer-desk-filters input,
+.transfer-desk-filters button,
+.transfer-desk-actions button {
+  min-height: 36px;
+  height: auto;
+  font-size: .75rem;
+  line-height: 1.8;
+}
+.transfer-desk-filters input,
+.transfer-desk-filters button[role="combobox"] {
+  border-color: var(--transfer-line);
+  background: var(--transfer-paper);
+}
+.transfer-desk-filters button[role="combobox"] { width: 160px; padding-inline: .65rem; }
+.transfer-desk-filters button[role="combobox"] > span {
+  display: block;
+  -webkit-line-clamp: unset;
+  overflow: visible;
+}
+.transfer-desk-filters button[role="combobox"] svg { width: 14px; height: 14px; }
+.transfer-desk .transfer-desk-list { overflow: hidden; }
+.transfer-desk-list th {
+  height: 40px;
+  padding: .5rem .75rem;
+  background: var(--transfer-wash);
+  color: #706579;
+  font-size: .75rem;
+  line-height: 1.8;
+  white-space: nowrap;
+}
+.transfer-desk-list td {
+  padding: .55rem .75rem;
+  font-size: .8125rem;
+  line-height: 1.7;
+}
+.transfer-desk-list tr { border-color: var(--transfer-line); }
+.transfer-desk-list [data-testid^="transfer-row-"]:hover { background: var(--transfer-wash); }
+.transfer-desk-list td svg { max-width: 14px; max-height: 14px; }
+.transfer-desk-list td:nth-child(3) span {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  word-break: normal;
+  overflow-wrap: normal;
+}
+.transfer-desk-list td:nth-child(4) > div { width: fit-content; white-space: nowrap; font-size: .6875rem; }
+.transfer-desk-list td:last-child button { min-height: 32px; font-size: .75rem; }
+.transfer-desk-list td:last-child button[data-testid^="btn-more-"] { min-width: 32px; }
+.transfer-desk button:focus-visible,
+.transfer-desk a:focus-visible {
+  outline: 2px solid var(--transfer-accent);
+  outline-offset: 2px;
+}
+@media (min-width: 768px) {
+  .transfer-desk.page-container { padding-block-start: .75rem; }
+  .transfer-desk-header [data-testid="page-header-actions"] { max-width: 48%; }
+  .transfer-desk [data-testid="branch-supply-sources"] > div.grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .transfer-desk [data-testid="branch-supply-sources"] article button,
+  .transfer-desk [data-testid="branch-supply-sources"] article a {
+    min-height: 34px;
+    height: auto;
+    font-size: .75rem;
+    padding-block: .3rem;
+  }
+}
+@media (max-width: 767px) {
+  .transfer-desk [data-testid="text-page-title"] { font-size: 1.125rem; }
+  .transfer-desk button,
+  .transfer-desk a,
+  .transfer-desk input {
+    min-height: 44px;
+    height: auto;
+  }
+  .transfer-desk [data-testid="button-page-back"],
+  .transfer-desk-list button[data-testid^="btn-more-"] { min-width: 44px; }
+  .transfer-desk-filters > div:last-child { width: 100%; }
+  .transfer-desk-filters button[role="combobox"] { flex: 1 1 140px; width: auto; }
+  /* One live row and one set of handlers: the existing table becomes a stacked
+     list, rather than duplicating role-sensitive actions in a mobile renderer. */
+  .transfer-desk .transfer-desk-list { border: 0; background: transparent; overflow: visible; }
+  .transfer-desk-list table { display: block; min-width: 0; contain: none; }
+  .transfer-desk-list div.overflow-x-auto { overflow: visible; border: 0; }
+  .transfer-desk-list thead { display: none; }
+  .transfer-desk-list tbody { display: grid; gap: .5rem; }
+  .transfer-desk-list tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: .4rem .65rem;
+    padding: .65rem .75rem;
+    border: 1px solid var(--transfer-line) !important;
+    border-radius: .875rem;
+    background: var(--transfer-paper);
+  }
+  .transfer-desk-list td { padding: 0; min-width: 0; }
+  .transfer-desk-list td:nth-child(1) { grid-column: 1; grid-row: 1; }
+  .transfer-desk-list td:nth-child(1) span { font-size: .75rem; direction: ltr; unicode-bidi: isolate; }
+  .transfer-desk-list td:nth-child(3) { grid-column: 1; grid-row: 2; }
+  .transfer-desk-list td:nth-child(3) span { max-width: none; margin-inline: 0; }
+  .transfer-desk-list td:nth-child(4) { grid-column: 2; grid-row: 1 / 3; }
+  .transfer-desk-list td:last-child:not([colspan]) {
+    grid-column: 1 / -1;
+    border-top: 1px solid var(--transfer-line);
+    padding-top: .4rem;
+  }
+  .transfer-desk-list td:last-child > div { justify-content: flex-end; }
+  .transfer-desk-list td:last-child button { min-height: 44px; font-size: .75rem; }
+  .transfer-desk-list [data-testid^="btn-view-"] span { display: inline; }
+  .transfer-desk-list td[colspan] { grid-column: 1 / -1; padding-block: 1rem; }
+  .transfer-desk-list td[colspan] > div { display: block; }
+  .transfer-desk .transfer-desk-pagination { flex-wrap: wrap; gap: .5rem; }
+}

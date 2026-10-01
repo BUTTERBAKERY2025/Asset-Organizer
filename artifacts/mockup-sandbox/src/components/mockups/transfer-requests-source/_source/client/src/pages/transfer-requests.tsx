@@ -1,52 +1,53 @@
+import { sandboxFetch as fetch, previewWindow as window } from "../../../../_stubs/effects.ts";
 import { useState, useEffect, useMemo, useCallback, useRef, Suspense, lazy, createElement, type ComponentType } from "react";
 import "./transfer-requests.css";
-import { Layout } from "@/components/layout";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { PageHeader } from "@/components/dashboard/page-header";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { useTranslation } from "react-i18next";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Layout } from "../../../../_stubs/layout.tsx";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card.tsx";
+import { Button } from "../components/ui/button.tsx";
+import { Input } from "../components/ui/input.tsx";
+import { Label } from "../components/ui/label.tsx";
+import { Textarea } from "../components/ui/textarea.tsx";
+import { Badge } from "../components/ui/badge.tsx";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select.tsx";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "../components/ui/dialog.tsx";
+import { PageHeader } from "../components/dashboard/page-header.tsx";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/ui/table.tsx";
+import { useTranslation } from "../../../../_stubs/data.ts";
+import { useQuery, useMutation, useQueryClient } from "../../../../_stubs/query.ts";
 import { 
   Send, Plus, Search, Filter, Clock, CheckCircle, Truck, 
   ArrowLeft, FileText, MapPin, User, Calendar, PenTool, Building2, Warehouse, Package, Printer, Download, MessageCircle, FileSpreadsheet, MoreHorizontal, XCircle, Copy, AlertTriangle
 } from "lucide-react";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
-import { useReactToPrint } from "react-to-print";
-import { useSearch } from "wouter";
-import { apiRequest } from "@/lib/queryClient";
-import { useToast } from "@/hooks/use-toast";
-import { SignaturePad, SignatureDisplay } from "@/components/signature-pad";
-import { ExportButtons } from "@/components/export-buttons";
-import { useBranches } from "@/hooks/useBranches";
-import { useAuth } from "@/hooks/useAuth";
-import { usePermissions } from "@/hooks/usePermissions";
-import { filterWarehouseTransfers, pageWarehouseTransfers, WAREHOUSE_PAGE_SIZE } from "@/lib/warehouse-keeper-list";
-import { Skeleton } from "@/components/ui/skeleton";
-import { useBranchNavigation } from "@/hooks/use-branch-navigation";
-import { useBranchDeskIntent } from "@/hooks/use-branch-desk-intent";
-import { BranchSupplySources } from "@/components/branch-supply/sources";
-import { supplySourceReturnIntent } from "@/lib/operations-center-navigation";
-import { WarehouseItemEntry } from "@/components/warehouse-entry/warehouse-item-entry";
-import { isValidWarehouseDraftItem, warehouseCategoryLabel } from "@/components/warehouse-entry/warehouse-item-entry-helpers";
-import { generateTransferPdf, generateQuickTransferPdf } from "@/lib/pdf-utils";
-import { TransferDocument } from "@/components/transfer-document";
-import { buildTransferListWorkbook, buildTransferWorkbook } from "@/lib/transfer-export";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "../components/ui/dropdown-menu.tsx";
+import { useReactToPrint } from "../../../../_stubs/actions.ts";
+import { useSearch } from "../../../../_stubs/router.tsx";
+import { apiRequest } from "../../../../_stubs/actions.ts";
+import { useToast } from "../../../../_stubs/actions.ts";
+import { SignaturePad, SignatureDisplay } from "../components/signature-pad.tsx";
+import { ExportButtons } from "../components/export-buttons.tsx";
+import { useBranches } from "../../../../_stubs/data.ts";
+import { useAuth } from "../../../../_stubs/data.ts";
+import { usePermissions } from "../../../../_stubs/data.ts";
+import { filterWarehouseTransfers, pageWarehouseTransfers, WAREHOUSE_PAGE_SIZE } from "../lib/warehouse-keeper-list.ts";
+import { Skeleton } from "../components/ui/skeleton.tsx";
+import { useBranchNavigation } from "../hooks/use-branch-navigation.ts";
+import { useBranchDeskIntent } from "../hooks/use-branch-desk-intent.ts";
+import { BranchSupplySources } from "../components/branch-supply/sources.tsx";
+import { supplySourceReturnIntent } from "../lib/operations-center-navigation.ts";
+import { WarehouseItemEntry } from "../components/warehouse-entry/warehouse-item-entry.tsx";
+import { isValidWarehouseDraftItem, warehouseCategoryLabel } from "../components/warehouse-entry/warehouse-item-entry-helpers.ts";
+import { generateTransferPdf, generateQuickTransferPdf } from "../lib/pdf-utils.ts";
+import { TransferDocument } from "../components/transfer-document.tsx";
+import { buildTransferListWorkbook, buildTransferWorkbook } from "../lib/transfer-export.ts";
 import {
   canReceiveBranchSupplyTransfer,
   consumeWarehouseCreateIntent,
   parseWarehouseSupplyIntent,
   resolveVisibleBranchFilter,
   resolveWarehouseCreateDestination,
-} from "@/lib/warehouse-branch-supply";
+} from "../lib/warehouse-branch-supply.ts";
 
-const EmbeddedDeliveryWorkspace = lazy(() => import("@/pages/driver-deliveries").then(module => ({ default: module.DeliveryWorkspace })));
+const EmbeddedDeliveryWorkspace = lazy(() => import("./driver-deliveries.tsx").then(module => ({ default: module.DeliveryWorkspace })));
 
 type MaterialTransfer = {
   id: number;

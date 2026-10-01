@@ -1,0 +1,13780 @@
+import { previewWindow as window } from "../../_stubs/effects.ts";
+import { sql } from "drizzle-orm";
+import {
+  pgTable,
+  text,
+  varchar,
+  integer,
+  real,
+  timestamp,
+  serial,
+  bigserial,
+  index,
+  uniqueIndex,
+  unique,
+  check,
+  jsonb,
+  boolean,
+  doublePrecision,
+  date,
+  numeric,
+  bigint,
+  foreignKey,
+  primaryKey,
+} from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
+import { z } from "zod";
+import {
+  materialQuantitySchema,
+  nonzeroMaterialQuantitySchema,
+  nonnegativeMaterialQuantitySchema,
+  positiveMaterialQuantitySchema,
+} from "./material-quantity.ts";
+
+// Session storage table (required for Replit Auth)
+export const sessions = pgTable(
+  "sessions",
+  {
+    sid: varchar("sid").primaryKey(),
+    sess: jsonb("sess").notNull(),
+    expire: timestamp("expire").notNull(),
+  },
+  (table) => [index("IDX_session_expire").on(table.expire)],
+);
+
+// User storage table
+export const users = pgTable("users", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  username: varchar("username").unique(),
+  password: varchar("password"),
+  phone: varchar("phone"),
+  email: varchar("email"),
+  firstName: varchar("first_name"),
+  lastName: varchar("last_name"),
+  profileImageUrl: varchar("profile_image_url"),
+  role: varchar("role").default("viewer").notNull(), // admin, employee, viewer, attendance_clerk
+  branchId: varchar("branch_id").references(() => branches.id),
+  jobTitle: varchar("job_title"),
+  isActive: text("is_active").default("active"), // active, inactive
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_users_branch_id").on(table.branchId),
+  index("idx_users_role").on(table.role),
+]);
+
+export const insertUserSchema = createInsertSchema(users).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type UpsertUser = typeof users.$inferInsert;
+export type User = typeof users.$inferSelect;
+export type InsertUser = z.infer<typeof insertUserSchema>;
+
+// Branches table
+export const branches = pgTable("branches", {
+  id: varchar("id").primaryKey(),
+  name: text("name").notNull(),
+  isCentralKitchen: boolean("is_central_kitchen").default(false).notNull(),
+  latitude: doublePrecision("latitude"),
+  longitude: doublePrecision("longitude"),
+  locationRadius: integer("location_radius").default(200),
+  address: text("address"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertBranchSchema = createInsertSchema(branches).omit({
+  createdAt: true,
+});
+
+export type Branch = typeof branches.$inferSelect;
+export type InsertBranch = z.infer<typeof insertBranchSchema>;
+
+// Branch complaints are an operations-owned workflow. Events and attachment
+// metadata are append-only records; attachment removal archives metadata and
+// intentionally retains the object for audit/recovery.
+export const branchComplaints = pgTable("branch_complaints", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
+  subject: text("subject").notNull(),
+  description: text("description").notNull(),
+  category: text("category").notNull(),
+  priority: text("priority").notNull().default("normal"),
+  ownerUserId: varchar("owner_user_id").references(() => users.id),
+  responseDue: timestamp("response_due"),
+  status: text("status").notNull().default("open"),
+  resolution: text("resolution"),
+  firstRespondedAt: timestamp("first_responded_at"),
+  version: integer("version").notNull().default(1),
+  createdBy: varchar("created_by").notNull().references(() => users.id),
+  updatedBy: varchar("updated_by").notNull().references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_branch_complaints_branch_status").on(table.branchId, table.status),
+  index("idx_branch_complaints_branch_priority").on(table.branchId, table.priority),
+  index("idx_branch_complaints_owner").on(table.ownerUserId),
+  index("idx_branch_complaints_response_due").on(table.responseDue),
+  check("chk_branch_complaints_category", sql`${table.category} in ('service','product','cleanliness','staff','other')`),
+  check("chk_branch_complaints_priority", sql`${table.priority} in ('low','normal','high','urgent')`),
+  check("chk_branch_complaints_status", sql`${table.status} in ('open','in_progress','resolved','closed')`),
+  check("chk_branch_complaints_version", sql`${table.version} > 0`),
+]);
+
+export const branchComplaintEvents = pgTable("branch_complaint_events", {
+  id: serial("id").primaryKey(),
+  complaintId: integer("complaint_id").notNull().references(() => branchComplaints.id),
+  actorUserId: varchar("actor_user_id").notNull().references(() => users.id),
+  eventType: text("event_type").notNull(),
+  fromStatus: text("from_status"),
+  toStatus: text("to_status"),
+  reason: text("reason"),
+  changes: jsonb("changes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_branch_complaint_events_complaint").on(table.complaintId, table.createdAt),
+]);
+
+export const branchComplaintAttachments = pgTable("branch_complaint_attachments", {
+  id: serial("id").primaryKey(),
+  complaintId: integer("complaint_id").notNull().references(() => branchComplaints.id),
+  originalName: text("original_name").notNull(),
+  storagePath: text("storage_path").notNull(),
+  mimeType: text("mime_type").notNull(),
+  sizeBytes: integer("size_bytes").notNull(),
+  uploadedBy: varchar("uploaded_by").notNull().references(() => users.id),
+  archivedAt: timestamp("archived_at"),
+  archivedBy: varchar("archived_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_branch_complaint_attachments_complaint").on(table.complaintId, table.createdAt),
+  uniqueIndex("uq_branch_complaint_attachment_path").on(table.storagePath),
+  check("chk_branch_complaint_attachment_size", sql`${table.sizeBytes} > 0`),
+]);
+
+export type BranchComplaint = typeof branchComplaints.$inferSelect;
+export type BranchComplaintEvent = typeof branchComplaintEvents.$inferSelect;
+export type BranchComplaintAttachment = typeof branchComplaintAttachments.$inferSelect;
+
+// Inventory items table
+export const inventoryItems = pgTable("inventory_items", {
+  id: varchar("id").primaryKey(),
+  branchId: varchar("branch_id")
+    .notNull()
+    .references(() => branches.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  quantity: integer("quantity").notNull(),
+  unit: text("unit").notNull(),
+  category: text("category").notNull(),
+  price: real("price"),
+  status: text("status"),
+  lastCheck: text("last_check"),
+  notes: text("notes"),
+  serialNumber: text("serial_number"),
+  imageUrl: text("image_url"),
+  nextInspectionDate: text("next_inspection_date"),
+  inspectionIntervalDays: integer("inspection_interval_days"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_inventory_branch").on(table.branchId),
+  index("idx_inventory_category").on(table.category),
+  index("idx_inventory_status").on(table.status),
+]);
+
+export const insertInventoryItemSchema = createInsertSchema(
+  inventoryItems,
+).omit({
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InventoryItem = typeof inventoryItems.$inferSelect;
+export type InsertInventoryItem = z.infer<typeof insertInventoryItemSchema>;
+
+export const maintenanceTickets = pgTable("maintenance_tickets", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
+  assetId: varchar("asset_id").references(() => inventoryItems.id),
+  description: text("description").notNull(),
+  priority: text("priority").notNull().default("normal"),
+  assigneeUserId: varchar("assignee_user_id").references(() => users.id),
+  dueAt: timestamp("due_at"),
+  status: text("status").notNull().default("open"),
+  closedAt: timestamp("closed_at"),
+  version: integer("version").notNull().default(1),
+  createdBy: varchar("created_by").notNull().references(() => users.id),
+  updatedBy: varchar("updated_by").notNull().references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (t) => [
+  index("idx_maintenance_tickets_branch_status_due").on(t.branchId, t.status, t.dueAt),
+  index("idx_maintenance_tickets_assignee").on(t.assigneeUserId),
+  check("chk_maintenance_tickets_status", sql`${t.status} in ('open','assigned','in_progress','closed')`),
+  check("chk_maintenance_tickets_priority", sql`${t.priority} in ('low','normal','high','urgent')`),
+  check("chk_maintenance_tickets_version", sql`${t.version} > 0`),
+  check("chk_maintenance_tickets_assignment", sql`${t.status} not in ('assigned','in_progress') or ${t.assigneeUserId} is not null`),
+]);
+export const auditLogs = pgTable("audit_logs", {
+  id: serial("id").primaryKey(),
+  itemId: varchar("item_id")
+    .notNull()
+    .references(() => inventoryItems.id, { onDelete: "cascade" }),
+  action: text("action").notNull(), // 'create', 'update', 'delete'
+  fieldName: text("field_name"),
+  oldValue: text("old_value"),
+  newValue: text("new_value"),
+  changedBy: text("changed_by"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_audit_logs_item_id").on(table.itemId),
+  index("idx_audit_logs_created_at").on(table.createdAt),
+]);
+
+export const insertAuditLogSchema = createInsertSchema(auditLogs).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type AuditLog = typeof auditLogs.$inferSelect;
+export type InsertAuditLog = z.infer<typeof insertAuditLogSchema>;
+
+// System-wide audit log for all operations
+export const systemAuditLogs = pgTable("system_audit_logs", {
+  id: serial("id").primaryKey(),
+  module: text("module").notNull(), // 'inventory', 'projects', 'contractors', 'transfers', 'users', 'contracts'
+  entityId: text("entity_id").notNull(),
+  entityName: text("entity_name"),
+  action: text("action").notNull(), // 'create', 'update', 'delete', 'view', 'export', 'transfer', 'approve', 'reject'
+  details: text("details"), // JSON string with change details
+  userId: varchar("user_id").references(() => users.id),
+  userName: text("user_name"),
+  branchId: varchar("branch_id").references(() => branches.id), // Branch context of the action (nullable for legacy rows)
+  targetId: text("target_id"), // Target entity ID for security/RBAC actions
+  description: text("description"), // Human-readable description of the action
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_system_audit_logs_module").on(table.module),
+  index("idx_system_audit_logs_entity_id").on(table.entityId),
+  index("idx_system_audit_logs_created_at").on(table.createdAt),
+  index("idx_system_audit_logs_branch_id").on(table.branchId),
+  index("idx_system_audit_logs_action").on(table.action),
+]);
+
+export const insertSystemAuditLogSchema = createInsertSchema(
+  systemAuditLogs,
+).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type SystemAuditLog = typeof systemAuditLogs.$inferSelect;
+export type InsertSystemAuditLog = z.infer<typeof insertSystemAuditLogSchema>;
+
+// Backups table
+export const backups = pgTable("backups", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  type: text("type").notNull(), // 'manual', 'auto', 'scheduled'
+  status: text("status").notNull().default("pending"), // 'pending', 'completed', 'failed', 'in_progress', 'restoring'
+  fileSize: integer("file_size"),
+  filePath: text("file_path"),
+  tables: text("tables"), // JSON array of backed up table names
+  tableCount: integer("table_count"),
+  rowCount: integer("row_count"),
+  backupData: text("backup_data"), // JSON string of actual backup data
+  errorMessage: text("error_message"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  completedAt: timestamp("completed_at"),
+  restoredAt: timestamp("restored_at"),
+  restoredBy: varchar("restored_by"),
+});
+
+export const insertBackupSchema = createInsertSchema(backups).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type Backup = typeof backups.$inferSelect;
+export type InsertBackup = z.infer<typeof insertBackupSchema>;
+
+// Saved filters table
+export const savedFilters = pgTable("saved_filters", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  filterConfig: text("filter_config").notNull(), // JSON string
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertSavedFilterSchema = createInsertSchema(savedFilters).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type SavedFilter = typeof savedFilters.$inferSelect;
+export type InsertSavedFilter = z.infer<typeof insertSavedFilterSchema>;
+
+// Construction Categories table
+export const constructionCategories = pgTable("construction_categories", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  slug: text("slug").notNull().unique(),
+  icon: text("icon"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertConstructionCategorySchema = createInsertSchema(
+  constructionCategories,
+).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type ConstructionCategory = typeof constructionCategories.$inferSelect;
+export type InsertConstructionCategory = z.infer<
+  typeof insertConstructionCategorySchema
+>;
+
+// Contractors table
+export const contractors = pgTable("contractors", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  phone: text("phone"),
+  email: text("email"),
+  specialization: text("specialization"),
+  notes: text("notes"),
+  rating: integer("rating"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertContractorSchema = createInsertSchema(contractors).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type Contractor = typeof contractors.$inferSelect;
+export type InsertContractor = z.infer<typeof insertContractorSchema>;
+
+// Construction Projects table
+export const constructionProjects = pgTable("construction_projects", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id")
+    .notNull()
+    .references(() => branches.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  description: text("description"),
+  status: text("status").default("planned").notNull(), // planned, in_progress, completed, on_hold
+  budget: real("budget"),
+  actualCost: real("actual_cost"),
+  startDate: text("start_date"),
+  targetCompletionDate: text("target_completion_date"),
+  actualCompletionDate: text("actual_completion_date"),
+  progressPercent: integer("progress_percent").default(0),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_projects_branch").on(table.branchId),
+  index("idx_projects_status").on(table.status),
+]);
+
+export const insertConstructionProjectSchema = createInsertSchema(
+  constructionProjects,
+).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type ConstructionProject = typeof constructionProjects.$inferSelect;
+export type InsertConstructionProject = z.infer<
+  typeof insertConstructionProjectSchema
+>;
+
+// Project Work Items table
+export const projectWorkItems = pgTable("project_work_items", {
+  id: serial("id").primaryKey(),
+  projectId: integer("project_id")
+    .notNull()
+    .references(() => constructionProjects.id, { onDelete: "cascade" }),
+  categoryId: integer("category_id").references(
+    () => constructionCategories.id,
+  ),
+  name: text("name").notNull(),
+  description: text("description"),
+  status: text("status").default("pending").notNull(), // pending, in_progress, completed
+  costEstimate: real("cost_estimate"),
+  actualCost: real("actual_cost"),
+  contractorId: integer("contractor_id").references(() => contractors.id),
+  scheduledStart: text("scheduled_start"),
+  scheduledEnd: text("scheduled_end"),
+  completedAt: text("completed_at"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_work_items_project").on(table.projectId),
+  index("idx_work_items_status").on(table.status),
+]);
+
+export const insertProjectWorkItemSchema = createInsertSchema(
+  projectWorkItems,
+).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type ProjectWorkItem = typeof projectWorkItems.$inferSelect;
+export type InsertProjectWorkItem = z.infer<typeof insertProjectWorkItemSchema>;
+
+// Project Budget Allocations table - for planning budget per category
+export const projectBudgetAllocations = pgTable("project_budget_allocations", {
+  id: serial("id").primaryKey(),
+  projectId: integer("project_id")
+    .notNull()
+    .references(() => constructionProjects.id, { onDelete: "cascade" }),
+  categoryId: integer("category_id").references(
+    () => constructionCategories.id,
+  ),
+  plannedAmount: real("planned_amount").notNull().default(0),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertProjectBudgetAllocationSchema = createInsertSchema(
+  projectBudgetAllocations,
+).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type ProjectBudgetAllocation =
+  typeof projectBudgetAllocations.$inferSelect;
+export type InsertProjectBudgetAllocation = z.infer<
+  typeof insertProjectBudgetAllocationSchema
+>;
+
+// Construction Contracts table - عقود الإنشاءات مع المقاولين
+export const constructionContracts = pgTable("construction_contracts", {
+  id: serial("id").primaryKey(),
+  projectId: integer("project_id")
+    .notNull()
+    .references(() => constructionProjects.id, { onDelete: "cascade" }),
+  contractorId: integer("contractor_id")
+    .notNull()
+    .references(() => contractors.id),
+  contractNumber: text("contract_number").unique(),
+  title: text("title").notNull(),
+  description: text("description"),
+  contractType: text("contract_type").default("fixed_price").notNull(), // fixed_price, cost_plus, unit_price
+  status: text("status").default("draft").notNull(), // draft, active, completed, cancelled, suspended
+  totalAmount: real("total_amount").notNull().default(0),
+  paidAmount: real("paid_amount").default(0),
+  startDate: text("start_date"),
+  endDate: text("end_date"),
+  paymentTerms: text("payment_terms"), // شروط الدفع (نص حر قديم — استبدل بـ contractMilestones)
+  warrantyPeriod: text("warranty_period"), // فترة الضمان
+  // Phase 2: احتجاز الضمان (Retention)
+  retentionPercentage: real("retention_percentage").default(0),         // نسبة الاحتجاز من كل دفعة
+  retentionReleaseDate: text("retention_release_date"),                 // تاريخ الإفراج المتوقع
+  retentionReleased: boolean("retention_released").default(false),
+  retentionReleasedAt: timestamp("retention_released_at"),
+  retentionReleasedBy: varchar("retention_released_by").references(() => users.id),
+  // Phase 4: غرامات التأخير (Liquidated Damages)
+  ldEnabled: boolean("ld_enabled").default(false),
+  ldDailyRate: real("ld_daily_rate").default(0),                          // % يومياً، مثلاً 0.1 = 0.1%
+  ldMaxPercentage: real("ld_max_percentage").default(10),                 // سقف % من قيمة العقد
+  plannedCompletionDate: text("planned_completion_date"),
+  actualCompletionDate: text("actual_completion_date"),
+  ldCalculatedAmount: real("ld_calculated_amount").default(0),
+  ldCalculatedDays: integer("ld_calculated_days").default(0),
+  ldCalculatedAt: timestamp("ld_calculated_at"),
+  ldApplied: boolean("ld_applied").default(false),
+  ldWaived: boolean("ld_waived").default(false),
+  ldWaivedReason: text("ld_waived_reason"),
+  ldActionAt: timestamp("ld_action_at"),
+  ldActionBy: varchar("ld_action_by").references(() => users.id),
+  // Phase 6: Official contract document fields
+  scopeOfWork: text("scope_of_work"),
+  termsAndConditions: text("terms_and_conditions"),
+  executionDuration: text("execution_duration"),
+  workLocation: text("work_location"),
+  firstPartyName: text("first_party_name"),
+  firstPartyRepresentative: text("first_party_representative"),
+  firstPartyTitle: text("first_party_title"),
+  firstPartyIdNumber: text("first_party_id_number"),
+  signatureDate: text("signature_date"),
+  signatureLocation: text("signature_location"),
+  contractYear: integer("contract_year"),
+  notes: text("notes"),
+  attachmentUrl: text("attachment_url"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertConstructionContractSchema = createInsertSchema(
+  constructionContracts,
+).omit({
+  id: true,
+  contractYear: true,
+  retentionReleased: true,
+  retentionReleasedAt: true,
+  retentionReleasedBy: true,
+  // Phase 4: server-managed LD fields
+  ldCalculatedAmount: true,
+  ldCalculatedDays: true,
+  ldCalculatedAt: true,
+  ldApplied: true,
+  ldWaived: true,
+  ldWaivedReason: true,
+  ldActionAt: true,
+  ldActionBy: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type ConstructionContract = typeof constructionContracts.$inferSelect;
+export type InsertConstructionContract = z.infer<
+  typeof insertConstructionContractSchema
+>;
+
+// Contract Items table - بنود العقد
+export const contractItems: any = pgTable("contract_items", {
+  id: serial("id").primaryKey(),
+  contractId: integer("contract_id")
+    .notNull()
+    .references(() => constructionContracts.id, { onDelete: "cascade" }),
+  categoryId: integer("category_id").references(
+    () => constructionCategories.id,
+  ),
+  // Phase 5: BOQ hierarchical numbering (1, 1.1, 1.2.1) + section grouping
+  itemNumber: text("item_number"),
+  parentId: integer("parent_id").references((): any => contractItems.id, { onDelete: "cascade" }),
+  isSection: boolean("is_section").default(false),
+  sortOrder: integer("sort_order").default(0),
+  description: text("description").notNull(),
+  unit: text("unit").default("قطعة"),
+  quantity: real("quantity").notNull().default(1),
+  unitPrice: real("unit_price").notNull().default(0),
+  totalPrice: real("total_price").notNull().default(0),
+  completedQuantity: real("completed_quantity").default(0),
+  status: text("status").default("pending").notNull(), // pending, in_progress, completed
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertContractItemSchema = createInsertSchema(contractItems).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type ContractItem = typeof contractItems.$inferSelect;
+export type InsertContractItem = z.infer<typeof insertContractItemSchema>;
+
+// Payment Requests table - طلبات الحوالات والمصروفات
+export const paymentRequests = pgTable("payment_requests", {
+  id: serial("id").primaryKey(),
+  projectId: integer("project_id")
+    .notNull()
+    .references(() => constructionProjects.id, { onDelete: "cascade" }),
+  contractId: integer("contract_id").references(() => constructionContracts.id),
+  contractorId: integer("contractor_id").references(() => contractors.id),
+  requestNumber: text("request_number"),
+  requestType: text("request_type").notNull(), // transfer (حوالة), expense (مصروف), advance (سلفة)
+  amount: real("amount").notNull(),
+  description: text("description").notNull(),
+  beneficiaryName: text("beneficiary_name"), // اسم المستفيد
+  beneficiaryBank: text("beneficiary_bank"), // البنك
+  beneficiaryIban: text("beneficiary_iban"), // رقم الحساب
+  categoryId: integer("category_id").references(
+    () => constructionCategories.id,
+  ),
+  status: text("status").default("pending").notNull(), // pending, approved, rejected, paid
+  priority: text("priority").default("normal"), // urgent, high, normal, low
+  requestDate: text("request_date"),
+  dueDate: text("due_date"),
+  approvedBy: varchar("approved_by").references(() => users.id),
+  approvedAt: timestamp("approved_at"),
+  paidAt: timestamp("paid_at"),
+  rejectionReason: text("rejection_reason"),
+  attachmentUrl: text("attachment_url"),
+  invoiceNumber: text("invoice_number"), // رقم الفاتورة
+  notes: text("notes"),
+  requestedBy: varchar("requested_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertPaymentRequestSchema = createInsertSchema(
+  paymentRequests,
+).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  approvedAt: true,
+  paidAt: true,
+});
+
+export type PaymentRequest = typeof paymentRequests.$inferSelect;
+export type InsertPaymentRequest = z.infer<typeof insertPaymentRequestSchema>;
+
+// Contract Payments table - سجل دفعات العقود
+export const contractPayments = pgTable("contract_payments", {
+  id: serial("id").primaryKey(),
+  contractId: integer("contract_id")
+    .notNull()
+    .references(() => constructionContracts.id, { onDelete: "cascade" }),
+  paymentRequestId: integer("payment_request_id").references(
+    () => paymentRequests.id,
+  ),
+  amount: real("amount").notNull(),
+  paymentDate: text("payment_date").notNull(),
+  paymentMethod: text("payment_method"), // bank_transfer, cash, check
+  referenceNumber: text("reference_number"),
+  notes: text("notes"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertContractPaymentSchema = createInsertSchema(
+  contractPayments,
+).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type ContractPayment = typeof contractPayments.$inferSelect;
+export type InsertContractPayment = z.infer<typeof insertContractPaymentSchema>;
+
+// ============================================================
+// Contract Milestones table - مراحل/دفعات العقد المهيكلة (Phase 1)
+// ============================================================
+// Replaces the free-text `payment_terms` field with structured, trackable
+// milestones (e.g., "30% advance", "40% at 50% progress", "30% on delivery").
+// Each milestone can be converted into a paymentRequest with one click.
+export const contractMilestones = pgTable("contract_milestones", {
+  id: serial("id").primaryKey(),
+  contractId: integer("contract_id")
+    .notNull()
+    .references(() => constructionContracts.id, { onDelete: "cascade" }),
+  sequence: integer("sequence").notNull().default(1),       // ترتيب المرحلة
+  title: text("title").notNull(),                            // "دفعة مقدمة"، "إنجاز 50%"
+  description: text("description"),                          // ما يجب إنجازه قبل الصرف
+  amountType: text("amount_type").notNull().default("percentage"), // percentage | fixed
+  percentage: real("percentage"),                            // إذا amountType=percentage
+  amount: real("amount").notNull().default(0),               // المبلغ بالريال
+  triggerType: text("trigger_type").notNull().default("manual"), // manual | date | progress | item_completion
+  triggerDate: text("trigger_date"),                         // إذا trigger=date
+  triggerProgressPercent: real("trigger_progress_percent"),  // إذا trigger=progress
+  status: text("status").notNull().default("pending"),       // pending | due | requested | paid | cancelled
+  dueDate: text("due_date"),                                 // تاريخ الاستحقاق
+  paymentRequestId: integer("payment_request_id").references(() => paymentRequests.id, { onDelete: "set null" }),
+  paidAt: timestamp("paid_at"),
+  paidAmount: real("paid_amount").default(0),
+  notes: text("notes"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_contract_milestones_contract").on(table.contractId),
+  index("idx_contract_milestones_status").on(table.status),
+]);
+
+export const insertContractMilestoneSchema = createInsertSchema(contractMilestones).omit({
+  id: true,
+  paidAt: true,
+  paidAmount: true,
+  paymentRequestId: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type ContractMilestone = typeof contractMilestones.$inferSelect;
+export type InsertContractMilestone = z.infer<typeof insertContractMilestoneSchema>;
+
+// ============================================================
+// Contract Retentions table - حركات احتجاز الضمان (Phase 2)
+// ============================================================
+// Audit log of every retention hold/release on a contract.
+// Held when a payment is marked paid (if contract.retentionPercentage > 0),
+// released by an explicit user action after the warranty period.
+export const contractRetentions = pgTable("contract_retentions", {
+  id: serial("id").primaryKey(),
+  contractId: integer("contract_id")
+    .notNull()
+    .references(() => constructionContracts.id, { onDelete: "cascade" }),
+  milestoneId: integer("milestone_id").references(() => contractMilestones.id, { onDelete: "set null" }),
+  paymentRequestId: integer("payment_request_id").references(() => paymentRequests.id, { onDelete: "set null" }),
+  type: text("type").notNull().default("hold"),         // 'hold' | 'release'
+  amount: real("amount").notNull(),                      // مبلغ موجب دائماً
+  percentage: real("percentage"),                        // نسبة الاحتجاز المطبقة وقت الحركة
+  notes: text("notes"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_contract_retentions_contract").on(table.contractId),
+  index("idx_contract_retentions_milestone").on(table.milestoneId),
+  index("idx_contract_retentions_type").on(table.type),
+]);
+
+export const insertContractRetentionSchema = createInsertSchema(contractRetentions).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type ContractRetention = typeof contractRetentions.$inferSelect;
+export type InsertContractRetention = z.infer<typeof insertContractRetentionSchema>;
+
+// ============================================================
+// Contract Variations table - أوامر التغيير (Phase 3)
+// ============================================================
+// Tracks Variation Orders (VOs) / Change Orders. When a VO is approved,
+// the contract.totalAmount is adjusted by VO.amount inside a transaction.
+export const contractVariations = pgTable("contract_variations", {
+  id: serial("id").primaryKey(),
+  contractId: integer("contract_id")
+    .notNull()
+    .references(() => constructionContracts.id, { onDelete: "cascade" }),
+  variationNumber: text("variation_number").notNull(),                  // VO-001
+  title: text("title").notNull(),
+  description: text("description"),
+  type: text("type").notNull().default("addition"),                     // addition | deduction | scope_change | time_extension
+  amount: real("amount").notNull().default(0),                          // موجب=زيادة، سالب=تخفيض، 0 لو time-only
+  durationChangeDays: integer("duration_change_days").default(0),
+  reason: text("reason"),
+  status: text("status").notNull().default("draft"),                    // draft | pending_approval | approved | rejected
+  requestedBy: varchar("requested_by").references(() => users.id),
+  requestedAt: timestamp("requested_at").defaultNow(),
+  approvedBy: varchar("approved_by").references(() => users.id),
+  approvedAt: timestamp("approved_at"),
+  rejectionReason: text("rejection_reason"),
+  attachmentUrl: text("attachment_url"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_contract_variations_contract").on(table.contractId),
+  index("idx_contract_variations_status").on(table.status),
+]);
+
+export const insertContractVariationSchema = createInsertSchema(contractVariations).omit({
+  id: true,
+  approvedBy: true,
+  approvedAt: true,
+  rejectionReason: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type ContractVariation = typeof contractVariations.$inferSelect;
+export type InsertContractVariation = z.infer<typeof insertContractVariationSchema>;
+
+// ============================================================
+// Contract Guarantees table - الضمانات البنكية (Phase 3)
+// ============================================================
+// Tracks bank guarantees provided by contractor (bid bond, performance,
+// advance payment, maintenance). Status auto-derived from expiry_date
+// in the UI; explicit release marks status='released'.
+export const contractGuarantees = pgTable("contract_guarantees", {
+  id: serial("id").primaryKey(),
+  contractId: integer("contract_id")
+    .notNull()
+    .references(() => constructionContracts.id, { onDelete: "cascade" }),
+  guaranteeNumber: text("guarantee_number").notNull(),
+  type: text("type").notNull().default("performance"),                  // bid | performance | advance | maintenance
+  bankName: text("bank_name").notNull(),
+  amount: real("amount").notNull(),
+  currency: text("currency").notNull().default("SAR"),
+  issueDate: text("issue_date").notNull(),
+  expiryDate: text("expiry_date").notNull(),
+  status: text("status").notNull().default("active"),                   // active | expired | released | claimed
+  releasedAt: timestamp("released_at"),
+  releasedBy: varchar("released_by").references(() => users.id),
+  releaseNotes: text("release_notes"),
+  attachmentUrl: text("attachment_url"),
+  notes: text("notes"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_contract_guarantees_contract").on(table.contractId),
+  index("idx_contract_guarantees_status").on(table.status),
+  index("idx_contract_guarantees_expiry").on(table.expiryDate),
+]);
+
+export const insertContractGuaranteeSchema = createInsertSchema(contractGuarantees).omit({
+  id: true,
+  releasedAt: true,
+  releasedBy: true,
+  releaseNotes: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type ContractGuarantee = typeof contractGuarantees.$inferSelect;
+export type InsertContractGuarantee = z.infer<typeof insertContractGuaranteeSchema>;
+
+// ============================================================
+// Contract Templates (Phase 4)
+// ============================================================
+// Reusable templates for common contract types (civil, electrical, MEP, finishing).
+// When creating a new contract from a template, default values are pre-filled
+// and default milestones/guarantees are auto-created.
+export const contractTemplates = pgTable("contract_templates", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  description: text("description"),
+  category: text("category"),                                    // مدنية | كهرباء | ميكانيكية | تشطيبات | عام
+  defaultTerms: text("default_terms"),
+  defaultRetentionPercentage: real("default_retention_percentage").default(0),
+  defaultLdEnabled: boolean("default_ld_enabled").default(false),
+  defaultLdDailyRate: real("default_ld_daily_rate").default(0),
+  defaultLdMaxPercentage: real("default_ld_max_percentage").default(10),
+  defaultMilestones: jsonb("default_milestones").default([]),    // [{title, amountType, percentage, sequence, triggerType}]
+  defaultGuarantees: jsonb("default_guarantees").default([]),    // [{type, amountPercentage, validityMonths}]
+  isActive: boolean("is_active").default(true),
+  usageCount: integer("usage_count").default(0),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_contract_templates_category").on(table.category),
+  index("idx_contract_templates_active").on(table.isActive),
+]);
+
+export const insertContractTemplateSchema = createInsertSchema(contractTemplates).omit({
+  id: true,
+  usageCount: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type ContractTemplate = typeof contractTemplates.$inferSelect;
+export type InsertContractTemplate = z.infer<typeof insertContractTemplateSchema>;
+
+// Project Expenses table - مصروفات المشروع المباشرة (غير مرتبطة بعقد)
+export const projectExpenses = pgTable("project_expenses", {
+  id: serial("id").primaryKey(),
+  projectId: integer("project_id")
+    .notNull()
+    .references(() => constructionProjects.id, { onDelete: "cascade" }),
+  contractorId: integer("contractor_id").references(() => contractors.id),
+  categoryId: integer("category_id").references(() => constructionCategories.id),
+  expenseDate: text("expense_date").notNull(),
+  amount: real("amount").notNull(),
+  description: text("description").notNull(),
+  beneficiaryName: text("beneficiary_name"),
+  paymentMethod: text("payment_method"), // cash, bank_transfer, check
+  referenceNumber: text("reference_number"),
+  invoiceNumber: text("invoice_number"),
+  attachmentUrl: text("attachment_url"),
+  notes: text("notes"),
+  // Optional back-reference to the daily work log that originated this expense
+  // (in-site cash purchases / daily wages logged from the daily work log page)
+  dailyLogId: integer("daily_log_id"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_project_expenses_project").on(table.projectId),
+  index("idx_project_expenses_contractor").on(table.contractorId),
+  index("idx_project_expenses_date").on(table.expenseDate),
+  index("idx_project_expenses_daily_log").on(table.dailyLogId),
+]);
+
+export const insertProjectExpenseSchema = createInsertSchema(projectExpenses).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type ProjectExpense = typeof projectExpenses.$inferSelect;
+export type InsertProjectExpense = z.infer<typeof insertProjectExpenseSchema>;
+
+// Project Daily Work Logs - يوميات أعمال المشروع
+export const projectDailyLogs = pgTable("project_daily_logs", {
+  id: serial("id").primaryKey(),
+  projectId: integer("project_id")
+    .notNull()
+    .references(() => constructionProjects.id, { onDelete: "cascade" }),
+  branchId: varchar("branch_id").references(() => branches.id),
+  contractorId: integer("contractor_id").references(() => contractors.id),
+  logDate: text("log_date").notNull(), // YYYY-MM-DD
+  supervisorName: text("supervisor_name").notNull(), // اسم المشرف/المهندس (نص حر)
+  supervisorRole: text("supervisor_role"), // مهندس، مشرف موقع، مدير، إلخ
+  workDescription: text("work_description").notNull(), // الأعمال المنفذة اليوم
+  workLocation: text("work_location"), // موقع التنفيذ في الموقع (مثال: الطابق الأول، الواجهة، المدخل)
+  startTime: text("start_time"), // ساعة بداية العمل HH:mm
+  endTime: text("end_time"), // ساعة نهاية العمل HH:mm
+  // التخصص الرئيسي اليوم: paint / tiling / hvac / plumbing / electrical / gypsum / kitchen_steel / glass / mdf / signage
+  mainTrade: text("main_trade"),
+  workItems: jsonb("work_items"), // [legacy] بنود الأعمال المنفذة كنص حر — للتوافق مع اليوميات القديمة
+  workerBreakdown: jsonb("worker_breakdown"), // توزيع العمالة [{role, count}]
+  progressToday: integer("progress_today").default(0), // نسبة الإنجاز اليومي %
+  workersCount: integer("workers_count").default(0), // عدد العمالة الحاضرة (إجمالي)
+  equipmentUsed: text("equipment_used"), // المعدات المستخدمة
+  weather: text("weather"), // مشمس، ممطر، حار، إلخ
+  temperature: text("temperature"), // درجة الحرارة (اختياري)
+  safetyIncidents: text("safety_incidents"), // حوادث السلامة إن وجدت
+  issues: text("issues"), // المشاكل والمعوقات
+  nextDayPlan: text("next_day_plan"), // خطة عمل اليوم التالي
+  notes: text("notes"), // ملاحظات إضافية
+  status: text("status").default("draft"), // draft, submitted
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_project_daily_logs_project").on(table.projectId),
+  index("idx_project_daily_logs_date").on(table.logDate),
+  index("idx_project_daily_logs_project_date").on(table.projectId, table.logDate),
+  index("idx_project_daily_logs_contractor").on(table.contractorId),
+]);
+
+export const insertProjectDailyLogSchema = createInsertSchema(projectDailyLogs).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type ProjectDailyLog = typeof projectDailyLogs.$inferSelect;
+export type InsertProjectDailyLog = z.infer<typeof insertProjectDailyLogSchema>;
+
+// Project Daily Log Photos - صور اليومية
+export const projectDailyLogPhotos = pgTable("project_daily_log_photos", {
+  id: serial("id").primaryKey(),
+  dailyLogId: integer("daily_log_id")
+    .notNull()
+    .references(() => projectDailyLogs.id, { onDelete: "cascade" }),
+  photoUrl: text("photo_url").notNull(),
+  caption: text("caption"),
+  photoType: text("photo_type").default("during"), // before, during, after
+  // Phase 8: GPS metadata captured at the moment the photo was taken
+  gpsLatitude: real("gps_latitude"),
+  gpsLongitude: real("gps_longitude"),
+  gpsAccuracy: real("gps_accuracy"),
+  capturedAt: timestamp("captured_at"),
+  deviceInfo: text("device_info"),
+  uploadedBy: varchar("uploaded_by").references(() => users.id),
+  uploadedAt: timestamp("uploaded_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_project_daily_log_photos_log").on(table.dailyLogId),
+]);
+
+export const insertProjectDailyLogPhotoSchema = createInsertSchema(projectDailyLogPhotos).omit({
+  id: true,
+  uploadedAt: true,
+});
+
+export type ProjectDailyLogPhoto = typeof projectDailyLogPhotos.$inferSelect;
+export type InsertProjectDailyLogPhoto = z.infer<typeof insertProjectDailyLogPhotoSchema>;
+
+// Daily Log Activities — أنشطة اليومية الذكية
+// كل نشاط يربط: يومية + مقاول + (اختياري) عقد + (اختياري) بند عقد + كمية اليوم.
+// عند ربط نشاط ببند عقد، يتم تحديث completed_quantity تلقائياً في contract_items.
+export const dailyLogActivities = pgTable("daily_log_activities", {
+  id: serial("id").primaryKey(),
+  dailyLogId: integer("daily_log_id")
+    .notNull()
+    .references(() => projectDailyLogs.id, { onDelete: "cascade" }),
+  contractorId: integer("contractor_id").references(() => contractors.id),
+  contractId: integer("contract_id").references(() => constructionContracts.id),
+  contractItemId: integer("contract_item_id").references(() => contractItems.id),
+  // نوع التشطيب: paint / tiling / hvac / plumbing / electrical / gypsum / kitchen_steel / glass / mdf / signage / other
+  tradeType: text("trade_type"),
+  description: text("description").notNull(), // وصف النشاط المنفذ اليوم
+  quantityToday: real("quantity_today").default(0), // الكمية المنفذة اليوم
+  unit: text("unit"), // م²، م.ط، عدد، إلخ
+  unitCost: real("unit_cost"), // سعر الوحدة (اختياري — للحساب التلقائي)
+  totalCost: real("total_cost"), // تكلفة النشاط الإجمالية (اختياري)
+  completionStatus: text("completion_status").default("in_progress"), // in_progress / completed
+  notes: text("notes"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_daily_log_activities_log").on(table.dailyLogId),
+  index("idx_daily_log_activities_contractor").on(table.contractorId),
+  index("idx_daily_log_activities_contract_item").on(table.contractItemId),
+]);
+
+export const insertDailyLogActivitySchema = createInsertSchema(dailyLogActivities).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type DailyLogActivity = typeof dailyLogActivities.$inferSelect;
+export type InsertDailyLogActivity = z.infer<typeof insertDailyLogActivitySchema>;
+
+// ============================================================
+// Phase 8: Field Hub — Field Checklists + GPS-tagged Photos
+// (Names are prefixed with "field" to avoid clash with the Branch
+//  Shift checklist tables defined later in this file.)
+// ============================================================
+export const fieldChecklistTemplates = pgTable("field_checklist_templates", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  description: text("description"),
+  // safety / quality / handover / commissioning / inspection / opening / maintenance
+  category: text("category").notNull(),
+  // optional: paint / tiling / hvac / plumbing / electrical / gypsum / glass / mdf / signage
+  trade: text("trade"),
+  isActive: boolean("is_active").default(true).notNull(),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_field_checklist_templates_category").on(table.category),
+  index("idx_field_checklist_templates_active").on(table.isActive),
+]);
+
+export const insertFieldChecklistTemplateSchema = createInsertSchema(fieldChecklistTemplates).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type FieldChecklistTemplate = typeof fieldChecklistTemplates.$inferSelect;
+export type InsertFieldChecklistTemplate = z.infer<typeof insertFieldChecklistTemplateSchema>;
+
+export const fieldChecklistTemplateItems = pgTable("field_checklist_template_items", {
+  id: serial("id").primaryKey(),
+  templateId: integer("template_id").notNull().references(() => fieldChecklistTemplates.id, { onDelete: "cascade" }),
+  sequence: integer("sequence").notNull(),
+  text: text("text").notNull(),
+  isRequired: boolean("is_required").default(true).notNull(),
+  requiresPhoto: boolean("requires_photo").default(false).notNull(),
+  notes: text("notes"),
+}, (table) => [
+  index("idx_field_checklist_template_items_template").on(table.templateId),
+]);
+
+export const insertFieldChecklistTemplateItemSchema = createInsertSchema(fieldChecklistTemplateItems).omit({ id: true });
+export type FieldChecklistTemplateItem = typeof fieldChecklistTemplateItems.$inferSelect;
+export type InsertFieldChecklistTemplateItem = z.infer<typeof insertFieldChecklistTemplateItemSchema>;
+
+// Checklist instance — a field checklist actually being filled in the field
+export const fieldChecklists = pgTable("field_checklists", {
+  id: serial("id").primaryKey(),
+  templateId: integer("template_id").references(() => fieldChecklistTemplates.id),
+  title: text("title").notNull(),
+  category: text("category").notNull(),
+  projectId: integer("project_id").references(() => constructionProjects.id, { onDelete: "cascade" }),
+  contractId: integer("contract_id").references(() => constructionContracts.id, { onDelete: "set null" }),
+  dailyLogId: integer("daily_log_id").references(() => projectDailyLogs.id, { onDelete: "set null" }),
+  branchId: varchar("branch_id").references(() => branches.id),
+  assignedTo: varchar("assigned_to").references(() => users.id),
+  dueDate: text("due_date"),
+  status: text("status").default("open").notNull(), // open / in_progress / completed / cancelled
+  completedAt: timestamp("completed_at"),
+  completedBy: varchar("completed_by").references(() => users.id),
+  passCount: integer("pass_count").default(0).notNull(),
+  failCount: integer("fail_count").default(0).notNull(),
+  naCount: integer("na_count").default(0).notNull(),
+  totalCount: integer("total_count").default(0).notNull(),
+  notes: text("notes"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_field_checklists_project").on(table.projectId),
+  index("idx_field_checklists_contract").on(table.contractId),
+  index("idx_field_checklists_status").on(table.status),
+  index("idx_field_checklists_assigned").on(table.assignedTo),
+]);
+
+export const insertFieldChecklistSchema = createInsertSchema(fieldChecklists).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  completedAt: true,
+  completedBy: true,
+  passCount: true,
+  failCount: true,
+  naCount: true,
+  totalCount: true,
+});
+export type FieldChecklist = typeof fieldChecklists.$inferSelect;
+export type InsertFieldChecklist = z.infer<typeof insertFieldChecklistSchema>;
+
+export const fieldChecklistItems = pgTable("field_checklist_items", {
+  id: serial("id").primaryKey(),
+  checklistId: integer("checklist_id").notNull().references(() => fieldChecklists.id, { onDelete: "cascade" }),
+  sequence: integer("sequence").notNull(),
+  text: text("text").notNull(),
+  isRequired: boolean("is_required").default(true).notNull(),
+  requiresPhoto: boolean("requires_photo").default(false).notNull(),
+  status: text("status").default("pending").notNull(), // pending / pass / fail / na
+  notes: text("notes"),
+  // Photos as a JSON-encoded array: [{url, lat, lng, accuracy, capturedAt}]
+  photos: jsonb("photos"),
+  checkedBy: varchar("checked_by").references(() => users.id),
+  checkedAt: timestamp("checked_at"),
+}, (table) => [
+  index("idx_field_checklist_items_checklist").on(table.checklistId),
+]);
+
+export const insertFieldChecklistItemSchema = createInsertSchema(fieldChecklistItems).omit({ id: true });
+export type FieldChecklistItem = typeof fieldChecklistItems.$inferSelect;
+export type InsertFieldChecklistItem = z.infer<typeof insertFieldChecklistItemSchema>;
+
+
+// System Modules for permissions - جميع وحدات النظام
+export const SYSTEM_MODULES = [
+  // الأساسية
+  "dashboard",
+  "platform_home",
+  "settings",
+  
+  // المخزون والأصول
+  "inventory",
+  "asset_transfers",
+  "inspections",
+  "maintenance",
+  
+  // الإنتاج والتشغيل
+  "production",
+  "daily_production",
+  "advanced_production",
+  "quality_control",
+  "quality", // اسم مختصر للتوافق
+  "products",
+  "operations",
+  "branch_complaints",
+  "branch_supply",
+  "delivery_tasks",
+  "central_kitchen_orders",
+  "central_kitchen_recipes",
+  "ai_production_planner",
+  
+  // الورديات والحضور
+  "shifts",
+  "attendance",
+  "attendance_check", // صفحة تسجيل الحضور والانصراف فقط
+  "biometric_settings", // إعدادات البصمة والتحقق البيومتري
+  "timesheet",
+  "branch_closure",
+  
+  // الموظفين والموارد البشرية
+  "users",
+  "branch_employees",
+  "branches",
+  "organizational_structure",
+  "employee_reports",
+  "employee_transfers",
+  "hr_management",
+  "operations_hr",
+  "operations_payroll",
+  "operations_joining",
+  "operations_employee_transfer",
+  // وحدات الموارد البشرية التفصيلية (تحكم منفصل لكل صفحة)
+  "hr_employment_applications",
+  "hr_job_offers",
+  "hr_onboarding",
+  "hr_documents",      // وثائق الموظفين (هوية/إقامة/رخصة/تأمين)
+  "hr_leaves",         // طلبات الإجازات والموافقة عليها
+  "hr_warnings",       // الإنذارات والمخالفات الإدارية
+  "hr_eos",            // حسابات نهاية الخدمة
+  "hr_advances",       // السلف والقروض على الموظفين
+  "hr_evaluations",    // تقييم الأداء الدوري للموظفين
+  "salary_closing",    // إغلاق الرواتب الشهرية (صلاحية منفصلة لاعتماد الإغلاق وتصدير تقريره)
+  
+  // المالية
+  "cashier_journal",
+  "cashier_performance",
+  "cashier", // اسم مختصر للتوافق
+  "daily_closures", // الإغلاقات اليومية للفروع - وحدة مستقلة عن يومية الكاشير
+  "pnl_dashboard",
+  "incentives",
+  "sales_analytics",
+  "sales_uploads",
+  
+  // الحوافز الذكية
+  "smart_incentives_settings",
+  "smart_incentives_challenges",
+  "smart_incentives_commissions",
+  "smart_incentives_bonus",
+  "smart_incentives_wallet",
+  "smart_incentives_statements",
+  
+  // الأهداف والأداء
+  "targets",
+  "targets_planning",
+  "waste_tracking",
+  "waste", // اسم مختصر للتوافق
+  
+  // مشاريع الإنشاء
+  "construction_projects",
+  "construction_work_items",
+  "construction_reports",
+  "construction", // اسم مختصر للتوافق
+  "contractors",
+  "contracts",
+  "budget_planning",
+  "payment_requests",
+  "project_expenses",
+  "contractor_statements",
+  "project_daily_logs",
+  
+  // التسويق
+  "marketing",
+  "marketing_campaigns",
+  "marketing_influencers",
+  "marketing_tasks",
+  "marketing_goals",
+  "marketing_calendar",
+  "marketing_alerts",
+  "marketing_assets",
+  "marketing_expenses",
+  "marketing_reports",
+  "marketing_team",
+  "social_responsibility",
+  
+  // إدارة النظام
+  "rbac_management",
+  "audit_logs",
+  "backups",
+  "integrations",
+  "reports",
+  
+  // المخازن والتحويلات
+  "warehouse",
+  "material_requests",
+  "transfer_requests",
+  "warehouse_inventory",
+  
+  // السكرتارية التنفيذية
+  "executive_dashboard",
+  "executive_meetings",
+  "executive_tasks",
+  "executive_correspondence",
+  "executive_documents",
+  "executive_visitors",
+  "executive_travel",
+  "executive_reports",
+  "executive_notifications",
+  "executive_calendar",
+  
+  // إدارة الوثائق
+  "documents",
+  
+  // الحوكمة المؤسسية
+  "governance",
+  "governance_board",
+  "governance_shareholders",
+  "governance_meetings",
+  "governance_resolutions",
+  "governance_compliance",
+  "governance_transfers",
+  "governance_disclosures",
+  "governance_dividends",
+  "governance_capital",
+  "governance_voting",
+  // نقطة البيع
+  "event_pos",
+
+  // مخطط أرضية الفرع وتوزيع فريق العمل
+  "floor_plan",
+] as const;
+
+export type SystemModule = (typeof SYSTEM_MODULES)[number];
+
+// Product catalog reads are intentionally available through several existing
+// modules.  This is a focused read capability for the catalog route, not a
+// global alias between modules.
+export const PRODUCT_CATALOG_READ_MODULES = [
+  "operations",
+  "products",
+  "production",
+  "daily_production",
+  "advanced_production",
+] as const satisfies readonly SystemModule[];
+
+// Actions for each module
+export const MODULE_ACTIONS = [
+  "view",
+  "view_list",
+  "view_details",
+  "create",
+  "edit",
+  "delete",
+  "submit",
+  "approve",
+  "reject",
+  "reopen",
+  "export",
+  "print",
+  "sign",
+  "view_signatures",
+  "manage_attachments",
+  "notify",
+  "change_status",
+  "assign_reviewer",
+  "advanced",
+] as const;
+
+export type ModuleAction = (typeof MODULE_ACTIONS)[number];
+
+// User Permissions table - صلاحيات المستخدمين التفصيلية
+export const userPermissions = pgTable("user_permissions", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  module: text("module").notNull(), // e.g., 'inventory', 'construction_projects'
+  actions: text("actions").array().notNull(), // e.g., ['view', 'create', 'edit', 'delete']
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_user_permissions_user_id").on(table.userId),
+  index("idx_user_permissions_module").on(table.module),
+  index("idx_user_permissions_user_module").on(table.userId, table.module),
+]);
+
+export const insertUserPermissionSchema = createInsertSchema(
+  userPermissions,
+).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type UserPermission = typeof userPermissions.$inferSelect;
+export type InsertUserPermission = z.infer<typeof insertUserPermissionSchema>;
+
+// Module labels for UI display (Arabic)
+export const MODULE_LABELS: Record<SystemModule, string> = {
+  // الأساسية
+  dashboard: "لوحة التحكم",
+  platform_home: "الصفحة الرئيسية",
+  settings: "الإعدادات",
+  
+  // المخزون والأصول
+  inventory: "المخزون والأصول",
+  asset_transfers: "تحويلات الأصول",
+  inspections: "التفتيش والجرد",
+  maintenance: "الصيانة",
+  
+  // الإنتاج والتشغيل
+  production: "الإنتاج",
+  daily_production: "الإنتاج اليومي",
+  advanced_production: "أوامر الإنتاج المتقدمة",
+  quality_control: "مراقبة الجودة",
+  quality: "الجودة",
+  products: "المنتجات",
+  operations: "التشغيل",
+  branch_complaints: "شكاوى الفروع",
+  branch_supply: "طلبات مواد الفروع واستلامها",
+  delivery_tasks: "مهام التوصيل",
+  central_kitchen_orders: "طلبات المطبخ المركزي",
+  central_kitchen_recipes: "وصفات المطبخ المركزي",
+  ai_production_planner: "مخطط الإنتاج الذكي",
+  
+  // الورديات والحضور
+  shifts: "الورديات",
+  attendance: "الحضور والانصراف",
+  attendance_check: "تسجيل الحضور والانصراف",
+  biometric_settings: "إعدادات البصمة",
+  timesheet: "كشوف الدوام",
+  branch_closure: "فتح وإغلاق الفروع",
+  
+  // الموظفين والموارد البشرية
+  users: "إدارة المستخدمين",
+  branch_employees: "موظفي الفروع",
+  branches: "الفروع",
+  organizational_structure: "الهيكل التنظيمي",
+  employee_reports: "تقارير الموظفين",
+  employee_transfers: "تحويلات الموظفين",
+  hr_management: "إدارة الموارد البشرية",
+  operations_hr: "مركز موارد التشغيل (عرض الموظفين)",
+  operations_payroll: "مراجعة رواتب التشغيل",
+  operations_joining: "روابط مباشرة موظفي التشغيل",
+  operations_employee_transfer: "نقل موظفي التشغيل بين الفروع",
+  hr_employment_applications: "طلبات التوظيف",
+  hr_job_offers: "عروض العمل",
+  hr_onboarding: "مباشرة العمل (إشعار)",
+  hr_documents: "وثائق الموظفين",
+  hr_leaves: "طلبات الإجازات",
+  hr_warnings: "الإنذارات والمخالفات",
+  hr_eos: "نهاية الخدمة",
+  hr_evaluations: "تقييم الأداء",
+  hr_advances: "السلف والقروض",
+  salary_closing: "إغلاق الرواتب الشهرية",
+  
+  // المالية
+  cashier: "الكاشير",
+  cashier_journal: "يومية الكاشير",
+  cashier_performance: "أداء الكاشير",
+  daily_closures: "الإغلاقات اليومية للفروع",
+  pnl_dashboard: "لوحة الأرباح والخسائر",
+  incentives: "الحوافز",
+  sales_analytics: "تحليلات المبيعات",
+  sales_uploads: "رفع بيانات المبيعات",
+  smart_incentives_settings: "إعدادات النقاط والحوافز",
+  smart_incentives_challenges: "التحديات اليومية",
+  smart_incentives_commissions: "عمولات المنتجات",
+  smart_incentives_bonus: "مكافأة إنجاز الفرع",
+  smart_incentives_wallet: "محفظة النقاط",
+  smart_incentives_statements: "كشوفات حساب الحوافز",
+  
+  // الأهداف والأداء
+  targets: "الأهداف",
+  targets_planning: "تخطيط الأهداف",
+  waste_tracking: "تتبع الهدر",
+  waste: "الهدر",
+  
+  // مشاريع الإنشاء
+  construction: "الإنشاءات",
+  construction_projects: "مشاريع الإنشاءات",
+  construction_work_items: "بنود الأعمال",
+  construction_reports: "تقارير المشاريع",
+  contractors: "المقاولين",
+  contracts: "العقود",
+  budget_planning: "تخطيط الميزانية",
+  payment_requests: "طلبات الصرف",
+  project_expenses: "مصروفات المشروع",
+  contractor_statements: "كشوف حساب المقاولين",
+  project_daily_logs: "يوميات أعمال المشاريع",
+  
+  // التسويق
+  marketing: "التسويق",
+  marketing_campaigns: "الحملات التسويقية",
+  marketing_influencers: "المؤثرين",
+  marketing_tasks: "مهام التسويق",
+  marketing_goals: "أهداف التسويق",
+  marketing_calendar: "تقويم التسويق",
+  marketing_alerts: "تنبيهات التسويق",
+  marketing_assets: "أصول التسويق",
+  marketing_expenses: "مصروفات التسويق",
+  marketing_reports: "تقارير التسويق",
+  marketing_team: "فريق التسويق",
+  social_responsibility: "المسؤولية الاجتماعية",
+  
+  // إدارة النظام
+  rbac_management: "إدارة الصلاحيات",
+  audit_logs: "سجلات التدقيق",
+  backups: "النسخ الاحتياطية",
+  integrations: "التكاملات",
+  reports: "التقارير",
+  
+  // المخازن والتحويلات
+  warehouse: "المخازن",
+  material_requests: "طلبات المواد",
+  transfer_requests: "طلبات التحويل",
+  warehouse_inventory: "مخزون المستودع",
+  
+  // السكرتارية التنفيذية
+  executive_dashboard: "لوحة السكرتارية التنفيذية",
+  executive_meetings: "الاجتماعات",
+  executive_tasks: "المهام التنفيذية",
+  executive_correspondence: "المراسلات",
+  executive_documents: "الوثائق والأرشفة",
+  executive_visitors: "سجل الزوار",
+  executive_travel: "إدارة السفر",
+  executive_reports: "تقارير السكرتارية",
+  executive_notifications: "التنبيهات",
+  executive_calendar: "التقويم التنفيذي",
+  
+  // إدارة الوثائق
+  documents: "إدارة الوثائق",
+  
+  // الحوكمة المؤسسية
+  governance: "الحوكمة المؤسسية",
+  governance_board: "مجلس الإدارة",
+  governance_shareholders: "المساهمين",
+  governance_meetings: "اجتماعات الحوكمة",
+  governance_resolutions: "القرارات",
+  governance_compliance: "الامتثال",
+  governance_transfers: "تحويلات الأسهم",
+  governance_disclosures: "الإفصاحات",
+  governance_dividends: "توزيعات الأرباح",
+  governance_capital: "رأس المال",
+  governance_voting: "التصويت",
+  
+  // نقطة بيع الفعاليات
+  event_pos: "نقطة بيع الفعاليات",
+  floor_plan: "مخطط الأرضية",
+};
+
+// Action labels for UI display (Arabic)
+export const ACTION_LABELS: Record<ModuleAction, string> = {
+  view: "عرض",
+  view_list: "عرض القائمة",
+  view_details: "عرض التفاصيل",
+  create: "إنشاء",
+  edit: "تعديل",
+  delete: "حذف",
+  submit: "إرسال",
+  approve: "اعتماد",
+  reject: "رفض",
+  reopen: "إعادة فتح",
+  export: "تصدير",
+  print: "طباعة",
+  sign: "توقيع",
+  view_signatures: "عرض التوقيعات",
+  manage_attachments: "إدارة المرفقات",
+  notify: "إشعارات",
+  change_status: "تغيير الحالة",
+  assign_reviewer: "تعيين مراجع",
+  advanced: "متقدم",
+};
+
+// أفعال قديمة/خاصة قد تكون مخزنة في قاعدة البيانات (للتوافق مع البيانات الحالية)
+// Legacy/special actions that may exist in stored permissions — kept for backward compatibility
+export const LEGACY_ACTION_LABELS: Record<string, string> = {
+  view_own: "عرض بياناتي فقط",
+  view_all_branches: "عرض جميع الفروع",
+  transfer: "تحويل",
+  maintenance: "صيانة",
+  permissions: "صلاحيات",
+};
+
+// خريطة موحدة لعرض اسم أي فعل (الحالية + القديمة) — تستخدمها الواجهة والسيرفر
+export const ALL_ACTION_LABELS: Record<string, string> = {
+  ...ACTION_LABELS,
+  ...LEGACY_ACTION_LABELS,
+};
+
+// تصنيف الأفعال لعرضها في شاشة الصلاحيات (مصدر واحد للواجهة)
+export const ACTION_CATEGORIES: Record<string, { label: string; color: string; actions: string[] }> = {
+  basic: {
+    label: "الأساسية",
+    color: "bg-blue-100 text-blue-800",
+    actions: ["view", "view_list", "view_details", "create", "edit", "delete"],
+  },
+  workflow: {
+    label: "سير العمل",
+    color: "bg-amber-100 text-amber-800",
+    actions: ["submit", "approve", "reject", "reopen", "change_status", "assign_reviewer"],
+  },
+  export: {
+    label: "التصدير والطباعة",
+    color: "bg-green-100 text-green-800",
+    actions: ["export", "print"],
+  },
+  special: {
+    label: "الخاصة",
+    color: "bg-purple-100 text-purple-800",
+    actions: ["sign", "view_signatures", "manage_attachments", "notify", "transfer", "maintenance", "permissions", "advanced"],
+  },
+  scope: {
+    label: "نطاق العرض",
+    color: "bg-orange-100 text-orange-800",
+    actions: ["view_own", "view_all_branches"],
+  },
+};
+
+// Module groups for UI organization
+export const MODULE_GROUPS: { label: string; modules: SystemModule[] }[] = [
+  {
+    label: "الأساسية",
+    modules: ["dashboard", "platform_home", "settings"],
+  },
+  {
+    label: "المخزون والأصول",
+    modules: ["inventory", "asset_transfers", "inspections", "maintenance"],
+  },
+  {
+    label: "الإنتاج والتشغيل",
+    modules: [
+      "production",
+      "daily_production",
+      "advanced_production",
+      "quality_control",
+      "products",
+      "operations",
+      "branch_supply",
+      "central_kitchen_orders",
+      "central_kitchen_recipes",
+      "ai_production_planner",
+    ],
+  },
+  {
+    label: "الورديات والحضور",
+    modules: ["shifts", "attendance", "attendance_check", "biometric_settings", "timesheet", "branch_closure"],
+  },
+  {
+    label: "الموظفين والموارد البشرية",
+    modules: [
+      "users",
+      "branch_employees",
+      "branches",
+      "organizational_structure",
+      "employee_reports",
+      "employee_transfers",
+      "hr_management",
+      "operations_hr",
+      "operations_payroll",
+      "operations_joining",
+      "operations_employee_transfer",
+      "hr_employment_applications",
+      "hr_job_offers",
+      "hr_onboarding",
+      "hr_documents",
+      "hr_leaves",
+      "hr_warnings",
+      "hr_eos",
+      "hr_advances",
+      "hr_evaluations",
+      "salary_closing",
+    ],
+  },
+  {
+    label: "المالية والكاشير",
+    modules: [
+      "cashier_journal",
+      "cashier_performance",
+      "daily_closures",
+      "pnl_dashboard",
+      "incentives",
+      "sales_analytics",
+      "sales_uploads",
+    ],
+  },
+  {
+    label: "الحوافز الذكية",
+    modules: [
+      "smart_incentives_settings",
+      "smart_incentives_challenges",
+      "smart_incentives_commissions",
+      "smart_incentives_bonus",
+      "smart_incentives_wallet",
+      "smart_incentives_statements",
+    ],
+  },
+  {
+    label: "الأهداف والأداء",
+    modules: ["targets", "targets_planning", "waste_tracking"],
+  },
+  {
+    label: "مشاريع الإنشاء",
+    modules: [
+      "construction_projects",
+      "construction_work_items",
+      "construction_reports",
+      "contractors",
+      "contracts",
+      "budget_planning",
+      "payment_requests",
+      "project_expenses",
+      "contractor_statements",
+      "project_daily_logs",
+    ],
+  },
+  {
+    label: "التسويق",
+    modules: [
+      "marketing",
+      "marketing_campaigns",
+      "marketing_influencers",
+      "marketing_tasks",
+      "marketing_goals",
+      "marketing_calendar",
+      "marketing_alerts",
+      "marketing_assets",
+      "marketing_expenses",
+      "marketing_reports",
+      "marketing_team",
+      "social_responsibility",
+    ],
+  },
+  {
+    label: "تشغيل الفروع",
+    modules: ["branch_complaints", "delivery_tasks"],
+  },
+  {
+    label: "إدارة النظام",
+    modules: ["rbac_management", "audit_logs", "backups", "integrations", "reports"],
+  },
+  {
+    label: "المخازن والتحويلات",
+    modules: ["warehouse", "material_requests", "transfer_requests", "warehouse_inventory"],
+  },
+  {
+    label: "السكرتارية التنفيذية",
+    modules: [
+      "executive_dashboard",
+      "executive_meetings",
+      "executive_tasks",
+      "executive_correspondence",
+      "executive_documents",
+      "executive_visitors",
+      "executive_travel",
+      "executive_reports",
+      "executive_notifications",
+      "executive_calendar",
+    ],
+  },
+  {
+    label: "إدارة الوثائق",
+    modules: ["documents"],
+  },
+  {
+    label: "الحوكمة المؤسسية",
+    modules: [
+      "governance",
+      "governance_board",
+      "governance_shareholders",
+      "governance_meetings",
+      "governance_resolutions",
+      "governance_compliance",
+      "governance_transfers",
+      "governance_disclosures",
+      "governance_dividends",
+      "governance_capital",
+      "governance_voting",
+    ],
+  },
+  {
+    label: "نقطة بيع الفعاليات",
+    modules: ["event_pos", "floor_plan"],
+  },
+];
+
+// وحدات "مرادفة" قديمة للتوافق فقط — لا تُعرض في شاشات منح الصلاحيات
+// Legacy alias modules kept for backward compatibility; intentionally NOT grantable via UI.
+export const ALIAS_MODULES: SystemModule[] = ["quality", "cashier", "waste", "construction"];
+
+// دالة موحدة: تعيد المجموعات + مجموعة "أخرى" تلقائيًا لأي وحدة جديدة غير مصنفة
+// Guarantees every NEW module in SYSTEM_MODULES appears in the permissions UI even if
+// someone forgets to add it to MODULE_GROUPS. Alias modules are excluded so the
+// grantable surface stays identical to before.
+export function getGroupedModules(): { label: string; modules: SystemModule[] }[] {
+  const grouped = new Set<string>(MODULE_GROUPS.flatMap((g) => g.modules));
+  const ungrouped = SYSTEM_MODULES.filter(
+    (m) => !grouped.has(m) && !ALIAS_MODULES.includes(m),
+  );
+  return ungrouped.length > 0
+    ? [...MODULE_GROUPS, { label: "أخرى", modules: ungrouped }]
+    : MODULE_GROUPS;
+}
+
+// Role permission templates - قوالب الصلاحيات الافتراضية لكل دور
+export const ROLE_PERMISSION_TEMPLATES: Record<
+  string,
+  { module: SystemModule; actions: ModuleAction[] }[]
+> = {
+  // Admin gets full access (handled separately in middleware)
+  // Owner portal is independently authorized; never grant operational modules.
+  business_owner: [],
+  admin: SYSTEM_MODULES.map((module) => ({
+    module,
+    actions: [...MODULE_ACTIONS] as ModuleAction[],
+  })),
+
+  // Employee: Can view, create, edit most things, but no delete/approve for sensitive modules
+  employee: [
+    { module: "dashboard", actions: ["view", "export"] },
+    { module: "inventory", actions: ["view", "create", "edit", "export"] },
+    {
+      module: "asset_transfers",
+      actions: ["view", "create", "edit", "export"],
+    },
+    {
+      module: "construction_projects",
+      actions: ["view", "create", "edit", "export"],
+    },
+    {
+      module: "construction_work_items",
+      actions: ["view", "create", "edit", "export"],
+    },
+    { module: "contractors", actions: ["view", "create", "edit", "export"] },
+    { module: "contracts", actions: ["view", "create", "edit", "export"] },
+    {
+      module: "budget_planning",
+      actions: ["view", "create", "edit", "export"],
+    },
+    {
+      module: "payment_requests",
+      actions: ["view", "create", "edit", "export"],
+    },
+    {
+      module: "project_expenses",
+      actions: ["view", "create", "edit", "export"],
+    },
+    {
+      module: "contractor_statements",
+      actions: ["view", "export"],
+    },
+    {
+      module: "project_daily_logs",
+      actions: ["view", "create", "edit", "export"],
+    },
+    { module: "reports", actions: ["view", "export"] },
+    { module: "smart_incentives_wallet", actions: ["view"] },
+    { module: "smart_incentives_statements", actions: ["view"] },
+  ],
+
+  // Financial Accountant: View reports, cashier, sales, closures, operations
+  financial_accountant: [
+    { module: "dashboard", actions: ["view"] },
+    { module: "cashier", actions: ["view", "export", "print"] },
+    { module: "cashier_journal", actions: ["view", "export", "print"] },
+    { module: "branch_closure", actions: ["view"] },
+    { module: "reports", actions: ["view", "export", "print", "advanced"] },
+    { module: "production", actions: ["view", "export", "print"] },
+    { module: "operations", actions: ["view"] },
+    { module: "inventory", actions: ["view", "export", "print"] },
+    { module: "waste", actions: ["view"] },
+    { module: "quality", actions: ["view"] },
+    { module: "shifts", actions: ["view"] },
+    { module: "branches", actions: ["view"] },
+  ],
+
+  // Financial Manager: إشراف مالي شامل على كل الفروع. يعتمد الصرف وتحويل المبالغ
+  // (صلاحية approve تغطي الاعتماد والرفض وتأكيد الصرف mark-paid)، ويغلق الرواتب
+  // الشهرية (الإغلاق/إعادة الفتح بصلاحية edit)، ويتابع الموظفين والرواتب تفصيليًا،
+  // مع رؤية مالية ورقابية. لا يشمل إدارة المستخدمين أو إعدادات النظام أو الصلاحيات.
+  production_development_manager: [
+    { module: "production", actions: ["view", "create", "edit", "approve", "export"] },
+    { module: "daily_production", actions: ["view", "create", "edit", "export"] },
+    { module: "advanced_production", actions: ["view", "create", "edit", "export"] },
+    { module: "ai_production_planner", actions: ["view", "create", "edit"] },
+    { module: "products", actions: ["view", "create", "edit", "export"] },
+    { module: "central_kitchen_recipes", actions: ["view", "create", "edit", "approve", "print"] },
+    { module: "central_kitchen_orders", actions: ["view", "create", "edit", "approve", "export"] },
+    { module: "warehouse", actions: ["view", "create", "edit", "export"] },
+    { module: "delivery_tasks", actions: ["view", "create", "edit", "approve", "export"] },
+    { module: "material_requests", actions: ["view", "create", "edit", "approve", "export"] },
+    { module: "transfer_requests", actions: ["view", "create", "edit", "approve", "export"] },
+    { module: "warehouse_inventory", actions: ["view", "create", "edit", "export"] },
+    { module: "branches", actions: ["view"] },
+  ],
+  // أمين المستودعات: مخزون المستودع الرئيسي وحركة المواد فقط، دون صلاحيات
+  // مالية أو أصول أو مبيعات. نطاق الفرع محصور بالمستودع الرئيسي في الخادم.
+  warehouse_keeper: [
+    { module: "warehouse", actions: ["view", "create", "edit", "export"] },
+    { module: "material_requests", actions: ["view", "create", "edit", "approve", "export"] },
+    { module: "transfer_requests", actions: ["view", "create", "edit", "approve", "export"] },
+    { module: "warehouse_inventory", actions: ["view", "create", "edit", "export"] },
+    { module: "delivery_tasks", actions: ["view", "create", "edit", "approve"] },
+  ],
+  financial_manager: [
+    { module: "dashboard", actions: ["view", "export"] },
+    // الاعتماد المالي وتحويل المبالغ
+    { module: "payment_requests", actions: ["view", "create", "edit", "approve", "export", "print"] },
+    // إغلاق الرواتب الشهرية وتصديرها
+    { module: "salary_closing", actions: ["view", "edit", "export", "print"] },
+    // متابعة الموظفين والرواتب تفصيليًا
+    { module: "branch_employees", actions: ["view", "export"] },
+    { module: "hr_advances", actions: ["view", "create", "edit", "export"] },
+    { module: "hr_eos", actions: ["view", "create", "edit", "export"] },
+    { module: "attendance", actions: ["view", "export"] },
+    { module: "timesheet", actions: ["view", "export"] },
+    { module: "employee_reports", actions: ["view", "export", "print"] },
+    // الرؤية المالية والرقابة
+    { module: "pnl_dashboard", actions: ["view", "export"] },
+    { module: "cashier_journal", actions: ["view", "export", "print"] },
+    { module: "daily_closures", actions: ["view", "export", "print"] },
+    { module: "branch_closure", actions: ["view", "export"] },
+    { module: "sales_analytics", actions: ["view", "export"] },
+    { module: "reports", actions: ["view", "export", "print", "advanced"] },
+    { module: "contractor_statements", actions: ["view", "export"] },
+    { module: "project_expenses", actions: ["view", "export"] },
+    { module: "budget_planning", actions: ["view", "export"] },
+    { module: "audit_logs", actions: ["view"] },
+  ],
+
+  // Operations Manager: مدير التشغيل — إدارة العمليات اليومية عبر كل الفروع:
+  // التشغيل والإنتاج والجودة والهدر، الورديات والحضور والتايم شيت، المخزون
+  // والمخازن والصيانة، واعتماد الإجازات (وحدة hr_leaves تغطي مسار الاعتماد)،
+  // مع رؤية تشغيلية للتقارير والمبيعات. لا يشمل إدارة المستخدمين أو الإعدادات
+  // أو الاعتماد المالي/إغلاق الرواتب (نطاق المدير المالي).
+  operations_manager: [
+    { module: "dashboard", actions: ["view", "export"] },
+    { module: "operations_hr", actions: ["view"] },
+    // موظفو الفروع المصرّح بها فقط؛ اعتماد مراجعة التشغيل استشاري ولا
+    // يمنح إغلاق الرواتب أو الصرف النهائي أو إدارة شؤون الموظفين العامة.
+    { module: "operations_payroll", actions: ["view", "export", "approve"] },
+    { module: "operations_joining", actions: ["view", "create", "approve"] },
+    { module: "operations_employee_transfer", actions: ["view", "create"] },
+    // التشغيل والإنتاج والجودة
+    { module: "operations", actions: ["view", "create", "edit", "delete", "export", "print"] },
+    { module: "branch_complaints", actions: ["view", "create", "edit", "approve"] },
+    { module: "central_kitchen_orders", actions: ["view", "create", "edit", "approve", "export", "print"] },
+    { module: "production", actions: ["view", "create", "edit", "export", "print"] },
+    { module: "daily_production", actions: ["view", "create", "edit", "export", "print"] },
+    { module: "advanced_production", actions: ["view", "create", "edit", "export"] },
+    { module: "quality_control", actions: ["view", "create", "edit", "export"] },
+    { module: "quality", actions: ["view", "create", "edit", "export"] },
+    { module: "products", actions: ["view", "create", "edit", "export"] },
+    { module: "waste_tracking", actions: ["view", "create", "edit", "export"] },
+    { module: "waste", actions: ["view", "create", "edit", "export"] },
+    // الورديات والحضور والتايم شيت
+    { module: "shifts", actions: ["view", "create", "edit", "export"] },
+    { module: "attendance", actions: ["view", "create", "edit", "export"] },
+    { module: "timesheet", actions: ["view", "create", "edit", "export", "print"] },
+    { module: "branch_closure", actions: ["view", "create", "edit", "export"] },
+    { module: "daily_closures", actions: ["view", "export", "print"] },
+    { module: "floor_plan", actions: ["view", "create", "edit"] },
+    // الإجازات: عرض وإنشاء واعتماد فقط — بدون edit حتى لا يصل للمسارات الإدارية
+    // الحساسة (أرصدة الإجازات، العطل الرسمية، التسويات، القيود المحاسبية) المحمية
+    // بصلاحية hr_leaves:edit صراحةً.
+    { module: "hr_leaves", actions: ["view", "create", "approve", "export"] },
+    // السلف: عرض + موافقة مبدئية فقط (القرار النهائي لمدير شؤون الموظفين)
+    { module: "hr_advances", actions: ["view", "approve", "export"] },
+    // المخزون والمخازن والصيانة
+    { module: "inventory", actions: ["view", "create", "edit", "export"] },
+    { module: "asset_transfers", actions: ["view", "create", "edit", "export"] },
+    { module: "maintenance", actions: ["view", "create", "edit", "approve", "export"] },
+    { module: "inspections", actions: ["view", "create", "edit", "export"] },
+    { module: "warehouse", actions: ["view", "create", "edit", "export"] },
+    { module: "delivery_tasks", actions: ["view", "create", "edit", "approve", "export"] },
+    { module: "material_requests", actions: ["view", "create", "edit", "approve", "export"] },
+    { module: "transfer_requests", actions: ["view", "create", "edit", "approve", "export"] },
+    { module: "warehouse_inventory", actions: ["view", "create", "edit", "export"] },
+    // المتابعة والأداء (عرض وتصدير)
+    { module: "branch_employees", actions: ["view", "export"] },
+    { module: "employee_reports", actions: ["view", "export", "print"] },
+    { module: "reports", actions: ["view", "export", "print"] },
+    { module: "sales_analytics", actions: ["view", "export"] },
+    { module: "cashier_journal", actions: ["view", "export", "print"] },
+    { module: "targets", actions: ["view", "export"] },
+    { module: "targets_planning", actions: ["view", "export"] },
+    { module: "branches", actions: ["view"] },
+  ],
+
+  // Branch Manager: مدير الفرع — نطاق فرعه فقط (عبر الفروع المسموحة/فرعه
+  // الافتراضي، لا يتجاوز العزل الفرعي). مهمته الأساسية: اعتماد طلبات إجازات
+  // موظفي فرعه (hr_leaves بدون edit حتى لا يصل للمسارات الإدارية الحساسة —
+  // أرصدة الإجازات والعطل الرسمية والتسويات)، مع إدارة الحضور والورديات
+  // ومتابعة موظفي فرعه. لا رواتب ولا إعدادات ولا إدارة مستخدمين.
+  branch_manager: [
+    { module: "dashboard", actions: ["view"] },
+    { module: "hr_leaves", actions: ["view", "create", "approve", "export"] },
+    { module: "branch_employees", actions: ["view", "export"] },
+    { module: "employee_reports", actions: ["view", "export"] },
+    { module: "attendance", actions: ["view", "create", "edit", "export"] },
+    { module: "attendance_check", actions: ["view", "create", "edit"] },
+    { module: "shifts", actions: ["view", "create", "edit", "export"] },
+    { module: "timesheet", actions: ["view", "export"] },
+    { module: "operations", actions: ["view", "create", "edit", "export"] },
+    { module: "branch_complaints", actions: ["view", "create", "edit"] },
+    { module: "maintenance", actions: ["view", "create", "edit"] },
+    { module: "branch_supply", actions: ["view", "create", "edit", "export"] },
+    { module: "central_kitchen_orders", actions: ["view", "create", "edit", "export"] },
+    { module: "delivery_tasks", actions: ["view", "approve", "export"] },
+    { module: "waste_tracking", actions: ["view", "create", "edit", "export"] },
+    { module: "waste", actions: ["view", "create", "edit", "export"] },
+  ],
+
+  // Viewer: View-only access to all modules
+  // Recipe-book permissions are intentionally explicit.  In particular, do
+  // not let the broad view-only template silently grant the new module to
+  // every viewer when the catalog is extended.
+  viewer: SYSTEM_MODULES.filter((m) => m !== "users" && m !== "central_kitchen_recipes" && m !== "delivery_tasks" && m !== "branch_supply").map((module) => ({
+    module,
+    actions: ["view"] as ModuleAction[],
+  })),
+};
+
+// Job Titles - الوظائف
+export const JOB_TITLES = [
+  "cashier",
+  "baker",
+  "supervisor",
+  "branch_manager",
+  "production_manager",
+  "warehouse_keeper",
+  "quality_inspector",
+  "delivery",
+  "cleaner",
+  "maintenance",
+  "executive_secretary",
+  "other",
+] as const;
+
+export type JobTitle = (typeof JOB_TITLES)[number];
+
+// Job Title Labels - مسميات الوظائف بالعربية
+export const JOB_TITLE_LABELS: Record<JobTitle, string> = {
+  cashier: "كاشير",
+  baker: "خباز",
+  supervisor: "مشرف",
+  branch_manager: "مدير فرع",
+  production_manager: "مدير إنتاج",
+  warehouse_keeper: "أمين المستودعات",
+  quality_inspector: "مفتش جودة",
+  delivery: "توصيل",
+  cleaner: "نظافة",
+  maintenance: "صيانة",
+  executive_secretary: "سكرتير تنفيذي",
+  other: "أخرى",
+};
+
+// Job Role Permission Templates - قوالب صلاحيات الوظائف
+export const JOB_ROLE_PERMISSION_TEMPLATES: Record<
+  JobTitle,
+  { module: SystemModule; actions: ModuleAction[] }[]
+> = {
+  // Job title is descriptive, not an authorization path: only the dedicated
+  // warehouse_keeper role carries warehouse authority and its branch restriction.
+  warehouse_keeper: [],
+  // كاشير - يومية الكاشير فقط
+  cashier: [
+    { module: "dashboard", actions: ["view"] },
+    { module: "cashier_journal", actions: ["view", "create", "edit"] },
+  ],
+
+  // خباز - الإنتاج ومراقبة الجودة
+  baker: [
+    { module: "dashboard", actions: ["view"] },
+    { module: "production", actions: ["view", "create", "edit"] },
+    { module: "quality_control", actions: ["view"] },
+  ],
+
+  // مشرف - نظرة عامة على التشغيل مع عرض الأقسام الأساسية
+  supervisor: [
+    { module: "dashboard", actions: ["view", "export"] },
+    { module: "operations", actions: ["view", "create", "edit"] },
+    { module: "production", actions: ["view"] },
+    { module: "shifts", actions: ["view", "create", "edit"] },
+    { module: "quality_control", actions: ["view"] },
+    { module: "cashier_journal", actions: ["view", "approve"] },
+    { module: "daily_closures", actions: ["view", "create", "approve"] },
+    { module: "inventory", actions: ["view"] },
+  ],
+
+  // Keep job-title provisioning aligned with the role's branch-only template.
+  branch_manager: ROLE_PERMISSION_TEMPLATES.branch_manager.map(({ module, actions }) => ({
+    module, actions: [...actions],
+  })),
+
+  // مدير إنتاج - الإنتاج والورديات ومراقبة الجودة
+  production_manager: [
+    { module: "dashboard", actions: ["view", "export"] },
+    { module: "production", actions: ["view", "create", "edit", "approve", "delete"] },
+    { module: "daily_production", actions: ["view", "create", "edit", "export", "print"] },
+    { module: "advanced_production", actions: ["view", "create", "edit", "export"] },
+    { module: "central_kitchen_orders", actions: ["view", "edit", "approve", "export", "print"] },
+    { module: "shifts", actions: ["view", "create", "edit", "delete"] },
+    {
+      module: "quality_control",
+      actions: ["view", "create", "edit", "delete"],
+    },
+    { module: "products", actions: ["view"] },
+    { module: "operations", actions: ["view"] },
+    { module: "inventory", actions: ["view"] },
+  ],
+
+  // مفتش جودة - مراقبة الجودة والإنتاج
+  quality_inspector: [
+    { module: "dashboard", actions: ["view"] },
+    { module: "quality_control", actions: ["view", "create", "edit"] },
+    { module: "production", actions: ["view"] },
+  ],
+
+  // توصيل - يبدأ مهامه ويثبت التسليم وينهيه (دون صلاحيات الإدارة أو الاعتماد)
+  delivery: [
+    { module: "dashboard", actions: ["view"] },
+    { module: "cashier_journal", actions: ["view"] },
+    { module: "delivery_tasks", actions: ["view", "edit"] },
+  ],
+
+  // نظافة - عرض محدود
+  cleaner: [
+    { module: "dashboard", actions: ["view"] },
+    { module: "operations", actions: ["view"] },
+  ],
+
+  // صيانة - المخزون وتحويلات الأصول
+  maintenance: [
+    { module: "dashboard", actions: ["view"] },
+    { module: "inventory", actions: ["view", "edit"] },
+    { module: "asset_transfers", actions: ["view", "create"] },
+    { module: "maintenance", actions: ["view", "create", "edit"] },
+  ],
+
+  // سكرتير تنفيذي - صلاحيات السكرتارية التنفيذية الكاملة
+  executive_secretary: [
+    { module: "dashboard", actions: ["view"] },
+    { module: "executive_dashboard", actions: ["view", "export"] },
+    { module: "executive_meetings", actions: ["view", "create", "edit", "delete", "export", "print"] },
+    { module: "executive_tasks", actions: ["view", "create", "edit", "delete", "change_status"] },
+    { module: "executive_correspondence", actions: ["view", "create", "edit", "delete", "export", "print"] },
+    { module: "executive_documents", actions: ["view", "create", "edit", "delete", "manage_attachments", "export"] },
+    { module: "executive_visitors", actions: ["view", "create", "edit", "delete", "export", "print"] },
+    { module: "executive_travel", actions: ["view", "create", "edit", "submit", "approve", "reject", "export"] },
+    { module: "executive_reports", actions: ["view", "export", "print"] },
+    { module: "executive_notifications", actions: ["view", "create", "edit", "delete", "notify"] },
+  ],
+
+  // أخرى - عرض لوحة التحكم فقط
+  other: [{ module: "dashboard", actions: ["view"] }],
+};
+
+// Job Role Permissions table - جدول صلاحيات الوظائف (للتخصيص)
+export const jobRolePermissions = pgTable("job_role_permissions", {
+  id: serial("id").primaryKey(),
+  jobTitle: text("job_title").notNull(), // cashier, baker, supervisor, etc.
+  module: text("module").notNull(),
+  actions: text("actions").array().notNull(),
+  isDefault: boolean("is_default").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertJobRolePermissionSchema = createInsertSchema(
+  jobRolePermissions,
+).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type JobRolePermission = typeof jobRolePermissions.$inferSelect;
+export type InsertJobRolePermission = z.infer<
+  typeof insertJobRolePermissionSchema
+>;
+
+// Permission Audit Logs - سجل تغييرات الصلاحيات
+export const permissionAuditLogs = pgTable("permission_audit_logs", {
+  id: serial("id").primaryKey(),
+  targetUserId: varchar("target_user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  changedByUserId: varchar("changed_by_user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  action: text("action").notNull(), // 'grant', 'revoke', 'modify', 'apply_template'
+  module: text("module"), // The module affected
+  oldActions: text("old_actions").array(), // Previous actions
+  newActions: text("new_actions").array(), // New actions
+  templateApplied: text("template_applied"), // If a template was applied (e.g., 'admin', 'employee', 'viewer')
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_permission_audit_logs_target_user").on(table.targetUserId),
+  index("idx_permission_audit_logs_changed_by").on(table.changedByUserId),
+  index("idx_permission_audit_logs_created_at").on(table.createdAt),
+]);
+
+export const insertPermissionAuditLogSchema = createInsertSchema(
+  permissionAuditLogs,
+).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type PermissionAuditLog = typeof permissionAuditLogs.$inferSelect;
+export type InsertPermissionAuditLog = z.infer<
+  typeof insertPermissionAuditLogSchema
+>;
+
+// Asset Transfers table - تحويلات الأصول بين الفروع
+export const assetTransfers = pgTable("asset_transfers", {
+  id: serial("id").primaryKey(),
+  transferNumber: text("transfer_number").unique().notNull(),
+  itemId: varchar("item_id")
+    .notNull()
+    .references(() => inventoryItems.id, { onDelete: "cascade" }),
+  quantity: integer("quantity").notNull().default(1),
+  fromBranchId: varchar("from_branch_id")
+    .notNull()
+    .references(() => branches.id),
+  toBranchId: varchar("to_branch_id")
+    .notNull()
+    .references(() => branches.id),
+  status: text("status").default("pending").notNull(), // pending, approved, in_transit, completed, cancelled
+  reason: text("reason"),
+  notes: text("notes"),
+  requestedBy: varchar("requested_by").references(() => users.id),
+  requestedAt: timestamp("requested_at").defaultNow().notNull(),
+  approvedBy: varchar("approved_by").references(() => users.id),
+  approvedAt: timestamp("approved_at"),
+  receivedBy: varchar("received_by").references(() => users.id),
+  receivedAt: timestamp("received_at"),
+  receiverName: text("receiver_name"),
+  receiverSignature: text("receiver_signature"), // Base64 signature
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertAssetTransferSchema = createInsertSchema(
+  assetTransfers,
+).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  requestedAt: true,
+  approvedAt: true,
+  receivedAt: true,
+});
+
+export type AssetTransfer = typeof assetTransfers.$inferSelect;
+export type InsertAssetTransfer = z.infer<typeof insertAssetTransferSchema>;
+
+// Asset Transfer Events table - أحداث التحويل
+export const assetTransferEvents = pgTable("asset_transfer_events", {
+  id: serial("id").primaryKey(),
+  transferId: integer("transfer_id")
+    .notNull()
+    .references(() => assetTransfers.id, { onDelete: "cascade" }),
+  eventType: text("event_type").notNull(), // created, approved, dispatched, received, cancelled
+  actorId: varchar("actor_id").references(() => users.id),
+  note: text("note"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_asset_transfer_events_transfer_id").on(table.transferId),
+]);
+
+export const insertAssetTransferEventSchema = createInsertSchema(
+  assetTransferEvents,
+).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type AssetTransferEvent = typeof assetTransferEvents.$inferSelect;
+export type InsertAssetTransferEvent = z.infer<
+  typeof insertAssetTransferEventSchema
+>;
+
+// External System Integrations - التكاملات مع الأنظمة الخارجية
+export const externalIntegrations = pgTable("external_integrations", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(), // e.g., 'accounting', 'sms', 'whatsapp', 'erp'
+  type: text("type").notNull(), // 'accounting', 'messaging', 'erp', 'import'
+  config: jsonb("config"), // JSON configuration
+  isActive: text("is_active").default("true"),
+  lastSyncAt: timestamp("last_sync_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertExternalIntegrationSchema = createInsertSchema(
+  externalIntegrations,
+).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type ExternalIntegration = typeof externalIntegrations.$inferSelect;
+export type InsertExternalIntegration = z.infer<
+  typeof insertExternalIntegrationSchema
+>;
+
+// Notification Templates - قوالب الإشعارات
+export const notificationTemplates = pgTable("notification_templates", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  eventType: text("event_type").notNull(), // 'transfer_pending', 'transfer_approved', 'maintenance_due', etc.
+  channel: text("channel").notNull(), // 'sms', 'whatsapp', 'email'
+  template: text("template").notNull(), // Template with placeholders like {{itemName}}, {{branchName}}
+  isActive: text("is_active").default("true"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertNotificationTemplateSchema = createInsertSchema(
+  notificationTemplates,
+).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type NotificationTemplate = typeof notificationTemplates.$inferSelect;
+export type InsertNotificationTemplate = z.infer<
+  typeof insertNotificationTemplateSchema
+>;
+
+// Notification Queue - قائمة الإشعارات المنتظرة
+export const notificationQueue = pgTable("notification_queue", {
+  id: serial("id").primaryKey(),
+  recipientPhone: text("recipient_phone").notNull(),
+  recipientName: text("recipient_name"),
+  channel: text("channel").notNull(), // 'sms', 'whatsapp'
+  message: text("message").notNull(),
+  mediaUrl: text("media_url"), // Optional image/media URL for WhatsApp rich messages
+  status: text("status").default("pending").notNull(), // 'pending', 'sent', 'failed'
+  errorMessage: text("error_message"),
+  relatedModule: text("related_module"), // 'transfers', 'inventory', 'projects', 'system_notification'
+  relatedEntityId: text("related_entity_id"),
+  sentAt: timestamp("sent_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  // Retry bookkeeping for the notification scheduler (max 3 attempts).
+  // These columns exist in the production DB (Phase 11) but were missing
+  // from the typed schema, causing TS errors in server/scheduler.ts.
+  retryCount: integer("retry_count").default(0).notNull(),
+  lastAttemptAt: timestamp("last_attempt_at"),
+}, (table) => [
+  index("idx_notification_queue_status").on(table.status),
+  index("idx_notification_queue_created_at").on(table.createdAt),
+  index("idx_notification_queue_status_created_at").on(table.status, table.createdAt),
+]);
+
+export const insertNotificationQueueSchema = createInsertSchema(
+  notificationQueue,
+).omit({
+  id: true,
+  createdAt: true,
+  sentAt: true,
+  retryCount: true,
+  lastAttemptAt: true,
+});
+
+export type NotificationQueueItem = typeof notificationQueue.$inferSelect;
+export type InsertNotificationQueueItem = z.infer<
+  typeof insertNotificationQueueSchema
+>;
+
+// Data Import Jobs - وظائف استيراد البيانات
+export const dataImportJobs = pgTable("data_import_jobs", {
+  id: serial("id").primaryKey(),
+  sourceSystem: text("source_system").notNull(), // 'excel', 'csv', 'api', 'erp'
+  targetModule: text("target_module").notNull(), // 'inventory', 'projects', 'contractors'
+  fileName: text("file_name"),
+  status: text("status").default("pending").notNull(), // 'pending', 'processing', 'completed', 'failed'
+  totalRecords: integer("total_records").default(0),
+  processedRecords: integer("processed_records").default(0),
+  failedRecords: integer("failed_records").default(0),
+  errorLog: text("error_log"),
+  importedBy: varchar("imported_by").references(() => users.id),
+  startedAt: timestamp("started_at"),
+  completedAt: timestamp("completed_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertDataImportJobSchema = createInsertSchema(
+  dataImportJobs,
+).omit({
+  id: true,
+  createdAt: true,
+  startedAt: true,
+  completedAt: true,
+});
+
+export type DataImportJob = typeof dataImportJobs.$inferSelect;
+export type InsertDataImportJob = z.infer<typeof insertDataImportJobSchema>;
+
+// Accounting Journal Entries - القيود المحاسبية
+export const accountingJournalEntries = pgTable("accounting_journal_entries", {
+  id: serial("id").primaryKey(),
+  entryNumber: text("entry_number").notNull(),
+  entryDate: text("entry_date").notNull(),
+  entryType: text("entry_type").notNull(), // 'sales', 'purchases', 'waste', 'production', 'transfer', 'salary', 'expense', 'manual'
+  description: text("description").notNull(),
+  branchId: varchar("branch_id").references(() => branches.id),
+  referenceType: text("reference_type"), // 'cashier_journal', 'waste_report', 'production_order', 'material_request', 'invoice'
+  referenceId: text("reference_id"),
+  totalDebit: numeric("total_debit", { precision: 12, scale: 2 }).default("0"),
+  totalCredit: numeric("total_credit", { precision: 12, scale: 2 }).default("0"),
+  vatAmount: numeric("vat_amount", { precision: 12, scale: 2 }).default("0"),
+  currency: text("currency").default("SAR"),
+  status: text("status").default("draft").notNull(), // 'draft', 'posted', 'reconciled', 'void'
+  reconciliationStatus: text("reconciliation_status").default("pending"), // 'pending', 'matched', 'discrepancy', 'resolved'
+  reconciliationNotes: text("reconciliation_notes"),
+  // Phase 5: link journal entries directly to a construction contract for auto-integration
+  constructionContractId: integer("construction_contract_id").references(() => constructionContracts.id, { onDelete: "set null" }),
+  postedBy: varchar("posted_by").references(() => users.id),
+  postedAt: timestamp("posted_at"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_journal_entry_date").on(table.entryDate),
+  index("idx_journal_entry_type").on(table.entryType),
+  index("idx_journal_entry_branch").on(table.branchId),
+  index("idx_journal_entry_status").on(table.status),
+  index("idx_journal_reconciliation").on(table.reconciliationStatus),
+  index("idx_journal_entry_contract").on(table.constructionContractId),
+]);
+
+export const insertAccountingJournalEntrySchema = createInsertSchema(accountingJournalEntries).omit({
+  id: true,
+  createdAt: true,
+  postedAt: true,
+});
+
+export type AccountingJournalEntry = typeof accountingJournalEntries.$inferSelect;
+export type InsertAccountingJournalEntry = z.infer<typeof insertAccountingJournalEntrySchema>;
+
+// Journal Entry Lines - بنود القيد المحاسبي
+export const journalEntryLines = pgTable("journal_entry_lines", {
+  id: serial("id").primaryKey(),
+  journalEntryId: integer("journal_entry_id").references(() => accountingJournalEntries.id).notNull(),
+  lineNumber: integer("line_number").notNull(),
+  accountCode: text("account_code").notNull(),
+  accountName: text("account_name").notNull(),
+  description: text("description"),
+  debitAmount: numeric("debit_amount", { precision: 12, scale: 2 }).default("0"),
+  creditAmount: numeric("credit_amount", { precision: 12, scale: 2 }).default("0"),
+  costCenter: text("cost_center"),
+  vatCode: text("vat_code"),
+  vatRate: numeric("vat_rate", { precision: 5, scale: 2 }),
+});
+
+export const insertJournalEntryLineSchema = createInsertSchema(journalEntryLines).omit({
+  id: true,
+});
+
+export type JournalEntryLine = typeof journalEntryLines.$inferSelect;
+export type InsertJournalEntryLine = z.infer<typeof insertJournalEntryLineSchema>;
+
+// Accounting Reconciliation Records - سجلات التسوية
+export const accountingReconciliations = pgTable("accounting_reconciliations", {
+  id: serial("id").primaryKey(),
+  reconciliationDate: text("reconciliation_date").notNull(),
+  periodFrom: text("period_from").notNull(),
+  periodTo: text("period_to").notNull(),
+  branchId: varchar("branch_id").references(() => branches.id),
+  totalSystemSales: numeric("total_system_sales", { precision: 12, scale: 2 }).default("0"),
+  totalActualDeposits: numeric("total_actual_deposits", { precision: 12, scale: 2 }).default("0"),
+  totalVariance: numeric("total_variance", { precision: 12, scale: 2 }).default("0"),
+  totalWasteValue: numeric("total_waste_value", { precision: 12, scale: 2 }).default("0"),
+  totalPurchases: numeric("total_purchases", { precision: 12, scale: 2 }).default("0"),
+  vatCollected: numeric("vat_collected", { precision: 12, scale: 2 }).default("0"),
+  vatPaid: numeric("vat_paid", { precision: 12, scale: 2 }).default("0"),
+  netVat: numeric("net_vat", { precision: 12, scale: 2 }).default("0"),
+  entriesCount: integer("entries_count").default(0),
+  matchedCount: integer("matched_count").default(0),
+  discrepancyCount: integer("discrepancy_count").default(0),
+  status: text("status").default("draft").notNull(), // 'draft', 'in_review', 'approved', 'exported'
+  notes: text("notes"),
+  preparedBy: varchar("prepared_by").references(() => users.id),
+  approvedBy: varchar("approved_by").references(() => users.id),
+  approvedAt: timestamp("approved_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_reconciliation_date").on(table.reconciliationDate),
+  index("idx_reconciliation_branch").on(table.branchId),
+  index("idx_reconciliation_status").on(table.status),
+]);
+
+export const insertAccountingReconciliationSchema = createInsertSchema(accountingReconciliations).omit({
+  id: true,
+  createdAt: true,
+  approvedAt: true,
+});
+
+export type AccountingReconciliation = typeof accountingReconciliations.$inferSelect;
+export type InsertAccountingReconciliation = z.infer<typeof insertAccountingReconciliationSchema>;
+
+// Chart of Accounts - دليل الحسابات
+export const chartOfAccounts = pgTable("chart_of_accounts", {
+  id: serial("id").primaryKey(),
+  accountCode: text("account_code").notNull().unique(),
+  accountName: text("account_name").notNull(),
+  accountNameEn: text("account_name_en"),
+  accountType: text("account_type").notNull(), // 'asset', 'liability', 'equity', 'revenue', 'expense'
+  parentCode: text("parent_code"),
+  level: integer("level").default(1),
+  isActive: text("is_active").default("true"),
+  description: text("description"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertChartOfAccountSchema = createInsertSchema(chartOfAccounts).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type ChartOfAccount = typeof chartOfAccounts.$inferSelect;
+export type InsertChartOfAccount = z.infer<typeof insertChartOfAccountSchema>;
+
+// Accounting Exports - تصدير للمحاسبة
+export const accountingExports = pgTable("accounting_exports", {
+  id: serial("id").primaryKey(),
+  exportType: text("export_type").notNull(), // 'inventory_valuation', 'asset_movements', 'project_costs'
+  dateFrom: text("date_from"),
+  dateTo: text("date_to"),
+  branchId: varchar("branch_id").references(() => branches.id),
+  data: jsonb("data"), // Exported data in JSON format
+  status: text("status").default("pending").notNull(), // 'pending', 'completed', 'synced'
+  syncedAt: timestamp("synced_at"),
+  exportedBy: varchar("exported_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertAccountingExportSchema = createInsertSchema(
+  accountingExports,
+).omit({
+  id: true,
+  createdAt: true,
+  syncedAt: true,
+});
+
+export type AccountingExport = typeof accountingExports.$inferSelect;
+export type InsertAccountingExport = z.infer<
+  typeof insertAccountingExportSchema
+>;
+
+// ============================================
+// نظام التشغيل - Operations Module
+// ============================================
+
+// Products table - المنتجات (المخبوزات والمعجنات)
+export const products = pgTable("products", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  nameEn: text("name_en"), // الاسم بالإنجليزية
+  sku: text("sku"), // رمز المنتج
+  category: text("category").notNull(), // bread, pastry, cake, sandwich, etc.
+  productType: text("product_type").default("finish"), // نوع الصنف: finish (نهائي) أو inventory (مخزني)
+  unit: text("unit").default("قطعة"), // قطعة، كيلو، صينية
+  basePrice: doublePrecision("base_price"), // السعر شامل الضريبة
+  priceExclVat: doublePrecision("price_excl_vat"), // السعر بدون ضريبة
+  vatAmount: doublePrecision("vat_amount"), // قيمة الضريبة
+  vatRate: doublePrecision("vat_rate").default(0.15), // نسبة الضريبة
+  isActive: text("is_active").default("true"),
+  // is_active remains the legacy POS gate: old deployments must not sell
+  // newly imported, unpriced operational products during a rolling deploy.
+  operationsEnabled: boolean("operations_enabled").default(false).notNull(),
+  saleEnabled: boolean("sale_enabled").default(true).notNull(),
+  description: text("description"), // وصف المنتج
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertProductSchema = createInsertSchema(products).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type Product = typeof products.$inferSelect;
+export type InsertProduct = z.infer<typeof insertProductSchema>;
+
+// Shifts table - الورديات
+export const shifts = pgTable("shifts", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id")
+    .notNull()
+    .references(() => branches.id, { onDelete: "cascade" }),
+  name: text("name").notNull(), // الوردية الصباحية، المسائية، الليلية
+  date: text("date").notNull(), // التاريخ
+  startTime: text("start_time").notNull(), // وقت البدء
+  endTime: text("end_time").notNull(), // وقت الانتهاء
+  status: text("status").default("scheduled").notNull(), // scheduled, active, completed, cancelled
+  supervisorName: text("supervisor_name"), // اسم المشرف
+  employeeCount: integer("employee_count").default(0), // عدد الموظفين
+  notes: text("notes"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_shifts_branch_id").on(table.branchId),
+  index("idx_shifts_date").on(table.date),
+  index("idx_shifts_branch_date").on(table.branchId, table.date),
+]);
+
+export const insertShiftSchema = createInsertSchema(shifts).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type Shift = typeof shifts.$inferSelect;
+export type InsertShift = z.infer<typeof insertShiftSchema>;
+
+// Shift Employees table - موظفي الوردية
+export const shiftEmployees = pgTable("shift_employees", {
+  id: serial("id").primaryKey(),
+  shiftId: integer("shift_id")
+    .notNull()
+    .references(() => shifts.id, { onDelete: "cascade" }),
+  employeeName: text("employee_name").notNull(),
+  role: text("role"), // خباز، معجناتي، كاشير، منظف، إلخ
+  checkInTime: text("check_in_time"),
+  checkOutTime: text("check_out_time"),
+  status: text("status").default("expected").notNull(), // expected, present, absent, late
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_shift_employees_shift_id").on(table.shiftId),
+  index("idx_shift_employees_status").on(table.status),
+]);
+
+export const insertShiftEmployeeSchema = createInsertSchema(
+  shiftEmployees,
+).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type ShiftEmployee = typeof shiftEmployees.$inferSelect;
+export type InsertShiftEmployee = z.infer<typeof insertShiftEmployeeSchema>;
+
+// Production Orders table - أوامر الإنتاج
+export const productionOrders = pgTable("production_orders", {
+  id: serial("id").primaryKey(),
+  orderNumber: text("order_number").unique(),
+  branchId: varchar("branch_id")
+    .notNull()
+    .references(() => branches.id, { onDelete: "cascade" }),
+  shiftId: integer("shift_id").references(() => shifts.id),
+  productId: integer("product_id")
+    .notNull()
+    .references(() => products.id),
+  targetQuantity: integer("target_quantity").notNull(), // الكمية المطلوبة
+  producedQuantity: integer("produced_quantity").default(0), // الكمية المنتجة
+  wastedQuantity: integer("wasted_quantity").default(0), // الكمية التالفة
+  status: text("status").default("pending").notNull(), // pending, in_progress, completed, cancelled
+  priority: text("priority").default("normal"), // urgent, high, normal, low
+  scheduledDate: text("scheduled_date"),
+  scheduledTime: text("scheduled_time"),
+  startedAt: timestamp("started_at"),
+  completedAt: timestamp("completed_at"),
+  assignedTo: text("assigned_to"), // الخباز المسؤول
+  notes: text("notes"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_production_orders_branch_id").on(table.branchId),
+  index("idx_production_orders_status").on(table.status),
+  index("idx_production_orders_scheduled_date").on(table.scheduledDate),
+  index("idx_production_orders_branch_status").on(table.branchId, table.status),
+  // PERF: operations reports filter by branch + date range together.
+  index("idx_production_orders_branch_scheduled").on(table.branchId, table.scheduledDate),
+]);
+
+export const insertProductionOrderSchema = createInsertSchema(
+  productionOrders,
+).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  startedAt: true,
+  completedAt: true,
+});
+
+export type ProductionOrder = typeof productionOrders.$inferSelect;
+export type InsertProductionOrder = z.infer<typeof insertProductionOrderSchema>;
+
+// Quality Checks table - فحوصات الجودة
+export const qualityChecks = pgTable("quality_checks", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id")
+    .notNull()
+    .references(() => branches.id, { onDelete: "cascade" }),
+  shiftId: integer("shift_id").references(() => shifts.id),
+  productionOrderId: integer("production_order_id").references(
+    () => productionOrders.id,
+  ),
+  checkType: text("check_type").notNull(), // temperature, appearance, taste, weight, packaging, cleanliness
+  checkDate: text("check_date").notNull(),
+  checkTime: text("check_time"),
+  result: text("result").notNull(), // passed, failed, needs_improvement
+  score: integer("score"), // درجة الجودة (1-100)
+  temperature: real("temperature"), // درجة الحرارة (للأفران والثلاجات)
+  checkedBy: text("checked_by").notNull(), // اسم الفاحص
+  details: text("details"), // تفاصيل الفحص (JSON)
+  issues: text("issues"), // المشاكل المكتشفة
+  correctiveAction: text("corrective_action"), // الإجراء التصحيحي
+  attachmentUrl: text("attachment_url"), // صورة أو مستند
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  // PERF: operations reports join quality_checks by production_order_id.
+  index("idx_quality_checks_production_order").on(table.productionOrderId),
+]);
+
+export const insertQualityCheckSchema = createInsertSchema(qualityChecks).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type QualityCheck = typeof qualityChecks.$inferSelect;
+export type InsertQualityCheck = z.infer<typeof insertQualityCheckSchema>;
+
+// Daily Operations Summary - ملخص العمليات اليومية
+export const dailyOperationsSummary = pgTable("daily_operations_summary", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id")
+    .notNull()
+    .references(() => branches.id, { onDelete: "cascade" }),
+  date: text("date").notNull(),
+  totalOrders: integer("total_orders").default(0),
+  completedOrders: integer("completed_orders").default(0),
+  totalProduced: integer("total_produced").default(0),
+  totalWasted: integer("total_wasted").default(0),
+  wastePercentage: real("waste_percentage").default(0),
+  qualityScore: real("quality_score"), // متوسط درجة الجودة
+  shiftsCount: integer("shifts_count").default(0),
+  employeesPresent: integer("employees_present").default(0),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertDailyOperationsSummarySchema = createInsertSchema(
+  dailyOperationsSummary,
+).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type DailyOperationsSummary = typeof dailyOperationsSummary.$inferSelect;
+export type InsertDailyOperationsSummary = z.infer<
+  typeof insertDailyOperationsSummarySchema
+>;
+
+// ==================== Cashier Sales Journal Module ====================
+
+// Cashier Sales Journals table - يومية مبيعات الكاشير
+export const cashierSalesJournals = pgTable("cashier_sales_journals", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id")
+    .notNull()
+    .references(() => branches.id, { onDelete: "cascade" }),
+  shiftId: integer("shift_id").references(() => shifts.id),
+  cashierId: varchar("cashier_id")
+    .notNull()
+    .references(() => users.id),
+  cashierName: text("cashier_name").notNull(),
+  journalDate: text("journal_date").notNull(), // تاريخ اليومية
+  shiftType: text("shift_type"), // صباحي، مسائي، ليلي
+  shiftStartTime: text("shift_start_time"), // وقت بدء الشفت
+  shiftEndTime: text("shift_end_time"), // وقت انتهاء الشفت
+
+  // رصيد افتتاحي
+  openingBalance: real("opening_balance").default(0).notNull(), // رصيد الافتتاح في الصندوق
+
+  // إجمالي المبيعات
+  totalSales: real("total_sales").default(0).notNull(), // إجمالي المبيعات
+  cashTotal: real("cash_total").default(0).notNull(), // إجمالي النقد
+  networkTotal: real("network_total").default(0).notNull(), // إجمالي الشبكة
+  deliveryTotal: real("delivery_total").default(0).notNull(), // إجمالي التوصيل
+
+  // مقارنة الصندوق النقدي
+  expectedCash: real("expected_cash").default(0).notNull(), // النقد المتوقع
+  actualCashDrawer: real("actual_cash_drawer").default(0).notNull(), // النقد الفعلي بالصندوق
+  discrepancyAmount: real("discrepancy_amount").default(0).notNull(), // مبلغ الفرق النقدي
+  discrepancyStatus: text("discrepancy_status").default("balanced").notNull(), // balanced, shortage, surplus
+
+  // Bank Reconciliation columns - مطابقة البنك
+  totalBankPosAmount: real("total_bank_pos_amount").default(0), // إجمالي المدفوعات البنكية من الكاشير
+  totalBankTerminalAmount: real("total_bank_terminal_amount").default(0), // إجمالي المدفوعات البنكية من التيرمنال
+  bankDiscrepancyTotal: real("bank_discrepancy_total").default(0), // إجمالي الفرق البنكي
+  bankDiscrepancyStatus: text("bank_discrepancy_status").default("balanced"), // حالة المطابقة البنكية
+  isInputError: boolean("is_input_error").default(false), // هل الفرق بسبب خطأ إدخال
+  inputErrorAmount: real("input_error_amount").default(0), // مبلغ خطأ الإدخال
+  netDiscrepancy: real("net_discrepancy").default(0), // صافي الفرق
+
+  // المرتجعات - Returns
+  returnAmount: real("return_amount").default(0), // مبلغ المرتجع
+  returnPaymentMethod: text("return_payment_method"), // طريقة الدفع المرتجعة (cash, mada, visa, etc)
+  returnReason: text("return_reason"), // سبب المرتجع
+  returnReference: text("return_reference"), // رقم الفاتورة المرتجعة
+  hasReturn: boolean("has_return").default(false), // هل يوجد مرتجع
+
+  // إحصائيات
+  customerCount: integer("customer_count").default(0), // عدد العملاء
+  transactionCount: integer("transaction_count").default(0), // عدد الفواتير
+  averageTicket: real("average_ticket").default(0), // متوسط الفاتورة
+
+  // الحالة والتوقيع
+  status: text("status").default("draft").notNull(), // draft, submitted, approved, rejected
+  submittedAt: timestamp("submitted_at"),
+  approvedBy: varchar("approved_by").references(() => users.id),
+  approvedAt: timestamp("approved_at"),
+
+  notes: text("notes"),
+
+  // ترحيل العجز إلى السلف والقروض (خصم راتب) — منع الترحيل المزدوج
+  deficitDeductionId: integer("deficit_deduction_id"), // معرف خصم الراتب المرحَّل إليه
+  deficitPostedBy: varchar("deficit_posted_by").references(() => users.id),
+  deficitPostedAt: timestamp("deficit_posted_at"),
+
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_journals_branch_date").on(table.branchId, table.journalDate),
+  index("idx_journals_cashier").on(table.cashierId),
+  index("idx_journals_status").on(table.status),
+  // PERF: extra covering indexes for the operations reports dashboard filters.
+  index("idx_cashier_journals_cashier_date").on(table.cashierId, table.journalDate),
+  index("idx_cashier_journals_branch_status_date").on(table.branchId, table.status, table.journalDate),
+  index("idx_cashier_journals_discrepancy").on(table.discrepancyStatus),
+  index("idx_cashier_journals_date_desc").on(table.journalDate),
+]);
+
+export const insertCashierSalesJournalSchema = createInsertSchema(
+  cashierSalesJournals,
+).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  submittedAt: true,
+  approvedAt: true,
+});
+
+export type CashierSalesJournal = typeof cashierSalesJournals.$inferSelect;
+export type InsertCashierSalesJournal = z.infer<
+  typeof insertCashierSalesJournalSchema
+>;
+
+// Payment Breakdown table - تفصيل المبيعات حسب وسيلة الدفع
+export const cashierPaymentBreakdowns = pgTable("cashier_payment_breakdowns", {
+  id: serial("id").primaryKey(),
+  journalId: integer("journal_id")
+    .notNull()
+    .references(() => cashierSalesJournals.id, { onDelete: "cascade" }),
+  paymentMethod: text("payment_method").notNull(), // cash, card, mada, stc_pay, apple_pay, visa, mastercard, delivery_app, other
+  amount: real("amount").default(0).notNull(), // المبلغ من نظام الكاشير (POS)
+  
+  // Bank Reconciliation columns - مطابقة البنك
+  posAmount: real("pos_amount").default(0), // المبلغ من نظام نقاط البيع (POS)
+  terminalAmount: real("terminal_amount").default(0), // المبلغ من جهاز الصراف البنكي (Terminal)
+  bankDiscrepancy: real("bank_discrepancy").default(0), // الفرق بين POS والتيرمنال
+  bankDiscrepancyType: text("bank_discrepancy_type").default("balanced"), // نوع الفرق: balanced, shortage, surplus
+  terminalTransactionCount: integer("terminal_transaction_count").default(0), // عدد العمليات من جهاز البنك
+  
+  transactionCount: integer("transaction_count").default(0), // عدد العمليات من الكاشير
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertCashierPaymentBreakdownSchema = createInsertSchema(
+  cashierPaymentBreakdowns,
+).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type CashierPaymentBreakdown =
+  typeof cashierPaymentBreakdowns.$inferSelect;
+export type InsertCashierPaymentBreakdown = z.infer<
+  typeof insertCashierPaymentBreakdownSchema
+>;
+
+// Payment Methods labels
+export const PAYMENT_METHODS = [
+  "cash",
+  "card",
+  "mada",
+  "stc_pay",
+  "apple_pay",
+  "visa",
+  "mastercard",
+  "delivery_app",
+  "hunger_station",
+  "hungerstation",
+  "toyou",
+  "jahez",
+  "marsool",
+  "keeta",
+  "the_chefs",
+  "ninja",
+  "other",
+] as const;
+
+export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
+
+// Payment method categories for reporting
+export const PAYMENT_CATEGORIES = {
+  cash: ["cash"],
+  cards: ["card", "mada", "stc_pay", "apple_pay", "visa", "mastercard"],
+  apps: [
+    "delivery_app",
+    "hunger_station",
+    "hungerstation",
+    "toyou",
+    "jahez",
+    "marsool",
+    "keeta",
+    "the_chefs",
+    "ninja",
+  ],
+} as const;
+
+export type PaymentCategory = keyof typeof PAYMENT_CATEGORIES;
+
+export const PAYMENT_CATEGORY_LABELS: Record<PaymentCategory, string> = {
+  cash: "نقدي",
+  cards: "بطاقات وشبكة",
+  apps: "تطبيقات التوصيل (آجل)",
+};
+
+// Bank payment methods that require terminal reconciliation - طرق الدفع البنكية التي تتطلب مطابقة التيرمنال
+export const BANK_PAYMENT_METHODS = [
+  "card",
+  "mada", 
+  "stc_pay",
+  "apple_pay",
+  "visa",
+  "mastercard",
+] as const;
+
+export type BankPaymentMethod = (typeof BANK_PAYMENT_METHODS)[number];
+
+// Helper to check if a payment method requires bank reconciliation
+export const requiresBankReconciliation = (method: string): boolean => {
+  return BANK_PAYMENT_METHODS.includes(method as BankPaymentMethod);
+};
+
+export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
+  cash: "نقد",
+  card: "بطاقة ائتمان",
+  mada: "مدى",
+  stc_pay: "STC Pay",
+  apple_pay: "Apple Pay",
+  visa: "فيزا",
+  mastercard: "ماستركارد",
+  delivery_app: "تطبيق توصيل",
+  hunger_station: "هنقرستيشن",
+  hungerstation: "هنقرستيشن",
+  toyou: "تو يو",
+  jahez: "جاهز",
+  marsool: "مرسول",
+  keeta: "كيتا",
+  the_chefs: "ذا شيفز",
+  ninja: "نينجا",
+  other: "أخرى",
+};
+
+// Cashier Signatures table - التوقيعات الإلكترونية
+export const cashierSignatures = pgTable("cashier_signatures", {
+  id: serial("id").primaryKey(),
+  journalId: integer("journal_id")
+    .notNull()
+    .references(() => cashierSalesJournals.id, { onDelete: "cascade" }),
+  signatureType: text("signature_type").notNull(), // cashier, supervisor, manager
+  signerName: text("signer_name").notNull(),
+  signerId: varchar("signer_id").references(() => users.id),
+  signatureData: text("signature_data").notNull(), // Base64 encoded signature image
+  signedAt: timestamp("signed_at").defaultNow().notNull(),
+  ipAddress: text("ip_address"),
+  notes: text("notes"),
+});
+
+export const insertCashierSignatureSchema = createInsertSchema(
+  cashierSignatures,
+).omit({
+  id: true,
+  signedAt: true,
+});
+
+export type CashierSignature = typeof cashierSignatures.$inferSelect;
+export type InsertCashierSignature = z.infer<
+  typeof insertCashierSignatureSchema
+>;
+
+// Journal Attachments - for storing photos (Foodics report, network device report, etc.)
+export const ATTACHMENT_TYPES = [
+  "foodics_report",
+  "network_report",
+  "other",
+] as const;
+export type AttachmentType = (typeof ATTACHMENT_TYPES)[number];
+
+export const ATTACHMENT_TYPE_LABELS: Record<AttachmentType, string> = {
+  foodics_report: "تقرير فوديكس",
+  network_report: "تقرير جهاز الشبكة",
+  other: "أخرى",
+};
+
+export const journalAttachments = pgTable("journal_attachments", {
+  id: serial("id").primaryKey(),
+  journalId: integer("journal_id")
+    .notNull()
+    .references(() => cashierSalesJournals.id, { onDelete: "cascade" }),
+  attachmentType: text("attachment_type").notNull(), // foodics_report, network_report, other
+  fileName: text("file_name").notNull(),
+  // Legacy: base64 inline (kept nullable so old rows keep working while we
+  // migrate everything to Supabase Storage). New uploads MUST use filePath.
+  fileData: text("file_data"),
+  // New Supabase Storage fields
+  filePath: text("file_path"), // object path inside Supabase bucket
+  downloadUrl: text("download_url"), // proxy URL: /api/uploads/file/{path}
+  mimeType: text("mime_type").notNull(),
+  fileSize: integer("file_size"),
+  notes: text("notes"),
+  uploadedBy: varchar("uploaded_by").references(() => users.id),
+  uploadedAt: timestamp("uploaded_at").defaultNow().notNull(),
+}, (table) => ({
+  journalIdIdx: index("idx_journal_attachments_journal_id").on(table.journalId),
+}));
+
+export const insertJournalAttachmentSchema = createInsertSchema(
+  journalAttachments,
+).omit({
+  id: true,
+  uploadedAt: true,
+});
+
+export type JournalAttachment = typeof journalAttachments.$inferSelect;
+export type InsertJournalAttachment = z.infer<
+  typeof insertJournalAttachmentSchema
+>;
+
+// Discrepancy status labels
+export const DISCREPANCY_STATUS = ["balanced", "shortage", "surplus"] as const;
+export type DiscrepancyStatus = (typeof DISCREPANCY_STATUS)[number];
+
+export const DISCREPANCY_STATUS_LABELS: Record<DiscrepancyStatus, string> = {
+  balanced: "متوازن",
+  shortage: "عجز",
+  surplus: "زيادة",
+};
+
+// Journal status labels
+export const JOURNAL_STATUS = [
+  "draft",
+  "posted",
+  "submitted",
+  "approved",
+  "rejected",
+] as const;
+export type JournalStatus = (typeof JOURNAL_STATUS)[number];
+
+export const JOURNAL_STATUS_LABELS: Record<JournalStatus, string> = {
+  draft: "مسودة",
+  posted: "مُرحَّل",
+  submitted: "مقدم للمراجعة",
+  approved: "معتمد",
+  rejected: "مرفوض",
+};
+
+// ==================== Branch Daily Closures Module ====================
+
+// Branch Daily Closures table - الإغلاق اليومي للفرع (اليومية المجمعة)
+export const branchDailyClosures = pgTable("branch_daily_closures", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id")
+    .notNull()
+    .references(() => branches.id, { onDelete: "cascade" }),
+  closureDate: text("closure_date").notNull(), // تاريخ الإغلاق
+
+  // إجمالي المبيعات المجمعة
+  totalSales: real("total_sales").default(0).notNull(),
+  cashTotal: real("cash_total").default(0).notNull(),
+  networkTotal: real("network_total").default(0).notNull(),
+  deliveryTotal: real("delivery_total").default(0).notNull(),
+
+  // إجمالي الصندوق النقدي
+  totalOpeningBalance: real("total_opening_balance").default(0).notNull(),
+  totalExpectedCash: real("total_expected_cash").default(0).notNull(),
+  totalActualCash: real("total_actual_cash").default(0).notNull(),
+  totalCashDiscrepancy: real("total_cash_discrepancy").default(0).notNull(),
+  cashDiscrepancyStatus: text("cash_discrepancy_status").default("balanced").notNull(),
+
+  // مطابقة البنك المجمعة
+  totalBankPosAmount: real("total_bank_pos_amount").default(0),
+  totalBankTerminalAmount: real("total_bank_terminal_amount").default(0),
+  totalBankDiscrepancy: real("total_bank_discrepancy").default(0),
+  bankDiscrepancyStatus: text("bank_discrepancy_status").default("balanced"),
+
+  // إحصائيات مجمعة
+  totalCustomerCount: integer("total_customer_count").default(0),
+  totalTransactionCount: integer("total_transaction_count").default(0),
+  averageTicket: real("average_ticket").default(0),
+  journalsCount: integer("journals_count").default(0).notNull(), // عدد اليوميات المجمعة
+
+  // الحالة
+  status: text("status").default("open").notNull(), // open, closed
+  closedBy: varchar("closed_by").references(() => users.id),
+  closedAt: timestamp("closed_at"),
+
+  notes: text("notes"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  // UNIQUE constraint: only one closure per branch+date (DB-level race guard).
+  // Maps to error code 23505 → handled as 409 in the route.
+  uniqueIndex("uq_daily_closure_branch_date").on(table.branchId, table.closureDate),
+  index("idx_daily_closure_status").on(table.status),
+]);
+
+export const insertBranchDailyClosureSchema = createInsertSchema(
+  branchDailyClosures,
+).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  closedAt: true,
+});
+
+export type BranchDailyClosure = typeof branchDailyClosures.$inferSelect;
+export type InsertBranchDailyClosure = z.infer<typeof insertBranchDailyClosureSchema>;
+
+// Branch Daily Closure Payments - تفاصيل الدفع المجمعة
+export const branchDailyClosurePayments = pgTable("branch_daily_closure_payments", {
+  id: serial("id").primaryKey(),
+  closureId: integer("closure_id")
+    .notNull()
+    .references(() => branchDailyClosures.id, { onDelete: "cascade" }),
+  paymentMethod: text("payment_method").notNull(),
+  totalAmount: real("total_amount").default(0).notNull(),
+  totalPosAmount: real("total_pos_amount").default(0),
+  totalTerminalAmount: real("total_terminal_amount").default(0),
+  totalBankDiscrepancy: real("total_bank_discrepancy").default(0),
+  bankDiscrepancyType: text("bank_discrepancy_type").default("balanced"),
+  totalTransactionCount: integer("total_transaction_count").default(0),
+  totalTerminalTransactionCount: integer("total_terminal_transaction_count").default(0),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertBranchDailyClosurePaymentSchema = createInsertSchema(
+  branchDailyClosurePayments,
+).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type BranchDailyClosurePayment = typeof branchDailyClosurePayments.$inferSelect;
+export type InsertBranchDailyClosurePayment = z.infer<typeof insertBranchDailyClosurePaymentSchema>;
+
+// Branch Daily Closure Journals - ربط اليومية المجمعة باليوميات الفردية
+export const branchDailyClosureJournals = pgTable("branch_daily_closure_journals", {
+  id: serial("id").primaryKey(),
+  closureId: integer("closure_id")
+    .notNull()
+    .references(() => branchDailyClosures.id, { onDelete: "cascade" }),
+  journalId: integer("journal_id")
+    .notNull()
+    .references(() => cashierSalesJournals.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_closure_journal_closure").on(table.closureId),
+  uniqueIndex("idx_closure_journal_unique").on(table.journalId),
+]);
+
+export const insertBranchDailyClosureJournalSchema = createInsertSchema(
+  branchDailyClosureJournals,
+).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type BranchDailyClosureJournal = typeof branchDailyClosureJournals.$inferSelect;
+export type InsertBranchDailyClosureJournal = z.infer<typeof insertBranchDailyClosureJournalSchema>;
+
+// Closure status labels
+export const CLOSURE_STATUS = ["open", "closed"] as const;
+export type ClosureStatus = (typeof CLOSURE_STATUS)[number];
+
+export const CLOSURE_STATUS_LABELS: Record<ClosureStatus, string> = {
+  open: "مفتوح",
+  closed: "مُغلق",
+};
+
+// ==========================================
+// نظام الأهداف والحوافز - Targets & Incentives System
+// ==========================================
+
+// Target Weight Profiles - ملفات توزيع الأوزان للأيام والمواسم
+export const targetWeightProfiles = pgTable("target_weight_profiles", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  description: text("description"),
+  isDefault: boolean("is_default").default(false),
+  isActive: boolean("is_active").default(true).notNull(),
+  // Weekly weights (percentage multipliers)
+  sundayWeight: real("sunday_weight").default(100).notNull(),
+  mondayWeight: real("monday_weight").default(100).notNull(),
+  tuesdayWeight: real("tuesday_weight").default(100).notNull(),
+  wednesdayWeight: real("wednesday_weight").default(100).notNull(),
+  thursdayWeight: real("thursday_weight").default(130).notNull(), // Higher for weekends
+  fridayWeight: real("friday_weight").default(130).notNull(),
+  saturdayWeight: real("saturday_weight").default(100).notNull(),
+  // Seasonal adjustments (JSON array of {startDate, endDate, multiplier, name})
+  seasonalAdjustments: jsonb("seasonal_adjustments"),
+  // Holiday overrides (JSON array of {date, multiplier, name})
+  holidayOverrides: jsonb("holiday_overrides"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertTargetWeightProfileSchema = createInsertSchema(
+  targetWeightProfiles,
+).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type TargetWeightProfile = typeof targetWeightProfiles.$inferSelect;
+export type InsertTargetWeightProfile = z.infer<
+  typeof insertTargetWeightProfileSchema
+>;
+
+// Branch Monthly Targets - الأهداف الشهرية للفروع
+export const branchMonthlyTargets = pgTable("branch_monthly_targets", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id")
+    .notNull()
+    .references(() => branches.id, { onDelete: "cascade" }),
+  yearMonth: text("year_month").notNull(), // Format: "2025-01"
+  targetAmount: real("target_amount").notNull(), // Total monthly target in SAR
+  profileId: integer("profile_id").references(() => targetWeightProfiles.id),
+  status: text("status").default("draft").notNull(), // draft, active, locked, archived
+  notes: text("notes"),
+  createdBy: varchar("created_by").references(() => users.id),
+  approvedBy: varchar("approved_by").references(() => users.id),
+  approvedAt: timestamp("approved_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertBranchMonthlyTargetSchema = createInsertSchema(
+  branchMonthlyTargets,
+).omit({
+  id: true,
+  approvedAt: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type BranchMonthlyTarget = typeof branchMonthlyTargets.$inferSelect;
+export type InsertBranchMonthlyTarget = z.infer<
+  typeof insertBranchMonthlyTargetSchema
+>;
+
+// Target Daily Allocations - توزيع الهدف على الأيام
+export const targetDailyAllocations = pgTable("target_daily_allocations", {
+  id: serial("id").primaryKey(),
+  monthlyTargetId: integer("monthly_target_id")
+    .notNull()
+    .references(() => branchMonthlyTargets.id, { onDelete: "cascade" }),
+  targetDate: text("target_date").notNull(), // Format: "2025-01-15"
+  weightPercent: real("weight_percent").notNull(), // Percentage weight for this day
+  dailyTarget: real("daily_target").notNull(), // Calculated daily target amount
+  isHoliday: boolean("is_holiday").default(false),
+  isManualOverride: boolean("is_manual_override").default(false),
+  overrideReason: text("override_reason"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertTargetDailyAllocationSchema = createInsertSchema(
+  targetDailyAllocations,
+).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type TargetDailyAllocation = typeof targetDailyAllocations.$inferSelect;
+export type InsertTargetDailyAllocation = z.infer<
+  typeof insertTargetDailyAllocationSchema
+>;
+
+// Target Shift Allocations - توزيع الهدف على الورديات
+export const targetShiftAllocations = pgTable("target_shift_allocations", {
+  id: serial("id").primaryKey(),
+  dailyAllocationId: integer("daily_allocation_id")
+    .notNull()
+    .references(() => targetDailyAllocations.id, { onDelete: "cascade" }),
+  shiftType: text("shift_type").notNull(), // morning, evening, night
+  shiftTarget: real("shift_target").notNull(), // Target amount for this shift
+  shiftWeightPercent: real("shift_weight_percent").notNull(), // Percentage of daily target
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertTargetShiftAllocationSchema = createInsertSchema(
+  targetShiftAllocations,
+).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type TargetShiftAllocation = typeof targetShiftAllocations.$inferSelect;
+export type InsertTargetShiftAllocation = z.infer<
+  typeof insertTargetShiftAllocationSchema
+>;
+
+// Incentive Tiers - مستويات الحوافز
+export const incentiveTiers = pgTable("incentive_tiers", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  description: text("description"),
+  minAchievementPercent: real("min_achievement_percent").notNull(), // e.g., 80%
+  maxAchievementPercent: real("max_achievement_percent"), // e.g., 99.99%
+  rewardType: text("reward_type").notNull(), // fixed, percentage, both
+  fixedAmount: real("fixed_amount"), // Fixed bonus amount
+  percentageRate: real("percentage_rate"), // Percentage of excess sales
+  isActive: boolean("is_active").default(true).notNull(),
+  applicableTo: text("applicable_to").default("all").notNull(), // all, cashier, branch
+  sortOrder: integer("sort_order").default(0),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertIncentiveTierSchema = createInsertSchema(
+  incentiveTiers,
+).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type IncentiveTier = typeof incentiveTiers.$inferSelect;
+export type InsertIncentiveTier = z.infer<typeof insertIncentiveTierSchema>;
+
+// Incentive Awards - سجل المكافآت والحوافز الممنوحة
+export const incentiveAwards = pgTable("incentive_awards", {
+  id: serial("id").primaryKey(),
+  awardType: text("award_type").notNull(), // daily, monthly, special
+  branchId: varchar("branch_id").references(() => branches.id),
+  cashierId: varchar("cashier_id").references(() => users.id),
+  periodStart: text("period_start").notNull(), // Start date of achievement period
+  periodEnd: text("period_end").notNull(), // End date of achievement period
+  targetAmount: real("target_amount").notNull(),
+  achievedAmount: real("achieved_amount").notNull(),
+  achievementPercent: real("achievement_percent").notNull(),
+  tierId: integer("tier_id").references(() => incentiveTiers.id),
+  calculatedReward: real("calculated_reward").notNull(),
+  adjustedReward: real("adjusted_reward"), // Manual adjustment if needed
+  finalReward: real("final_reward").notNull(),
+  status: text("status").default("pending").notNull(), // pending, approved, paid, cancelled
+  notes: text("notes"),
+  journalIds: jsonb("journal_ids"), // Array of related cashier journal IDs
+  approvedBy: varchar("approved_by").references(() => users.id),
+  approvedAt: timestamp("approved_at"),
+  paidAt: timestamp("paid_at"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertIncentiveAwardSchema = createInsertSchema(
+  incentiveAwards,
+).omit({
+  id: true,
+  approvedAt: true,
+  paidAt: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type IncentiveAward = typeof incentiveAwards.$inferSelect;
+export type InsertIncentiveAward = z.infer<typeof insertIncentiveAwardSchema>;
+
+// ==========================================
+// نظام النقاط والعمولات الذكي - Smart Points & Commissions
+// ==========================================
+
+// إعدادات النقاط العامة - Point Settings
+export const pointSettings = pgTable("point_settings", {
+  id: serial("id").primaryKey(),
+  pointValue: real("point_value").notNull().default(0.5),
+  maxDailyPoints: integer("max_daily_points"),
+  maxMonthlyPoints: integer("max_monthly_points"),
+  seasonalMultiplier: real("seasonal_multiplier").default(1),
+  isActive: boolean("is_active").default(true).notNull(),
+  notes: text("notes"),
+  updatedBy: varchar("updated_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertPointSettingsSchema = createInsertSchema(pointSettings).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type PointSettings = typeof pointSettings.$inferSelect;
+export type InsertPointSettings = z.infer<typeof insertPointSettingsSchema>;
+
+// تحديات الكاشير اليومية - Cashier Daily Challenges
+export const cashierDailyChallenges = pgTable("cashier_daily_challenges", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  challengeType: text("challenge_type").notNull(), // avg_ticket, customer_count, shift_sales
+  branchId: varchar("branch_id").references(() => branches.id),
+  cashierId: varchar("cashier_id").references(() => users.id),
+  targetValue: real("target_value").notNull(),
+  basePoints: integer("base_points").notNull(),
+  bonusPointsPerUnit: real("bonus_points_per_unit").default(0),
+  unitLabel: text("unit_label"),
+  shiftType: text("shift_type"),
+  isActive: boolean("is_active").default(true).notNull(),
+  validFrom: text("valid_from").notNull(),
+  validTo: text("valid_to"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertCashierDailyChallengeSchema = createInsertSchema(cashierDailyChallenges).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type CashierDailyChallenge = typeof cashierDailyChallenges.$inferSelect;
+export type InsertCashierDailyChallenge = z.infer<typeof insertCashierDailyChallengeSchema>;
+
+// عمولة الأصناف المستهدفة - Product Commission
+export const productCommissions = pgTable("product_commissions", {
+  id: serial("id").primaryKey(),
+  productName: text("product_name").notNull(),
+  productCategory: text("product_category"),
+  commissionType: text("commission_type").notNull(), // weekly_product, monthly_product, new_product
+  branchId: varchar("branch_id").references(() => branches.id),
+  cashierId: varchar("cashier_id").references(() => users.id),
+  targetQuantity: integer("target_quantity").notNull(),
+  pointsOnTarget: integer("points_on_target").notNull(),
+  bonusPointsPerExtra: real("bonus_points_per_extra").default(0),
+  shiftType: text("shift_type"),
+  isActive: boolean("is_active").default(true).notNull(),
+  validFrom: text("valid_from").notNull(),
+  validTo: text("valid_to"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertProductCommissionSchema = createInsertSchema(productCommissions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type ProductCommission = typeof productCommissions.$inferSelect;
+export type InsertProductCommission = z.infer<typeof insertProductCommissionSchema>;
+
+// عمولة إنجاز الفرع الجماعية - Branch Achievement Bonus Settings
+export const branchAchievementBonus = pgTable("branch_achievement_bonus", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
+  yearMonth: text("year_month").notNull(),
+  bonusPool: real("bonus_pool").notNull(),
+  targetAmount: real("target_amount").notNull(),
+  distributionMethod: text("distribution_method").default("contribution_ratio").notNull(),
+  bonusTiers: text("bonus_tiers"),
+  calculationStatus: text("calculation_status").default("pending"),
+  actualSales: real("actual_sales"),
+  achievementPercent: real("achievement_percent"),
+  matchedTierAmount: real("matched_tier_amount"),
+  calculationDetails: text("calculation_details"),
+  calculatedAt: timestamp("calculated_at"),
+  calculatedBy: varchar("calculated_by").references(() => users.id),
+  isActive: boolean("is_active").default(true).notNull(),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertBranchAchievementBonusSchema = createInsertSchema(branchAchievementBonus).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type BranchAchievementBonus = typeof branchAchievementBonus.$inferSelect;
+export type InsertBranchAchievementBonus = z.infer<typeof insertBranchAchievementBonusSchema>;
+
+// رصيد نقاط الكاشير - Cashier Points Ledger
+export const cashierPointsLedger = pgTable("cashier_points_ledger", {
+  id: serial("id").primaryKey(),
+  cashierId: varchar("cashier_id").notNull().references(() => users.id),
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
+  transactionDate: text("transaction_date").notNull(),
+  shiftType: text("shift_type"),
+  pointsType: text("points_type").notNull(), // challenge_avg_ticket, challenge_customers, challenge_sales, product_commission, branch_bonus
+  sourceId: integer("source_id"),
+  sourceName: text("source_name"),
+  pointsEarned: integer("points_earned").notNull(),
+  pointValue: real("point_value").notNull(),
+  amountEarned: real("amount_earned").notNull(),
+  status: text("status").default("earned").notNull(), // earned, approved, paid, cancelled
+  approvedBy: varchar("approved_by").references(() => users.id),
+  approvedAt: timestamp("approved_at"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_points_cashier_date").on(table.cashierId, table.transactionDate),
+  index("idx_points_branch_date").on(table.branchId, table.transactionDate),
+  index("idx_points_status").on(table.status),
+]);
+
+export const insertCashierPointsLedgerSchema = createInsertSchema(cashierPointsLedger).omit({
+  id: true,
+  approvedAt: true,
+  createdAt: true,
+});
+export type CashierPointsLedger = typeof cashierPointsLedger.$inferSelect;
+export type InsertCashierPointsLedger = z.infer<typeof insertCashierPointsLedgerSchema>;
+
+// سجل مبيعات الأصناف المستهدفة لكل كاشير - Product Sales Tracking
+export const cashierProductSales = pgTable("cashier_product_sales", {
+  id: serial("id").primaryKey(),
+  cashierId: varchar("cashier_id").notNull().references(() => users.id),
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
+  commissionId: integer("commission_id").notNull().references(() => productCommissions.id),
+  salesDate: text("sales_date").notNull(),
+  shiftType: text("shift_type"),
+  quantitySold: integer("quantity_sold").notNull().default(0),
+  targetQuantity: integer("target_quantity").notNull(),
+  isTargetMet: boolean("is_target_met").default(false),
+  pointsAwarded: integer("points_awarded").default(0),
+  recordedBy: varchar("recorded_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_product_sales_cashier").on(table.cashierId, table.salesDate),
+]);
+
+export const insertCashierProductSalesSchema = createInsertSchema(cashierProductSales).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type CashierProductSales = typeof cashierProductSales.$inferSelect;
+export type InsertCashierProductSales = z.infer<typeof insertCashierProductSalesSchema>;
+
+// كشف حساب حوافز الكاشير - Cashier Incentive Statements
+export const cashierIncentiveStatements = pgTable("cashier_incentive_statements", {
+  id: serial("id").primaryKey(),
+  statementNumber: text("statement_number").notNull(),
+  cashierId: varchar("cashier_id").notNull().references(() => users.id),
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
+  periodFrom: text("period_from").notNull(),
+  periodTo: text("period_to").notNull(),
+  totalPoints: integer("total_points").default(0).notNull(),
+  totalAmount: real("total_amount").default(0).notNull(),
+  dailyChallengePoints: integer("daily_challenge_points").default(0),
+  productCommissionPoints: integer("product_commission_points").default(0),
+  branchBonusPoints: integer("branch_bonus_points").default(0),
+  manualAdjustmentPoints: integer("manual_adjustment_points").default(0),
+  entriesCount: integer("entries_count").default(0),
+  status: text("status").default("draft").notNull(),
+  notes: text("notes"),
+  createdBy: varchar("created_by").references(() => users.id),
+  approvedBy: varchar("approved_by").references(() => users.id),
+  approvedAt: timestamp("approved_at"),
+  rejectedBy: varchar("rejected_by").references(() => users.id),
+  rejectedAt: timestamp("rejected_at"),
+  rejectionReason: text("rejection_reason"),
+  paidBy: varchar("paid_by").references(() => users.id),
+  paidAt: timestamp("paid_at"),
+  statementData: text("statement_data"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_incentive_stmt_cashier").on(table.cashierId),
+  index("idx_incentive_stmt_branch").on(table.branchId),
+  index("idx_incentive_stmt_status").on(table.status),
+]);
+
+export const insertCashierIncentiveStatementSchema = createInsertSchema(cashierIncentiveStatements).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type CashierIncentiveStatement = typeof cashierIncentiveStatements.$inferSelect;
+export type InsertCashierIncentiveStatement = z.infer<typeof insertCashierIncentiveStatementSchema>;
+
+// Seasons and Holidays - المواسم والإجازات
+export const seasonsHolidays = pgTable("seasons_holidays", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(), // اسم الموسم أو الإجازة
+  type: text("type").notNull(), // islamic, international, national, season, custom
+  category: text("category"), // eid, national_day, mothers_day, valentines, ramadan, etc.
+  startDate: text("start_date").notNull(), // Format: "2025-01-15"
+  endDate: text("end_date").notNull(),
+  color: text("color").default("#f59e0b"), // Badge color hex code
+  icon: text("icon"), // Icon name from lucide
+  weightMultiplier: real("weight_multiplier").default(1.0).notNull(), // 1.5 for 150% target
+  applicableBranches: jsonb("applicable_branches"), // Array of branch IDs or null for all
+  description: text("description"),
+  isRecurring: boolean("is_recurring").default(false),
+  recurringPattern: text("recurring_pattern"), // yearly, monthly, etc.
+  isActive: boolean("is_active").default(true).notNull(),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertSeasonHolidaySchema = createInsertSchema(
+  seasonsHolidays,
+).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type SeasonHoliday = typeof seasonsHolidays.$inferSelect;
+export type InsertSeasonHoliday = z.infer<typeof insertSeasonHolidaySchema>;
+
+// Commission Rates - معدلات العمولات
+export const commissionRates = pgTable("commission_rates", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(), // اسم نظام العمولة
+  description: text("description"),
+  minSalesAmount: real("min_sales_amount").default(0), // الحد الأدنى للمبيعات
+  maxSalesAmount: real("max_sales_amount"), // الحد الأقصى للمبيعات (null = unlimited)
+  commissionType: text("commission_type").notNull(), // fixed, percentage, tiered
+  fixedAmount: real("fixed_amount"), // مبلغ ثابت
+  percentageRate: real("percentage_rate"), // نسبة من المبيعات
+  applicableTo: text("applicable_to").default("cashier").notNull(), // cashier, branch, all
+  applicableBranches: jsonb("applicable_branches"), // Array of branch IDs or null for all
+  isActive: boolean("is_active").default(true).notNull(),
+  validFrom: text("valid_from"),
+  validTo: text("valid_to"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertCommissionRateSchema = createInsertSchema(
+  commissionRates,
+).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type CommissionRate = typeof commissionRates.$inferSelect;
+export type InsertCommissionRate = z.infer<typeof insertCommissionRateSchema>;
+
+// Commission Calculations - حسابات العمولات
+export const commissionCalculations = pgTable("commission_calculations", {
+  id: serial("id").primaryKey(),
+  cashierId: varchar("cashier_id").references(() => users.id),
+  branchId: varchar("branch_id").references(() => branches.id),
+  periodStart: text("period_start").notNull(),
+  periodEnd: text("period_end").notNull(),
+  totalSales: real("total_sales").notNull(),
+  targetAmount: real("target_amount"),
+  achievementPercent: real("achievement_percent"),
+  rateId: integer("rate_id").references(() => commissionRates.id),
+  calculatedCommission: real("calculated_commission").notNull(),
+  adjustedCommission: real("adjusted_commission"),
+  finalCommission: real("final_commission").notNull(),
+  status: text("status").default("pending").notNull(), // pending, approved, paid
+  journalIds: jsonb("journal_ids"),
+  notes: text("notes"),
+  approvedBy: varchar("approved_by").references(() => users.id),
+  approvedAt: timestamp("approved_at"),
+  paidAt: timestamp("paid_at"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertCommissionCalculationSchema = createInsertSchema(
+  commissionCalculations,
+).omit({
+  id: true,
+  approvedAt: true,
+  paidAt: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type CommissionCalculation = typeof commissionCalculations.$inferSelect;
+export type InsertCommissionCalculation = z.infer<
+  typeof insertCommissionCalculationSchema
+>;
+
+// Target Status Labels
+export const TARGET_STATUS = ["draft", "active", "locked", "archived"] as const;
+export type TargetStatus = (typeof TARGET_STATUS)[number];
+
+export const TARGET_STATUS_LABELS: Record<TargetStatus, string> = {
+  draft: "مسودة",
+  active: "نشط",
+  locked: "مُقفل",
+  archived: "مؤرشف",
+};
+
+// Reward Types Labels
+export const REWARD_TYPES = ["fixed", "percentage", "both"] as const;
+export type RewardType = (typeof REWARD_TYPES)[number];
+
+export const REWARD_TYPE_LABELS: Record<RewardType, string> = {
+  fixed: "مبلغ ثابت",
+  percentage: "نسبة مئوية",
+  both: "ثابت + نسبة",
+};
+
+// Award Status Labels
+export const AWARD_STATUS = [
+  "pending",
+  "approved",
+  "paid",
+  "cancelled",
+] as const;
+export type AwardStatus = (typeof AWARD_STATUS)[number];
+
+export const AWARD_STATUS_LABELS: Record<AwardStatus, string> = {
+  pending: "قيد الانتظار",
+  approved: "معتمد",
+  paid: "مدفوع",
+  cancelled: "ملغى",
+};
+
+// ==========================================
+// Sales Analytics Tables - جداول التحليلات
+// ==========================================
+
+// Daily Sales Summary per Branch - ملخص المبيعات اليومية
+export const branchDailySales = pgTable("branch_daily_sales", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id")
+    .notNull()
+    .references(() => branches.id),
+  salesDate: text("sales_date").notNull(), // YYYY-MM-DD
+  totalSales: real("total_sales").default(0).notNull(),
+  transactionsCount: integer("transactions_count").default(0),
+  averageTicket: real("average_ticket").default(0),
+  cashierCount: integer("cashier_count").default(0),
+  // Target comparison
+  targetAmount: real("target_amount").default(0),
+  achievementAmount: real("achievement_amount").default(0), // Difference from target
+  achievementPercent: real("achievement_percent").default(0),
+  // Shift breakdown
+  morningShiftSales: real("morning_shift_sales").default(0),
+  eveningShiftSales: real("evening_shift_sales").default(0),
+  nightShiftSales: real("night_shift_sales").default(0),
+  // Metadata
+  journalIds: jsonb("journal_ids"), // Array of related journal IDs
+  computedAt: timestamp("computed_at").defaultNow().notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertBranchDailySalesSchema = createInsertSchema(
+  branchDailySales,
+).omit({
+  id: true,
+  computedAt: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type BranchDailySales = typeof branchDailySales.$inferSelect;
+export type InsertBranchDailySales = z.infer<
+  typeof insertBranchDailySalesSchema
+>;
+
+// Cashier Shift Performance - أداء الكاشير في الشفت
+export const cashierShiftPerformance = pgTable("cashier_shift_performance", {
+  id: serial("id").primaryKey(),
+  journalId: integer("journal_id").references(() => cashierSalesJournals.id),
+  cashierId: varchar("cashier_id")
+    .notNull()
+    .references(() => users.id),
+  cashierName: text("cashier_name").notNull(),
+  shiftId: integer("shift_id").references(() => shifts.id),
+  shiftType: text("shift_type").notNull(), // morning, evening, night
+  branchId: varchar("branch_id")
+    .notNull()
+    .references(() => branches.id),
+  performanceDate: text("performance_date").notNull(), // YYYY-MM-DD
+  // Sales metrics
+  salesAmount: real("sales_amount").default(0).notNull(),
+  transactionsCount: integer("transactions_count").default(0),
+  averageTicket: real("average_ticket").default(0),
+  customerCount: integer("customer_count").default(0),
+  // Target metrics
+  targetShare: real("target_share").default(0), // Expected share of daily target
+  achievementPercent: real("achievement_percent").default(0),
+  // Cash handling
+  discrepancyAmount: real("discrepancy_amount").default(0),
+  discrepancyStatus: text("discrepancy_status").default("balanced"),
+  // Rankings (computed)
+  branchRank: integer("branch_rank"), // Rank among cashiers in same branch/day
+  shiftRank: integer("shift_rank"), // Rank among cashiers in same shift
+  // Metadata
+  computedAt: timestamp("computed_at").defaultNow().notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertCashierShiftPerformanceSchema = createInsertSchema(
+  cashierShiftPerformance,
+).omit({
+  id: true,
+  computedAt: true,
+  createdAt: true,
+});
+
+export type CashierShiftPerformance =
+  typeof cashierShiftPerformance.$inferSelect;
+export type InsertCashierShiftPerformance = z.infer<
+  typeof insertCashierShiftPerformanceSchema
+>;
+
+// Shift Type Labels
+export const SHIFT_TYPES = ["morning", "evening", "night"] as const;
+export type ShiftType = (typeof SHIFT_TYPES)[number];
+
+export const SHIFT_TYPE_LABELS: Record<ShiftType, string> = {
+  morning: "صباحي",
+  evening: "مسائي",
+  night: "ليلي",
+};
+
+// Display Bar Receipts - استلام الإنتاج لبار العرض
+export const displayBarReceipts = pgTable("display_bar_receipts", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id")
+    .notNull()
+    .references(() => branches.id, { onDelete: "cascade" }),
+  productId: integer("product_id")
+    .notNull()
+    .references(() => products.id),
+  receiptDate: text("receipt_date").notNull(), // YYYY-MM-DD
+  receiptTime: text("receipt_time").notNull(), // HH:MM
+  shiftId: integer("shift_id").references(() => shifts.id),
+  quantity: integer("quantity").notNull(),
+  receivedBy: varchar("received_by").references(() => users.id),
+  productionBatch: text("production_batch"), // رقم دفعة الإنتاج
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_display_bar_receipts_branch_id").on(table.branchId),
+  index("idx_display_bar_receipts_receipt_date").on(table.receiptDate),
+  index("idx_display_bar_receipts_branch_date").on(table.branchId, table.receiptDate),
+]);
+
+export const insertDisplayBarReceiptSchema = createInsertSchema(
+  displayBarReceipts,
+).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type DisplayBarReceipt = typeof displayBarReceipts.$inferSelect;
+export type InsertDisplayBarReceipt = z.infer<
+  typeof insertDisplayBarReceiptSchema
+>;
+
+// Display Bar Daily Summary - ملخص بار العرض اليومي
+export const displayBarDailySummary = pgTable("display_bar_daily_summary", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id")
+    .notNull()
+    .references(() => branches.id, { onDelete: "cascade" }),
+  productId: integer("product_id")
+    .notNull()
+    .references(() => products.id),
+  summaryDate: text("summary_date").notNull(), // YYYY-MM-DD
+  openingQuantity: integer("opening_quantity").default(0).notNull(), // الكمية الافتتاحية
+  receivedQuantity: integer("received_quantity").default(0).notNull(), // الكمية المستلمة
+  soldQuantity: integer("sold_quantity").default(0).notNull(), // الكمية المباعة
+  wastedQuantity: integer("wasted_quantity").default(0).notNull(), // الكمية التالفة
+  closingQuantity: integer("closing_quantity").default(0).notNull(), // الكمية الختامية
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_display_bar_daily_summary_branch_id").on(table.branchId),
+  index("idx_display_bar_daily_summary_date").on(table.summaryDate),
+  index("idx_display_bar_daily_summary_branch_date").on(table.branchId, table.summaryDate),
+]);
+
+export const insertDisplayBarDailySummarySchema = createInsertSchema(
+  displayBarDailySummary,
+).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type DisplayBarDailySummary = typeof displayBarDailySummary.$inferSelect;
+export type InsertDisplayBarDailySummary = z.infer<
+  typeof insertDisplayBarDailySummarySchema
+>;
+
+// Waste Reports - تقارير الهالك
+export const wasteReports = pgTable("waste_reports", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id")
+    .notNull()
+    .references(() => branches.id, { onDelete: "cascade" }),
+  reportDate: text("report_date").notNull(), // YYYY-MM-DD
+  shiftId: integer("shift_id").references(() => shifts.id),
+  shiftName: text("shift_name"), // morning, evening, night - اسم الوردية
+  reportedBy: varchar("reported_by").references(() => users.id),
+  reporterName: text("reporter_name"),
+  totalItems: integer("total_items").default(0).notNull(),
+  totalValue: real("total_value").default(0),
+  status: text("status").default("draft").notNull(), // draft, submitted, approved, rejected
+  approvedBy: varchar("approved_by").references(() => users.id),
+  approvedAt: timestamp("approved_at"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_waste_reports_branch_id").on(table.branchId),
+  index("idx_waste_reports_report_date").on(table.reportDate),
+  index("idx_waste_reports_status").on(table.status),
+  index("idx_waste_reports_branch_date").on(table.branchId, table.reportDate),
+]);
+
+export const insertWasteReportSchema = createInsertSchema(wasteReports).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type WasteReport = typeof wasteReports.$inferSelect;
+export type InsertWasteReport = z.infer<typeof insertWasteReportSchema>;
+
+// Waste Items - تفاصيل الهالك
+export const wasteItems = pgTable("waste_items", {
+  id: serial("id").primaryKey(),
+  wasteReportId: integer("waste_report_id")
+    .notNull()
+    .references(() => wasteReports.id, { onDelete: "cascade" }),
+  productId: integer("product_id")
+    .notNull()
+    .references(() => products.id),
+  quantity: integer("quantity").notNull(),
+  unitPrice: real("unit_price").default(0),
+  totalValue: real("total_value").default(0),
+  wasteReason: text("waste_reason").notNull(), // expired, damaged, quality_issue, other
+  reasonDetails: text("reason_details"),
+  imageUrl: text("image_url"), // صورة المنتج التالف
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertWasteItemSchema = createInsertSchema(wasteItems).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type WasteItem = typeof wasteItems.$inferSelect;
+export type InsertWasteItem = z.infer<typeof insertWasteItemSchema>;
+
+// Waste Reasons Labels
+export const WASTE_REASONS = [
+  "expired",
+  "damaged",
+  "quality_issue",
+  "overproduction",
+  "other",
+] as const;
+export type WasteReason = (typeof WASTE_REASONS)[number];
+
+export const WASTE_REASON_LABELS: Record<WasteReason, string> = {
+  expired: "منتهي الصلاحية",
+  damaged: "تالف",
+  quality_issue: "مشكلة جودة",
+  overproduction: "إنتاج زائد",
+  other: "أخرى",
+};
+
+// Product Categories for Display Bar
+export const DISPLAY_BAR_CATEGORIES = [
+  "bakery",
+  "dessert",
+  "breakfast",
+  "sandwich",
+] as const;
+export type DisplayBarCategory = (typeof DISPLAY_BAR_CATEGORIES)[number];
+
+export const DISPLAY_BAR_CATEGORY_LABELS: Record<DisplayBarCategory, string> = {
+  bakery: "مخبوزات",
+  dessert: "حلويات",
+  breakfast: "فطور",
+  sandwich: "ساندويتش",
+};
+
+// ==================== Advanced Production Orders Module ====================
+
+// Production Order Types
+export const PRODUCTION_ORDER_TYPES = ["daily", "weekly", "long_term"] as const;
+export type ProductionOrderType = (typeof PRODUCTION_ORDER_TYPES)[number];
+
+export const PRODUCTION_ORDER_TYPE_LABELS: Record<ProductionOrderType, string> =
+  {
+    daily: "يومي (فرش)",
+    weekly: "أسبوعي",
+    long_term: "طويل الأمد",
+  };
+
+// Production Order Priorities
+export const PRODUCTION_PRIORITIES = [
+  "urgent",
+  "high",
+  "normal",
+  "low",
+] as const;
+export type ProductionPriority = (typeof PRODUCTION_PRIORITIES)[number];
+
+export const PRODUCTION_PRIORITY_LABELS: Record<ProductionPriority, string> = {
+  urgent: "عاجل جداً",
+  high: "عالي",
+  normal: "عادي",
+  low: "منخفض",
+};
+
+// Production Order Statuses
+export const PRODUCTION_ORDER_STATUSES = [
+  "draft",
+  "pending",
+  "approved",
+  "in_progress",
+  "completed",
+  "cancelled",
+] as const;
+export type ProductionOrderStatus = (typeof PRODUCTION_ORDER_STATUSES)[number];
+
+export const PRODUCTION_ORDER_STATUS_LABELS: Record<
+  ProductionOrderStatus,
+  string
+> = {
+  draft: "مسودة",
+  pending: "قيد الانتظار",
+  approved: "معتمد",
+  in_progress: "قيد التنفيذ",
+  completed: "مكتمل",
+  cancelled: "ملغي",
+};
+
+// Advanced Production Orders - أوامر الإنتاج المتقدمة
+export const advancedProductionOrders = pgTable("advanced_production_orders", {
+  id: serial("id").primaryKey(),
+  orderNumber: text("order_number").unique().notNull(),
+  orderType: text("order_type").default("daily").notNull(), // daily, weekly, long_term
+  sourceBranchId: varchar("source_branch_id")
+    .notNull()
+    .references(() => branches.id), // الفرع المُرسِل
+  targetBranchId: varchar("target_branch_id")
+    .notNull()
+    .references(() => branches.id), // الفرع المُستهدف
+  targetDepartment: text("target_department"), // القسم المستهدف (مخبز، بسترى، ساندويتش، إلخ)
+  title: text("title").notNull(), // عنوان الأمر
+  description: text("description"),
+  status: text("status").default("draft").notNull(),
+  priority: text("priority").default("normal").notNull(),
+  startDate: text("start_date").notNull(), // تاريخ البداية
+  endDate: text("end_date").notNull(), // تاريخ النهاية (نفس تاريخ البداية للأوامر اليومية)
+  targetSalesValue: real("target_sales_value"), // قيمة المبيعات المستهدفة (للذكاء الاصطناعي)
+  sourceSalesValue: real("source_sales_value"), // قيمة المبيعات من الملف المصدر
+  estimatedCost: real("estimated_cost").default(0),
+  actualCost: real("actual_cost").default(0),
+  totalItems: integer("total_items").default(0),
+  completedItems: integer("completed_items").default(0),
+  completionPercent: real("completion_percent").default(0),
+  isAiGenerated: boolean("is_ai_generated").default(false),
+  aiPlanId: integer("ai_plan_id"),
+  notes: text("notes"),
+  mtoItems: jsonb("mto_items"),
+  createdBy: varchar("created_by").references(() => users.id),
+  approvedBy: varchar("approved_by").references(() => users.id),
+  approvedAt: timestamp("approved_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertAdvancedProductionOrderSchema = createInsertSchema(
+  advancedProductionOrders,
+).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  approvedAt: true,
+});
+
+export type AdvancedProductionOrder =
+  typeof advancedProductionOrders.$inferSelect;
+export type InsertAdvancedProductionOrder = z.infer<
+  typeof insertAdvancedProductionOrderSchema
+>;
+
+// Production Order Items - عناصر أمر الإنتاج
+export const productionOrderItems = pgTable("production_order_items", {
+  id: serial("id").primaryKey(),
+  orderId: integer("order_id")
+    .notNull()
+    .references(() => advancedProductionOrders.id, { onDelete: "cascade" }),
+  productId: integer("product_id").references(() => products.id),
+  productName: text("product_name").notNull(),
+  productCategory: text("product_category"),
+  targetQuantity: integer("target_quantity").notNull(),
+  originalQuantity: integer("original_quantity"), // الكمية الأصلية من الملف المصدر
+  executionUnit: text("execution_unit"), // Frozen only on explicit linked execution; historical plans remain NULL.
+  producedQuantity: integer("produced_quantity").default(0),
+  wastedQuantity: integer("wasted_quantity").default(0),
+  unitPrice: real("unit_price").default(0), // سعر الوحدة
+  totalValue: real("total_value").default(0), // القيمة الإجمالية
+  scheduledDate: text("scheduled_date"), // تاريخ الإنتاج المجدول
+  scheduledShift: text("scheduled_shift"), // الوردية المجدولة (morning, evening, night)
+  status: text("status").default("pending").notNull(), // pending, in_progress, completed, cancelled
+  assignedTo: text("assigned_to"), // الموظف المسؤول
+  priority: integer("priority").default(0), // ترتيب الأولوية
+  salesVelocity: real("sales_velocity"), // سرعة البيع (للذكاء الاصطناعي)
+  notes: text("notes"),
+  startedAt: timestamp("started_at"),
+  completedAt: timestamp("completed_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const advancedProductionRequestLinks = pgTable("advanced_production_request_links", {
+  planItemId: integer("plan_item_id").primaryKey().references(() => productionOrderItems.id, { onDelete: "restrict" }),
+  requestItemId: integer("request_item_id").notNull().references(() => centralKitchenOrderItems.id, { onDelete: "restrict" }),
+  reason: text("reason").notNull(),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, table => [index("idx_advanced_request_links_request").on(table.requestItemId)]);
+
+export const insertProductionOrderItemSchema = createInsertSchema(
+  productionOrderItems,
+).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  startedAt: true,
+  completedAt: true,
+});
+
+export type ProductionOrderItem = typeof productionOrderItems.$inferSelect;
+export type InsertProductionOrderItem = z.infer<
+  typeof insertProductionOrderItemSchema
+>;
+
+// Production Order Schedule - جدولة أوامر الإنتاج (للأوامر طويلة الأمد)
+export const productionOrderSchedules = pgTable("production_order_schedules", {
+  id: serial("id").primaryKey(),
+  orderId: integer("order_id")
+    .notNull()
+    .references(() => advancedProductionOrders.id, { onDelete: "cascade" }),
+  scheduledDate: text("scheduled_date").notNull(),
+  dayOfWeek: text("day_of_week"), // saturday, sunday, monday, etc.
+  shift: text("shift"), // morning, evening, night
+  targetQuantity: integer("target_quantity").default(0),
+  completedQuantity: integer("completed_quantity").default(0),
+  status: text("status").default("pending").notNull(),
+  assignedDepartment: text("assigned_department"),
+  assignedEmployees: text("assigned_employees"), // JSON array of employee names
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertProductionOrderScheduleSchema = createInsertSchema(
+  productionOrderSchedules,
+).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type ProductionOrderSchedule =
+  typeof productionOrderSchedules.$inferSelect;
+export type InsertProductionOrderSchedule = z.infer<
+  typeof insertProductionOrderScheduleSchema
+>;
+
+// Production AI Plans - خطط الذكاء الاصطناعي
+export const productionAiPlans = pgTable("production_ai_plans", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id")
+    .notNull()
+    .references(() => branches.id),
+  planName: text("plan_name").notNull(),
+  targetSalesValue: real("target_sales_value").notNull(), // قيمة المبيعات المستهدفة
+  planDate: text("plan_date").notNull(),
+  datasetId: integer("dataset_id"), // مرجع لمجموعة البيانات المستخدمة
+  algorithmVersion: text("algorithm_version").default("v1.0"),
+  confidenceScore: real("confidence_score").default(0), // نسبة الثقة 0-100
+  recommendedProducts: jsonb("recommended_products"), // JSON array of product recommendations
+  totalEstimatedValue: real("total_estimated_value").default(0),
+  totalEstimatedCost: real("total_estimated_cost").default(0),
+  profitMargin: real("profit_margin").default(0),
+  status: text("status").default("generated").notNull(), // generated, reviewed, approved, applied, rejected
+  appliedToOrderId: integer("applied_to_order_id"),
+  reviewedBy: varchar("reviewed_by").references(() => users.id),
+  reviewedAt: timestamp("reviewed_at"),
+  reviewNotes: text("review_notes"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertProductionAiPlanSchema = createInsertSchema(
+  productionAiPlans,
+).omit({
+  id: true,
+  createdAt: true,
+  reviewedAt: true,
+});
+
+export type ProductionAiPlan = typeof productionAiPlans.$inferSelect;
+export type InsertProductionAiPlan = z.infer<
+  typeof insertProductionAiPlanSchema
+>;
+
+// Sales Data Uploads - رفع بيانات المبيعات
+export const salesDataUploads = pgTable("sales_data_uploads", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id")
+    .notNull()
+    .references(() => branches.id),
+  fileName: text("file_name").notNull(),
+  fileType: text("file_type").default("excel"), // excel, csv
+  fileSize: integer("file_size"),
+  periodStart: text("period_start"), // بداية فترة البيانات
+  periodEnd: text("period_end"), // نهاية فترة البيانات
+  totalRecords: integer("total_records").default(0),
+  totalSalesValue: real("total_sales_value").default(0),
+  uniqueProducts: integer("unique_products").default(0),
+  parsedData: jsonb("parsed_data"), // البيانات المحللة
+  productVelocity: jsonb("product_velocity"), // سرعة بيع المنتجات
+  status: text("status").default("pending").notNull(), // pending, processing, completed, failed
+  errorMessage: text("error_message"),
+  uploadedBy: varchar("uploaded_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertSalesDataUploadSchema = createInsertSchema(
+  salesDataUploads,
+).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type SalesDataUpload = typeof salesDataUploads.$inferSelect;
+export type InsertSalesDataUpload = z.infer<typeof insertSalesDataUploadSchema>;
+
+// Product Sales Analytics - تحليلات مبيعات المنتجات (من البيانات المرفوعة)
+export const productSalesAnalytics = pgTable("product_sales_analytics", {
+  id: serial("id").primaryKey(),
+  uploadId: integer("upload_id")
+    .notNull()
+    .references(() => salesDataUploads.id, { onDelete: "cascade" }),
+  productId: integer("product_id").references(() => products.id),
+  productName: text("product_name").notNull(),
+  productCategory: text("product_category"),
+  totalQuantitySold: integer("total_quantity_sold").default(0),
+  totalRevenue: real("total_revenue").default(0),
+  averageDailySales: real("average_daily_sales").default(0),
+  salesVelocity: real("sales_velocity").default(0), // سرعة البيع (نسبة)
+  profitMargin: real("profit_margin").default(0),
+  peakHours: text("peak_hours"), // ساعات الذروة (JSON)
+  weekdayPattern: text("weekday_pattern"), // نمط أيام الأسبوع (JSON)
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertProductSalesAnalyticsSchema = createInsertSchema(
+  productSalesAnalytics,
+).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type ProductSalesAnalytics = typeof productSalesAnalytics.$inferSelect;
+export type InsertProductSalesAnalytics = z.infer<
+  typeof insertProductSalesAnalyticsSchema
+>;
+
+// Daily Production Batches - دفعات الإنتاج الفعلي اليومي
+export const dailyProductionBatches = pgTable("daily_production_batches", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id")
+    .notNull()
+    .references(() => branches.id),
+  productId: integer("product_id").references(() => products.id),
+  productName: text("product_name").notNull(),
+  productCategory: text("product_category"),
+  quantity: integer("quantity").notNull(),
+  unit: text("unit").default("قطعة"),
+  destination: text("destination").notNull(), // display_bar, kitchen_trolley, freezer, refrigerator
+  shiftId: integer("shift_id").references(() => shifts.id),
+  productionOrderId: integer("production_order_id"),
+  advancedProductionOrderItemId: integer("advanced_production_order_item_id")
+    .references(() => productionOrderItems.id, { onDelete: "restrict" }),
+  advancedRequestItemId: integer("advanced_request_item_id")
+    .references(() => centralKitchenOrderItems.id, { onDelete: "restrict" }),
+  advancedIdempotencyKey: varchar("advanced_idempotency_key", { length: 128 }),
+  advancedPayloadFingerprint: varchar("advanced_payload_fingerprint", { length: 64 }),
+  centralKitchenOrderItemId: integer("central_kitchen_order_item_id")
+    .references(() => centralKitchenOrderItems.id, { onDelete: "restrict" }),
+  centralKitchenIdempotencyKey: varchar("central_kitchen_idempotency_key", { length: 128 }),
+  centralKitchenPayloadFingerprint: varchar("central_kitchen_payload_fingerprint", { length: 64 }),
+  recipeExceptionId: integer("recipe_exception_id"),
+  recipeModeActivationId: integer("recipe_mode_activation_id"),
+  // NULL marks historical/non-recipe batches; recipe-backed batches are set
+  // only by the dedicated snapshot workflow.
+  recipeBacked: boolean("recipe_backed"),
+  producedAt: timestamp("produced_at").defaultNow().notNull(),
+  productionDate: text("production_date"), // تاريخ الإنتاج بتوقيت المستخدم YYYY-MM-DD
+  recordedBy: varchar("recorded_by").references(() => users.id),
+  recorderName: text("recorder_name"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  // Production status and chef tracking - حالة الإنتاج ومتابعة الشيف
+  status: text("status").default("finished"), // finished = مكتمل, in_progress = قيد التحضير
+  chefId: varchar("chef_id").references(() => users.id),
+  chefName: text("chef_name"), // اسم الشيف المنتج
+  sourceBatchId: integer("source_batch_id"), // ربط بالدفعة السابقة للترحيل
+  finishedAt: timestamp("finished_at"), // تاريخ اكتمال الإنتاج
+  finishedById: varchar("finished_by_id").references(() => users.id), // من قام بإكمال الدفعة
+  finishedByName: text("finished_by_name"), // اسم من قام بالإكمال
+}, (table) => [
+  index("idx_daily_production_batches_branch_id").on(table.branchId),
+  index("idx_daily_production_batches_production_date").on(table.productionDate),
+  index("idx_daily_production_batches_branch_date").on(table.branchId, table.productionDate),
+  index("idx_daily_production_advanced_item").on(table.advancedProductionOrderItemId),
+  uniqueIndex("uq_daily_production_advanced_creator_key")
+    .on(table.recordedBy, table.advancedIdempotencyKey)
+    .where(sql`${table.advancedIdempotencyKey} IS NOT NULL`),
+  uniqueIndex("uq_daily_production_linked_item_date")
+    .on(table.centralKitchenOrderItemId, table.productionDate)
+    .where(sql`${table.centralKitchenOrderItemId} IS NOT NULL`),
+  uniqueIndex("uq_daily_production_linked_creator_key")
+    .on(table.recordedBy, table.centralKitchenIdempotencyKey)
+    .where(sql`${table.centralKitchenOrderItemId} IS NOT NULL AND ${table.centralKitchenIdempotencyKey} IS NOT NULL`),
+]);
+
+export const insertDailyProductionBatchSchema = createInsertSchema(
+  dailyProductionBatches,
+).omit({
+  id: true,
+  createdAt: true,
+  finishedAt: true,
+  centralKitchenOrderItemId: true,
+  advancedRequestItemId: true,
+  centralKitchenIdempotencyKey: true,
+  centralKitchenPayloadFingerprint: true,
+  recipeBacked: true,
+  recipeExceptionId: true,
+  recipeModeActivationId: true,
+});
+
+export type DailyProductionBatch = typeof dailyProductionBatches.$inferSelect;
+export type InsertDailyProductionBatch = z.infer<
+  typeof insertDailyProductionBatchSchema
+>;
+
+// ==================== نظام الصلاحيات والمستخدمين الشامل ====================
+
+// Departments - الأقسام (مثل: الإنتاج، المخزون، الكاشير، الصيانة، المشاريع)
+export const departments = pgTable("departments", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(), // اسم القسم بالعربي
+  code: varchar("code", { length: 50 }).unique().notNull(), // كود فريد: production, inventory, cashier, maintenance, projects
+  description: text("description"),
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertDepartmentSchema = createInsertSchema(departments).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type Department = typeof departments.$inferSelect;
+export type InsertDepartment = z.infer<typeof insertDepartmentSchema>;
+
+// Roles - الأدوار (مثل: مدير عام، مدير فرع، مشرف قسم، موظف)
+export const roles = pgTable("roles", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(), // اسم الدور بالعربي
+  slug: varchar("slug", { length: 50 }).unique().notNull(), // super_admin, branch_manager, dept_head, employee, viewer
+  hierarchyLevel: integer("hierarchy_level").notNull().default(0), // 0 = أعلى مستوى
+  description: text("description"),
+  isSystemDefault: boolean("is_system_default").default(false).notNull(), // أدوار النظام الأساسية
+  inheritsFromRoleId: integer("inherits_from_role_id"), // يرث صلاحيات من دور آخر
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertRoleSchema = createInsertSchema(roles).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type Role = typeof roles.$inferSelect;
+export type InsertRole = z.infer<typeof insertRoleSchema>;
+
+// Permissions - الصلاحيات (تعريف كل صلاحية ممكنة في النظام)
+export const permissions = pgTable("permissions", {
+  id: serial("id").primaryKey(),
+  module: varchar("module", { length: 100 }).notNull(), // inventory, production, cashier, assets, projects, etc.
+  action: varchar("action", { length: 50 }).notNull(), // view, create, edit, delete, export, approve
+  name: text("name").notNull(), // اسم الصلاحية بالعربي
+  description: text("description"),
+  isDefault: boolean("is_default").default(false).notNull(), // صلاحيات افتراضية
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertPermissionSchema = createInsertSchema(permissions).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type Permission = typeof permissions.$inferSelect;
+export type InsertPermission = z.infer<typeof insertPermissionSchema>;
+
+// Role Permissions - صلاحيات كل دور
+export const rolePermissions = pgTable("role_permissions", {
+  id: serial("id").primaryKey(),
+  roleId: integer("role_id")
+    .notNull()
+    .references(() => roles.id, { onDelete: "cascade" }),
+  permissionId: integer("permission_id")
+    .notNull()
+    .references(() => permissions.id, { onDelete: "cascade" }),
+  scope: jsonb("scope"), // للتوسع المستقبلي: {"branches": ["all"], "departments": ["all"]}
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertRolePermissionSchema = createInsertSchema(rolePermissions).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type RolePermission = typeof rolePermissions.$inferSelect;
+export type InsertRolePermission = z.infer<typeof insertRolePermissionSchema>;
+
+// User Assignments - تعيينات المستخدمين (ربط المستخدم بدور وفرع وقسم)
+export const userAssignments = pgTable("user_assignments", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  roleId: integer("role_id")
+    .notNull()
+    .references(() => roles.id, { onDelete: "cascade" }),
+  branchId: varchar("branch_id").references(() => branches.id, { onDelete: "set null" }), // null = جميع الفروع
+  departmentId: integer("department_id").references(() => departments.id, { onDelete: "set null" }), // null = جميع الأقسام
+  scopeType: varchar("scope_type", { length: 20 }).notNull().default("branch"), // global, branch, department
+  isPrimary: boolean("is_primary").default(true).notNull(), // التعيين الأساسي للمستخدم
+  isActive: boolean("is_active").default(true).notNull(),
+  startDate: timestamp("start_date").defaultNow(),
+  endDate: timestamp("end_date"), // للتعيينات المؤقتة
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_user_assignments_user_id").on(table.userId),
+  index("idx_user_assignments_role_id").on(table.roleId),
+]);
+
+export const insertUserAssignmentSchema = createInsertSchema(userAssignments).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type UserAssignment = typeof userAssignments.$inferSelect;
+export type InsertUserAssignment = z.infer<typeof insertUserAssignmentSchema>;
+
+// User Permission Overrides - تجاوزات صلاحيات المستخدم (منح أو منع صلاحية خاصة)
+export const userPermissionOverrides = pgTable("user_permission_overrides", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  permissionId: integer("permission_id")
+    .notNull()
+    .references(() => permissions.id, { onDelete: "cascade" }),
+  allow: boolean("allow").notNull(), // true = منح، false = منع
+  branchId: varchar("branch_id").references(() => branches.id, { onDelete: "set null" }), // صلاحية لفرع معين فقط
+  departmentId: integer("department_id").references(() => departments.id, { onDelete: "set null" }),
+  reason: text("reason"), // سبب التجاوز
+  grantedBy: varchar("granted_by").references(() => users.id),
+  expiresAt: timestamp("expires_at"), // صلاحية مؤقتة
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertUserPermissionOverrideSchema = createInsertSchema(userPermissionOverrides).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type UserPermissionOverride = typeof userPermissionOverrides.$inferSelect;
+export type InsertUserPermissionOverride = z.infer<typeof insertUserPermissionOverrideSchema>;
+
+// User Branch Access - وصول المستخدم للفروع (للمستخدمين متعددي الفروع)
+export const userBranchAccess = pgTable("user_branch_access", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  branchId: varchar("branch_id")
+    .notNull()
+    .references(() => branches.id, { onDelete: "cascade" }),
+  accessLevel: varchar("access_level", { length: 20 }).notNull().default("full"), // full, view_only, limited
+  isDefault: boolean("is_default").default(false).notNull(), // الفرع الافتراضي
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertUserBranchAccessSchema = createInsertSchema(userBranchAccess).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type UserBranchAccess = typeof userBranchAccess.$inferSelect;
+export type InsertUserBranchAccess = z.infer<typeof insertUserBranchAccessSchema>;
+
+// ==================== نظام الأمان المتقدم ====================
+
+// User Security Settings - إعدادات أمان المستخدم
+export const userSecuritySettings = pgTable("user_security_settings", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id")
+    .notNull()
+    .unique()
+    .references(() => users.id, { onDelete: "cascade" }),
+  twoFactorEnabled: boolean("two_factor_enabled").default(false).notNull(),
+  twoFactorSecret: text("two_factor_secret"), // Secret for TOTP
+  twoFactorBackupCodes: text("two_factor_backup_codes").array(), // Backup codes
+  ipWhitelist: text("ip_whitelist").array(), // قائمة IP المسموحة
+  ipRestrictionEnabled: boolean("ip_restriction_enabled").default(false).notNull(),
+  sessionTimeout: integer("session_timeout").default(480), // مهلة الجلسة بالدقائق (8 ساعات افتراضي)
+  maxConcurrentSessions: integer("max_concurrent_sessions").default(3), // الحد الأقصى للجلسات المتزامنة
+  passwordChangedAt: timestamp("password_changed_at"),
+  passwordExpiryDays: integer("password_expiry_days").default(90), // صلاحية كلمة المرور
+  forcePasswordChange: boolean("force_password_change").default(false).notNull(),
+  failedLoginAttempts: integer("failed_login_attempts").default(0).notNull(),
+  lockedUntil: timestamp("locked_until"), // قفل الحساب حتى
+  lastLoginAt: timestamp("last_login_at"),
+  lastLoginIp: text("last_login_ip"),
+  lastLoginDevice: text("last_login_device"),
+  trustedDevices: jsonb("trusted_devices").$type<{ deviceId: string; name: string; addedAt: string }[]>(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertUserSecuritySettingsSchema = createInsertSchema(userSecuritySettings).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type UserSecuritySettings = typeof userSecuritySettings.$inferSelect;
+export type InsertUserSecuritySettings = z.infer<typeof insertUserSecuritySettingsSchema>;
+
+// User Sessions - جلسات المستخدمين النشطة
+export const userSessions = pgTable("user_sessions", {
+  id: serial("id").primaryKey(),
+  sessionId: varchar("session_id", { length: 255 }).unique().notNull(),
+  userId: varchar("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  deviceInfo: jsonb("device_info").$type<{ browser: string; os: string; device: string }>(),
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+  isActive: boolean("is_active").default(true).notNull(),
+  lastActivityAt: timestamp("last_activity_at").defaultNow().notNull(),
+  expiresAt: timestamp("expires_at").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => ({
+  userIdIdx: index("idx_user_sessions_user_id").on(table.userId),
+  sessionIdIdx: index("idx_user_sessions_session_id").on(table.sessionId),
+}));
+
+export const insertUserSessionSchema = createInsertSchema(userSessions).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type UserSession = typeof userSessions.$inferSelect;
+export type InsertUserSession = z.infer<typeof insertUserSessionSchema>;
+
+// Security Violation Alerts - تنبيهات الانتهاكات الأمنية
+export const securityViolationAlerts = pgTable("security_violation_alerts", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").references(() => users.id, { onDelete: "set null" }),
+  violationType: varchar("violation_type", { length: 50 }).notNull(), // unauthorized_access, failed_login, ip_blocked, session_hijack, permission_denied
+  severity: varchar("severity", { length: 20 }).notNull().default("warning"), // info, warning, critical
+  module: varchar("module", { length: 100 }), // الوحدة المستهدفة
+  action: varchar("action", { length: 50 }), // الإجراء المحاول
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+  details: jsonb("details").$type<Record<string, any>>(), // تفاصيل إضافية
+  isResolved: boolean("is_resolved").default(false).notNull(),
+  resolvedBy: varchar("resolved_by").references(() => users.id),
+  resolvedAt: timestamp("resolved_at"),
+  resolutionNotes: text("resolution_notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => ({
+  userIdIdx: index("idx_security_violations_user_id").on(table.userId),
+  typeIdx: index("idx_security_violations_type").on(table.violationType),
+  createdAtIdx: index("idx_security_violations_created_at").on(table.createdAt),
+}));
+
+export const insertSecurityViolationAlertSchema = createInsertSchema(securityViolationAlerts).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type SecurityViolationAlert = typeof securityViolationAlerts.$inferSelect;
+export type InsertSecurityViolationAlert = z.infer<typeof insertSecurityViolationAlertSchema>;
+
+// Permission Check Logs - سجل فحص الصلاحيات (لتتبع كل عملية تحقق)
+export const permissionCheckLogs = pgTable("permission_check_logs", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  module: varchar("module", { length: 100 }).notNull(),
+  action: varchar("action", { length: 50 }).notNull(),
+  resourceId: text("resource_id"), // معرف المورد المستهدف (مثل: projectId, inventoryId)
+  branchId: varchar("branch_id").references(() => branches.id, { onDelete: "set null" }),
+  allowed: boolean("allowed").notNull(), // هل تم السماح؟
+  denialReason: text("denial_reason"), // سبب الرفض إن وجد
+  ipAddress: text("ip_address"),
+  requestPath: text("request_path"), // مسار الطلب
+  requestMethod: varchar("request_method", { length: 10 }), // GET, POST, PUT, DELETE
+  responseTime: integer("response_time"), // وقت الاستجابة بالميلي ثانية
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => ({
+  userIdIdx: index("idx_perm_check_logs_user_id").on(table.userId),
+  moduleIdx: index("idx_perm_check_logs_module").on(table.module),
+  createdAtIdx: index("idx_perm_check_logs_created_at").on(table.createdAt),
+}));
+
+export const insertPermissionCheckLogSchema = createInsertSchema(permissionCheckLogs).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type PermissionCheckLog = typeof permissionCheckLogs.$inferSelect;
+export type InsertPermissionCheckLog = z.infer<typeof insertPermissionCheckLogSchema>;
+
+// Role Templates - قوالب الأدوار الجاهزة
+export const roleTemplates = pgTable("role_templates", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  slug: varchar("slug", { length: 50 }).unique().notNull(),
+  description: text("description"),
+  permissions: jsonb("permissions").$type<{ module: string; actions: string[] }[]>().notNull(),
+  departmentId: integer("department_id").references(() => departments.id, { onDelete: "set null" }),
+  isSystemDefault: boolean("is_system_default").default(false).notNull(),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertRoleTemplateSchema = createInsertSchema(roleTemplates).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type RoleTemplate = typeof roleTemplates.$inferSelect;
+export type InsertRoleTemplate = z.infer<typeof insertRoleTemplateSchema>;
+
+// ==========================================
+// نظام أهداف الشفت والكاشير - Shift & Cashier Targets
+// ==========================================
+
+// Cashier Shift Targets - أهداف الكاشير داخل الشفت
+export const cashierShiftTargets = pgTable("cashier_shift_targets", {
+  id: serial("id").primaryKey(),
+  cashierId: varchar("cashier_id")
+    .notNull()
+    .references(() => users.id),
+  branchId: varchar("branch_id")
+    .notNull()
+    .references(() => branches.id),
+  shiftType: varchar("shift_type").notNull(), // morning, evening
+  cashierRole: varchar("cashier_role").default("main").notNull(), // main, assistant, trainee
+  
+  // Period settings - إعدادات الفترة
+  periodType: varchar("period_type").default("daily").notNull(), // daily, weekly, monthly
+  startDate: date("start_date").notNull(), // تاريخ بداية الفترة
+  endDate: date("end_date").notNull(), // تاريخ نهاية الفترة
+  
+  // Total targets for the period - إجمالي الأهداف للفترة
+  totalTargetAmount: numeric("total_target_amount").notNull(), // إجمالي هدف المبيعات للفترة
+  totalTargetTransactions: integer("total_target_transactions"), // إجمالي الحركات المستهدفة للفترة
+  
+  // Daily distributed targets (auto-calculated) - الأهداف اليومية الموزعة
+  targetAmount: numeric("target_amount").notNull(), // هدف المبيعات اليومي الموزع
+  targetTransactions: integer("target_transactions"), // عدد المعاملات اليومي المستهدف
+  targetTicketValue: numeric("target_ticket_value"), // هدف متوسط الفاتورة (محسوب تلقائياً)
+  
+  // Legacy field for backward compatibility
+  targetDate: date("target_date").notNull(), // YYYY-MM-DD (same as startDate for daily)
+  
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertCashierShiftTargetSchema = createInsertSchema(cashierShiftTargets).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type CashierShiftTarget = typeof cashierShiftTargets.$inferSelect;
+export type InsertCashierShiftTarget = z.infer<typeof insertCashierShiftTargetSchema>;
+
+// Average Ticket Targets - أهداف متوسط الفاتورة
+export const averageTicketTargets = pgTable("average_ticket_targets", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id")
+    .references(() => branches.id),
+  cashierId: varchar("cashier_id")
+    .references(() => users.id),
+  shiftType: text("shift_type"), // morning, evening, night, or null for all
+  targetType: text("target_type").notNull(), // branch, cashier, shift
+  targetValue: real("target_value").notNull(), // القيمة المستهدفة لمتوسط الفاتورة
+  minAcceptable: real("min_acceptable"), // الحد الأدنى المقبول
+  bonusThreshold: real("bonus_threshold"), // عتبة المكافأة
+  bonusPerRiyal: real("bonus_per_riyal"), // مكافأة لكل ريال فوق الهدف
+  validFrom: text("valid_from").notNull(), // تاريخ البدء
+  validTo: text("valid_to"), // تاريخ الانتهاء
+  isActive: boolean("is_active").default(true).notNull(),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertAverageTicketTargetSchema = createInsertSchema(averageTicketTargets).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type AverageTicketTarget = typeof averageTicketTargets.$inferSelect;
+export type InsertAverageTicketTarget = z.infer<typeof insertAverageTicketTargetSchema>;
+
+// Performance Alerts - تنبيهات الأداء الفورية
+export const performanceAlerts = pgTable("performance_alerts", {
+  id: serial("id").primaryKey(),
+  cashierId: varchar("cashier_id")
+    .references(() => users.id),
+  branchId: varchar("branch_id")
+    .notNull()
+    .references(() => branches.id),
+  shiftType: varchar("shift_type"), // morning, evening
+  alertType: varchar("alert_type").notNull(), // shift_behind, shift_ahead, cashier_behind, cashier_ahead, ticket_low
+  alertLevel: varchar("alert_level").notNull(), // info, warning, critical, success
+  message: text("message").notNull(),
+  currentValue: numeric("current_value"),
+  targetValue: numeric("target_value"),
+  percentage: numeric("percentage"),
+  isRead: boolean("is_read").default(false).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertPerformanceAlertSchema = createInsertSchema(performanceAlerts).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type PerformanceAlert = typeof performanceAlerts.$inferSelect;
+export type InsertPerformanceAlert = z.infer<typeof insertPerformanceAlertSchema>;
+
+// Real-time Shift Performance Tracking - تتبع أداء الشفت المباشر
+export const shiftPerformanceTracking = pgTable("shift_performance_tracking", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id")
+    .notNull()
+    .references(() => branches.id),
+  shiftType: varchar("shift_type").notNull(), // morning, evening
+  trackingDate: date("tracking_date").notNull(), // YYYY-MM-DD
+  // Actual metrics
+  totalSales: numeric("total_sales").default("0"),
+  totalTransactions: integer("total_transactions").default(0),
+  averageTicket: numeric("average_ticket").default("0"),
+  // Target metrics
+  targetSales: numeric("target_sales").default("0"),
+  targetTransactions: integer("target_transactions").default(0),
+  // Performance indicators
+  achievementPercentage: numeric("achievement_percentage").default("0"),
+  status: varchar("status").default("in_progress"), // in_progress, completed
+  // Timestamps
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertShiftPerformanceTrackingSchema = createInsertSchema(shiftPerformanceTracking).omit({
+  id: true,
+  updatedAt: true,
+});
+
+export type ShiftPerformanceTracking = typeof shiftPerformanceTracking.$inferSelect;
+export type InsertShiftPerformanceTracking = z.infer<typeof insertShiftPerformanceTrackingSchema>;
+
+// Performance Alert Types
+export const PERFORMANCE_ALERT_TYPES = [
+  "shift_behind",
+  "shift_ahead", 
+  "cashier_behind",
+  "cashier_ahead",
+  "ticket_low",
+  "ticket_high",
+  "target_achieved",
+  "target_exceeded",
+] as const;
+export type PerformanceAlertType = (typeof PERFORMANCE_ALERT_TYPES)[number];
+
+export const PERFORMANCE_ALERT_LABELS: Record<PerformanceAlertType, string> = {
+  shift_behind: "الشفت متأخر عن الهدف",
+  shift_ahead: "الشفت متقدم على الهدف",
+  cashier_behind: "الكاشير متأخر",
+  cashier_ahead: "الكاشير متقدم",
+  ticket_low: "متوسط الفاتورة منخفض",
+  ticket_high: "متوسط الفاتورة مرتفع",
+  target_achieved: "تم تحقيق الهدف",
+  target_exceeded: "تم تجاوز الهدف",
+};
+
+// Progress Status Types
+export const PROGRESS_STATUS = ["on_track", "behind", "ahead", "critical"] as const;
+export type ProgressStatus = (typeof PROGRESS_STATUS)[number];
+
+export const PROGRESS_STATUS_LABELS: Record<ProgressStatus, string> = {
+  on_track: "في المسار",
+  behind: "متأخر",
+  ahead: "متقدم",
+  critical: "حرج",
+};
+
+// Cashier Role Types
+export const CASHIER_ROLES = ["main", "assistant", "trainee"] as const;
+export type CashierRole = (typeof CASHIER_ROLES)[number];
+
+export const CASHIER_ROLE_LABELS: Record<CashierRole, string> = {
+  main: "كاشير رئيسي",
+  assistant: "كاشير مساعد",
+  trainee: "متدرب",
+};
+
+// ============================================
+// إدارة التسويق - Marketing Management
+// ============================================
+
+// Campaign Status Types
+export const CAMPAIGN_STATUSES = ["draft", "planned", "active", "paused", "completed", "cancelled"] as const;
+export type CampaignStatus = (typeof CAMPAIGN_STATUSES)[number];
+
+export const CAMPAIGN_STATUS_LABELS: Record<CampaignStatus, string> = {
+  draft: "مسودة",
+  planned: "مخطط",
+  active: "نشط",
+  paused: "متوقف",
+  completed: "مكتمل",
+  cancelled: "ملغي",
+};
+
+// Campaign Objective Types
+export const CAMPAIGN_OBJECTIVES = ["brand_awareness", "engagement", "sales_increase", "new_product", "seasonal", "event", "loyalty"] as const;
+export type CampaignObjective = (typeof CAMPAIGN_OBJECTIVES)[number];
+
+export const CAMPAIGN_OBJECTIVE_LABELS: Record<CampaignObjective, string> = {
+  brand_awareness: "رفع الوعي بالعلامة التجارية",
+  engagement: "زيادة التفاعل",
+  sales_increase: "زيادة المبيعات",
+  new_product: "إطلاق منتج جديد",
+  seasonal: "حملة موسمية",
+  event: "حدث أو مناسبة",
+  loyalty: "برنامج ولاء",
+};
+
+// Season Types for Campaigns
+export const CAMPAIGN_SEASONS = ["summer", "winter", "spring", "autumn", "ramadan", "eid", "national_day", "other"] as const;
+export type CampaignSeason = (typeof CAMPAIGN_SEASONS)[number];
+
+export const CAMPAIGN_SEASON_LABELS: Record<CampaignSeason, string> = {
+  summer: "موسم الصيف",
+  winter: "موسم الشتاء",
+  spring: "موسم الربيع",
+  autumn: "موسم الخريف",
+  ramadan: "شهر رمضان",
+  eid: "عيد الفطر/الأضحى",
+  national_day: "اليوم الوطني",
+  other: "أخرى",
+};
+
+// Marketing Campaigns - الحملات التسويقية
+export const marketingCampaigns = pgTable("marketing_campaigns", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  nameAr: text("name_ar"),
+  description: text("description"),
+  objective: text("objective").notNull(), // from CAMPAIGN_OBJECTIVES
+  season: text("season"), // from CAMPAIGN_SEASONS
+  status: text("status").default("draft").notNull(), // from CAMPAIGN_STATUSES
+  totalBudget: real("total_budget").default(0).notNull(),
+  spentBudget: real("spent_budget").default(0).notNull(),
+  startDate: text("start_date").notNull(), // YYYY-MM-DD
+  endDate: text("end_date").notNull(), // YYYY-MM-DD
+  targetAudience: text("target_audience"),
+  channels: text("channels").array(), // social, print, influencer, email, etc.
+  kpis: jsonb("kpis"), // Key Performance Indicators
+  ownerId: varchar("owner_id").references(() => users.id),
+  createdBy: varchar("created_by").references(() => users.id),
+  notes: text("notes"),
+  metadata: jsonb("metadata"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_marketing_campaigns_status").on(table.status),
+]);
+
+export const insertMarketingCampaignSchema = createInsertSchema(marketingCampaigns).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type MarketingCampaign = typeof marketingCampaigns.$inferSelect;
+export type InsertMarketingCampaign = z.infer<typeof insertMarketingCampaignSchema>;
+
+// Campaign Budget Allocations - توزيع ميزانية الحملة على الفروع
+export const campaignBudgetAllocations = pgTable("campaign_budget_allocations", {
+  id: serial("id").primaryKey(),
+  campaignId: integer("campaign_id")
+    .notNull()
+    .references(() => marketingCampaigns.id, { onDelete: "cascade" }),
+  branchId: varchar("branch_id")
+    .notNull()
+    .references(() => branches.id),
+  allocatedBudget: real("allocated_budget").notNull(),
+  spentAmount: real("spent_amount").default(0).notNull(),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertCampaignBudgetAllocationSchema = createInsertSchema(campaignBudgetAllocations).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type CampaignBudgetAllocation = typeof campaignBudgetAllocations.$inferSelect;
+export type InsertCampaignBudgetAllocation = z.infer<typeof insertCampaignBudgetAllocationSchema>;
+
+// Campaign Goals - أهداف الحملة
+export const campaignGoals = pgTable("campaign_goals", {
+  id: serial("id").primaryKey(),
+  campaignId: integer("campaign_id")
+    .notNull()
+    .references(() => marketingCampaigns.id, { onDelete: "cascade" }),
+  goalType: text("goal_type").notNull(), // sales_target, engagement_rate, impressions, reach, conversions
+  targetValue: real("target_value").notNull(),
+  currentValue: real("current_value").default(0).notNull(),
+  unit: text("unit"), // SAR, %, count
+  description: text("description"),
+  deadline: text("deadline"), // YYYY-MM-DD
+  isAchieved: boolean("is_achieved").default(false).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertCampaignGoalSchema = createInsertSchema(campaignGoals).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type CampaignGoal = typeof campaignGoals.$inferSelect;
+export type InsertCampaignGoal = z.infer<typeof insertCampaignGoalSchema>;
+
+// Campaign Expense Categories - فئات المصروفات
+export const CAMPAIGN_EXPENSE_CATEGORIES = [
+  "influencer", // مؤثرين
+  "advertising", // إعلانات
+  "content_production", // إنتاج محتوى
+  "design", // تصميم
+  "printing", // طباعة
+  "events", // فعاليات
+  "gifts", // هدايا
+  "travel", // سفر
+  "equipment", // معدات
+  "software", // برمجيات
+  "other", // أخرى
+] as const;
+
+export const CAMPAIGN_EXPENSE_CATEGORY_LABELS: Record<string, string> = {
+  influencer: "مؤثرين",
+  advertising: "إعلانات",
+  content_production: "إنتاج محتوى",
+  design: "تصميم",
+  printing: "طباعة",
+  events: "فعاليات",
+  gifts: "هدايا",
+  travel: "سفر",
+  equipment: "معدات",
+  software: "برمجيات",
+  other: "أخرى",
+};
+
+// Campaign Expenses - مصروفات الحملات
+export const campaignExpenses = pgTable("campaign_expenses", {
+  id: serial("id").primaryKey(),
+  campaignId: integer("campaign_id")
+    .references(() => marketingCampaigns.id, { onDelete: "cascade" }),
+  branchId: integer("branch_id").references(() => branches.id, { onDelete: "set null" }),
+  branchName: text("branch_name"), // اسم الفرع للعرض
+  influencerId: integer("influencer_id").references(() => marketingInfluencers.id, { onDelete: "set null" }),
+  category: text("category").notNull(), // from CAMPAIGN_EXPENSE_CATEGORIES
+  description: text("description").notNull(),
+  amount: real("amount").notNull(),
+  currency: text("currency").default("SAR").notNull(),
+  expenseDate: text("expense_date").notNull(), // YYYY-MM-DD
+  expenseMonth: text("expense_month"), // YYYY-MM for filtering
+  paymentMethod: text("payment_method"), // bank_transfer, cash, check, credit_card
+  referenceNumber: text("reference_number"),
+  invoiceNumber: text("invoice_number"),
+  vendor: text("vendor"), // المورد أو الجهة المستفيدة
+  attachmentUrl: text("attachment_url"),
+  status: text("status").default("pending").notNull(), // pending, approved, paid, rejected
+  approvedBy: varchar("approved_by").references(() => users.id),
+  approvedAt: timestamp("approved_at"),
+  notes: text("notes"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertCampaignExpenseSchema = createInsertSchema(campaignExpenses).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type CampaignExpense = typeof campaignExpenses.$inferSelect;
+export type InsertCampaignExpense = z.infer<typeof insertCampaignExpenseSchema>;
+
+export const CAMPAIGN_EXPENSE_STATUS_LABELS: Record<string, string> = {
+  pending: "قيد الانتظار",
+  approved: "معتمد",
+  paid: "مدفوع",
+  rejected: "مرفوض",
+};
+
+export const CAMPAIGN_PAYMENT_METHOD_LABELS: Record<string, string> = {
+  bank_transfer: "تحويل بنكي",
+  cash: "نقدي",
+  check: "شيك",
+  credit_card: "بطاقة ائتمان",
+};
+
+// Marketing Calendar Events - تقويم التسويق
+export const marketingCalendarEvents = pgTable("marketing_calendar_events", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  description: text("description"),
+  eventType: text("event_type").notNull(), // campaign_start, campaign_end, content_deadline, meeting, reminder, milestone
+  campaignId: integer("campaign_id").references(() => marketingCampaigns.id, { onDelete: "set null" }),
+  startDate: text("start_date").notNull(), // YYYY-MM-DD
+  endDate: text("end_date"), // YYYY-MM-DD (optional for single-day events)
+  startTime: text("start_time"), // HH:MM
+  endTime: text("end_time"), // HH:MM
+  isAllDay: boolean("is_all_day").default(false).notNull(),
+  color: text("color"), // hex color for calendar display
+  assignedTo: varchar("assigned_to").references(() => users.id),
+  reminderMinutes: integer("reminder_minutes"), // minutes before event
+  isRecurring: boolean("is_recurring").default(false).notNull(),
+  recurringPattern: text("recurring_pattern"), // daily, weekly, monthly
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertMarketingCalendarEventSchema = createInsertSchema(marketingCalendarEvents).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type MarketingCalendarEvent = typeof marketingCalendarEvents.$inferSelect;
+export type InsertMarketingCalendarEvent = z.infer<typeof insertMarketingCalendarEventSchema>;
+
+// Influencer Platform Types
+export const INFLUENCER_PLATFORMS = ["instagram", "tiktok", "twitter", "youtube", "snapchat", "facebook", "other"] as const;
+export type InfluencerPlatform = (typeof INFLUENCER_PLATFORMS)[number];
+
+export const INFLUENCER_PLATFORM_LABELS: Record<InfluencerPlatform, string> = {
+  instagram: "انستغرام",
+  tiktok: "تيك توك",
+  twitter: "تويتر/إكس",
+  youtube: "يوتيوب",
+  snapchat: "سناب شات",
+  facebook: "فيسبوك",
+  other: "أخرى",
+};
+
+// Influencer Content Types
+export const INFLUENCER_CONTENT_TYPES = ["photo", "video", "story", "reel", "live", "blog", "podcast", "review"] as const;
+export type InfluencerContentType = (typeof INFLUENCER_CONTENT_TYPES)[number];
+
+export const INFLUENCER_CONTENT_TYPE_LABELS: Record<InfluencerContentType, string> = {
+  photo: "صور",
+  video: "فيديو",
+  story: "ستوري",
+  reel: "ريلز",
+  live: "بث مباشر",
+  blog: "مدونة",
+  podcast: "بودكاست",
+  review: "مراجعة",
+};
+
+// Influencer Specialty Types
+export const INFLUENCER_SPECIALTIES = ["food", "lifestyle", "family", "beauty", "fashion", "fitness", "travel", "entertainment", "tech", "general"] as const;
+export type InfluencerSpecialty = (typeof INFLUENCER_SPECIALTIES)[number];
+
+export const INFLUENCER_SPECIALTY_LABELS: Record<InfluencerSpecialty, string> = {
+  food: "طعام ومطاعم",
+  lifestyle: "نمط حياة",
+  family: "عائلة وأطفال",
+  beauty: "جمال ومكياج",
+  fashion: "موضة وأزياء",
+  fitness: "لياقة ورياضة",
+  travel: "سفر ورحلات",
+  entertainment: "ترفيه",
+  tech: "تقنية",
+  general: "عام",
+};
+
+// Marketing Influencers - المؤثرين والبلوجرز
+export const marketingInfluencers = pgTable("marketing_influencers", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  nameAr: text("name_ar"),
+  email: text("email"),
+  phone: text("phone"),
+  profileImageUrl: text("profile_image_url"),
+  accountUrl: text("account_url"), // رابط الحساب
+  coverageUrl: text("coverage_url"), // رابط التغطية
+  specialty: text("specialty").notNull(), // from INFLUENCER_SPECIALTIES
+  platforms: text("platforms").array(), // from INFLUENCER_PLATFORMS
+  contentTypes: text("content_types").array(), // from INFLUENCER_CONTENT_TYPES
+  followerCount: integer("follower_count").default(0),
+  followerCountText: text("follower_count_text"), // النص الأصلي للمتابعين مثل 133k
+  engagementRate: real("engagement_rate"), // percentage
+  viewRating: integer("view_rating"), // تقييم المشاهدات (1-100)
+  avgViews: integer("avg_views").default(0),
+  pricePerPost: real("price_per_post"),
+  pricePerStory: real("price_per_story"),
+  pricePerVideo: real("price_per_video"),
+  city: text("city"),
+  region: text("region"),
+  // Bank Information - معلومات بنكية
+  bankAccountNumber: text("bank_account_number"),
+  bankAccountHolder: text("bank_account_holder"),
+  bankName: text("bank_name"),
+  socialHandles: jsonb("social_handles"), // { instagram: "@handle", tiktok: "@handle", ... }
+  bestCollaborationTimes: text("best_collaboration_times"), // description of best times
+  notes: text("notes"),
+  rating: real("rating"), // 1-5 rating based on past collaborations
+  totalCollaborations: integer("total_collaborations").default(0),
+  isActive: boolean("is_active").default(true).notNull(),
+  aiInsights: jsonb("ai_insights"), // AI-generated insights about performance
+  lastContactDate: text("last_contact_date"), // YYYY-MM-DD
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_marketing_influencers_is_active").on(table.isActive),
+]);
+
+export const insertMarketingInfluencerSchema = createInsertSchema(marketingInfluencers).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type MarketingInfluencer = typeof marketingInfluencers.$inferSelect;
+export type InsertMarketingInfluencer = z.infer<typeof insertMarketingInfluencerSchema>;
+
+// Influencer Campaign Links - ربط المؤثرين بالحملات
+export const influencerCampaignLinks = pgTable("influencer_campaign_links", {
+  id: serial("id").primaryKey(),
+  influencerId: integer("influencer_id")
+    .notNull()
+    .references(() => marketingInfluencers.id, { onDelete: "cascade" }),
+  campaignId: integer("campaign_id")
+    .notNull()
+    .references(() => marketingCampaigns.id, { onDelete: "cascade" }),
+  status: text("status").default("pending").notNull(), // pending, contacted, confirmed, in_progress, completed, cancelled
+  contractAmount: real("contract_amount"),
+  deliverables: jsonb("deliverables"), // array of expected deliverables
+  deliverablesDone: jsonb("deliverables_done"), // array of completed deliverables
+  startDate: text("start_date"), // YYYY-MM-DD
+  endDate: text("end_date"), // YYYY-MM-DD
+  performanceScore: real("performance_score"), // 1-100 score after campaign
+  salesImpact: real("sales_impact"), // estimated sales impact in SAR
+  engagementGenerated: integer("engagement_generated"),
+  impressionsGenerated: integer("impressions_generated"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertInfluencerCampaignLinkSchema = createInsertSchema(influencerCampaignLinks).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InfluencerCampaignLink = typeof influencerCampaignLinks.$inferSelect;
+export type InsertInfluencerCampaignLink = z.infer<typeof insertInfluencerCampaignLinkSchema>;
+
+// Influencer Contacts Log - سجل التواصل مع المؤثرين
+export const influencerContacts = pgTable("influencer_contacts", {
+  id: serial("id").primaryKey(),
+  influencerId: integer("influencer_id")
+    .notNull()
+    .references(() => marketingInfluencers.id, { onDelete: "cascade" }),
+  contactType: text("contact_type").notNull(), // call, email, whatsapp, meeting, social_dm
+  contactDate: text("contact_date").notNull(), // YYYY-MM-DD
+  contactTime: text("contact_time"), // HH:MM
+  subject: text("subject"),
+  notes: text("notes"),
+  outcome: text("outcome"), // positive, negative, neutral, follow_up_needed
+  nextFollowUp: text("next_follow_up"), // YYYY-MM-DD
+  contactedBy: varchar("contacted_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertInfluencerContactSchema = createInsertSchema(influencerContacts).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InfluencerContact = typeof influencerContacts.$inferSelect;
+export type InsertInfluencerContact = z.infer<typeof insertInfluencerContactSchema>;
+
+// Influencer Payments/Ledger - كشف حساب المؤثرين
+export const influencerPayments = pgTable("influencer_payments", {
+  id: serial("id").primaryKey(),
+  influencerId: integer("influencer_id")
+    .notNull()
+    .references(() => marketingInfluencers.id, { onDelete: "cascade" }),
+  campaignId: integer("campaign_id").references(() => marketingCampaigns.id, { onDelete: "set null" }),
+  paymentType: text("payment_type").notNull(), // advance, milestone, final, bonus, refund
+  amount: real("amount").notNull(),
+  currency: text("currency").default("SAR").notNull(),
+  paymentDate: text("payment_date").notNull(), // YYYY-MM-DD
+  paymentMethod: text("payment_method"), // bank_transfer, cash, check, online
+  referenceNumber: text("reference_number"), // رقم الحوالة أو الشيك
+  description: text("description"),
+  status: text("status").default("completed").notNull(), // pending, completed, cancelled, refunded
+  invoiceNumber: text("invoice_number"),
+  attachmentUrl: text("attachment_url"), // رابط الفاتورة أو الإيصال
+  notes: text("notes"),
+  createdBy: varchar("created_by").references(() => users.id),
+  approvedBy: varchar("approved_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertInfluencerPaymentSchema = createInsertSchema(influencerPayments).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InfluencerPayment = typeof influencerPayments.$inferSelect;
+export type InsertInfluencerPayment = z.infer<typeof insertInfluencerPaymentSchema>;
+
+// Influencer Payment Type Labels
+export const INFLUENCER_PAYMENT_TYPE_LABELS: Record<string, string> = {
+  advance: "دفعة مقدمة",
+  milestone: "دفعة مرحلية",
+  final: "دفعة نهائية",
+  bonus: "مكافأة",
+  refund: "استرداد",
+};
+
+// Influencer Payment Method Labels
+export const INFLUENCER_PAYMENT_METHOD_LABELS: Record<string, string> = {
+  bank_transfer: "تحويل بنكي",
+  cash: "نقدي",
+  check: "شيك",
+  online: "دفع إلكتروني",
+};
+
+// Influencer Payment Status Labels
+export const INFLUENCER_PAYMENT_STATUS_LABELS: Record<string, string> = {
+  pending: "قيد الانتظار",
+  completed: "مكتمل",
+  cancelled: "ملغي",
+  refunded: "مسترد",
+};
+
+// Marketing Tasks - مهام فريق التسويق
+export const marketingTasks = pgTable("marketing_tasks", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  description: text("description"),
+  campaignId: integer("campaign_id").references(() => marketingCampaigns.id, { onDelete: "set null" }),
+  assignedTo: varchar("assigned_to").references(() => users.id),
+  assignedBy: varchar("assigned_by").references(() => users.id),
+  priority: text("priority").default("medium").notNull(), // low, medium, high, urgent
+  status: text("status").default("pending").notNull(), // pending, in_progress, completed, cancelled, blocked
+  dueDate: text("due_date"), // YYYY-MM-DD
+  completedAt: timestamp("completed_at"),
+  estimatedHours: real("estimated_hours"),
+  actualHours: real("actual_hours"),
+  category: text("category"), // content, design, coordination, analysis, other
+  attachments: jsonb("attachments"), // array of attachment URLs
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertMarketingTaskSchema = createInsertSchema(marketingTasks).omit({
+  id: true,
+  completedAt: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type MarketingTask = typeof marketingTasks.$inferSelect;
+export type InsertMarketingTask = z.infer<typeof insertMarketingTaskSchema>;
+
+// Marketing Task Activities - نشاط المهام
+export const marketingTaskActivities = pgTable("marketing_task_activities", {
+  id: serial("id").primaryKey(),
+  taskId: integer("task_id")
+    .notNull()
+    .references(() => marketingTasks.id, { onDelete: "cascade" }),
+  activityType: text("activity_type").notNull(), // comment, status_change, assignment, attachment, update
+  description: text("description"),
+  oldValue: text("old_value"),
+  newValue: text("new_value"),
+  userId: varchar("user_id").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertMarketingTaskActivitySchema = createInsertSchema(marketingTaskActivities).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type MarketingTaskActivity = typeof marketingTaskActivities.$inferSelect;
+export type InsertMarketingTaskActivity = z.infer<typeof insertMarketingTaskActivitySchema>;
+
+// Marketing Performance Reports - تقارير أداء التسويق
+export const marketingPerformanceReports = pgTable("marketing_performance_reports", {
+  id: serial("id").primaryKey(),
+  reportType: text("report_type").notNull(), // campaign, influencer, monthly, quarterly, yearly
+  periodStart: text("period_start").notNull(), // YYYY-MM-DD
+  periodEnd: text("period_end").notNull(), // YYYY-MM-DD
+  campaignId: integer("campaign_id").references(() => marketingCampaigns.id, { onDelete: "set null" }),
+  branchId: varchar("branch_id").references(() => branches.id),
+  // Metrics
+  totalSpend: real("total_spend").default(0),
+  totalReach: integer("total_reach").default(0),
+  totalImpressions: integer("total_impressions").default(0),
+  totalEngagement: integer("total_engagement").default(0),
+  engagementRate: real("engagement_rate").default(0),
+  estimatedSalesImpact: real("estimated_sales_impact").default(0),
+  actualSalesImpact: real("actual_sales_impact").default(0),
+  roi: real("roi").default(0), // Return on Investment percentage
+  costPerEngagement: real("cost_per_engagement").default(0),
+  costPerImpression: real("cost_per_impression").default(0),
+  // Comparison with previous period
+  previousPeriodSales: real("previous_period_sales"),
+  salesGrowth: real("sales_growth"), // percentage
+  // Additional data
+  topPerformingContent: jsonb("top_performing_content"),
+  topInfluencers: jsonb("top_influencers"),
+  recommendations: jsonb("recommendations"), // AI-generated recommendations
+  generatedBy: varchar("generated_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertMarketingPerformanceReportSchema = createInsertSchema(marketingPerformanceReports).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type MarketingPerformanceReport = typeof marketingPerformanceReports.$inferSelect;
+export type InsertMarketingPerformanceReport = z.infer<typeof insertMarketingPerformanceReportSchema>;
+
+// Marketing Assets - الأصول التسويقية (صور، فيديوهات، تصاميم)
+export const marketingAssets = pgTable("marketing_assets", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  assetType: text("asset_type").notNull(), // image, video, document, design, template
+  fileUrl: text("file_url"),
+  thumbnailUrl: text("thumbnail_url"),
+  campaignId: integer("campaign_id").references(() => marketingCampaigns.id, { onDelete: "set null" }),
+  branchId: varchar("branch_id").references(() => branches.id, { onDelete: "set null" }),
+  category: text("category"), // social, print, email, website
+  location: text("location"), // مكان التواجد (المخزن، الواجهة، المكتب)
+  quantity: integer("quantity").default(1), // الكمية
+  description: text("description"), // الوصف
+  tags: text("tags").array(),
+  fileSize: integer("file_size"), // in bytes
+  dimensions: text("dimensions"), // e.g., "1080x1080"
+  duration: integer("duration"), // for videos, in seconds
+  usageCount: integer("usage_count").default(0),
+  uploadedBy: varchar("uploaded_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertMarketingAssetSchema = createInsertSchema(marketingAssets).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type MarketingAsset = typeof marketingAssets.$inferSelect;
+export type InsertMarketingAsset = z.infer<typeof insertMarketingAssetSchema>;
+
+// Marketing Team Members - أعضاء فريق التسويق
+export const marketingTeamMembers = pgTable("marketing_team_members", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id")
+    .references(() => users.id),
+  name: text("name"),
+  email: text("email"),
+  phone: text("phone"),
+  role: text("role").notNull(), // manager, coordinator, designer, content_creator, analyst
+  specialization: text("specialization"), // social_media, influencer_relations, content, analytics
+  isTeamLead: boolean("is_team_lead").default(false).notNull(),
+  assignedBranches: text("assigned_branches").array(), // branch IDs this member focuses on
+  weeklyHoursCapacity: real("weekly_hours_capacity").default(40),
+  currentWorkload: real("current_workload").default(0), // calculated from active tasks
+  joinDate: text("join_date"), // YYYY-MM-DD
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertMarketingTeamMemberSchema = createInsertSchema(marketingTeamMembers).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type MarketingTeamMember = typeof marketingTeamMembers.$inferSelect;
+export type InsertMarketingTeamMember = z.infer<typeof insertMarketingTeamMemberSchema>;
+
+// Marketing Alerts - تنبيهات التسويق
+export const marketingAlerts = pgTable("marketing_alerts", {
+  id: serial("id").primaryKey(),
+  alertType: text("alert_type").notNull(), // campaign_start, campaign_end, budget_warning, task_overdue, influencer_deadline
+  severity: text("severity").notNull(), // info, warning, critical
+  title: text("title").notNull(),
+  message: text("message").notNull(),
+  campaignId: integer("campaign_id").references(() => marketingCampaigns.id, { onDelete: "cascade" }),
+  taskId: integer("task_id").references(() => marketingTasks.id, { onDelete: "cascade" }),
+  targetUserId: varchar("target_user_id").references(() => users.id),
+  isRead: boolean("is_read").default(false).notNull(),
+  isAcknowledged: boolean("is_acknowledged").default(false).notNull(),
+  acknowledgedBy: varchar("acknowledged_by").references(() => users.id),
+  acknowledgedAt: timestamp("acknowledged_at"),
+  scheduledFor: timestamp("scheduled_for"),
+  sentAt: timestamp("sent_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertMarketingAlertSchema = createInsertSchema(marketingAlerts).omit({
+  id: true,
+  acknowledgedAt: true,
+  sentAt: true,
+  createdAt: true,
+});
+
+export type MarketingAlert = typeof marketingAlerts.$inferSelect;
+export type InsertMarketingAlert = z.infer<typeof insertMarketingAlertSchema>;
+
+// ==========================================
+// نظام إدارة الورديات المتقدم - Advanced Shift Management System
+// ==========================================
+
+// Branch Shift Profiles - إعدادات أوقات الورديات حسب الفرع
+export const branchShiftProfiles = pgTable("branch_shift_profiles", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
+  shiftCode: text("shift_code").notNull(), // morning, evening, night, custom
+  displayName: text("display_name").notNull(), // الوردية الصباحية، المسائية، الليلية
+  startTime: text("start_time").notNull(), // HH:MM format (e.g., "08:00")
+  endTime: text("end_time").notNull(), // HH:MM format (e.g., "16:00")
+  breakMinutes: integer("break_minutes").default(60), // فترة الاستراحة بالدقائق
+  graceMinutesBefore: integer("grace_minutes_before").default(15), // فترة السماح قبل الوقت
+  graceMinutesAfter: integer("grace_minutes_after").default(15), // فترة السماح بعد الوقت
+  isActive: boolean("is_active").default(true).notNull(),
+  sortOrder: integer("sort_order").default(0), // ترتيب العرض
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_branch_shift_profiles_branch").on(table.branchId),
+  index("idx_branch_shift_profiles_code").on(table.branchId, table.shiftCode),
+]);
+
+export const insertBranchShiftProfileSchema = createInsertSchema(branchShiftProfiles).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type BranchShiftProfile = typeof branchShiftProfiles.$inferSelect;
+export type InsertBranchShiftProfile = z.infer<typeof insertBranchShiftProfileSchema>;
+
+// Schedule Templates - قوالب جداول الورديات
+export const scheduleTemplates = pgTable("schedule_templates", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  description: text("description"),
+  branchId: varchar("branch_id").references(() => branches.id),
+  isDefault: boolean("is_default").default(false),
+  weeklyPattern: jsonb("weekly_pattern"), // JSON: {sat: {start, end, isOff}, sun: {...}, ...}
+  createdBy: varchar("created_by").references(() => users.id),
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertScheduleTemplateSchema = createInsertSchema(scheduleTemplates).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type ScheduleTemplate = typeof scheduleTemplates.$inferSelect;
+export type InsertScheduleTemplate = z.infer<typeof insertScheduleTemplateSchema>;
+
+// Schedule Periods - فترات الجدول (أسبوعي/شهري)
+export const schedulePeriods = pgTable("schedule_periods", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
+  periodType: text("period_type").notNull(), // weekly, monthly
+  startDate: text("start_date").notNull(), // YYYY-MM-DD
+  endDate: text("end_date").notNull(), // YYYY-MM-DD
+  status: text("status").default("draft").notNull(), // draft, published, archived
+  templateId: integer("template_id").references(() => scheduleTemplates.id),
+  requiredStaffPerDay: jsonb("required_staff_per_day"), // {sat: 5, sun: 3, ...}
+  notes: text("notes"),
+  publishedBy: varchar("published_by").references(() => users.id),
+  publishedAt: timestamp("published_at"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_schedule_periods_branch").on(table.branchId),
+  index("idx_schedule_periods_dates").on(table.startDate, table.endDate),
+]);
+
+export const insertSchedulePeriodSchema = createInsertSchema(schedulePeriods).omit({
+  id: true,
+  publishedAt: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type SchedulePeriod = typeof schedulePeriods.$inferSelect;
+export type InsertSchedulePeriod = z.infer<typeof insertSchedulePeriodSchema>;
+
+// Employee Schedules - جداول الموظفين اليومية
+export const employeeSchedules = pgTable("employee_schedules", {
+  id: serial("id").primaryKey(),
+  periodId: integer("period_id").references(() => schedulePeriods.id, { onDelete: "cascade" }),
+  employeeId: varchar("employee_id").notNull(), // معرف الموظف (قد يكون userId أو branch_emp_XX)
+  employeeName: text("employee_name").notNull(),
+  branchId: varchar("branch_id").references(() => branches.id), // الفرع
+  branchEmployeeId: integer("branch_employee_id"), // ربط مع موظف الفرع (اختياري)
+  scheduleDate: text("schedule_date").notNull(), // YYYY-MM-DD
+  dayOfWeek: text("day_of_week").notNull(), // sat, sun, mon, tue, wed, thu, fri
+  shiftType: text("shift_type"), // morning, evening, night
+  startTime: text("start_time"), // HH:MM
+  endTime: text("end_time"), // HH:MM
+  isOff: boolean("is_off").default(false).notNull(), // يوم إجازة
+  breakDuration: integer("break_duration").default(60), // بالدقائق
+  status: text("status").default("scheduled").notNull(), // scheduled, completed, cancelled
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_employee_schedules_period").on(table.periodId),
+  index("idx_employee_schedules_employee").on(table.employeeId),
+  index("idx_employee_schedules_date").on(table.scheduleDate),
+  index("idx_employee_schedules_branch").on(table.branchId),
+  index("idx_employee_schedules_branch_employee").on(table.branchEmployeeId),
+  // PERF: schedule lookups are virtually always scoped to a branch + a date
+  // window. The composite makes those queries an index range scan instead of
+  // a full table scan.
+  index("idx_employee_schedules_branch_date").on(table.branchId, table.scheduleDate),
+  // PARTIAL unique indexes — these mirror exactly what server/db.ts creates at
+  // startup and what the bulk-save ON CONFLICT clauses target. Keeping the schema
+  // in sync prevents drift between the Drizzle definition and the live database.
+  uniqueIndex("idx_unique_schedule_per_employee_date_branch")
+    .on(table.branchEmployeeId, table.scheduleDate, table.branchId)
+    .where(sql`branch_employee_id IS NOT NULL AND branch_id IS NOT NULL`),
+  uniqueIndex("idx_unique_schedule_per_empid_date_branch")
+    .on(table.employeeId, table.scheduleDate, table.branchId)
+    .where(sql`branch_employee_id IS NULL AND branch_id IS NOT NULL`),
+]);
+
+export const insertEmployeeScheduleSchema = createInsertSchema(employeeSchedules).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type EmployeeSchedule = typeof employeeSchedules.$inferSelect;
+export type InsertEmployeeSchedule = z.infer<typeof insertEmployeeScheduleSchema>;
+
+// Weekly Schedule Locks - قفل جدول الدوام الأسبوعي
+export const weeklyScheduleLocks = pgTable("weekly_schedule_locks", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
+  weekStartDate: text("week_start_date").notNull(),
+  lockedAt: timestamp("locked_at").defaultNow().notNull(),
+  lockedBy: varchar("locked_by").references(() => users.id),
+  lockedByName: text("locked_by_name"),
+  shiftProfile: text("shift_profile"),
+  notes: text("notes"),
+}, (table) => [
+  index("idx_weekly_locks_branch").on(table.branchId),
+  index("idx_weekly_locks_week").on(table.weekStartDate),
+  uniqueIndex("idx_weekly_locks_unique").on(table.branchId, table.weekStartDate),
+]);
+
+export const insertWeeklyScheduleLockSchema = createInsertSchema(weeklyScheduleLocks).omit({
+  id: true,
+  lockedAt: true,
+});
+
+export type WeeklyScheduleLock = typeof weeklyScheduleLocks.$inferSelect;
+export type InsertWeeklyScheduleLock = z.infer<typeof insertWeeklyScheduleLockSchema>;
+
+// Schedule Change Audit Trail - سجل تتبع تعديلات الجدول
+export const scheduleChangeAudit = pgTable("schedule_change_audit", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
+  weekStartDate: text("week_start_date").notNull(),
+  employeeId: varchar("employee_id"),
+  employeeName: text("employee_name"),
+  changeType: text("change_type").notNull(),
+  scheduleDate: text("schedule_date"),
+  oldValue: jsonb("old_value"),
+  newValue: jsonb("new_value"),
+  changedBy: varchar("changed_by").references(() => users.id),
+  changedByName: text("changed_by_name"),
+  changeReason: text("change_reason"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_schedule_audit_branch").on(table.branchId),
+  index("idx_schedule_audit_week").on(table.weekStartDate),
+  index("idx_schedule_audit_employee").on(table.employeeId),
+  index("idx_schedule_audit_date").on(table.createdAt),
+]);
+
+export const insertScheduleChangeAuditSchema = createInsertSchema(scheduleChangeAudit).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type ScheduleChangeAudit = typeof scheduleChangeAudit.$inferSelect;
+export type InsertScheduleChangeAudit = z.infer<typeof insertScheduleChangeAuditSchema>;
+
+// Attendance Records - سجلات الحضور والانصراف
+export const attendanceRecords = pgTable("attendance_records", {
+  id: serial("id").primaryKey(),
+  employeeId: varchar("employee_id").notNull(), // بدون foreign key لدعم موظفي الفروع بدون حسابات
+  employeeName: text("employee_name").notNull(),
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
+  branchEmployeeId: integer("branch_employee_id"), // ربط مع موظف الفرع (اختياري)
+  scheduleId: integer("schedule_id"),
+  attendanceDate: text("attendance_date").notNull(), // YYYY-MM-DD
+  scheduledStartTime: text("scheduled_start_time"), // الوقت المجدول للحضور
+  scheduledEndTime: text("scheduled_end_time"), // الوقت المجدول للانصراف
+  actualCheckIn: text("actual_check_in"), // وقت الحضور الفعلي HH:MM:SS
+  actualCheckOut: text("actual_check_out"), // وقت الانصراف الفعلي
+  checkInSignature: text("check_in_signature"), // base64 encoded signature
+  checkOutSignature: text("check_out_signature"), // base64 encoded signature
+  status: text("status").default("pending").notNull(), // pending, present, absent, late, early_leave, on_leave
+  lateMinutes: integer("late_minutes").default(0), // دقائق التأخير
+  earlyLeaveMinutes: integer("early_leave_minutes").default(0), // دقائق الخروج المبكر
+  overtimeMinutes: integer("overtime_minutes").default(0), // دقائق العمل الإضافي
+  workingHours: real("working_hours").default(0), // ساعات العمل الفعلية
+  biometricVerified: boolean("biometric_verified").default(false),
+  biometricCheckIn: boolean("biometric_check_in").default(false),
+  biometricCheckOut: boolean("biometric_check_out").default(false),
+  deviceInfo: text("device_info"), // معلومات الجهاز (iPad, etc.)
+  locationInfo: text("location_info"), // معلومات الموقع
+  notes: text("notes"),
+  approvedBy: varchar("approved_by"),
+  approvedAt: timestamp("approved_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_attendance_employee").on(table.employeeId),
+  index("idx_attendance_branch").on(table.branchId),
+  index("idx_attendance_date").on(table.attendanceDate),
+  index("idx_attendance_status").on(table.status),
+  index("idx_attendance_branch_employee").on(table.branchEmployeeId),
+  // PERF: composite indexes for the hottest filter combinations on this table
+  // (employee/branch + date range). The single-column indexes above cannot serve
+  // these queries efficiently once the table grows past ~50k rows.
+  index("idx_attendance_branch_date").on(table.branchId, table.attendanceDate),
+  index("idx_attendance_employee_date").on(table.employeeId, table.attendanceDate),
+]);
+
+export const insertAttendanceRecordSchema = createInsertSchema(attendanceRecords).omit({
+  id: true,
+  approvedAt: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type AttendanceRecord = typeof attendanceRecords.$inferSelect;
+export type InsertAttendanceRecord = z.infer<typeof insertAttendanceRecordSchema>;
+
+// Time Entries - إدخالات الوقت (التوقيعات)
+export const timeEntries = pgTable("time_entries", {
+  id: serial("id").primaryKey(),
+  attendanceId: integer("attendance_id").references(() => attendanceRecords.id, { onDelete: "cascade" }),
+  employeeId: varchar("employee_id").notNull(), // بدون foreign key لدعم موظفي الفروع بدون حسابات
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
+  entryType: text("entry_type").notNull(), // check_in, check_out, break_start, break_end
+  entryTime: timestamp("entry_time").defaultNow().notNull(),
+  signature: text("signature"), // base64 encoded signature image
+  signatureType: text("signature_type"), // digital, biometric
+  deviceId: text("device_id"), // iPad ID or device identifier
+  ipAddress: text("ip_address"),
+  latitude: doublePrecision("latitude"),
+  longitude: doublePrecision("longitude"),
+  isVerified: boolean("is_verified").default(false),
+  verifiedBy: varchar("verified_by").references(() => users.id),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_time_entries_attendance").on(table.attendanceId),
+  index("idx_time_entries_employee").on(table.employeeId),
+  index("idx_time_entries_branch").on(table.branchId),
+]);
+
+export const insertTimeEntrySchema = createInsertSchema(timeEntries).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type TimeEntry = typeof timeEntries.$inferSelect;
+export type InsertTimeEntry = z.infer<typeof insertTimeEntrySchema>;
+
+// Attendance Summary - ملخص الحضور الشهري
+export const attendanceSummary = pgTable("attendance_summary", {
+  id: serial("id").primaryKey(),
+  employeeId: varchar("employee_id").notNull(), // بدون foreign key لدعم موظفي الفروع بدون حسابات
+  employeeName: text("employee_name").notNull(),
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
+  periodMonth: text("period_month").notNull(), // YYYY-MM
+  totalScheduledDays: integer("total_scheduled_days").default(0),
+  totalPresentDays: integer("total_present_days").default(0),
+  totalAbsentDays: integer("total_absent_days").default(0),
+  totalLateDays: integer("total_late_days").default(0),
+  totalEarlyLeaveDays: integer("total_early_leave_days").default(0),
+  totalLeaveDays: integer("total_leave_days").default(0),
+  totalWorkingHours: real("total_working_hours").default(0),
+  totalOvertimeHours: real("total_overtime_hours").default(0),
+  totalLateMinutes: integer("total_late_minutes").default(0),
+  totalEarlyLeaveMinutes: integer("total_early_leave_minutes").default(0),
+  attendanceRate: real("attendance_rate").default(0), // نسبة الحضور %
+  punctualityRate: real("punctuality_rate").default(0), // نسبة الالتزام بالوقت %
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_attendance_summary_employee").on(table.employeeId),
+  index("idx_attendance_summary_branch").on(table.branchId),
+  index("idx_attendance_summary_month").on(table.periodMonth),
+]);
+
+export const insertAttendanceSummarySchema = createInsertSchema(attendanceSummary).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type AttendanceSummary = typeof attendanceSummary.$inferSelect;
+export type InsertAttendanceSummary = z.infer<typeof insertAttendanceSummarySchema>;
+
+// Attendance Status Labels
+export const ATTENDANCE_STATUS = ["pending", "present", "absent", "late", "early_leave", "on_leave"] as const;
+export type AttendanceStatus = (typeof ATTENDANCE_STATUS)[number];
+
+export const ATTENDANCE_STATUS_LABELS: Record<AttendanceStatus, string> = {
+  pending: "في انتظار",
+  present: "حاضر",
+  absent: "غائب",
+  late: "متأخر",
+  early_leave: "خروج مبكر",
+  on_leave: "في إجازة",
+};
+
+export const ATTENDANCE_STATUS_ICONS: Record<AttendanceStatus, string> = {
+  pending: "🔘",
+  present: "✅",
+  absent: "❌",
+  late: "🟡",
+  early_leave: "🔵",
+  on_leave: "🟠",
+};
+
+// Days of Week (Arabic)
+export const DAYS_OF_WEEK = ["sat", "sun", "mon", "tue", "wed", "thu", "fri"] as const;
+export type DayOfWeek = (typeof DAYS_OF_WEEK)[number];
+
+export const DAYS_OF_WEEK_LABELS: Record<DayOfWeek, string> = {
+  sat: "السبت",
+  sun: "الأحد",
+  mon: "الاثنين",
+  tue: "الثلاثاء",
+  wed: "الأربعاء",
+  thu: "الخميس",
+  fri: "الجمعة",
+};
+
+// Timesheet Reports - تقارير الدوام الشهرية
+export const timesheetReports = pgTable("timesheet_reports", {
+  id: serial("id").primaryKey(),
+  employeeId: varchar("employee_id").notNull(), // بدون foreign key لدعم موظفي الفروع بدون حسابات
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
+  branchEmployeeId: integer("branch_employee_id"), // ربط مع موظف الفرع (اختياري)
+  startDate: text("start_date").notNull(), // YYYY-MM-DD
+  endDate: text("end_date").notNull(), // YYYY-MM-DD
+  generatedBy: varchar("generated_by").references(() => users.id),
+  status: text("status").default("pending").notNull(), // pending, pending_employee_signature, pending_manager_signature, finalized
+  totalScheduledDays: integer("total_scheduled_days").default(0),
+  totalPresentDays: integer("total_present_days").default(0),
+  totalAbsentDays: integer("total_absent_days").default(0),
+  totalLateDays: integer("total_late_days").default(0),
+  totalLeaveDays: integer("total_leave_days").default(0), // أيام الإجازة المعتمدة ضمن الفترة
+  totalScheduledHours: real("total_scheduled_hours").default(0),
+  totalActualHours: real("total_actual_hours").default(0),
+  totalOvertimeMinutes: integer("total_overtime_minutes").default(0),
+  totalLateMinutes: integer("total_late_minutes").default(0),
+  employeeSignature: text("employee_signature"), // base64 encoded signature
+  employeeSignedAt: timestamp("employee_signed_at"),
+  employeeAcknowledgment: text("employee_acknowledgment"),
+  managerSignature: text("manager_signature"), // base64 encoded signature
+  managerId: varchar("manager_id").references(() => users.id),
+  managerSignedAt: timestamp("manager_signed_at"),
+  managerAcknowledgment: text("manager_acknowledgment"),
+  notes: text("notes"),
+  // Phase 3: قفل الفترة + إعادة الإصدار
+  isLocked: boolean("is_locked").default(false).notNull(),
+  lockedAt: timestamp("locked_at"),
+  lockedBy: varchar("locked_by").references(() => users.id),
+  version: integer("version").default(1).notNull(),
+  supersededBy: integer("superseded_by"),
+  supersededAt: timestamp("superseded_at"),
+  reissueReason: text("reissue_reason"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_timesheet_reports_employee").on(table.employeeId),
+  index("idx_timesheet_reports_branch").on(table.branchId),
+  index("idx_timesheet_reports_status").on(table.status),
+  index("idx_timesheet_reports_dates").on(table.startDate, table.endDate),
+  index("idx_timesheet_reports_branch_employee").on(table.branchEmployeeId),
+  index("idx_timesheet_reports_locked").on(table.isLocked),
+  index("idx_timesheet_reports_superseded").on(table.supersededBy),
+  // منع تكرار التقارير: تقرير واحد لكل (موظف + فترة + إصدار).
+  // التوليد ينشئ دائماً version=1 فتتصادم النقرتان المتزامنتان؛ إعادة الإصدار تستخدم version=2,3.. فلا تتعارض.
+  uniqueIndex("uq_timesheet_reports_employee_period_version").on(
+    table.employeeId,
+    table.startDate,
+    table.endDate,
+    table.version,
+  ),
+]);
+
+export const insertTimesheetReportSchema = createInsertSchema(timesheetReports).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type TimesheetReport = typeof timesheetReports.$inferSelect;
+export type InsertTimesheetReport = z.infer<typeof insertTimesheetReportSchema>;
+
+// Timesheet Report Entries - سجلات التقرير اليومية
+export const timesheetReportEntries = pgTable("timesheet_report_entries", {
+  id: serial("id").primaryKey(),
+  reportId: integer("report_id").notNull().references(() => timesheetReports.id, { onDelete: "cascade" }),
+  date: text("date").notNull(), // YYYY-MM-DD
+  dayOfWeek: text("day_of_week").notNull(), // sat, sun, mon, etc.
+  scheduledStartTime: text("scheduled_start_time"), // HH:MM
+  scheduledEndTime: text("scheduled_end_time"), // HH:MM
+  actualStartTime: text("actual_start_time"), // HH:MM
+  actualEndTime: text("actual_end_time"), // HH:MM
+  isOff: boolean("is_off").default(false),
+  status: text("status").default("pending"), // pending, present, absent, late, day_off, leave, no_schedule
+  leaveType: text("leave_type"), // نوع الإجازة المعتمدة إن كانت الحالة leave (annual/sick/...)
+  scheduledHours: real("scheduled_hours").default(0),
+  actualHours: real("actual_hours").default(0),
+  overtimeMinutes: integer("overtime_minutes").default(0),
+  lateMinutes: integer("late_minutes").default(0),
+  notes: text("notes"),
+  checkInSignature: text("check_in_signature"), // base64 signature from daily attendance
+  checkOutSignature: text("check_out_signature"), // base64 signature from daily attendance
+}, (table) => [
+  index("idx_timesheet_entries_report").on(table.reportId),
+  index("idx_timesheet_entries_date").on(table.date),
+]);
+
+export const insertTimesheetReportEntrySchema = createInsertSchema(timesheetReportEntries).omit({
+  id: true,
+});
+
+export type TimesheetReportEntry = typeof timesheetReportEntries.$inferSelect;
+export type InsertTimesheetReportEntry = z.infer<typeof insertTimesheetReportEntrySchema>;
+
+// Timesheet Status Labels
+export const TIMESHEET_STATUS = ["pending", "pending_employee_signature", "pending_manager_signature", "finalized", "rejected"] as const;
+export type TimesheetStatus = (typeof TIMESHEET_STATUS)[number];
+
+export const TIMESHEET_STATUS_LABELS: Record<TimesheetStatus, string> = {
+  pending: "قيد الإنشاء",
+  pending_employee_signature: "بانتظار توقيع الموظف",
+  pending_manager_signature: "بانتظار توقيع المدير",
+  finalized: "مكتمل",
+  rejected: "مرفوض - بحاجة لمراجعة",
+};
+
+// Phase 3: Audit Log - سجل تدقيق تقارير الدوام
+export const TIMESHEET_AUDIT_ACTIONS = [
+  "created", "updated", "signed_employee", "signed_manager",
+  "locked", "unlocked", "reissued", "deleted", "pdf_generated", "rejected"
+] as const;
+export type TimesheetAuditAction = (typeof TIMESHEET_AUDIT_ACTIONS)[number];
+
+export const timesheetAuditLog = pgTable("timesheet_audit_log", {
+  id: serial("id").primaryKey(),
+  reportId: integer("report_id").notNull().references(() => timesheetReports.id, { onDelete: "cascade" }),
+  action: text("action").notNull(),
+  performedBy: varchar("performed_by").references(() => users.id),
+  performedByName: text("performed_by_name"),
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+  beforeState: jsonb("before_state"),
+  afterState: jsonb("after_state"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_timesheet_audit_report").on(table.reportId),
+  index("idx_timesheet_audit_action").on(table.action),
+  index("idx_timesheet_audit_date").on(table.createdAt),
+  index("idx_timesheet_audit_user").on(table.performedBy),
+]);
+
+export const insertTimesheetAuditLogSchema = createInsertSchema(timesheetAuditLog).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type TimesheetAuditLog = typeof timesheetAuditLog.$inferSelect;
+export type InsertTimesheetAuditLog = z.infer<typeof insertTimesheetAuditLogSchema>;
+
+// =====================================================
+// Branch Employees - موظفي الفروع مع بيانات الرواتب
+// =====================================================
+export const branchEmployees = pgTable("branch_employees", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
+  linkedUserId: varchar("linked_user_id").references(() => users.id), // ربط بحساب المستخدم (للدخول للنظام)
+  defaultScheduleTemplateId: integer("default_schedule_template_id").references(() => scheduleTemplates.id), // قالب الجدولة الافتراضي
+  employeeNumber: text("employee_number"), // رقم الموظف الوظيفي MED-00001
+  employeeName: text("employee_name").notNull(),
+  employeeNameEn: text("employee_name_en"), // الاسم بالإنجليزية
+  jobTitle: text("job_title").notNull(), // الوظيفة
+  department: text("department"), // القسم (مطبخ، صالة، إلخ)
+  nationality: text("nationality").notNull(), // الجنسية
+  sponsorshipType: text("sponsorship_type").default("company"), // نوع الكفالة: company (كفالة الشركة), external (كفالة خارجية)
+  salary: real("salary").notNull(), // الراتب الأساسي
+  housingAllowance: real("housing_allowance").default(0), // بدل السكن
+  transportAllowance: real("transport_allowance").default(0), // بدل المواصلات
+  foodAllowance: real("food_allowance").default(0), // بدل الطعام
+  otherAllowances: real("other_allowances").default(0), // بدلات أخرى
+  socialInsuranceDeduction: real("social_insurance_deduction").default(0), // خصم التأمينات الاجتماعية للسعوديين
+  totalSalary: real("total_salary"), // إجمالي الراتب
+  hireDate: text("hire_date"), // تاريخ التعيين
+  healthCertificate: text("health_certificate").default("none"), // شهادة صحية: none, valid, expired
+  healthCertificateExpiry: text("health_certificate_expiry"), // تاريخ انتهاء الشهادة الصحية
+  iqamaNumber: text("iqama_number"), // رقم الإقامة
+  iqamaExpiry: text("iqama_expiry"), // تاريخ انتهاء الإقامة
+  passportNumber: text("passport_number"), // رقم الجواز
+  passportExpiry: text("passport_expiry"), // تاريخ انتهاء الجواز
+  phoneNumber: text("phone_number"), // رقم الجوال
+  photoUrl: text("photo_url"), // الصورة الشخصية للموظف
+  emergencyContact: text("emergency_contact"), // رقم الطوارئ
+  bankName: text("bank_name"), // اسم البنك
+  bankAccountNumber: text("bank_account_number"), // رقم الحساب البنكي
+  annualLeaveDays: real("annual_leave_days"), // أيام الإجازة السنوية حسب العقد (21 أو 30)
+  leaveOpeningBalance: real("leave_opening_balance"), // الرصيد المرحل حتى تاريخ معين
+  leaveOpeningBalanceDate: text("leave_opening_balance_date"), // تاريخ الرصيد المرحل YYYY-MM-DD
+  status: text("status").default("active").notNull(), // active, inactive, terminated, on_leave
+  contractType: text("contract_type").default("full_time"), // full_time, part_time, contract
+  workPermitNumber: text("work_permit_number"), // رقم رخصة العمل
+  notes: text("notes"), // ملاحظات
+  // تتبع تغيير الحالة (Phase 12 - audit trail)
+  statusChangedAt: timestamp("status_changed_at"), // متى تغيرت الحالة آخر مرة
+  statusChangedBy: varchar("status_changed_by"), // المستخدم الذي غيّر الحالة
+  terminatedAt: timestamp("terminated_at"), // تاريخ إنهاء الخدمة (يُملأ تلقائياً عند تغيير الحالة إلى terminated)
+  terminationReason: text("termination_reason"), // سبب إنهاء الخدمة
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_branch_employees_branch").on(table.branchId),
+  index("idx_branch_employees_nationality").on(table.nationality),
+  index("idx_branch_employees_status").on(table.status),
+  index("idx_branch_employees_job").on(table.jobTitle),
+  uniqueIndex("idx_branch_employees_linked_user").on(table.linkedUserId),
+  index("idx_branch_employees_branch_status").on(table.branchId, table.status),
+  index("idx_branch_employees_terminated_at").on(table.terminatedAt),
+]);
+
+// =====================================================
+// Employee Status History - سجل تاريخ تغيرات حالة الموظفين
+// =====================================================
+export const employeeStatusHistory = pgTable("employee_status_history", {
+  id: serial("id").primaryKey(),
+  branchEmployeeId: integer("branch_employee_id").notNull().references(() => branchEmployees.id, { onDelete: "cascade" }),
+  oldStatus: text("old_status"), // الحالة السابقة (NULL لو هو أول سجل)
+  newStatus: text("new_status").notNull(), // الحالة الجديدة
+  changedAt: timestamp("changed_at").defaultNow().notNull(),
+  changedBy: varchar("changed_by").references(() => users.id), // المستخدم الذي قام بالتغيير
+  reason: text("reason"), // سبب التغيير (خاصة عند الإنهاء)
+  notes: text("notes"), // ملاحظات إضافية
+}, (table) => [
+  index("idx_emp_status_history_emp").on(table.branchEmployeeId),
+  index("idx_emp_status_history_new_status").on(table.newStatus),
+  index("idx_emp_status_history_changed_at").on(table.changedAt),
+]);
+
+export const insertEmployeeStatusHistorySchema = createInsertSchema(employeeStatusHistory).omit({
+  id: true,
+  changedAt: true,
+});
+
+export type EmployeeStatusHistory = typeof employeeStatusHistory.$inferSelect;
+export type InsertEmployeeStatusHistory = z.infer<typeof insertEmployeeStatusHistorySchema>;
+
+export const insertBranchEmployeeSchema = createInsertSchema(branchEmployees).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  // Server-managed audit fields — never trust client input
+  statusChangedAt: true,
+  statusChangedBy: true,
+  terminatedAt: true,
+  terminationReason: true,
+});
+
+export type BranchEmployee = typeof branchEmployees.$inferSelect;
+export type InsertBranchEmployee = z.infer<typeof insertBranchEmployeeSchema>;
+
+// =====================================================
+// Salary Deductions - السُلف والخصومات اليدوية الشهرية
+// =====================================================
+// جدول لتسجيل أي سُلفة أو خصم يدوي شهري على الموظف يُخصم من صافي الراتب
+// عند إغلاق الراتب الشهري.
+export const salaryDeductions = pgTable("salary_deductions", {
+  id: serial("id").primaryKey(),
+  branchEmployeeId: integer("branch_employee_id").notNull().references(() => branchEmployees.id, { onDelete: "cascade" }),
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
+  month: text("month").notNull(), // YYYY-MM شهر الخصم
+  type: text("type").notNull(), // advance (سلفة) | deduction (خصم) | loan_installment (قسط) | penalty (جزاء/مخالفة) | other
+  amount: real("amount").notNull(), // المبلغ بالريال (موجب — يُخصم من الصافي)
+  description: text("description"), // وصف اختياري (سبب السلفة/الخصم)
+  advanceRequestId: integer("advance_request_id"), // ربط القسط بطلب السلفة (بدون FK لتفادي مرجعية دائرية)
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_salary_deductions_branch").on(table.branchId),
+  index("idx_salary_deductions_employee").on(table.branchEmployeeId),
+  index("idx_salary_deductions_month").on(table.month),
+  index("idx_salary_deductions_branch_month").on(table.branchId, table.month),
+]);
+
+export const insertSalaryDeductionSchema = createInsertSchema(salaryDeductions, {
+  amount: z.number().positive("المبلغ يجب أن يكون موجب"),
+  type: z.enum(["advance", "deduction", "loan_installment", "penalty", "sales_deficit", "other"]),
+  month: z.string().regex(/^\d{4}-\d{2}$/, "صيغة الشهر يجب أن تكون YYYY-MM"),
+}).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type SalaryDeduction = typeof salaryDeductions.$inferSelect;
+export type InsertSalaryDeduction = z.infer<typeof insertSalaryDeductionSchema>;
+
+export const SALARY_DEDUCTION_TYPE_LABELS: Record<string, string> = {
+  advance: "سلفة",
+  deduction: "خصم يدوي",
+  loan_installment: "قسط قرض",
+  penalty: "جزاء/مخالفة",
+  sales_deficit: "عجز يوميات مبيعات",
+  other: "أخرى",
+};
+
+// =====================================================
+// Salary Attendance Adjustments - تعديل أيام الحضور اليدوي
+// =====================================================
+// عند تعطّل نظام البصمة/التوقيع يوماً ما، يحق للأدمن ومدير الموارد البشرية فقط
+// تعديل عدد أيام حضور الموظف يدوياً (مع ذكر السبب إلزامياً). يُقلّل التعديل خصم
+// الغياب ويزيد الصافي تلقائياً، ويُجمّد داخل لقطة الإغلاق ويظهر في قسيمة الراتب.
+export const salaryAttendanceAdjustments = pgTable("salary_attendance_adjustments", {
+  id: serial("id").primaryKey(),
+  branchEmployeeId: integer("branch_employee_id").notNull().references(() => branchEmployees.id, { onDelete: "cascade" }),
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
+  month: text("month").notNull(), // YYYY-MM
+  adjustedPresentDays: integer("adjusted_present_days").notNull(), // عدد أيام الحضور المعتمد بعد التعديل
+  reason: text("reason").notNull(), // سبب التعديل (إلزامي)
+  createdBy: varchar("created_by").references(() => users.id),
+  createdByName: text("created_by_name"), // اسم حساب المستخدم الذي قام بالتعديل (للعرض في القسيمة)
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_salary_attendance_adj_branch_month").on(table.branchId, table.month),
+  index("idx_salary_attendance_adj_employee").on(table.branchEmployeeId),
+  // تعديل واحد فعّال لكل موظف/شهر
+  uniqueIndex("idx_salary_attendance_adj_emp_month").on(table.branchEmployeeId, table.month),
+]);
+
+export const insertSalaryAttendanceAdjustmentSchema = createInsertSchema(salaryAttendanceAdjustments, {
+  adjustedPresentDays: z.number().int().min(0, "عدد الأيام يجب أن يكون صفراً أو أكثر").max(31, "عدد الأيام غير منطقي"),
+  reason: z.string().trim().min(3, "سبب التعديل إلزامي"),
+  month: z.string().regex(/^\d{4}-\d{2}$/, "صيغة الشهر يجب أن تكون YYYY-MM"),
+}).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type SalaryAttendanceAdjustment = typeof salaryAttendanceAdjustments.$inferSelect;
+export type InsertSalaryAttendanceAdjustment = z.infer<typeof insertSalaryAttendanceAdjustmentSchema>;
+
+// =====================================================
+// Salary Payments - تتبع صرف الرواتب وطريقة الدفع
+// =====================================================
+// لكل موظف/شهر نسجّل هل تم صرف راتبه وبأي طريقة (حوالة بنكية | حماية أجور | نقدي)،
+// لأن الرواتب أحياناً تُصرف بأكثر من طريقة. يتيح هذا فلترة المدفوع/المتبقّي وتصدير
+// كشف مخصص لكل منهما. وجود السجل = تم الصرف؛ حذفه = إلغاء التأشير.
+export const salaryPayments = pgTable("salary_payments", {
+  id: serial("id").primaryKey(),
+  branchEmployeeId: integer("branch_employee_id").notNull().references(() => branchEmployees.id, { onDelete: "cascade" }),
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
+  month: text("month").notNull(), // YYYY-MM
+  paymentMethod: text("payment_method").notNull(), // bank_transfer | wage_protection | cash
+  amount: real("amount"), // المبلغ المصروف (اختياري — افتراضياً صافي الراتب)
+  paidAt: timestamp("paid_at").defaultNow().notNull(),
+  note: text("note"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdByName: text("created_by_name"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_salary_payments_branch_month").on(table.branchId, table.month),
+  index("idx_salary_payments_employee").on(table.branchEmployeeId),
+  // سجل صرف واحد لكل موظف/شهر
+  uniqueIndex("idx_salary_payments_emp_month").on(table.branchEmployeeId, table.month),
+]);
+
+export const insertSalaryPaymentSchema = createInsertSchema(salaryPayments, {
+  paymentMethod: z.enum(["bank_transfer", "wage_protection", "cash"]),
+  month: z.string().regex(/^\d{4}-\d{2}$/, "صيغة الشهر يجب أن تكون YYYY-MM"),
+  amount: z.number().nonnegative("المبلغ يجب أن يكون صفراً أو أكثر").optional(),
+}).omit({
+  id: true,
+  paidAt: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type SalaryPayment = typeof salaryPayments.$inferSelect;
+export type InsertSalaryPayment = z.infer<typeof insertSalaryPaymentSchema>;
+
+export const SALARY_PAYMENT_METHOD_LABELS: Record<string, string> = {
+  bank_transfer: "حوالة بنكية",
+  wage_protection: "حماية أجور",
+  cash: "نقدي",
+};
+
+// =====================================================
+// Operations review is an advisory audit marker, never a salary closing gate.
+export const operationsPayrollReviews = pgTable("operations_payroll_reviews", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
+  month: varchar("month", { length: 7 }).notNull(),
+  reviewedBy: varchar("reviewed_by").notNull().references(() => users.id),
+  reviewedAt: timestamp("reviewed_at").defaultNow().notNull(),
+  note: text("note"),
+}, (table) => [
+  uniqueIndex("idx_operations_payroll_reviews_month_reviewer").on(table.branchId, table.month, table.reviewedBy),
+]);
+
+// Operational monthly review only: it does not lock source days or financial modules.
+export const operationsMonthReviews = pgTable("operations_month_reviews", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
+  month: varchar("month", { length: 7 }).notNull(),
+  status: text("status").default("open").notNull(),
+  revision: integer("revision").default(0).notNull(),
+  declarations: jsonb("declarations").default([]).notNull(),
+  history: jsonb("history").default([]).notNull(),
+  fingerprint: text("fingerprint"),
+  snapshot: jsonb("snapshot"),
+  closedAt: timestamp("closed_at", { withTimezone: true }),
+  closedBy: varchar("closed_by").references(() => users.id),
+  closedByName: text("closed_by_name"),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, table => [uniqueIndex("operations_month_reviews_branch_id_month_key").on(table.branchId, table.month)]);
+
+// Salary Closures - إغلاق الرواتب الشهري (لقطة ثابتة + قفل)
+// =====================================================
+// عند إغلاق رواتب شهر/فرع، نحفظ "لقطة" ثابتة من الأرقام المحسوبة على الخادم
+// حتى لا تتغيّر بأثر رجعي لو تغيّرت بيانات الحضور لاحقاً. كل إغلاق له سجل تدقيق
+// (من أغلق ومتى)، وقابل لإعادة الفتح من المدير فقط مع تسجيل السبب.
+export const salaryClosures = pgTable("salary_closures", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
+  month: text("month").notNull(), // YYYY-MM
+  status: text("status").default("closed").notNull(), // closed | reopened
+  // إجماليات اللقطة (محسوبة على الخادم وقت الإغلاق)
+  employeeCount: integer("employee_count").default(0).notNull(),
+  totalBase: real("total_base").default(0).notNull(),
+  totalAllowances: real("total_allowances").default(0).notNull(),
+  totalGross: real("total_gross").default(0).notNull(),
+  totalAbsenceDeduction: real("total_absence_deduction").default(0).notNull(),
+  totalSocialInsurance: real("total_social_insurance").default(0).notNull(),
+  totalManualDeductions: real("total_manual_deductions").default(0).notNull(),
+  totalNet: real("total_net").default(0).notNull(),
+  unlinkedCount: integer("unlinked_count").default(0).notNull(),
+  warningsCount: integer("warnings_count").default(0).notNull(),
+  warnings: jsonb("warnings"), // لقطة من التحذيرات وقت الإغلاق (مصفوفة نصوص)
+  notes: text("notes"),
+  // سجل التدقيق
+  closedBy: varchar("closed_by").references(() => users.id),
+  closedByName: text("closed_by_name"),
+  closedAt: timestamp("closed_at").defaultNow().notNull(),
+  reopenedBy: varchar("reopened_by").references(() => users.id),
+  reopenedByName: text("reopened_by_name"),
+  reopenedAt: timestamp("reopened_at"),
+  reopenReason: text("reopen_reason"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_salary_closures_branch").on(table.branchId),
+  index("idx_salary_closures_month").on(table.month),
+  // قفل: إغلاق واحد فعّال لكل فرع/شهر (نمنع التكرار على مستوى التطبيق أيضاً)
+  uniqueIndex("idx_salary_closures_branch_month").on(table.branchId, table.month),
+]);
+
+// سطور اللقطة: صف لكل موظف وقت الإغلاق
+export const salaryClosureLines = pgTable("salary_closure_lines", {
+  id: serial("id").primaryKey(),
+  closureId: integer("closure_id").notNull().references(() => salaryClosures.id, { onDelete: "cascade" }),
+  branchEmployeeId: integer("branch_employee_id"),
+  employeeNumber: text("employee_number"),
+  employeeName: text("employee_name").notNull(),
+  jobTitle: text("job_title"),
+  employeeStatus: text("employee_status"), // حالة الموظف وقت الإغلاق (active/inactive/terminated/on_leave) — لقطة ثابتة
+  nationality: text("nationality"),
+  bankName: text("bank_name"),
+  bankAccountNumber: text("bank_account_number"),
+  presentDays: integer("present_days").default(0).notNull(),
+  originalPresentDays: integer("original_present_days"), // أيام الحضور المحتسبة قبل التعديل اليدوي (إن وُجد)
+  attendanceAdjustmentReason: text("attendance_adjustment_reason"), // سبب تعديل أيام الحضور
+  attendanceAdjustmentBy: text("attendance_adjustment_by"), // حساب المستخدم الذي قام بالتعديل
+  absentDays: integer("absent_days").default(0).notNull(),
+  offDays: integer("off_days").default(0).notNull(),
+  paidLeaveDays: integer("paid_leave_days").default(0).notNull(),
+  unpaidLeaveDays: integer("unpaid_leave_days").default(0).notNull(),
+  unpaidDays: integer("unpaid_days").default(0).notNull(),
+  leaveBreakdown: jsonb("leave_breakdown"), // [{type, days, paid}]
+  scheduledWorkDays: integer("scheduled_work_days").default(0).notNull(),
+  scheduledHours: real("scheduled_hours").default(0).notNull(),
+  lateDays: integer("late_days").default(0).notNull(),
+  totalHours: real("total_hours").default(0).notNull(),
+  baseSalary: real("base_salary").default(0).notNull(),
+  allowances: real("allowances").default(0).notNull(),
+  grossSalary: real("gross_salary").default(0).notNull(),
+  dailyRate: real("daily_rate").default(0).notNull(),
+  absenceDeduction: real("absence_deduction").default(0).notNull(),
+  // خصم الإجازة المرضية حسب المادة 117 (أيام 75% × ربع قيمة اليوم) — لقطة ثابتة
+  sickLeaveDeduction: real("sick_leave_deduction").default(0),
+  sickThreeQuarterDays: real("sick_three_quarter_days").default(0),
+  sickUnpaidDays: real("sick_unpaid_days").default(0),
+  socialInsurance: real("social_insurance").default(0).notNull(),
+  manualDeductionsTotal: real("manual_deductions_total").default(0).notNull(),
+  netSalary: real("net_salary").default(0).notNull(),
+  dataSource: text("data_source"), // signed_timesheet | schedule_attendance | attendance_only
+  noWorkAtAll: boolean("no_work_at_all").default(false).notNull(),
+  manualDeductions: jsonb("manual_deductions"), // [{type, amount, description}]
+  presentDates: jsonb("present_dates"),
+  absentDates: jsonb("absent_dates"),
+  offDates: jsonb("off_dates"),
+}, (table) => [
+  index("idx_salary_closure_lines_closure").on(table.closureId),
+  index("idx_salary_closure_lines_employee").on(table.branchEmployeeId),
+]);
+
+export const insertSalaryClosureSchema = createInsertSchema(salaryClosures).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type SalaryClosure = typeof salaryClosures.$inferSelect;
+export type InsertSalaryClosure = z.infer<typeof insertSalaryClosureSchema>;
+
+export const insertSalaryClosureLineSchema = createInsertSchema(salaryClosureLines).omit({
+  id: true,
+});
+export type SalaryClosureLine = typeof salaryClosureLines.$inferSelect;
+export type InsertSalaryClosureLine = z.infer<typeof insertSalaryClosureLineSchema>;
+
+// =====================================================
+// Advance Requests - طلبات السلف من الموظف (بوابة الموظف الذاتية)
+// =====================================================
+// الموظف يقدّم طلب سلفة من بوابته الذاتية، والمدير يعتمد/يرفض. عند الاعتماد
+// يُنشأ سجل خصم (salary_deductions) تلقائياً ليُخصم من الراتب الشهري.
+export const advanceRequests = pgTable("advance_requests", {
+  id: serial("id").primaryKey(),
+  branchEmployeeId: integer("branch_employee_id").notNull().references(() => branchEmployees.id, { onDelete: "cascade" }),
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
+  amount: real("amount").notNull(), // المبلغ المطلوب بالريال
+  reason: text("reason"), // سبب الطلب
+  requestedMonth: text("requested_month").notNull(), // YYYY-MM الشهر المطلوب الخصم فيه
+  installments: integer("installments").default(1), // عدد الأقساط (للعلم فقط)
+  status: text("status").notNull().default("pending"), // pending | pre_approved | awaiting_signature | signed | approved | disbursed | rejected | cancelled
+  preApprovedBy: varchar("pre_approved_by").references(() => users.id), // الموافقة المبدئية (مدير التشغيل)
+  preApprovedAt: timestamp("pre_approved_at"),
+  preApproverNote: text("pre_approver_note"),
+  // مراجعة شؤون الموظفين: القيمة المعتمدة وتوزيع الأقساط (أقساط متساوية)
+  approvedAmount: real("approved_amount"), // القيمة المعتمدة من شؤون الموظفين (قد تختلف عن المطلوبة)
+  installmentMonths: integer("installment_months"), // عدد أشهر الاستقطاع
+  monthlyInstallment: real("monthly_installment"), // قيمة القسط الشهري (متساوي)
+  startMonth: text("start_month"), // YYYY-MM أول شهر استقطاع
+  sentForSignatureBy: varchar("sent_for_signature_by").references(() => users.id),
+  sentForSignatureAt: timestamp("sent_for_signature_at"),
+  // توقيع الموظف على النموذج الرسمي (إقرار + توقيع مرسوم)
+  signatureData: text("signature_data"), // صورة التوقيع base64
+  signedAt: timestamp("signed_at"),
+  // الصرف المالي بعد الاعتماد النهائي
+  disbursedBy: varchar("disbursed_by").references(() => users.id),
+  disbursedAt: timestamp("disbursed_at"),
+  isLegacy: boolean("is_legacy").default(false), // سلفة سابقة مُدخلة يدوياً (معتمدة مباشرة بدون توقيع)
+  legacyRepaidAmount: real("legacy_repaid_amount"), // ما سُدد سابقاً من السلفة القديمة
+  reviewedBy: varchar("reviewed_by").references(() => users.id),
+  reviewedAt: timestamp("reviewed_at"),
+  reviewerNote: text("reviewer_note"),
+  linkedDeductionId: integer("linked_deduction_id").references(() => salaryDeductions.id), // الخصم المُنشأ عند الاعتماد
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_advance_requests_employee").on(table.branchEmployeeId),
+  index("idx_advance_requests_branch").on(table.branchId),
+  index("idx_advance_requests_status").on(table.status),
+]);
+
+export const insertAdvanceRequestSchema = createInsertSchema(advanceRequests, {
+  amount: z.number().positive("المبلغ يجب أن يكون موجب"),
+  requestedMonth: z.string().regex(/^\d{4}-\d{2}$/, "صيغة الشهر يجب أن تكون YYYY-MM"),
+  installments: z.number().int().positive().optional(),
+}).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  status: true,
+  reviewedBy: true,
+  reviewedAt: true,
+  reviewerNote: true,
+  linkedDeductionId: true,
+  createdBy: true,
+  approvedAmount: true,
+  installmentMonths: true,
+  monthlyInstallment: true,
+  startMonth: true,
+  sentForSignatureBy: true,
+  sentForSignatureAt: true,
+  signatureData: true,
+  signedAt: true,
+  disbursedBy: true,
+  disbursedAt: true,
+  isLegacy: true,
+  legacyRepaidAmount: true,
+});
+
+export type AdvanceRequest = typeof advanceRequests.$inferSelect;
+export type InsertAdvanceRequest = z.infer<typeof insertAdvanceRequestSchema>;
+
+export const ADVANCE_REQUEST_STATUS_LABELS: Record<string, string> = {
+  pending: "قيد المراجعة",
+  pre_approved: "موافقة مبدئية",
+  awaiting_signature: "بانتظار توقيع الموظف",
+  signed: "موقعة — بانتظار الاعتماد النهائي",
+  approved: "معتمدة",
+  disbursed: "تم الصرف",
+  rejected: "مرفوضة",
+  cancelled: "ملغاة",
+};
+
+// Branch Job Titles - وظائف موظفي الفروع
+export const BRANCH_JOB_TITLES = [
+  "كاشير",
+  "مشرف",
+  "مدير صالة",
+  "معبأ طلبات",
+  "بيكري",
+  "بستري",
+  "ساندويتشات",
+  "بيتزا",
+  "باريستا",
+  "واتر",
+  "عامل",
+  "أمين مستودع",
+  "سائق",
+  "حارس أمن",
+] as const;
+
+// Nationalities - الجنسيات
+export const NATIONALITIES = [
+  "سعودي",
+  "مصري",
+  "سوري",
+  "نيبالي",
+  "بنجلاديشي",
+  "فلبيني",
+  "بورمي",
+  "هندي",
+  "باكستاني",
+  "يمني",
+  "سوداني",
+  "إندونيسي",
+  "إثيوبي",
+  "أخرى",
+] as const;
+
+// Health Certificate Status
+export const HEALTH_CERT_STATUS = ["none", "valid", "expired", "pending"] as const;
+export type HealthCertStatus = (typeof HEALTH_CERT_STATUS)[number];
+
+export const HEALTH_CERT_LABELS: Record<HealthCertStatus, string> = {
+  none: "لا يوجد",
+  valid: "سارية",
+  expired: "منتهية",
+  pending: "قيد التجديد",
+};
+
+// Employee Status
+export const EMPLOYEE_STATUS = ["active", "inactive", "terminated", "on_leave"] as const;
+export type EmployeeStatus = (typeof EMPLOYEE_STATUS)[number];
+
+export const EMPLOYEE_STATUS_LABELS: Record<EmployeeStatus, string> = {
+  active: "نشط",
+  inactive: "غير نشط",
+  terminated: "منتهي",
+  on_leave: "إجازة",
+};
+
+// Organizational Job Roles - الهيكل الوظيفي
+export const orgJobRoles = pgTable("org_job_roles", {
+  id: serial("id").primaryKey(),
+  slug: text("slug").notNull().unique(),
+  parentId: integer("parent_id"),
+  level: integer("level").notNull().default(1),
+  orderIndex: integer("order_index").notNull().default(0),
+  titleAr: text("title_ar").notNull(),
+  titleEn: text("title_en").notNull(),
+  summaryAr: text("summary_ar"),
+  summaryEn: text("summary_en"),
+  responsibilitiesAr: jsonb("responsibilities_ar").$type<string[]>().default([]),
+  responsibilitiesEn: jsonb("responsibilities_en").$type<string[]>().default([]),
+  qualificationsAr: jsonb("qualifications_ar").$type<string[]>().default([]),
+  qualificationsEn: jsonb("qualifications_en").$type<string[]>().default([]),
+  icon: text("icon").default("user"),
+  color: text("color").default("bg-amber-500"),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_org_job_roles_parent").on(table.parentId),
+  index("idx_org_job_roles_level").on(table.level),
+  index("idx_org_job_roles_active").on(table.isActive),
+]);
+
+export const insertOrgJobRoleSchema = createInsertSchema(orgJobRoles).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type OrgJobRole = typeof orgJobRoles.$inferSelect;
+export type InsertOrgJobRole = z.infer<typeof insertOrgJobRoleSchema>;
+
+// Employee Settings - إعدادات بيانات الموظفين (القوائم المنسدلة)
+export const employeeSettings = pgTable("employee_settings", {
+  id: serial("id").primaryKey(),
+  category: text("category").notNull(), // nationality, job_title, status, health_cert, contract_type, department, bank
+  value: text("value").notNull(), // القيمة الفعلية
+  labelAr: text("label_ar").notNull(), // التسمية بالعربي
+  labelEn: text("label_en"), // التسمية بالإنجليزي (اختياري)
+  color: text("color"), // لون البادج (اختياري)
+  icon: text("icon"), // أيقونة (اختياري)
+  orderIndex: integer("order_index").default(0).notNull(), // ترتيب العرض
+  isActive: boolean("is_active").default(true).notNull(), // نشط/غير نشط
+  isDefault: boolean("is_default").default(false).notNull(), // القيمة الافتراضية
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_employee_settings_category").on(table.category),
+  index("idx_employee_settings_active").on(table.isActive),
+]);
+
+export const insertEmployeeSettingSchema = createInsertSchema(employeeSettings).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type EmployeeSetting = typeof employeeSettings.$inferSelect;
+export type InsertEmployeeSetting = z.infer<typeof insertEmployeeSettingSchema>;
+
+// Portal Settings - إعدادات بوابة الموظف (key/value)
+export const portalSettings = pgTable("portal_settings", {
+  id: serial("id").primaryKey(),
+  key: text("key").notNull().unique(),
+  value: text("value").notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertPortalSettingSchema = createInsertSchema(portalSettings).omit({
+  id: true,
+  updatedAt: true,
+});
+
+export type PortalSetting = typeof portalSettings.$inferSelect;
+export type InsertPortalSetting = z.infer<typeof insertPortalSettingSchema>;
+
+// Known portal setting keys + defaults
+export const PORTAL_SETTING_KEYS = {
+  // Feature/tab visibility
+  SHOW_SALARY: "show_salary",
+  SHOW_SCHEDULE: "show_schedule",
+  SHOW_ATTENDANCE: "show_attendance",
+  SHOW_LEAVES: "show_leaves",
+  SHOW_ADVANCES: "show_advances",
+  SHOW_WARNINGS: "show_warnings",
+  SHOW_DOCUMENTS: "show_documents",
+  SHOW_INCENTIVES: "show_incentives",
+  SHOW_EVALUATIONS: "show_evaluations",
+  ALLOW_SELF_CHECKIN: "allow_self_checkin",
+  // Business rules
+  ALLOW_LEAVE_REQUESTS: "allow_leave_requests",
+  ALLOW_ADVANCE_REQUESTS: "allow_advance_requests",
+  ALLOW_EVALUATION_ACK: "allow_evaluation_ack",
+  MAX_ADVANCE_AMOUNT: "max_advance_amount",
+  DEFAULT_LANGUAGE: "default_language",
+} as const;
+
+// Subset of keys whose values are booleans ("true"/"false").
+// Keys not listed here are stored/returned as raw strings (e.g. numbers, enums).
+export const PORTAL_BOOLEAN_KEYS: string[] = [
+  PORTAL_SETTING_KEYS.SHOW_SALARY,
+  PORTAL_SETTING_KEYS.SHOW_SCHEDULE,
+  PORTAL_SETTING_KEYS.SHOW_ATTENDANCE,
+  PORTAL_SETTING_KEYS.SHOW_LEAVES,
+  PORTAL_SETTING_KEYS.SHOW_ADVANCES,
+  PORTAL_SETTING_KEYS.SHOW_WARNINGS,
+  PORTAL_SETTING_KEYS.SHOW_DOCUMENTS,
+  PORTAL_SETTING_KEYS.SHOW_INCENTIVES,
+  PORTAL_SETTING_KEYS.SHOW_EVALUATIONS,
+  PORTAL_SETTING_KEYS.ALLOW_SELF_CHECKIN,
+  PORTAL_SETTING_KEYS.ALLOW_LEAVE_REQUESTS,
+  PORTAL_SETTING_KEYS.ALLOW_ADVANCE_REQUESTS,
+  PORTAL_SETTING_KEYS.ALLOW_EVALUATION_ACK,
+];
+
+export const PORTAL_SETTING_DEFAULTS: Record<string, string> = {
+  show_salary: "false",
+  show_schedule: "true",
+  show_attendance: "true",
+  show_leaves: "true",
+  show_advances: "true",
+  show_warnings: "true",
+  show_documents: "true",
+  show_incentives: "true",
+  show_evaluations: "true",
+  allow_self_checkin: "true",
+  allow_leave_requests: "true",
+  allow_advance_requests: "true",
+  allow_evaluation_ack: "true",
+  max_advance_amount: "0",
+  default_language: "ar",
+};
+
+// Employee Setting Categories - فئات الإعدادات
+export const EMPLOYEE_SETTING_CATEGORIES = [
+  { value: "nationality", labelAr: "الجنسيات", labelEn: "Nationalities" },
+  { value: "job_title", labelAr: "الوظائف", labelEn: "Job Titles" },
+  { value: "department", labelAr: "الأقسام", labelEn: "Departments" },
+  { value: "contract_type", labelAr: "أنواع العقود", labelEn: "Contract Types" },
+  { value: "bank", labelAr: "البنوك", labelEn: "Banks" },
+] as const;
+
+// Employee Transfer Status
+export const TRANSFER_STATUS = [
+  "pending",
+  "source_approved",
+  "dest_approved", 
+  "hr_approved",
+  "completed",
+  "rejected",
+  "cancelled"
+] as const;
+
+export type TransferStatus = typeof TRANSFER_STATUS[number];
+
+// Employee Transfer Requests - طلبات نقل الموظفين
+export const employeeTransferRequests = pgTable("employee_transfer_requests", {
+  id: serial("id").primaryKey(),
+  employeeId: integer("employee_id").notNull().references(() => branchEmployees.id),
+  sourceBranchId: varchar("source_branch_id").notNull().references(() => branches.id),
+  destinationBranchId: varchar("destination_branch_id").notNull().references(() => branches.id),
+  requestedBy: varchar("requested_by").notNull().references(() => users.id),
+  requestedAt: timestamp("requested_at").defaultNow().notNull(),
+  effectiveDate: text("effective_date").notNull(),
+  reason: text("reason").notNull(),
+  status: text("status").default("pending").notNull(),
+  currentApproverRole: text("current_approver_role").default("source_manager"),
+  rejectionReason: text("rejection_reason"),
+  completedAt: timestamp("completed_at"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_transfer_employee").on(table.employeeId),
+  index("idx_transfer_source").on(table.sourceBranchId),
+  index("idx_transfer_dest").on(table.destinationBranchId),
+  index("idx_transfer_status").on(table.status),
+  index("idx_transfer_requested_by").on(table.requestedBy),
+]);
+
+export const insertEmployeeTransferRequestSchema = createInsertSchema(employeeTransferRequests).omit({
+  id: true,
+  requestedAt: true,
+  completedAt: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type EmployeeTransferRequest = typeof employeeTransferRequests.$inferSelect;
+export type InsertEmployeeTransferRequest = z.infer<typeof insertEmployeeTransferRequestSchema>;
+
+// Transfer Approval Steps - خطوات الموافقة على النقل
+export const transferApprovalSteps = pgTable("transfer_approval_steps", {
+  id: serial("id").primaryKey(),
+  transferId: integer("transfer_id").notNull().references(() => employeeTransferRequests.id, { onDelete: "cascade" }),
+  stepOrder: integer("step_order").notNull(),
+  approverRole: text("approver_role").notNull(),
+  approverId: varchar("approver_id").references(() => users.id),
+  status: text("status").default("pending").notNull(),
+  actionTakenAt: timestamp("action_taken_at"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_approval_transfer").on(table.transferId),
+  index("idx_approval_approver").on(table.approverId),
+  index("idx_approval_status").on(table.status),
+]);
+
+export const insertTransferApprovalStepSchema = createInsertSchema(transferApprovalSteps).omit({
+  id: true,
+  actionTakenAt: true,
+  createdAt: true,
+});
+
+export type TransferApprovalStep = typeof transferApprovalSteps.$inferSelect;
+export type InsertTransferApprovalStep = z.infer<typeof insertTransferApprovalStepSchema>;
+
+// Transfer History/Audit Log - سجل تاريخ النقل
+export const transferHistory = pgTable("transfer_history", {
+  id: serial("id").primaryKey(),
+  transferId: integer("transfer_id").notNull().references(() => employeeTransferRequests.id, { onDelete: "cascade" }),
+  eventType: text("event_type").notNull(),
+  performedBy: varchar("performed_by").references(() => users.id),
+  details: jsonb("details"),
+  eventTimestamp: timestamp("event_timestamp").defaultNow().notNull(),
+}, (table) => [
+  index("idx_history_transfer").on(table.transferId),
+  index("idx_history_event").on(table.eventType),
+]);
+
+// ==================== P&L (Profit & Loss) Dashboard Tables ====================
+
+// Financial Periods - الفترات المالية
+export const financialPeriods = pgTable("financial_periods", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
+  periodType: text("period_type").notNull().default("monthly"),
+  month: integer("month").notNull(),
+  year: integer("year").notNull(),
+  targetRevenue: real("target_revenue").default(0),
+  targetGrossMargin: real("target_gross_margin").default(0),
+  targetNetMargin: real("target_net_margin").default(0),
+  status: text("status").default("draft"),
+  notes: text("notes"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_financial_periods_branch").on(table.branchId),
+  index("idx_financial_periods_date").on(table.year, table.month),
+]);
+
+export const insertFinancialPeriodSchema = createInsertSchema(financialPeriods).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type FinancialPeriod = typeof financialPeriods.$inferSelect;
+export type InsertFinancialPeriod = z.infer<typeof insertFinancialPeriodSchema>;
+
+// Sales Channels Enum
+export const SALES_CHANNELS = ["cash", "card", "delivery_apps", "online", "other"] as const;
+export type SalesChannel = typeof SALES_CHANNELS[number];
+
+// Financial Sales - المبيعات المالية
+export const financialSales = pgTable("financial_sales", {
+  id: serial("id").primaryKey(),
+  periodId: integer("period_id").notNull().references(() => financialPeriods.id, { onDelete: "cascade" }),
+  channel: text("channel").notNull(),
+  category: text("category"),
+  shift: text("shift"),
+  totalAmount: real("total_amount").notNull().default(0),
+  invoiceCount: integer("invoice_count").default(0),
+  avgInvoiceValue: real("avg_invoice_value").default(0),
+  date: text("date"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_financial_sales_period").on(table.periodId),
+  index("idx_financial_sales_channel").on(table.channel),
+]);
+
+export const insertFinancialSalesSchema = createInsertSchema(financialSales).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type FinancialSales = typeof financialSales.$inferSelect;
+export type InsertFinancialSales = z.infer<typeof insertFinancialSalesSchema>;
+
+// COGS Item Types Enum
+export const COGS_ITEM_TYPES = ["raw_materials", "production", "packaging", "waste", "delivery", "other"] as const;
+export type COGSItemType = typeof COGS_ITEM_TYPES[number];
+
+// Financial COGS (Cost of Goods Sold) - تكلفة البضائع المباعة
+export const financialCOGS = pgTable("financial_cogs", {
+  id: serial("id").primaryKey(),
+  periodId: integer("period_id").notNull().references(() => financialPeriods.id, { onDelete: "cascade" }),
+  itemType: text("item_type").notNull(),
+  amount: real("amount").notNull().default(0),
+  wasteAmount: real("waste_amount").default(0),
+  wastePct: real("waste_pct").default(0),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_financial_cogs_period").on(table.periodId),
+  index("idx_financial_cogs_type").on(table.itemType),
+]);
+
+export const insertFinancialCOGSSchema = createInsertSchema(financialCOGS).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type FinancialCOGS = typeof financialCOGS.$inferSelect;
+export type InsertFinancialCOGS = z.infer<typeof insertFinancialCOGSSchema>;
+
+// Operating Expense Types Enum
+export const OPERATING_EXPENSE_TYPES = [
+  "salaries", "insurance", "electricity", "water", "internet", 
+  "cleaning", "maintenance", "marketing", "supplies", "other"
+] as const;
+export type OperatingExpenseType = typeof OPERATING_EXPENSE_TYPES[number];
+
+// Financial Operating Expenses - المصروفات التشغيلية
+export const financialOperatingExpenses = pgTable("financial_operating_expenses", {
+  id: serial("id").primaryKey(),
+  periodId: integer("period_id").notNull().references(() => financialPeriods.id, { onDelete: "cascade" }),
+  expenseType: text("expense_type").notNull(),
+  amount: real("amount").notNull().default(0),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_financial_opex_period").on(table.periodId),
+  index("idx_financial_opex_type").on(table.expenseType),
+]);
+
+export const insertFinancialOperatingExpenseSchema = createInsertSchema(financialOperatingExpenses).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type FinancialOperatingExpense = typeof financialOperatingExpenses.$inferSelect;
+export type InsertFinancialOperatingExpense = z.infer<typeof insertFinancialOperatingExpenseSchema>;
+
+// Fixed Cost Types Enum
+export const FIXED_COST_TYPES = [
+  "rent", "licenses", "taxes", "zakat", "subscriptions", "insurance", "other"
+] as const;
+export type FixedCostType = typeof FIXED_COST_TYPES[number];
+
+// Financial Fixed Costs - التكاليف الثابتة
+export const financialFixedCosts = pgTable("financial_fixed_costs", {
+  id: serial("id").primaryKey(),
+  periodId: integer("period_id").notNull().references(() => financialPeriods.id, { onDelete: "cascade" }),
+  costType: text("cost_type").notNull(),
+  amount: real("amount").notNull().default(0),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_financial_fixed_period").on(table.periodId),
+  index("idx_financial_fixed_type").on(table.costType),
+]);
+
+export const insertFinancialFixedCostSchema = createInsertSchema(financialFixedCosts).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type FinancialFixedCost = typeof financialFixedCosts.$inferSelect;
+export type InsertFinancialFixedCost = z.infer<typeof insertFinancialFixedCostSchema>;
+
+// Branch Performance Rating
+export const PERFORMANCE_RATINGS = ["excellent", "good", "average", "poor"] as const;
+export type PerformanceRating = typeof PERFORMANCE_RATINGS[number];
+
+// Financial Metrics Cache - تخزين المؤشرات المالية
+export const financialMetrics = pgTable("financial_metrics", {
+  id: serial("id").primaryKey(),
+  periodId: integer("period_id").notNull().references(() => financialPeriods.id, { onDelete: "cascade" }),
+  totalRevenue: real("total_revenue").default(0),
+  totalCOGS: real("total_cogs").default(0),
+  totalOperatingExpenses: real("total_operating_expenses").default(0),
+  totalFixedCosts: real("total_fixed_costs").default(0),
+  grossProfit: real("gross_profit").default(0),
+  netProfit: real("net_profit").default(0),
+  grossMarginPct: real("gross_margin_pct").default(0),
+  netMarginPct: real("net_margin_pct").default(0),
+  breakEvenSales: real("break_even_sales").default(0),
+  salaryToSalesPct: real("salary_to_sales_pct").default(0),
+  rentToRevenuePct: real("rent_to_revenue_pct").default(0),
+  wastePct: real("waste_pct").default(0),
+  invoiceCount: integer("invoice_count").default(0),
+  avgInvoiceValue: real("avg_invoice_value").default(0),
+  ebitda: real("ebitda").default(0),
+  ebitdaMarginPct: real("ebitda_margin_pct").default(0),
+  contributionMargin: real("contribution_margin").default(0),
+  contributionMarginPct: real("contribution_margin_pct").default(0),
+  laborProductivity: real("labor_productivity").default(0),
+  revenuePerEmployee: real("revenue_per_employee").default(0),
+  employeeCount: integer("employee_count").default(0),
+  operatingProfit: real("operating_profit").default(0),
+  operatingMarginPct: real("operating_margin_pct").default(0),
+  rating: text("rating").default("average"),
+  ratingReasons: jsonb("rating_reasons"),
+  recommendations: jsonb("recommendations"),
+  calculatedAt: timestamp("calculated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_financial_metrics_period").on(table.periodId),
+  index("idx_financial_metrics_rating").on(table.rating),
+]);
+
+export const insertFinancialMetricsSchema = createInsertSchema(financialMetrics).omit({
+  id: true,
+  calculatedAt: true,
+});
+
+export type FinancialMetrics = typeof financialMetrics.$inferSelect;
+export type InsertFinancialMetrics = z.infer<typeof insertFinancialMetricsSchema>;
+
+// P&L Arabic Labels
+export const PNL_LABELS = {
+  channels: {
+    cash: "نقدي",
+    card: "شبكة",
+    delivery_apps: "تطبيقات التوصيل",
+    online: "أونلاين",
+    other: "أخرى",
+  },
+  cogs: {
+    raw_materials: "المواد الخام",
+    production: "الإنتاج",
+    packaging: "التعبئة والتغليف",
+    waste: "الهدر والفاقد",
+    delivery: "النقل والتوصيل",
+    other: "أخرى",
+  },
+  opex: {
+    salaries: "الرواتب",
+    insurance: "التأمينات",
+    electricity: "الكهرباء",
+    water: "المياه",
+    internet: "الإنترنت والاتصالات",
+    cleaning: "مواد النظافة",
+    maintenance: "الصيانة",
+    marketing: "التسويق",
+    supplies: "المستلزمات",
+    other: "مصروفات أخرى",
+  },
+  fixed: {
+    rent: "الإيجار",
+    licenses: "رسوم التراخيص",
+    taxes: "الضرائب",
+    zakat: "الزكاة",
+    subscriptions: "الاشتراكات الشهرية",
+    insurance: "التأمين",
+    other: "أخرى",
+  },
+  ratings: {
+    excellent: { label: "ممتاز", color: "#22c55e", icon: "🟢" },
+    good: { label: "جيد", color: "#eab308", icon: "🟡" },
+    average: { label: "متوسط", color: "#f97316", icon: "🟠" },
+    poor: { label: "ضعيف", color: "#ef4444", icon: "🔴" },
+  },
+} as const;
+
+// ==================== Enhanced P&L System - إعدادات الأرباح والخسائر المحسنة ====================
+
+// Branch Fixed Settings for P&L - إعدادات ثابتة لكل فرع
+export const pnlBranchSettings = pgTable("pnl_branch_settings", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
+  monthlyRent: real("monthly_rent").default(0), // الإيجار الشهري الثابت
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_pnl_branch_settings_branch").on(table.branchId),
+]);
+
+export const insertPnlBranchSettingsSchema = createInsertSchema(pnlBranchSettings).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type PnlBranchSettings = typeof pnlBranchSettings.$inferSelect;
+export type InsertPnlBranchSettings = z.infer<typeof insertPnlBranchSettingsSchema>;
+
+// Global P&L settings (single-row table). Holds system-wide rules such as the
+// fixed COGS ratio applied to net sales. Editable by admin only.
+export const pnlGlobalSettings = pgTable("pnl_global_settings", {
+  id: serial("id").primaryKey(),
+  cogsRatio: real("cogs_ratio").notNull().default(0.30), // 0.30 = 30%
+  updatedBy: varchar("updated_by"),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export type PnlGlobalSettings = typeof pnlGlobalSettings.$inferSelect;
+
+// Monthly variable inputs for P&L - الإدخالات الشهرية المتغيرة
+export const pnlMonthlyInputs = pgTable("pnl_monthly_inputs", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
+  year: integer("year").notNull(),
+  month: integer("month").notNull(), // 1-12
+  // المرافق والخدمات
+  electricityCost: real("electricity_cost").default(0), // تكلفة الكهرباء
+  waterCost: real("water_cost").default(0), // تكلفة المياه
+  utilitiesOther: real("utilities_other").default(0), // مصاريف خدمات أخرى
+  // تكلفة البضاعة المباعة
+  cogsCost: real("cogs_cost").default(0), // تكلفة البضاعة المباعة
+  cogsNotes: text("cogs_notes"),
+  // تكاليف أخرى متنوعة
+  maintenanceCost: real("maintenance_cost").default(0), // صيانة
+  marketingCost: real("marketing_cost").default(0), // تسويق
+  suppliesCost: real("supplies_cost").default(0), // مستلزمات
+  // مصاريف عمومية إضافية (متغيرة شهرياً) — أُضيفت في v2
+  internetCost: real("internet_cost").default(0), // إنترنت واتصالات
+  governmentFees: real("government_fees").default(0), // رسوم بلدية/دفاع مدني/رخص
+  insuranceCost: real("insurance_cost").default(0), // تأمين عام/أصول
+  subscriptionsCost: real("subscriptions_cost").default(0), // اشتراكات (سوفتوير/POS) — يدوية، تختلف عن المتكررة
+  securityCost: real("security_cost").default(0), // حراسة ونظافة
+  bankFees: real("bank_fees").default(0), // عمولات بنكية ونقاط بيع
+  fuelCost: real("fuel_cost").default(0), // وقود ومواصلات
+  otherCosts: real("other_costs").default(0), // تكاليف أخرى متفرقة
+  otherCostsDetails: text("other_costs_details"), // تفاصيل التكاليف الأخرى (JSON array)
+  // ملاحظات وتتبع
+  notes: text("notes"),
+  createdBy: varchar("created_by"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_pnl_monthly_inputs_branch").on(table.branchId),
+  index("idx_pnl_monthly_inputs_period").on(table.year, table.month),
+  index("idx_pnl_monthly_inputs_branch_period").on(table.branchId, table.year, table.month),
+]);
+
+export const insertPnlMonthlyInputsSchema = createInsertSchema(pnlMonthlyInputs).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type PnlMonthlyInputs = typeof pnlMonthlyInputs.$inferSelect;
+export type InsertPnlMonthlyInputs = z.infer<typeof insertPnlMonthlyInputsSchema>;
+
+// ==================== P&L Expense Management v2 ====================
+// Rent History — tracks rent value with effective dates so old months
+// keep their historical rent when contracts change. Replaces the single
+// `monthlyRent` on `pnl_branch_settings` for computation purposes.
+export const pnlRentHistory = pgTable("pnl_rent_history", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
+  monthlyAmount: real("monthly_amount").notNull(),
+  effectiveFrom: date("effective_from").notNull(), // YYYY-MM-01
+  effectiveTo: date("effective_to"), // null = ongoing
+  contractRef: text("contract_ref"),
+  notes: text("notes"),
+  createdBy: varchar("created_by"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_pnl_rent_history_branch").on(table.branchId),
+  index("idx_pnl_rent_history_effective").on(table.branchId, table.effectiveFrom),
+]);
+
+export const insertPnlRentHistorySchema = createInsertSchema(pnlRentHistory).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type PnlRentHistory = typeof pnlRentHistory.$inferSelect;
+export type InsertPnlRentHistory = z.infer<typeof insertPnlRentHistorySchema>;
+
+// Recurring monthly expenses — subscriptions, insurance, government fees split,
+// security/cleaning contracts. Each row is auto-applied to every month its
+// validity window covers (eliminates manual re-entry).
+export const pnlRecurringExpenses = pgTable("pnl_recurring_expenses", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
+  category: text("category").notNull(), // subscription | insurance | license | service | maintenance | other
+  name: text("name").notNull(),
+  monthlyAmount: real("monthly_amount").notNull(),
+  effectiveFrom: date("effective_from").notNull(),
+  effectiveTo: date("effective_to"), // null = ongoing
+  vendor: text("vendor"),
+  notes: text("notes"),
+  isActive: boolean("is_active").default(true).notNull(),
+  createdBy: varchar("created_by"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_pnl_recurring_branch").on(table.branchId),
+  index("idx_pnl_recurring_active").on(table.branchId, table.isActive),
+  index("idx_pnl_recurring_effective").on(table.branchId, table.effectiveFrom),
+]);
+
+export const insertPnlRecurringExpenseSchema = createInsertSchema(pnlRecurringExpenses).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type PnlRecurringExpense = typeof pnlRecurringExpenses.$inferSelect;
+export type InsertPnlRecurringExpense = z.infer<typeof insertPnlRecurringExpenseSchema>;
+
+// ==================== Production vs Sales Comparison System ====================
+
+// Daily Sales Data for Comparison - بيانات المبيعات اليومية للمقارنة
+export const dailySalesData = pgTable("daily_sales_data", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
+  salesDate: date("sales_date").notNull(),
+  productName: text("product_name").notNull(),
+  productCategory: text("product_category"),
+  quantitySold: integer("quantity_sold").default(0),
+  salesValue: real("sales_value").default(0),
+  unitPrice: real("unit_price"),
+  uploadId: integer("upload_id"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_daily_sales_branch").on(table.branchId),
+  index("idx_daily_sales_date").on(table.salesDate),
+  index("idx_daily_sales_product").on(table.productName),
+  index("idx_daily_sales_upload").on(table.uploadId),
+]);
+
+export const insertDailySalesDataSchema = createInsertSchema(dailySalesData).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type DailySalesData = typeof dailySalesData.$inferSelect;
+export type InsertDailySalesData = z.infer<typeof insertDailySalesDataSchema>;
+
+// Production vs Sales Comparison Uploads - ملفات رفع المقارنات
+export const comparisonUploads = pgTable("comparison_uploads", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
+  fileName: text("file_name").notNull(),
+  fileType: text("file_type").default("excel"),
+  dataType: text("data_type").notNull(), // 'sales' or 'production'
+  periodStart: date("period_start"),
+  periodEnd: date("period_end"),
+  totalRecords: integer("total_records").default(0),
+  totalValue: real("total_value").default(0),
+  uniqueProducts: integer("unique_products").default(0),
+  status: text("status").default("pending"), // pending, processing, completed, failed
+  errorMessage: text("error_message"),
+  uploadedBy: varchar("uploaded_by"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_comparison_uploads_branch").on(table.branchId),
+  index("idx_comparison_uploads_type").on(table.dataType),
+  index("idx_comparison_uploads_status").on(table.status),
+]);
+
+export const insertComparisonUploadSchema = createInsertSchema(comparisonUploads).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type ComparisonUpload = typeof comparisonUploads.$inferSelect;
+export type InsertComparisonUpload = z.infer<typeof insertComparisonUploadSchema>;
+
+// Daily Production vs Sales Comparison - مقارنة الإنتاج والمبيعات اليومية
+export const dailyComparisons = pgTable("daily_comparisons", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
+  comparisonDate: date("comparison_date").notNull(),
+  productName: text("product_name").notNull(),
+  productCategory: text("product_category"),
+  producedQuantity: integer("produced_quantity").default(0),
+  soldQuantity: integer("sold_quantity").default(0),
+  difference: integer("difference").default(0), // produced - sold
+  differencePercent: real("difference_percent").default(0),
+  productionValue: real("production_value").default(0),
+  salesValue: real("sales_value").default(0),
+  valueDifference: real("value_difference").default(0),
+  wasteValue: real("waste_value").default(0), // قيمة الهدر المالية
+  isStorable: boolean("is_storable").default(false),
+  storageNotes: text("storage_notes"),
+  status: text("status").default("normal"), // normal, waste, shortage, stored
+  statusChangedBy: varchar("status_changed_by"), // من قام بتغيير الحالة
+  statusChangedAt: timestamp("status_changed_at"), // متى تم تغيير الحالة
+  statusReason: text("status_reason"), // سبب تغيير الحالة
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_daily_comparisons_branch").on(table.branchId),
+  index("idx_daily_comparisons_date").on(table.comparisonDate),
+  index("idx_daily_comparisons_product").on(table.productName),
+  index("idx_daily_comparisons_category").on(table.productCategory),
+  index("idx_daily_comparisons_status").on(table.status),
+]);
+
+export const insertDailyComparisonSchema = createInsertSchema(dailyComparisons).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type DailyComparison = typeof dailyComparisons.$inferSelect;
+export type InsertDailyComparison = z.infer<typeof insertDailyComparisonSchema>;
+
+// Comparison Summary - ملخص المقارنات
+export const comparisonSummaries = pgTable("comparison_summaries", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
+  periodType: text("period_type").notNull(), // daily, weekly, monthly
+  periodStart: date("period_start").notNull(),
+  periodEnd: date("period_end").notNull(),
+  totalProduced: integer("total_produced").default(0),
+  totalSold: integer("total_sold").default(0),
+  totalWaste: integer("total_waste").default(0),
+  totalShortage: integer("total_shortage").default(0),
+  productionValue: real("production_value").default(0),
+  salesValue: real("sales_value").default(0),
+  wasteValue: real("waste_value").default(0),
+  wastePercent: real("waste_percent").default(0),
+  shortagePercent: real("shortage_percent").default(0),
+  efficiencyScore: real("efficiency_score").default(0),
+  topWasteProducts: jsonb("top_waste_products"),
+  topShortageProducts: jsonb("top_shortage_products"),
+  categoryBreakdown: jsonb("category_breakdown"),
+  recommendations: jsonb("recommendations"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_comparison_summaries_branch").on(table.branchId),
+  index("idx_comparison_summaries_period").on(table.periodType),
+  index("idx_comparison_summaries_dates").on(table.periodStart, table.periodEnd),
+]);
+
+export const insertComparisonSummarySchema = createInsertSchema(comparisonSummaries).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type ComparisonSummary = typeof comparisonSummaries.$inferSelect;
+export type InsertComparisonSummary = z.infer<typeof insertComparisonSummarySchema>;
+
+// Product Storage Settings - إعدادات تخزين المنتجات
+export const productStorageSettings = pgTable("product_storage_settings", {
+  id: serial("id").primaryKey(),
+  productName: text("product_name").notNull().unique(),
+  productCategory: text("product_category"),
+  suggestedCategory: text("suggested_category"), // الفئة المقترحة تلقائياً
+  confidenceScore: integer("confidence_score").default(0), // نسبة الثقة في الاقتراح
+  isVerified: boolean("is_verified").default(false), // هل تم التحقق من الفئة
+  verifiedBy: varchar("verified_by"), // من قام بالتحقق
+  verifiedAt: timestamp("verified_at"), // متى تم التحقق
+  isStorable: boolean("is_storable").default(false),
+  maxStorageDays: integer("max_storage_days").default(0),
+  storageType: text("storage_type"), // freezer, refrigerator, room_temp
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedBy: varchar("updated_by"),
+}, (table) => [
+  index("idx_product_storage_name").on(table.productName),
+  index("idx_product_storage_category").on(table.productCategory),
+  index("idx_product_storage_verified").on(table.isVerified),
+]);
+
+export const insertProductStorageSettingSchema = createInsertSchema(productStorageSettings).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type ProductStorageSetting = typeof productStorageSettings.$inferSelect;
+export type InsertProductStorageSetting = z.infer<typeof insertProductStorageSettingSchema>;
+
+// Comparison Categories Labels
+export const COMPARISON_CATEGORIES = ["إفطار", "مخبوزات", "حلويات", "بيتزا", "باريستا", "تجمعات", "أخرى"] as const;
+export type ComparisonCategory = typeof COMPARISON_CATEGORIES[number];
+
+// Categories that are made-to-order (no waste possible) - excluded from waste calculations
+// باريستا (Drinks) and بيتزا (Pizza) are made when customer orders, so no excess production
+export const MADE_TO_ORDER_CATEGORIES = ["باريستا", "بيتزا"] as const;
+export type MadeToOrderCategory = typeof MADE_TO_ORDER_CATEGORIES[number];
+
+// Helper function to check if a category is made-to-order
+export function isMadeToOrderCategory(category: string | null | undefined): boolean {
+  if (!category) return false;
+  return (MADE_TO_ORDER_CATEGORIES as readonly string[]).includes(category);
+}
+
+// Keyword-based category rules for auto-classification
+// Each rule maps keywords (Arabic/English) to a category
+export const CATEGORY_KEYWORD_RULES: Record<string, string[]> = {
+  "باريستا": [
+    // Coffee drinks
+    "coffee", "كوفي", "قهوة", "لاتيه", "latte", "كابتشينو", "cappuccino",
+    "اسبريسو", "espresso", "موكا", "mocha", "امريكانو", "americano",
+    "فلات وايت", "flat white", "ماكياتو", "macchiato", "v60", "في 60",
+    "cold brew", "كولد برو", "ice coffee", "ايس كوفي",
+    // Other drinks
+    "هوت شوكليت", "hot chocolate", "شوكولاته ساخنة", "ماتشا", "matcha",
+    "شاي", "tea", "عصير", "juice", "سموذي", "smoothie", "ميلك شيك", "milkshake",
+    "فرابي", "frappe", "spanish latte", "سبانش لاتيه",
+    // Barista keywords
+    "barista", "باريستا"
+  ],
+  "بيتزا": [
+    "pizza", "بيتزا", "بيتسا", "مارغريتا", "margherita", "ببروني", "pepperoni"
+  ],
+  "إفطار": [
+    "breakfast", "إفطار", "فطور", "eggs", "بيض", "benedict", "بينيديكت",
+    "أومليت", "omelette", "فول", "شكشوكة", "shakshuka", "توست فرنسي", "french toast",
+    "بانكيك", "pancake", "وافل", "waffle", "croissant egg", "كرواسون بيض",
+    "bruschetta egg", "بروسكيتا بيض", "ساندويتش صباحي"
+  ],
+  "مخبوزات": [
+    "croissant", "كرواسون", "دانش", "danish", "بريوش", "brioche",
+    "باجيت", "baguette", "خبز", "bread", "سندويتش", "sandwich", "ساندوتش",
+    "بان", "bun", "رول", "roll", "فوكاتشا", "focaccia", "سيجنتشر",
+    "signature", "حلومي", "halloumi", "تونا", "tuna", "تركي", "turkey",
+    "سمون", "salmon", "افوكادو", "avocado"
+  ],
+  "حلويات": [
+    "cake", "كيك", "تشيز كيك", "cheesecake", "تارت", "tart", "براوني", "brownie",
+    "كوكي", "cookie", "مافن", "muffin", "تيراميسو", "tiramisu", "بودنج", "pudding",
+    "كريم بروليه", "creme brulee", "ماتيلدا", "matilda", "كراميل", "caramel",
+    "نوتيلا", "nutella", "شوكولاته", "chocolate", "فانيلا", "vanilla",
+    "توت", "berry", "raspberry", "فراولة", "strawberry", "مانجو", "mango",
+    "لوز", "almond", "بيكان", "pecan", "سان سابستيان", "san sebastian",
+    "honey cake", "كيك العسل", "كريمة", "cream"
+  ],
+  "تجمعات": [
+    "catering", "كاترينج", "تجمعات", "حفلات", "party", "بوفيه", "buffet",
+    "مناسبات", "events", "اجتماعات", "meetings"
+  ]
+};
+
+// Function to suggest category based on product name keywords
+export function suggestCategoryFromProductName(productName: string): { category: string | null; confidence: number } {
+  const normalizedName = productName.toLowerCase();
+  
+  let bestMatch: { category: string; matchCount: number } | null = null;
+  
+  for (const [category, keywords] of Object.entries(CATEGORY_KEYWORD_RULES)) {
+    let matchCount = 0;
+    for (const keyword of keywords) {
+      if (normalizedName.includes(keyword.toLowerCase())) {
+        matchCount++;
+      }
+    }
+    if (matchCount > 0 && (!bestMatch || matchCount > bestMatch.matchCount)) {
+      bestMatch = { category, matchCount };
+    }
+  }
+  
+  if (bestMatch) {
+    // Calculate confidence based on match count
+    const confidence = Math.min(bestMatch.matchCount * 30, 100);
+    return { category: bestMatch.category, confidence };
+  }
+  
+  return { category: null, confidence: 0 };
+}
+
+export const COMPARISON_STATUS = {
+  normal: { label: "طبيعي", color: "green" },
+  waste: { label: "هدر", color: "red" },
+  shortage: { label: "نقص", color: "orange" },
+  stored: { label: "مخزن", color: "blue" },
+  made_to_order: { label: "حسب الطلب", color: "purple" },
+} as const;
+
+// Comparison Status History - سجل تغييرات حالة المقارنة
+export const comparisonStatusHistory = pgTable("comparison_status_history", {
+  id: serial("id").primaryKey(),
+  comparisonId: integer("comparison_id").notNull().references(() => dailyComparisons.id),
+  previousStatus: text("previous_status"),
+  newStatus: text("new_status").notNull(),
+  reason: text("reason"),
+  changedBy: varchar("changed_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_status_history_comparison").on(table.comparisonId),
+  index("idx_status_history_date").on(table.createdAt),
+]);
+
+export const insertComparisonStatusHistorySchema = createInsertSchema(comparisonStatusHistory).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type ComparisonStatusHistory = typeof comparisonStatusHistory.$inferSelect;
+export type InsertComparisonStatusHistory = z.infer<typeof insertComparisonStatusHistorySchema>;
+
+// Product Prices - أسعار المنتجات
+export const productPrices = pgTable("product_prices", {
+  id: serial("id").primaryKey(),
+  productName: text("product_name").notNull(),
+  branchId: varchar("branch_id").references(() => branches.id),
+  price: real("price").notNull(),
+  costPrice: real("cost_price"), // سعر التكلفة
+  currency: varchar("currency", { length: 3 }).default("SAR"),
+  effectiveDate: date("effective_date").defaultNow().notNull(),
+  source: text("source"), // manual, foodics, import
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedBy: varchar("updated_by"),
+}, (table) => [
+  index("idx_product_prices_name").on(table.productName),
+  index("idx_product_prices_branch").on(table.branchId),
+  index("idx_product_prices_date").on(table.effectiveDate),
+]);
+
+export const insertProductPriceSchema = createInsertSchema(productPrices).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type ProductPrice = typeof productPrices.$inferSelect;
+export type InsertProductPrice = z.infer<typeof insertProductPriceSchema>;
+
+// Waste Risk Rules - قواعد مخاطر الهدر
+export const wasteRiskRules = pgTable("waste_risk_rules", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  branchId: varchar("branch_id").references(() => branches.id), // null = all branches
+  category: text("category"), // null = all categories
+  productName: text("product_name"), // null = all products
+  thresholdType: text("threshold_type").notNull(), // quantity, value, percent
+  thresholdValue: real("threshold_value").notNull(),
+  periodDays: integer("period_days").default(1), // 1 = daily, 7 = weekly, etc
+  severity: text("severity").default("medium"), // low, medium, high, critical
+  isActive: boolean("is_active").default(true),
+  createdBy: varchar("created_by"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_waste_rules_branch").on(table.branchId),
+  index("idx_waste_rules_category").on(table.category),
+  index("idx_waste_rules_active").on(table.isActive),
+]);
+
+export const insertWasteRiskRuleSchema = createInsertSchema(wasteRiskRules).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type WasteRiskRule = typeof wasteRiskRules.$inferSelect;
+export type InsertWasteRiskRule = z.infer<typeof insertWasteRiskRuleSchema>;
+
+// Waste Risk Alerts - تنبيهات مخاطر الهدر
+export const wasteRiskAlerts = pgTable("waste_risk_alerts", {
+  id: serial("id").primaryKey(),
+  ruleId: integer("rule_id").notNull().references(() => wasteRiskRules.id),
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
+  alertDate: date("alert_date").notNull(),
+  productName: text("product_name"),
+  category: text("category"),
+  currentValue: real("current_value").notNull(),
+  thresholdValue: real("threshold_value").notNull(),
+  severity: text("severity").default("medium"),
+  status: text("status").default("open"), // open, acknowledged, resolved
+  acknowledgedBy: varchar("acknowledged_by").references(() => users.id),
+  acknowledgedAt: timestamp("acknowledged_at"),
+  resolvedBy: varchar("resolved_by").references(() => users.id),
+  resolvedAt: timestamp("resolved_at"),
+  resolutionNotes: text("resolution_notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_waste_alerts_rule").on(table.ruleId),
+  index("idx_waste_alerts_branch").on(table.branchId),
+  index("idx_waste_alerts_date").on(table.alertDate),
+  index("idx_waste_alerts_status").on(table.status),
+  index("idx_waste_alerts_severity").on(table.severity),
+]);
+
+export const insertWasteRiskAlertSchema = createInsertSchema(wasteRiskAlerts).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type WasteRiskAlert = typeof wasteRiskAlerts.$inferSelect;
+export type InsertWasteRiskAlert = z.infer<typeof insertWasteRiskAlertSchema>;
+
+// Risk severity levels
+export const RISK_SEVERITY = {
+  low: { label: "منخفض", color: "blue", icon: "info" },
+  medium: { label: "متوسط", color: "yellow", icon: "alert-triangle" },
+  high: { label: "عالي", color: "orange", icon: "alert-circle" },
+  critical: { label: "حرج", color: "red", icon: "x-circle" },
+} as const;
+
+// Alert status
+export const ALERT_STATUS = {
+  open: { label: "مفتوح", color: "red" },
+  acknowledged: { label: "تم الاطلاع", color: "yellow" },
+  resolved: { label: "تم الحل", color: "green" },
+} as const;
+
+// ==========================================
+// نظام إدارة السوشيال ميديا - Social Media Management System
+// ==========================================
+
+// Social Accounts - حسابات السوشيال ميديا المرتبطة
+export const socialAccounts = pgTable("social_accounts", {
+  id: serial("id").primaryKey(),
+  platform: text("platform").notNull(), // instagram, facebook, twitter, tiktok, snapchat, youtube
+  accountId: text("account_id"), // Platform-specific account ID
+  accountName: text("account_name").notNull(),
+  accountHandle: text("account_handle"), // @username
+  profileUrl: text("profile_url"), // رابط الملف الشخصي
+  pageId: text("page_id"), // For Facebook pages
+  profileImageUrl: text("profile_image_url"),
+  followersCount: integer("followers_count").default(0),
+  followingCount: integer("following_count").default(0),
+  postsCount: integer("posts_count").default(0),
+  accessToken: text("access_token"), // Encrypted
+  refreshToken: text("refresh_token"), // Encrypted
+  tokenExpiresAt: timestamp("token_expires_at"),
+  branchId: varchar("branch_id").references(() => branches.id),
+  isConnected: boolean("is_connected").default(false).notNull(),
+  lastSyncAt: timestamp("last_sync_at"),
+  connectionError: text("connection_error"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_social_accounts_platform").on(table.platform),
+  index("idx_social_accounts_branch").on(table.branchId),
+]);
+
+export const insertSocialAccountSchema = createInsertSchema(socialAccounts).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type SocialAccount = typeof socialAccounts.$inferSelect;
+export type InsertSocialAccount = z.infer<typeof insertSocialAccountSchema>;
+
+// Social Posts - المنشورات
+export const socialPosts = pgTable("social_posts", {
+  id: serial("id").primaryKey(),
+  title: text("title"),
+  content: text("content").notNull(),
+  contentAr: text("content_ar"), // Arabic version
+  mediaUrls: text("media_urls").array(), // Array of image/video URLs
+  mediaTypes: text("media_types").array(), // image, video, carousel
+  hashtags: text("hashtags").array(),
+  status: text("status").default("draft").notNull(), // draft, scheduled, published, failed
+  platforms: text("platforms").array().notNull(), // Target platforms
+  scheduledAt: timestamp("scheduled_at"),
+  publishedAt: timestamp("published_at"),
+  failedReason: text("failed_reason"),
+  campaignId: integer("campaign_id").references(() => marketingCampaigns.id),
+  calendarEventId: integer("calendar_event_id").references(() => marketingCalendarEvents.id),
+  influencerId: integer("influencer_id").references(() => marketingInfluencers.id),
+  createdBy: varchar("created_by").references(() => users.id),
+  approvedBy: varchar("approved_by").references(() => users.id),
+  approvedAt: timestamp("approved_at"),
+  postType: text("post_type").default("regular"), // regular, story, reel, carousel
+  linkUrl: text("link_url"),
+  callToAction: text("call_to_action"),
+  targetAudience: text("target_audience"),
+  isPromoted: boolean("is_promoted").default(false),
+  promotionBudget: real("promotion_budget"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_social_posts_status").on(table.status),
+  index("idx_social_posts_scheduled").on(table.scheduledAt),
+  index("idx_social_posts_campaign").on(table.campaignId),
+]);
+
+export const insertSocialPostSchema = createInsertSchema(socialPosts).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type SocialPost = typeof socialPosts.$inferSelect;
+export type InsertSocialPost = z.infer<typeof insertSocialPostSchema>;
+
+// Social Post Metrics - إحصائيات المنشورات
+export const socialPostMetrics = pgTable("social_post_metrics", {
+  id: serial("id").primaryKey(),
+  postId: integer("post_id").notNull().references(() => socialPosts.id, { onDelete: "cascade" }),
+  platform: text("platform").notNull(),
+  platformPostId: text("platform_post_id"), // Post ID on the platform
+  impressions: integer("impressions").default(0),
+  reach: integer("reach").default(0),
+  engagements: integer("engagements").default(0),
+  likes: integer("likes").default(0),
+  comments: integer("comments").default(0),
+  shares: integer("shares").default(0),
+  saves: integer("saves").default(0),
+  clicks: integer("clicks").default(0),
+  videoViews: integer("video_views").default(0),
+  engagementRate: real("engagement_rate").default(0),
+  fetchedAt: timestamp("fetched_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_social_metrics_post").on(table.postId),
+  index("idx_social_metrics_platform").on(table.platform),
+]);
+
+export const insertSocialPostMetricSchema = createInsertSchema(socialPostMetrics).omit({
+  id: true,
+  fetchedAt: true,
+});
+
+export type SocialPostMetric = typeof socialPostMetrics.$inferSelect;
+export type InsertSocialPostMetric = z.infer<typeof insertSocialPostMetricSchema>;
+
+// Social Content Templates - قوالب المحتوى
+export const socialContentTemplates = pgTable("social_content_templates", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  category: text("category").notNull(), // product_launch, promotion, holiday, engagement, announcement
+  content: text("content").notNull(),
+  contentAr: text("content_ar"),
+  defaultHashtags: text("default_hashtags").array(),
+  defaultMediaType: text("default_media_type"), // image, video, carousel
+  placeholderFields: text("placeholder_fields").array(), // e.g., ["product_name", "price", "discount"]
+  suitablePlatforms: text("suitable_platforms").array(),
+  usageCount: integer("usage_count").default(0),
+  isActive: boolean("is_active").default(true).notNull(),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_content_templates_category").on(table.category),
+]);
+
+export const insertSocialContentTemplateSchema = createInsertSchema(socialContentTemplates).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type SocialContentTemplate = typeof socialContentTemplates.$inferSelect;
+export type InsertSocialContentTemplate = z.infer<typeof insertSocialContentTemplateSchema>;
+
+// Social Schedule Slots - أوقات النشر المفضلة
+export const socialScheduleSlots = pgTable("social_schedule_slots", {
+  id: serial("id").primaryKey(),
+  platform: text("platform").notNull(),
+  dayOfWeek: integer("day_of_week").notNull(), // 0-6 (Sunday-Saturday)
+  timeSlot: text("time_slot").notNull(), // HH:MM format
+  priority: integer("priority").default(1), // 1 = primary, 2 = secondary
+  engagementScore: real("engagement_score").default(0), // Historical performance
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_schedule_slots_platform").on(table.platform),
+  index("idx_schedule_slots_day").on(table.dayOfWeek),
+]);
+
+export const insertSocialScheduleSlotSchema = createInsertSchema(socialScheduleSlots).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type SocialScheduleSlot = typeof socialScheduleSlots.$inferSelect;
+export type InsertSocialScheduleSlot = z.infer<typeof insertSocialScheduleSlotSchema>;
+
+// Social Platform Constants
+export const SOCIAL_PLATFORMS = {
+  instagram: { label: "انستقرام", icon: "instagram", color: "bg-gradient-to-r from-purple-500 to-pink-500" },
+  facebook: { label: "فيسبوك", icon: "facebook", color: "bg-blue-600" },
+  twitter: { label: "تويتر/X", icon: "twitter", color: "bg-black" },
+  tiktok: { label: "تيك توك", icon: "music", color: "bg-black" },
+  snapchat: { label: "سناب شات", icon: "ghost", color: "bg-yellow-400" },
+  youtube: { label: "يوتيوب", icon: "youtube", color: "bg-red-600" },
+} as const;
+
+export const POST_STATUS = {
+  draft: { label: "مسودة", color: "gray" },
+  scheduled: { label: "مجدول", color: "blue" },
+  published: { label: "منشور", color: "green" },
+  failed: { label: "فشل", color: "red" },
+} as const;
+
+export const CONTENT_CATEGORIES = {
+  product_launch: { label: "إطلاق منتج", icon: "rocket" },
+  promotion: { label: "عرض ترويجي", icon: "tag" },
+  holiday: { label: "مناسبة", icon: "calendar" },
+  engagement: { label: "تفاعل", icon: "heart" },
+  announcement: { label: "إعلان", icon: "megaphone" },
+  behind_scenes: { label: "كواليس", icon: "camera" },
+  user_content: { label: "محتوى المستخدمين", icon: "users" },
+} as const;
+
+// Influencer Contracts - عقود المؤثرين والبلوجر
+export const influencerContracts = pgTable("influencer_contracts", {
+  id: serial("id").primaryKey(),
+  contractNumber: text("contract_number").notNull(), // رقم العقد
+  influencerId: integer("influencer_id").references(() => marketingInfluencers.id, { onDelete: "set null" }),
+  
+  // معلومات المؤثر (نسخة لحفظها في العقد حتى لو تغيرت بيانات المؤثر)
+  influencerName: text("influencer_name").notNull(),
+  influencerPhone: text("influencer_phone"),
+  influencerEmail: text("influencer_email"),
+  nationalId: text("national_id"), // رقم الهوية
+  
+  // معلومات الحساب البنكي
+  bankName: text("bank_name"),
+  bankAccountNumber: text("bank_account_number"),
+  bankAccountHolder: text("bank_account_holder"),
+  iban: text("iban"),
+  
+  // تفاصيل الحملة/التغطية
+  campaignName: text("campaign_name").notNull(), // اسم الحملة أو التغطية
+  campaignDescription: text("campaign_description"), // وصف التغطية
+  branchId: varchar("branch_id").references(() => branches.id), // الفرع المستهدف
+  branchName: text("branch_name"), // اسم الفرع (نسخة)
+  coverageLocation: text("coverage_location"), // مكان التغطية
+  coverageDate: text("coverage_date"), // تاريخ التغطية YYYY-MM-DD
+  coverageTime: text("coverage_time"), // وقت التغطية
+  
+  // الشروط المالية
+  contractAmount: real("contract_amount").notNull(), // مبلغ العقد
+  currency: text("currency").default("SAR"), // العملة
+  paymentTerms: text("payment_terms"), // شروط الدفع
+  
+  // الالتزامات
+  deliverables: text("deliverables").array(), // المخرجات المتوقعة (قصة، منشور، ريلز، إلخ)
+  contentRequirements: text("content_requirements"), // متطلبات المحتوى
+  exclusivityClause: boolean("exclusivity_clause").default(false), // شرط الحصرية
+  
+  // التواريخ
+  contractStartDate: text("contract_start_date").notNull(), // تاريخ بداية العقد
+  contractEndDate: text("contract_end_date"), // تاريخ نهاية العقد
+  
+  // التوقيعات
+  influencerSignature: text("influencer_signature"), // توقيع المؤثر (base64 أو URL)
+  influencerSignedAt: timestamp("influencer_signed_at"),
+  companySignature: text("company_signature"), // توقيع الشركة
+  companySignedAt: timestamp("company_signed_at"),
+  companySignedBy: varchar("company_signed_by").references(() => users.id),
+  
+  // حالة العقد
+  status: text("status").default("draft").notNull(), // draft, pending_signature, signed, completed, cancelled
+  
+  // اعتماد الإدارة المالية
+  financeApproved: boolean("finance_approved").default(false),
+  financeApprovedBy: varchar("finance_approved_by").references(() => users.id),
+  financeApprovedAt: timestamp("finance_approved_at"),
+  financeNotes: text("finance_notes"),
+  
+  // حالة الدفع
+  paymentStatus: text("payment_status").default("pending"), // pending, approved, paid
+  paymentDate: text("payment_date"),
+  paymentReference: text("payment_reference"), // رقم مرجع التحويل
+  
+  notes: text("notes"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_influencer_contracts_influencer").on(table.influencerId),
+  index("idx_influencer_contracts_status").on(table.status),
+  index("idx_influencer_contracts_branch").on(table.branchId),
+  index("idx_influencer_contracts_payment").on(table.paymentStatus),
+]);
+
+export const insertInfluencerContractSchema = createInsertSchema(influencerContracts).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InfluencerContract = typeof influencerContracts.$inferSelect;
+export type InsertInfluencerContract = z.infer<typeof insertInfluencerContractSchema>;
+
+// Contract Status Constants
+export const CONTRACT_STATUS = {
+  draft: { label: "مسودة", labelEn: "Draft", color: "gray" },
+  pending_signature: { label: "بانتظار التوقيع", labelEn: "Pending Signature", color: "yellow" },
+  signed: { label: "موقع", labelEn: "Signed", color: "green" },
+  completed: { label: "مكتمل", labelEn: "Completed", color: "blue" },
+  cancelled: { label: "ملغي", labelEn: "Cancelled", color: "red" },
+} as const;
+
+export const PAYMENT_STATUS = {
+  pending: { label: "بانتظار الاعتماد", labelEn: "Pending", color: "gray" },
+  approved: { label: "معتمد للصرف", labelEn: "Approved", color: "yellow" },
+  paid: { label: "تم الدفع", labelEn: "Paid", color: "green" },
+} as const;
+
+export const DELIVERABLE_TYPES = [
+  { value: "instagram_story", label: "ستوري انستقرام" },
+  { value: "instagram_post", label: "منشور انستقرام" },
+  { value: "instagram_reel", label: "ريلز انستقرام" },
+  { value: "tiktok_video", label: "فيديو تيك توك" },
+  { value: "snapchat_story", label: "ستوري سناب شات" },
+  { value: "youtube_video", label: "فيديو يوتيوب" },
+  { value: "twitter_post", label: "تغريدة" },
+  { value: "live_coverage", label: "تغطية مباشرة" },
+  { value: "blog_post", label: "مقالة مدونة" },
+] as const;
+
+// ==================== مخزون الإنتاج النهائي ====================
+
+// Finished Goods Inventory - مخزون الإنتاج النهائي
+// يحتوي على الكميات المنتجة التي يمكن تحويلها للفروع أو بار العرض
+// 
+// Unique constraint: (branch_id, product_name_normalized, production_date)
+// product_name_normalized stores the lowercased, trimmed product name for consistent matching
+// This allows atomic UPSERT operations without functional indexes
+export const finishedGoodsInventory = pgTable("finished_goods_inventory", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id")
+    .notNull()
+    .references(() => branches.id),
+  productId: integer("product_id").references(() => products.id),
+  productName: text("product_name").notNull(),
+  productNameNormalized: text("product_name_normalized").notNull(), // normalized: lower(trim(product_name))
+  productCategory: text("product_category"),
+  quantity: integer("quantity").notNull().default(0), // الكمية المتاحة
+  reservedQuantity: integer("reserved_quantity").notNull().default(0),
+  unit: text("unit").default("قطعة"),
+  productionDate: text("production_date").notNull(), // تاريخ الإنتاج YYYY-MM-DD
+  lastBatchId: integer("last_batch_id").references(() => dailyProductionBatches.id), // آخر دفعة إنتاج
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_finished_goods_branch").on(table.branchId),
+  index("idx_finished_goods_product").on(table.productId),
+  index("idx_finished_goods_date").on(table.productionDate),
+  index("idx_finished_goods_category").on(table.productCategory),
+  index("idx_finished_goods_product_name").on(table.productName),
+  // Standard unique index for atomic UPSERT - uses normalized product name
+  uniqueIndex("finished_goods_unique_idx")
+    .on(table.branchId, table.productNameNormalized, table.productionDate)
+    .where(sql`${table.productId} IS NULL`),
+  uniqueIndex("uq_finished_goods_canonical_product")
+    .on(table.branchId, table.productId, table.productionDate, table.unit)
+    .where(sql`${table.productId} IS NOT NULL`),
+  check("ck_finished_goods_reserved_quantity", sql`${table.reservedQuantity} >= 0 AND ${table.reservedQuantity} <= ${table.quantity}`),
+]);
+
+export const insertFinishedGoodsInventorySchema = createInsertSchema(finishedGoodsInventory).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type FinishedGoodsInventory = typeof finishedGoodsInventory.$inferSelect;
+export type InsertFinishedGoodsInventory = z.infer<typeof insertFinishedGoodsInventorySchema>;
+
+// Finished Goods Transfer Types - أنواع التحويلات
+export const TRANSFER_DESTINATION_TYPES = {
+  branch: { label: "فرع آخر", labelEn: "Another Branch" },
+  display_bar: { label: "بار العرض", labelEn: "Display Bar" },
+  kitchen_trolley: { label: "عربة المطبخ", labelEn: "Kitchen Trolley" },
+  freezer: { label: "الفريزر", labelEn: "Freezer" },
+  refrigerator: { label: "الثلاجة", labelEn: "Refrigerator" },
+} as const;
+
+// Finished Goods Transfers - تحويلات المخزون النهائي
+export const finishedGoodsTransfers = pgTable("finished_goods_transfers", {
+  id: serial("id").primaryKey(),
+  inventoryId: integer("inventory_id")
+    .notNull()
+    .references(() => finishedGoodsInventory.id),
+  sourceBranchId: varchar("source_branch_id")
+    .notNull()
+    .references(() => branches.id),
+  destinationType: text("destination_type").notNull(), // branch, display_bar, kitchen_trolley, freezer, refrigerator
+  destinationBranchId: varchar("destination_branch_id")
+    .references(() => branches.id), // فقط إذا كان التحويل لفرع آخر
+  productId: integer("product_id").references(() => products.id),
+  productName: text("product_name").notNull(),
+  productCategory: text("product_category"),
+  quantity: integer("quantity").notNull(),
+  unit: text("unit").default("قطعة"),
+  transferDate: text("transfer_date").notNull(), // تاريخ التحويل YYYY-MM-DD
+  notes: text("notes"),
+  status: text("status").default("completed").notNull(), // pending, completed, cancelled
+  transportPolicy: text("transport_policy"), // null = historical/local immediate transfer; branch_receipt = staged branch shipment
+  requestKey: text("request_key"),
+  dispatchKey: text("dispatch_key"),
+  receiveKey: text("receive_key"),
+  cancelKey: text("cancel_key"),
+  usableQuantity: integer("usable_quantity"),
+  damagedQuantity: integer("damaged_quantity"),
+  shortageQuantity: integer("shortage_quantity"),
+  settlementStatus: text("settlement_status"),
+  receiptNotes: text("receipt_notes"),
+  productionDate: text("production_date"), // original source lot date, not transfer date
+  receivedQuantity: integer("received_quantity"),
+  receivedBy: varchar("received_by").references(() => users.id),
+  receivedAt: timestamp("received_at"),
+  dispatchedAt: timestamp("dispatched_at"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdByName: text("created_by_name"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_fg_transfers_source").on(table.sourceBranchId),
+  index("idx_fg_transfers_dest").on(table.destinationBranchId),
+  index("idx_fg_transfers_type").on(table.destinationType),
+  index("idx_fg_transfers_date").on(table.transferDate),
+  index("idx_fg_transfers_status").on(table.status),
+  check("ck_internal_bar_handoff_totals", sql`${table.transportPolicy} <> 'internal_bar_receipt' OR (
+    ${table.quantity} > 0 AND ${table.destinationType} = 'display_bar'
+    AND ${table.destinationBranchId} = ${table.sourceBranchId}
+    AND ${table.productId} IS NOT NULL AND ${table.productionDate} IS NOT NULL
+    AND ${table.createdBy} IS NOT NULL AND ${table.requestKey} IS NOT NULL
+    AND ${table.status} IN ('pending','in_transit','received','cancelled')
+    AND (${table.status} <> 'in_transit' OR (${table.dispatchedAt} IS NOT NULL AND ${table.dispatchKey} IS NOT NULL))
+    AND (${table.status} <> 'received' OR (
+      ${table.dispatchedAt} IS NOT NULL AND ${table.receivedAt} IS NOT NULL
+      AND ${table.dispatchKey} IS NOT NULL AND ${table.receiveKey} IS NOT NULL
+      AND ${table.receivedBy} IS NOT NULL
+      AND ${table.usableQuantity} >= 0 AND ${table.damagedQuantity} >= 0
+      AND ${table.shortageQuantity} >= 0
+      AND ${table.receivedQuantity} = ${table.usableQuantity} + ${table.damagedQuantity}
+      AND ${table.shortageQuantity} = ${table.quantity} - ${table.receivedQuantity}
+    ))
+  )`),
+]);
+
+export const insertFinishedGoodsTransferSchema = createInsertSchema(finishedGoodsTransfers).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type FinishedGoodsTransfer = typeof finishedGoodsTransfers.$inferSelect;
+export type InsertFinishedGoodsTransfer = z.infer<typeof insertFinishedGoodsTransferSchema>;
+
+// Confirmed bar receipts since activation, held separately from the kitchen
+// inventory. Until POS/waste consumption is integrated, quantity is cumulative
+// received usable units, NOT current saleable stock after sales.
+export const branchBarStock = pgTable("branch_bar_stock", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
+  productId: integer("product_id").notNull().references(() => products.id),
+  productionDate: text("production_date").notNull(),
+  unit: text("unit").notNull(),
+  quantity: integer("quantity").notNull().default(0),
+  quarantineQuantity: integer("quarantine_quantity").notNull().default(0),
+}, table => [
+  uniqueIndex("uq_branch_bar_stock_lot").on(table.branchId, table.productId, table.productionDate, table.unit),
+  check("ck_branch_bar_stock_nonnegative", sql`${table.quantity} >= 0 AND ${table.quarantineQuantity} >= 0`),
+]);
+
+export const branchBarHandoffEvents = pgTable("branch_bar_handoff_events", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  transferId: integer("transfer_id").notNull().references(() => finishedGoodsTransfers.id),
+  action: text("action").notNull(),
+  actorId: varchar("actor_id").notNull().references(() => users.id),
+  occurredAt: timestamp("occurred_at", { withTimezone: true }).defaultNow().notNull(),
+  payload: jsonb("payload").default({}).notNull(),
+}, table => [uniqueIndex("uq_branch_bar_handoff_event").on(table.transferId, table.action)]);
+
+export const branchBarWorkflowActivation = pgTable("branch_bar_workflow_activation", {
+  id: integer("id").primaryKey(),
+  activatedAt: timestamp("activated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+// Production Inventory Movement Log - سجل حركة مخزون الإنتاج
+export const productionInventoryLogs = pgTable("production_inventory_logs", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id")
+    .notNull()
+    .references(() => branches.id),
+  productId: integer("product_id").references(() => products.id),
+  productName: text("product_name").notNull(),
+  movementType: text("movement_type").notNull(), // production_in, transfer_out, adjustment
+  quantity: integer("quantity").notNull(), // موجب للإضافة، سالب للخصم
+  balanceBefore: integer("balance_before").default(0),
+  balanceAfter: integer("balance_after").default(0),
+  referenceType: text("reference_type"), // batch, transfer, adjustment
+  referenceId: integer("reference_id"), // معرف المرجع
+  batchId: integer("batch_id").references(() => dailyProductionBatches.id),
+  notes: text("notes"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdByName: text("created_by_name"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_prod_inv_logs_branch").on(table.branchId),
+  index("idx_prod_inv_logs_product").on(table.productId),
+  index("idx_prod_inv_logs_type").on(table.movementType),
+  uniqueIndex("uq_production_inventory_logs_batch")
+    .on(table.batchId)
+    .where(sql`${table.batchId} IS NOT NULL`),
+]);
+
+export const insertProductionInventoryLogSchema = createInsertSchema(productionInventoryLogs).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type ProductionInventoryLog = typeof productionInventoryLogs.$inferSelect;
+export type InsertProductionInventoryLog = z.infer<typeof insertProductionInventoryLogSchema>;
+
+// ==================== نظام المخازن والتحويلات ====================
+
+// Material Categories - فئات المواد
+export const MATERIAL_CATEGORIES = {
+  raw: { label: "مواد خام", labelEn: "Raw Materials", color: "blue" },
+  consumable: { label: "مواد استهلاكية", labelEn: "Consumables", color: "green" },
+  packaging: { label: "مواد تغليف", labelEn: "Packaging", color: "amber" },
+  primary: { label: "مواد أولية", labelEn: "Primary Materials", color: "purple" },
+} as const;
+
+// Request Types - أنواع الطلبات
+export const REQUEST_TYPES = {
+  daily: { label: "يومي", labelEn: "Daily", color: "blue" },
+  weekly: { label: "أسبوعي", labelEn: "Weekly", color: "green" },
+  urgent: { label: "طارئ", labelEn: "Urgent", color: "red" },
+} as const;
+
+// Request Reasons - أسباب الطلب
+export const REQUEST_REASONS = {
+  depleted: { label: "نفاد المخزون", labelEn: "Stock Depleted", color: "red" },
+  production_expansion: { label: "توسع الإنتاج", labelEn: "Production Expansion", color: "blue" },
+  seasonal: { label: "موسم", labelEn: "Seasonal", color: "amber" },
+  urgent: { label: "طارئ", labelEn: "Urgent", color: "red" },
+  buffer_stock: { label: "مخزون احتياطي", labelEn: "Buffer Stock", color: "green" },
+} as const;
+
+// Material Request Status - حالات طلب المواد
+export const MATERIAL_REQUEST_STATUS = {
+  draft: { label: "مسودة", labelEn: "Draft", color: "gray" },
+  pending: { label: "قيد المراجعة", labelEn: "Pending Review", color: "yellow" },
+  approved: { label: "معتمد", labelEn: "Approved", color: "green" },
+  partially_fulfilled: { label: "منفذ جزئياً", labelEn: "Partially Fulfilled", color: "blue" },
+  fulfilled: { label: "منفذ بالكامل", labelEn: "Fulfilled", color: "emerald" },
+  rejected: { label: "مرفوض", labelEn: "Rejected", color: "red" },
+  forwarded_to_purchasing: { label: "محول للمشتريات", labelEn: "Forwarded to Purchasing", color: "purple" },
+  cancelled: { label: "ملغي", labelEn: "Cancelled", color: "gray" },
+} as const;
+
+// Warehouse Items - أصناف المستودع
+export const warehouseItems = pgTable("warehouse_items", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  nameEn: text("name_en"),
+  category: text("category").notNull(), // raw, consumable, packaging, primary
+  unit: text("unit").notNull().default("كجم"), // كجم، لتر، قطعة، علبة، كرتون
+  sku: text("sku"), // رمز الصنف
+  barcode: text("barcode"),
+  minStockLevel: numeric("min_stock_level", { precision: 18, scale: 6, mode: "number" }).default(0), // الحد الأدنى للتنبيه
+  maxStockLevel: numeric("max_stock_level", { precision: 18, scale: 6, mode: "number" }), // الحد الأقصى
+  reorderPoint: numeric("reorder_point", { precision: 18, scale: 6, mode: "number" }), // نقطة إعادة الطلب
+  currentStock: numeric("current_stock", { precision: 18, scale: 6, mode: "number" }).default(0), // المخزون الحالي في المستودع الرئيسي
+  reverseReservedQuantity: numeric("reverse_reserved_quantity", { precision: 18, scale: 6, mode: "number" }).notNull().default(0),
+  unitPrice: text("unit_price"), // سعر الوحدة
+  supplierId: integer("supplier_id"), // المورد الرئيسي
+  isActive: boolean("is_active").default(true),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_warehouse_items_category").on(table.category),
+  index("idx_warehouse_items_sku").on(table.sku),
+  index("idx_warehouse_items_active").on(table.isActive),
+]);
+
+export const insertWarehouseItemSchema = createInsertSchema(warehouseItems, {
+  minStockLevel: nonnegativeMaterialQuantitySchema.nullable().optional(),
+  maxStockLevel: nonnegativeMaterialQuantitySchema.nullable().optional(),
+  reorderPoint: nonnegativeMaterialQuantitySchema.nullable().optional(),
+  currentStock: nonnegativeMaterialQuantitySchema.nullable().optional(),
+}).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type WarehouseItem = typeof warehouseItems.$inferSelect;
+export type InsertWarehouseItem = z.infer<typeof insertWarehouseItemSchema>;
+
+// Branch Stock - مخزون الفروع
+export const branchStock = pgTable("branch_stock", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id")
+    .notNull()
+    .references(() => branches.id),
+  itemId: integer("item_id")
+    .notNull()
+    .references(() => warehouseItems.id),
+  currentQuantity: numeric("current_quantity", { precision: 18, scale: 6, mode: "number" }).default(0),
+  reservedQuantity: numeric("reserved_quantity", { precision: 18, scale: 6, mode: "number" }).notNull().default(0),
+  dailyConsumption: numeric("daily_consumption", { precision: 18, scale: 6, mode: "number" }).default(0), // معدل الاستهلاك اليومي
+  lastUpdated: timestamp("last_updated").defaultNow().notNull(),
+  updatedBy: varchar("updated_by").references(() => users.id),
+}, (table) => [
+  index("idx_branch_stock_branch").on(table.branchId),
+  index("idx_branch_stock_item").on(table.itemId),
+  uniqueIndex("branch_stock_unique").on(table.branchId, table.itemId),
+  check("ck_branch_stock_reserved_quantity", sql`${table.reservedQuantity} >= 0 AND ${table.reservedQuantity} <= COALESCE(${table.currentQuantity}, 0)`),
+]);
+
+export const insertBranchStockSchema = createInsertSchema(branchStock, {
+  currentQuantity: nonnegativeMaterialQuantitySchema.nullable().optional(),
+  reservedQuantity: nonnegativeMaterialQuantitySchema.optional(),
+  dailyConsumption: nonnegativeMaterialQuantitySchema.nullable().optional(),
+}).omit({
+  id: true,
+  lastUpdated: true,
+});
+
+export type BranchStock = typeof branchStock.$inferSelect;
+export type InsertBranchStock = z.infer<typeof insertBranchStockSchema>;
+
+// Material Transfers - تحويلات المواد
+export const materialTransfers = pgTable("material_transfers", {
+  id: serial("id").primaryKey(),
+  transferNumber: text("transfer_number").notNull(), // رقم التحويل التلقائي
+  requestId: integer("request_id"), // للتوافقية مع البيانات القديمة
+  sourceType: text("source_type").notNull().default("warehouse"), // warehouse, branch
+  sourceBranchId: varchar("source_branch_id")
+    .references(() => branches.id),
+  destinationBranchId: varchar("destination_branch_id")
+    .notNull()
+    .references(() => branches.id),
+  transferDate: text("transfer_date").notNull(), // تاريخ التحويل
+  deliveryDate: text("delivery_date"), // تاريخ التسليم الفعلي
+  status: text("status").notNull().default("pending"), // pending, approved, rejected, in_transit, delivered, cancelled
+  // Only kitchen raw requests debit the source on dispatch; legacy rows keep receipt-time debit.
+  stockPostingPolicy: text("stock_posting_policy").notNull().default("on_receipt"),
+  // حقول الموافقة
+  approvedBy: varchar("approved_by").references(() => users.id),
+  approvedByName: text("approved_by_name"),
+  approvedAt: timestamp("approved_at"),
+  rejectedBy: varchar("rejected_by").references(() => users.id),
+  rejectedByName: text("rejected_by_name"),
+  rejectedAt: timestamp("rejected_at"),
+  rejectionReason: text("rejection_reason"),
+  // حقول الإرسال والتسليم
+  driverName: text("driver_name"),
+  vehicleNumber: text("vehicle_number"),
+  departureTime: timestamp("departure_time"),
+  arrivalTime: timestamp("arrival_time"),
+  receivedBy: varchar("received_by").references(() => users.id),
+  receivedByName: text("received_by_name"),
+  receiverSignature: text("receiver_signature"), // توقيع المستلم الإلكتروني
+  deliveryNotes: text("delivery_notes"), // ملاحظات التسليم
+  hasDiscrepancy: boolean("has_discrepancy").default(false), // هل يوجد فرق في الكميات
+  hasQuantityModifications: boolean("has_quantity_modifications").default(false), // هل تم تعديل الكميات من مسؤول المستودع
+  notes: text("notes"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdByName: text("created_by_name"),
+  // Durable request deduplication. requestId remains the business request FK
+  // and must not be used as an idempotency key.
+  idempotencyKey: varchar("idempotency_key", { length: 128 }),
+  idempotencyActorId: varchar("idempotency_actor_id").references(() => users.id),
+  idempotencyAction: varchar("idempotency_action", { length: 64 }),
+  idempotencyPayloadHash: varchar("idempotency_payload_hash", { length: 64 }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_material_transfers_source").on(table.sourceBranchId),
+  index("idx_material_transfers_dest").on(table.destinationBranchId),
+  index("idx_material_transfers_status").on(table.status),
+  index("idx_material_transfers_date").on(table.transferDate),
+  index("idx_material_transfers_request").on(table.requestId),
+  uniqueIndex("material_transfers_number_unique").on(table.transferNumber),
+  uniqueIndex("uq_material_transfers_idempotency")
+    .on(table.idempotencyActorId, table.idempotencyAction, table.idempotencyKey)
+    .where(sql`${table.idempotencyKey} IS NOT NULL`),
+]);
+
+export const insertMaterialTransferSchema = createInsertSchema(materialTransfers).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type MaterialTransfer = typeof materialTransfers.$inferSelect;
+export type InsertMaterialTransfer = z.infer<typeof insertMaterialTransferSchema>;
+
+// Material Transfer Items - بنود التحويل
+export const materialTransferItems = pgTable("material_transfer_items", {
+  id: serial("id").primaryKey(),
+  transferId: integer("transfer_id")
+    .notNull()
+    .references(() => materialTransfers.id, { onDelete: "cascade" }),
+  itemId: integer("item_id")
+    .notNull()
+    .references(() => warehouseItems.id),
+  itemName: text("item_name").notNull(),
+  category: text("category").notNull(),
+  unit: text("unit").notNull(),
+  quantity: numeric("quantity", { precision: 18, scale: 6, mode: "number" }).notNull(), // الكمية المعتمدة للإرسال
+  originalQuantity: numeric("original_quantity", { precision: 18, scale: 6, mode: "number" }), // الكمية المطلوبة الأصلية
+  availableQuantity: numeric("available_quantity", { precision: 18, scale: 6, mode: "number" }), // الكمية المتوفرة وقت الإنشاء
+  receivedQuantity: numeric("received_quantity", { precision: 18, scale: 6, mode: "number" }), // الكمية المستلمة فعلياً
+  discrepancy: numeric("discrepancy", { precision: 18, scale: 6, mode: "number" }), // الفرق (مستلم - مرسل)
+  discrepancyNotes: text("discrepancy_notes"), // ملاحظات الفرق (تالف، ناقص، إلخ)
+  isModified: boolean("is_modified").default(false), // هل تم تعديل الكمية من مسؤول المستودع؟
+  modifiedBy: text("modified_by"), // معرف المعدِّل
+  modifiedByName: text("modified_by_name"), // اسم المعدِّل
+  modifiedAt: timestamp("modified_at"), // تاريخ التعديل
+  modificationNotes: text("modification_notes"), // سبب التعديل (مثل: الكمية غير متوفرة)
+  notes: text("notes"),
+}, (table) => [
+  index("idx_material_transfer_items_transfer").on(table.transferId),
+  index("idx_material_transfer_items_item").on(table.itemId),
+]);
+
+export const insertMaterialTransferItemSchema = createInsertSchema(materialTransferItems, {
+  quantity: positiveMaterialQuantitySchema,
+  originalQuantity: positiveMaterialQuantitySchema.nullable().optional(),
+  availableQuantity: nonnegativeMaterialQuantitySchema.nullable().optional(),
+  receivedQuantity: nonnegativeMaterialQuantitySchema.nullable().optional(),
+  discrepancy: materialQuantitySchema.nullable().optional(),
+}).omit({
+  id: true,
+});
+
+export type MaterialTransferItem = typeof materialTransferItems.$inferSelect;
+export type InsertMaterialTransferItem = z.infer<typeof insertMaterialTransferItemSchema>;
+
+// Warehouse Movement Log - سجل حركة المستودع
+export const warehouseMovementLogs = pgTable("warehouse_movement_logs", {
+  id: serial("id").primaryKey(),
+  itemId: integer("item_id")
+    .notNull()
+    .references(() => warehouseItems.id),
+  branchId: varchar("branch_id")
+    .references(() => branches.id),
+  movementType: text("movement_type").notNull(), // in, out, adjustment, transfer_in, transfer_out
+  quantity: numeric("quantity", { precision: 18, scale: 6, mode: "number" }).notNull(),
+  balanceBefore: numeric("balance_before", { precision: 18, scale: 6, mode: "number" }).default(0),
+  balanceAfter: numeric("balance_after", { precision: 18, scale: 6, mode: "number" }).default(0),
+  referenceType: text("reference_type"), // request, transfer, purchase, adjustment
+  referenceId: integer("reference_id"),
+  notes: text("notes"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdByName: text("created_by_name"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_warehouse_logs_item").on(table.itemId),
+  index("idx_warehouse_logs_branch").on(table.branchId),
+  index("idx_warehouse_logs_type").on(table.movementType),
+  index("idx_warehouse_logs_date").on(table.createdAt),
+]);
+
+export const insertWarehouseMovementLogSchema = createInsertSchema(warehouseMovementLogs, {
+  quantity: nonzeroMaterialQuantitySchema,
+  balanceBefore: nonnegativeMaterialQuantitySchema.nullable().optional(),
+  balanceAfter: nonnegativeMaterialQuantitySchema.nullable().optional(),
+}).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type WarehouseMovementLog = typeof warehouseMovementLogs.$inferSelect;
+export type InsertWarehouseMovementLog = z.infer<typeof insertWarehouseMovementLogSchema>;
+
+// Purchasing Requests - طلبات المشتريات
+export const purchasingRequests = pgTable("purchasing_requests", {
+  id: serial("id").primaryKey(),
+  requestNumber: text("request_number").notNull(),
+  sourceMaterialRequestId: integer("source_material_request_id"), // للتوافقية مع البيانات القديمة
+  branchId: varchar("branch_id")
+    .notNull()
+    .references(() => branches.id),
+  status: text("status").notNull().default("pending"), // pending, approved, rejected, ordered, received, cancelled
+  priority: text("priority").default("normal"), // normal, urgent, critical
+  totalEstimatedCost: numeric("total_estimated_cost", { precision: 12, scale: 2 }).default("0"),
+  approvedBudget: numeric("approved_budget", { precision: 12, scale: 2 }),
+  vendorId: integer("vendor_id"),
+  vendorName: text("vendor_name"),
+  expectedDeliveryDate: text("expected_delivery_date"),
+  actualDeliveryDate: text("actual_delivery_date"),
+  notes: text("notes"),
+  requestedBy: varchar("requested_by").references(() => users.id),
+  requestedByName: text("requested_by_name"),
+  approvedBy: varchar("approved_by").references(() => users.id),
+  approvedByName: text("approved_by_name"),
+  approvedAt: timestamp("approved_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_purchasing_requests_branch").on(table.branchId),
+  index("idx_purchasing_requests_status").on(table.status),
+  uniqueIndex("purchasing_requests_number_unique").on(table.requestNumber),
+]);
+
+export const insertPurchasingRequestSchema = createInsertSchema(purchasingRequests).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type PurchasingRequest = typeof purchasingRequests.$inferSelect;
+export type InsertPurchasingRequest = z.infer<typeof insertPurchasingRequestSchema>;
+
+// Purchasing Request Items - بنود طلب المشتريات
+export const purchasingRequestItems = pgTable("purchasing_request_items", {
+  id: serial("id").primaryKey(),
+  purchasingRequestId: integer("purchasing_request_id")
+    .notNull()
+    .references(() => purchasingRequests.id, { onDelete: "cascade" }),
+  itemId: integer("item_id").references(() => warehouseItems.id),
+  itemName: text("item_name").notNull(),
+  category: text("category"),
+  unit: text("unit"),
+  requestedQuantity: integer("requested_quantity").notNull().default(0),
+  approvedQuantity: integer("approved_quantity").default(0),
+  orderedQuantity: integer("ordered_quantity").default(0),
+  receivedQuantity: integer("received_quantity").default(0),
+  unitPrice: numeric("unit_price", { precision: 10, scale: 2 }),
+  totalPrice: numeric("total_price", { precision: 12, scale: 2 }),
+  notes: text("notes"),
+});
+
+export const insertPurchasingRequestItemSchema = createInsertSchema(purchasingRequestItems).omit({
+  id: true,
+});
+
+export type PurchasingRequestItem = typeof purchasingRequestItems.$inferSelect;
+export type InsertPurchasingRequestItem = z.infer<typeof insertPurchasingRequestItemSchema>;
+
+// Warehouse Notifications - إشعارات المخازن
+export const warehouseNotifications = pgTable("warehouse_notifications", {
+  id: serial("id").primaryKey(),
+  type: text("type").notNull(), // request_created, request_approved, request_rejected, transfer_started, transfer_delivered, low_stock
+  title: text("title").notNull(),
+  titleEn: text("title_en"),
+  body: text("body").notNull(),
+  bodyEn: text("body_en"),
+  branchId: varchar("branch_id").references(() => branches.id),
+  targetBranchId: varchar("target_branch_id").references(() => branches.id), // for transfers
+  userId: varchar("user_id").references(() => users.id), // specific user target (null = all branch users)
+  entityType: text("entity_type"), // material_request, transfer, warehouse_item
+  entityId: integer("entity_id"),
+  priority: text("priority").default("normal"), // low, normal, high, urgent
+  isRead: boolean("is_read").default(false),
+  readAt: timestamp("read_at"),
+  readBy: varchar("read_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_warehouse_notif_branch").on(table.branchId),
+  index("idx_warehouse_notif_user").on(table.userId),
+  index("idx_warehouse_notif_read").on(table.isRead),
+  index("idx_warehouse_notif_date").on(table.createdAt),
+  index("idx_warehouse_notif_entity").on(table.entityType, table.entityId),
+]);
+
+export const insertWarehouseNotificationSchema = createInsertSchema(warehouseNotifications).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type WarehouseNotification = typeof warehouseNotifications.$inferSelect;
+export type InsertWarehouseNotification = z.infer<typeof insertWarehouseNotificationSchema>;
+
+// ==========================================
+// Executive Secretariat Module - السكرتارية التنفيذية
+// ==========================================
+
+// Meeting Status Constants
+export const MEETING_STATUS = ["scheduled", "in_progress", "completed", "cancelled", "postponed"] as const;
+export type MeetingStatus = typeof MEETING_STATUS[number];
+
+// Task Status Constants
+export const EXEC_TASK_STATUS = ["pending", "in_progress", "completed", "cancelled", "on_hold"] as const;
+export type ExecTaskStatus = typeof EXEC_TASK_STATUS[number];
+
+// Task Priority Constants
+export const EXEC_TASK_PRIORITY = ["low", "medium", "high", "urgent"] as const;
+export type ExecTaskPriority = typeof EXEC_TASK_PRIORITY[number];
+
+// Correspondence Type Constants
+export const CORRESPONDENCE_TYPE = ["incoming", "outgoing"] as const;
+export type CorrespondenceType = typeof CORRESPONDENCE_TYPE[number];
+
+// Correspondence Status Constants
+export const CORRESPONDENCE_STATUS = ["draft", "sent", "received", "archived", "pending_review"] as const;
+export type CorrespondenceStatus = typeof CORRESPONDENCE_STATUS[number];
+
+// Executive Meetings - الاجتماعات التنفيذية
+export const execMeetings = pgTable("exec_meetings", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id").references(() => branches.id),
+  title: text("title").notNull(),
+  titleEn: text("title_en"),
+  agenda: text("agenda"),
+  agendaEn: text("agenda_en"),
+  meetingType: text("meeting_type").default("regular"), // regular, urgent, board, department, external
+  startAt: timestamp("start_at").notNull(),
+  endAt: timestamp("end_at"),
+  location: text("location"),
+  locationEn: text("location_en"),
+  isVirtual: boolean("is_virtual").default(false),
+  virtualMeetingLink: text("virtual_meeting_link"),
+  organizerId: varchar("organizer_id").references(() => users.id),
+  organizerName: text("organizer_name"),
+  status: text("status").notNull().default("scheduled"), // scheduled, in_progress, completed, cancelled, postponed
+  notes: text("notes"),
+  minutes: text("minutes"), // محضر الاجتماع
+  decisions: text("decisions"), // القرارات
+  reminderSent: boolean("reminder_sent").default(false),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_exec_meetings_branch").on(table.branchId),
+  index("idx_exec_meetings_organizer").on(table.organizerId),
+  index("idx_exec_meetings_status").on(table.status),
+  index("idx_exec_meetings_start").on(table.startAt),
+]);
+
+export const insertExecMeetingSchema = createInsertSchema(execMeetings).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type ExecMeeting = typeof execMeetings.$inferSelect;
+export type InsertExecMeeting = z.infer<typeof insertExecMeetingSchema>;
+
+// Meeting Attendees - حضور الاجتماعات
+export const execMeetingAttendees = pgTable("exec_meeting_attendees", {
+  id: serial("id").primaryKey(),
+  meetingId: integer("meeting_id")
+    .notNull()
+    .references(() => execMeetings.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").references(() => users.id),
+  attendeeName: text("attendee_name").notNull(),
+  attendeeEmail: text("attendee_email"),
+  attendeePhone: text("attendee_phone"),
+  role: text("role").default("attendee"), // organizer, attendee, presenter, guest
+  isExternal: boolean("is_external").default(false),
+  externalOrganization: text("external_organization"),
+  attendanceStatus: text("attendance_status").default("invited"), // invited, confirmed, declined, attended, absent
+  attendedAt: timestamp("attended_at"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_exec_attendees_meeting").on(table.meetingId),
+  index("idx_exec_attendees_user").on(table.userId),
+]);
+
+export const insertExecMeetingAttendeeSchema = createInsertSchema(execMeetingAttendees).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type ExecMeetingAttendee = typeof execMeetingAttendees.$inferSelect;
+export type InsertExecMeetingAttendee = z.infer<typeof insertExecMeetingAttendeeSchema>;
+
+// Executive Tasks - المهام التنفيذية
+export const execTasks = pgTable("exec_tasks", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id").references(() => branches.id),
+  title: text("title").notNull(),
+  titleEn: text("title_en"),
+  description: text("description"),
+  descriptionEn: text("description_en"),
+  taskType: text("task_type").default("general"), // general, meeting_followup, correspondence_followup, urgent
+  assignedTo: varchar("assigned_to").references(() => users.id),
+  assignedToName: text("assigned_to_name"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdByName: text("created_by_name"),
+  relatedType: text("related_type"), // meeting, correspondence, document
+  relatedId: integer("related_id"),
+  dueDate: timestamp("due_date"),
+  startDate: timestamp("start_date"),
+  completedAt: timestamp("completed_at"),
+  priority: text("priority").notNull().default("medium"), // low, medium, high, urgent
+  status: text("status").notNull().default("pending"), // pending, in_progress, completed, cancelled, on_hold
+  progress: integer("progress").default(0), // 0-100
+  notes: text("notes"),
+  reminderSent: boolean("reminder_sent").default(false),
+  reminderDate: timestamp("reminder_date"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_exec_tasks_branch").on(table.branchId),
+  index("idx_exec_tasks_assigned").on(table.assignedTo),
+  index("idx_exec_tasks_created_by").on(table.createdBy),
+  index("idx_exec_tasks_status").on(table.status),
+  index("idx_exec_tasks_priority").on(table.priority),
+  index("idx_exec_tasks_due_date").on(table.dueDate),
+]);
+
+export const insertExecTaskSchema = createInsertSchema(execTasks).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type ExecTask = typeof execTasks.$inferSelect;
+export type InsertExecTask = z.infer<typeof insertExecTaskSchema>;
+
+// Executive Correspondence - المراسلات التنفيذية
+export const execCorrespondence = pgTable("exec_correspondence", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id").references(() => branches.id),
+  refNumber: text("ref_number").notNull(), // رقم المرجع
+  type: text("type").notNull().default("incoming"), // incoming, outgoing
+  subject: text("subject").notNull(),
+  subjectEn: text("subject_en"),
+  body: text("body"),
+  bodyEn: text("body_en"),
+  senderName: text("sender_name"),
+  senderOrganization: text("sender_organization"),
+  senderEmail: text("sender_email"),
+  senderPhone: text("sender_phone"),
+  receiverName: text("receiver_name"),
+  receiverOrganization: text("receiver_organization"),
+  receiverEmail: text("receiver_email"),
+  receiverPhone: text("receiver_phone"),
+  category: text("category").default("general"), // general, contract, inquiry, complaint, official, financial
+  priority: text("priority").default("normal"), // low, normal, high, urgent
+  status: text("status").notNull().default("received"), // draft, sent, received, archived, pending_review
+  receivedAt: timestamp("received_at"),
+  sentAt: timestamp("sent_at"),
+  responseDeadline: timestamp("response_deadline"),
+  respondedAt: timestamp("responded_at"),
+  responseRefNumber: text("response_ref_number"),
+  attachments: jsonb("attachments").default([]), // [{name, url, type, size}]
+  ownerId: varchar("owner_id").references(() => users.id),
+  ownerName: text("owner_name"),
+  assignedTo: varchar("assigned_to").references(() => users.id),
+  assignedToName: text("assigned_to_name"),
+  isConfidential: boolean("is_confidential").default(false),
+  notes: text("notes"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_exec_corr_branch").on(table.branchId),
+  index("idx_exec_corr_type").on(table.type),
+  index("idx_exec_corr_status").on(table.status),
+  index("idx_exec_corr_category").on(table.category),
+  index("idx_exec_corr_owner").on(table.ownerId),
+  index("idx_exec_corr_assigned").on(table.assignedTo),
+  index("idx_exec_corr_received").on(table.receivedAt),
+  uniqueIndex("exec_correspondence_ref_unique").on(table.refNumber),
+]);
+
+export const insertExecCorrespondenceSchema = createInsertSchema(execCorrespondence).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type ExecCorrespondence = typeof execCorrespondence.$inferSelect;
+export type InsertExecCorrespondence = z.infer<typeof insertExecCorrespondenceSchema>;
+
+// Task Comments - تعليقات المهام
+export const execTaskComments = pgTable("exec_task_comments", {
+  id: serial("id").primaryKey(),
+  taskId: integer("task_id")
+    .notNull()
+    .references(() => execTasks.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").references(() => users.id),
+  userName: text("user_name"),
+  content: text("content").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_exec_task_comments_task").on(table.taskId),
+]);
+
+export const insertExecTaskCommentSchema = createInsertSchema(execTaskComments).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type ExecTaskComment = typeof execTaskComments.$inferSelect;
+export type InsertExecTaskComment = z.infer<typeof insertExecTaskCommentSchema>;
+
+// Executive Notifications - تنبيهات السكرتارية
+export const execNotifications = pgTable("exec_notifications", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").references(() => users.id),
+  branchId: varchar("branch_id").references(() => branches.id),
+  type: text("type").notNull(), // meeting_reminder, task_due, task_assigned, correspondence_received, correspondence_deadline
+  title: text("title").notNull(),
+  titleEn: text("title_en"),
+  body: text("body"),
+  bodyEn: text("body_en"),
+  entityType: text("entity_type"), // meeting, task, correspondence
+  entityId: integer("entity_id"),
+  priority: text("priority").default("normal"), // low, normal, high, urgent
+  isRead: boolean("is_read").default(false),
+  readAt: timestamp("read_at"),
+  scheduledAt: timestamp("scheduled_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_exec_notif_user").on(table.userId),
+  index("idx_exec_notif_branch").on(table.branchId),
+  index("idx_exec_notif_read").on(table.isRead),
+  index("idx_exec_notif_entity").on(table.entityType, table.entityId),
+]);
+
+export const insertExecNotificationSchema = createInsertSchema(execNotifications).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type ExecNotification = typeof execNotifications.$inferSelect;
+export type InsertExecNotification = z.infer<typeof insertExecNotificationSchema>;
+
+// ==========================================
+// Document Management Module - إدارة الوثائق والأرشفة
+// ==========================================
+
+// Document Status Constants
+export const DOCUMENT_STATUS = ["draft", "active", "archived", "deleted"] as const;
+export type DocumentStatus = typeof DOCUMENT_STATUS[number];
+
+// Document Access Level Constants
+export const DOCUMENT_ACCESS_LEVEL = ["private", "internal", "public", "confidential"] as const;
+export type DocumentAccessLevel = typeof DOCUMENT_ACCESS_LEVEL[number];
+
+// Document Categories - تصنيفات الوثائق
+export const documentCategories = pgTable("document_categories", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id").references(() => branches.id),
+  name: text("name").notNull(),
+  nameEn: text("name_en"),
+  description: text("description"),
+  color: text("color").default("#6B7280"),
+  icon: text("icon").default("folder"),
+  parentId: integer("parent_id"),
+  sortOrder: integer("sort_order").default(0),
+  isActive: boolean("is_active").default(true),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_doc_categories_branch").on(table.branchId),
+  index("idx_doc_categories_parent").on(table.parentId),
+]);
+
+export const insertDocumentCategorySchema = createInsertSchema(documentCategories).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type DocumentCategory = typeof documentCategories.$inferSelect;
+export type InsertDocumentCategory = z.infer<typeof insertDocumentCategorySchema>;
+
+// Document Folders - مجلدات الوثائق
+export const documentFolders = pgTable("document_folders", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id").references(() => branches.id),
+  name: text("name").notNull(),
+  nameEn: text("name_en"),
+  description: text("description"),
+  parentId: integer("parent_id"),
+  path: text("path").notNull().default("/"), // المسار الكامل للمجلد
+  categoryId: integer("category_id").references(() => documentCategories.id),
+  accessLevel: text("access_level").default("internal"), // private, internal, public, confidential
+  ownerId: varchar("owner_id").references(() => users.id),
+  ownerName: text("owner_name"),
+  color: text("color"),
+  icon: text("icon"),
+  isLocked: boolean("is_locked").default(false),
+  sortOrder: integer("sort_order").default(0),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_doc_folders_branch").on(table.branchId),
+  index("idx_doc_folders_parent").on(table.parentId),
+  index("idx_doc_folders_category").on(table.categoryId),
+  index("idx_doc_folders_owner").on(table.ownerId),
+  index("idx_doc_folders_path").on(table.path),
+]);
+
+export const insertDocumentFolderSchema = createInsertSchema(documentFolders).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type DocumentFolder = typeof documentFolders.$inferSelect;
+export type InsertDocumentFolder = z.infer<typeof insertDocumentFolderSchema>;
+
+// Documents - الوثائق
+export const documents = pgTable("documents", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id").references(() => branches.id),
+  folderId: integer("folder_id").references(() => documentFolders.id),
+  categoryId: integer("category_id").references(() => documentCategories.id),
+  title: text("title").notNull(),
+  titleEn: text("title_en"),
+  description: text("description"),
+  descriptionEn: text("description_en"),
+  documentNumber: text("document_number"), // رقم الوثيقة
+  documentDate: timestamp("document_date"), // تاريخ الوثيقة
+  fileName: text("file_name").notNull(),
+  fileType: text("file_type").notNull(), // pdf, docx, xlsx, etc.
+  fileSize: integer("file_size").notNull(), // بالبايت
+  filePath: text("file_path").notNull(), // مسار التخزين
+  mimeType: text("mime_type"),
+  checksum: text("checksum"), // للتحقق من سلامة الملف
+  currentVersion: integer("current_version").default(1),
+  accessLevel: text("access_level").default("internal"), // private, internal, public, confidential
+  status: text("status").notNull().default("active"), // draft, active, archived, deleted
+  tags: text("tags").array(), // الكلمات المفتاحية
+  metadata: jsonb("metadata").default({}), // بيانات إضافية
+  expiryDate: timestamp("expiry_date"), // تاریخ انتهاء الصلاحية
+  retentionPeriod: integer("retention_period"), // فترة الاحتفاظ بالأيام
+  isTemplate: boolean("is_template").default(false),
+  templateFor: text("template_for"), // نوع القالب
+  relatedType: text("related_type"), // meeting, task, correspondence, contract
+  relatedId: integer("related_id"),
+  ownerId: varchar("owner_id").references(() => users.id),
+  ownerName: text("owner_name"),
+  lastAccessedAt: timestamp("last_accessed_at"),
+  lastAccessedBy: varchar("last_accessed_by").references(() => users.id),
+  downloadCount: integer("download_count").default(0),
+  viewCount: integer("view_count").default(0),
+  isLocked: boolean("is_locked").default(false),
+  lockedBy: varchar("locked_by").references(() => users.id),
+  lockedAt: timestamp("locked_at"),
+  archivedAt: timestamp("archived_at"),
+  archivedBy: varchar("archived_by").references(() => users.id),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_documents_branch").on(table.branchId),
+  index("idx_documents_folder").on(table.folderId),
+  index("idx_documents_category").on(table.categoryId),
+  index("idx_documents_owner").on(table.ownerId),
+  index("idx_documents_status").on(table.status),
+  index("idx_documents_access").on(table.accessLevel),
+  index("idx_documents_type").on(table.fileType),
+  index("idx_documents_related").on(table.relatedType, table.relatedId),
+  index("idx_documents_date").on(table.documentDate),
+]);
+
+export const insertDocumentSchema = createInsertSchema(documents).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type Document = typeof documents.$inferSelect;
+export type InsertDocument = z.infer<typeof insertDocumentSchema>;
+
+// Document Versions - إصدارات الوثائق
+export const documentVersions = pgTable("document_versions", {
+  id: serial("id").primaryKey(),
+  documentId: integer("document_id")
+    .notNull()
+    .references(() => documents.id, { onDelete: "cascade" }),
+  versionNumber: integer("version_number").notNull(),
+  fileName: text("file_name").notNull(),
+  fileSize: integer("file_size").notNull(),
+  filePath: text("file_path").notNull(),
+  mimeType: text("mime_type"),
+  checksum: text("checksum"),
+  changeNotes: text("change_notes"), // ملاحظات التغيير
+  changedBy: varchar("changed_by").references(() => users.id),
+  changedByName: text("changed_by_name"),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_doc_versions_document").on(table.documentId),
+  index("idx_doc_versions_number").on(table.documentId, table.versionNumber),
+]);
+
+export const insertDocumentVersionSchema = createInsertSchema(documentVersions).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type DocumentVersion = typeof documentVersions.$inferSelect;
+export type InsertDocumentVersion = z.infer<typeof insertDocumentVersionSchema>;
+
+// Document Shares - مشاركة الوثائق
+export const documentShares = pgTable("document_shares", {
+  id: serial("id").primaryKey(),
+  documentId: integer("document_id")
+    .notNull()
+    .references(() => documents.id, { onDelete: "cascade" }),
+  folderId: integer("folder_id").references(() => documentFolders.id, { onDelete: "cascade" }),
+  sharedWithUserId: varchar("shared_with_user_id").references(() => users.id),
+  sharedWithUserName: text("shared_with_user_name"),
+  sharedWithBranchId: varchar("shared_with_branch_id").references(() => branches.id),
+  shareType: text("share_type").default("user"), // user, branch, department, public
+  permission: text("permission").default("view"), // view, download, edit, full
+  expiresAt: timestamp("expires_at"), // تاریخ انتهاء المشاركة
+  shareLink: text("share_link"), // رابط المشاركة العام
+  sharePassword: text("share_password"), // كلمة مرور للرابط
+  accessCount: integer("access_count").default(0),
+  maxAccessCount: integer("max_access_count"), // الحد الأقصى للوصول
+  isActive: boolean("is_active").default(true),
+  sharedBy: varchar("shared_by").references(() => users.id),
+  sharedByName: text("shared_by_name"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_doc_shares_document").on(table.documentId),
+  index("idx_doc_shares_folder").on(table.folderId),
+  index("idx_doc_shares_user").on(table.sharedWithUserId),
+  index("idx_doc_shares_branch").on(table.sharedWithBranchId),
+  index("idx_doc_shares_link").on(table.shareLink),
+]);
+
+export const insertDocumentShareSchema = createInsertSchema(documentShares).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type DocumentShare = typeof documentShares.$inferSelect;
+export type InsertDocumentShare = z.infer<typeof insertDocumentShareSchema>;
+
+// Document Access Logs - سجل الوصول للوثائق
+export const documentAccessLogs = pgTable("document_access_logs", {
+  id: serial("id").primaryKey(),
+  documentId: integer("document_id")
+    .notNull()
+    .references(() => documents.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").references(() => users.id),
+  userName: text("user_name"),
+  action: text("action").notNull(), // view, download, print, edit, share, delete, restore
+  actionDetails: text("action_details"),
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+  versionNumber: integer("version_number"),
+  accessedAt: timestamp("accessed_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_doc_access_document").on(table.documentId),
+  index("idx_doc_access_user").on(table.userId),
+  index("idx_doc_access_action").on(table.action),
+  index("idx_doc_access_date").on(table.accessedAt),
+]);
+
+export const insertDocumentAccessLogSchema = createInsertSchema(documentAccessLogs).omit({
+  id: true,
+  accessedAt: true,
+});
+
+export type DocumentAccessLog = typeof documentAccessLogs.$inferSelect;
+export type InsertDocumentAccessLog = z.infer<typeof insertDocumentAccessLogSchema>;
+
+// =====================================================
+// سجل الزوار - Visitor Management
+// =====================================================
+
+// Visitors - الزوار
+export const visitors = pgTable("visitors", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id").references(() => branches.id),
+  // بيانات الزائر
+  fullName: text("full_name").notNull(),
+  nationalId: text("national_id"), // رقم الهوية
+  phone: text("phone"),
+  email: text("email"),
+  company: text("company"), // الجهة/الشركة
+  nationality: text("nationality"),
+  idType: text("id_type").default("national_id"), // national_id, passport, iqama
+  photoUrl: text("photo_url"), // صورة الزائر
+  // معلومات إضافية
+  notes: text("notes"),
+  isBlacklisted: boolean("is_blacklisted").default(false), // قائمة سوداء
+  blacklistReason: text("blacklist_reason"),
+  visitCount: integer("visit_count").default(0), // عدد الزيارات
+  lastVisitAt: timestamp("last_visit_at"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_visitors_branch").on(table.branchId),
+  index("idx_visitors_national_id").on(table.nationalId),
+  index("idx_visitors_phone").on(table.phone),
+  index("idx_visitors_company").on(table.company),
+]);
+
+export const insertVisitorSchema = createInsertSchema(visitors).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type Visitor = typeof visitors.$inferSelect;
+export type InsertVisitor = z.infer<typeof insertVisitorSchema>;
+
+// Visitor Logs - سجل الزيارات
+export const visitorLogs = pgTable("visitor_logs", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id").references(() => branches.id),
+  visitorId: integer("visitor_id").references(() => visitors.id),
+  // بيانات الزيارة
+  visitNumber: text("visit_number"), // رقم الزيارة VIS-YYYYMM-XXXX
+  visitDate: timestamp("visit_date").defaultNow().notNull(),
+  visitPurpose: text("visit_purpose").notNull(), // غرض الزيارة
+  visitType: text("visit_type").default("business"), // business, personal, delivery, interview, meeting, other
+  // المضيف
+  hostId: varchar("host_id").references(() => users.id),
+  hostName: text("host_name"),
+  hostDepartment: text("host_department"),
+  // أوقات الدخول والخروج
+  checkInTime: timestamp("check_in_time"),
+  checkOutTime: timestamp("check_out_time"),
+  expectedDuration: integer("expected_duration"), // المدة المتوقعة بالدقائق
+  actualDuration: integer("actual_duration"), // المدة الفعلية بالدقائق
+  // حالة الزيارة
+  status: text("status").default("checked_in"), // pending, checked_in, checked_out, cancelled, no_show
+  // بطاقة الزائر
+  badgeNumber: text("badge_number"),
+  badgeIssued: boolean("badge_issued").default(false),
+  badgeReturned: boolean("badge_returned").default(false),
+  // معلومات إضافية
+  vehiclePlate: text("vehicle_plate"), // لوحة السيارة
+  itemsCarried: text("items_carried"), // الأغراض المحمولة
+  accessAreas: text("access_areas").array(), // المناطق المسموح بها
+  escortRequired: boolean("escort_required").default(false), // يتطلب مرافق
+  escortName: text("escort_name"),
+  // ملاحظات وتوقيعات
+  notes: text("notes"),
+  visitorSignature: text("visitor_signature"),
+  hostSignature: text("host_signature"),
+  securityNotes: text("security_notes"),
+  // المسجل
+  registeredBy: varchar("registered_by").references(() => users.id),
+  registeredByName: text("registered_by_name"),
+  checkedOutBy: varchar("checked_out_by").references(() => users.id),
+  checkedOutByName: text("checked_out_by_name"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_visitor_logs_branch").on(table.branchId),
+  index("idx_visitor_logs_visitor").on(table.visitorId),
+  index("idx_visitor_logs_host").on(table.hostId),
+  index("idx_visitor_logs_date").on(table.visitDate),
+  index("idx_visitor_logs_status").on(table.status),
+  index("idx_visitor_logs_number").on(table.visitNumber),
+]);
+
+export const insertVisitorLogSchema = createInsertSchema(visitorLogs).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type VisitorLog = typeof visitorLogs.$inferSelect;
+export type InsertVisitorLog = z.infer<typeof insertVisitorLogSchema>;
+
+// =====================================================
+// إدارة السفر والحجوزات - Travel Management
+// =====================================================
+
+// Travel Requests - طلبات السفر
+export const travelRequests = pgTable("travel_requests", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id").references(() => branches.id),
+  // رقم الطلب
+  requestNumber: text("request_number"), // TR-YYYYMM-XXXX
+  // مقدم الطلب
+  requesterId: varchar("requester_id").references(() => users.id),
+  requesterName: text("requester_name"),
+  requesterDepartment: text("requester_department"),
+  requesterJobTitle: text("requester_job_title"),
+  // تفاصيل الرحلة
+  tripTitle: text("trip_title").notNull(), // عنوان الرحلة
+  tripPurpose: text("trip_purpose").notNull(), // الغرض من السفر
+  tripType: text("trip_type").default("business"), // business, training, conference, client_visit, other
+  // الوجهات والتواريخ
+  departureCity: text("departure_city").notNull(),
+  destinationCity: text("destination_city").notNull(),
+  destinationCountry: text("destination_country"),
+  departureDate: timestamp("departure_date").notNull(),
+  returnDate: timestamp("return_date").notNull(),
+  tripDuration: integer("trip_duration"), // عدد الأيام
+  // احتياجات السفر
+  needsFlight: boolean("needs_flight").default(true),
+  needsHotel: boolean("needs_hotel").default(true),
+  needsTransportation: boolean("needs_transportation").default(false),
+  needsVisa: boolean("needs_visa").default(false),
+  // الميزانية التقديرية
+  estimatedFlightCost: numeric("estimated_flight_cost", { precision: 12, scale: 2 }),
+  estimatedHotelCost: numeric("estimated_hotel_cost", { precision: 12, scale: 2 }),
+  estimatedTransportCost: numeric("estimated_transport_cost", { precision: 12, scale: 2 }),
+  estimatedMealsCost: numeric("estimated_meals_cost", { precision: 12, scale: 2 }),
+  estimatedOtherCost: numeric("estimated_other_cost", { precision: 12, scale: 2 }),
+  totalEstimatedCost: numeric("total_estimated_cost", { precision: 12, scale: 2 }),
+  currency: text("currency").default("SAR"),
+  // حالة الطلب
+  status: text("status").default("draft"), // draft, pending, approved, rejected, cancelled, completed
+  // الموافقات
+  managerApproval: text("manager_approval").default("pending"), // pending, approved, rejected
+  managerApprovalDate: timestamp("manager_approval_date"),
+  managerApprovalBy: varchar("manager_approval_by").references(() => users.id),
+  managerApprovalNotes: text("manager_approval_notes"),
+  financeApproval: text("finance_approval").default("pending"),
+  financeApprovalDate: timestamp("finance_approval_date"),
+  financeApprovalBy: varchar("finance_approval_by").references(() => users.id),
+  financeApprovalNotes: text("finance_approval_notes"),
+  // التنفيذ
+  actualFlightCost: numeric("actual_flight_cost", { precision: 12, scale: 2 }),
+  actualHotelCost: numeric("actual_hotel_cost", { precision: 12, scale: 2 }),
+  actualTransportCost: numeric("actual_transport_cost", { precision: 12, scale: 2 }),
+  actualMealsCost: numeric("actual_meals_cost", { precision: 12, scale: 2 }),
+  actualOtherCost: numeric("actual_other_cost", { precision: 12, scale: 2 }),
+  totalActualCost: numeric("total_actual_cost", { precision: 12, scale: 2 }),
+  // تفاصيل الحجوزات
+  flightDetails: jsonb("flight_details"), // تفاصيل حجز الطيران
+  hotelDetails: jsonb("hotel_details"), // تفاصيل حجز الفندق
+  transportDetails: jsonb("transport_details"), // تفاصيل النقل
+  // ملفات مرفقة
+  attachments: jsonb("attachments"), // قائمة الملفات المرفقة
+  // ملاحظات
+  notes: text("notes"),
+  tripReport: text("trip_report"), // تقرير بعد الرحلة
+  tripReportDate: timestamp("trip_report_date"),
+  // المعلومات الإدارية
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_travel_requests_branch").on(table.branchId),
+  index("idx_travel_requests_requester").on(table.requesterId),
+  index("idx_travel_requests_status").on(table.status),
+  index("idx_travel_requests_dates").on(table.departureDate, table.returnDate),
+  index("idx_travel_requests_number").on(table.requestNumber),
+]);
+
+export const insertTravelRequestSchema = createInsertSchema(travelRequests).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type TravelRequest = typeof travelRequests.$inferSelect;
+export type InsertTravelRequest = z.infer<typeof insertTravelRequestSchema>;
+
+// Travel Expenses - مصروفات السفر
+export const travelExpenses = pgTable("travel_expenses", {
+  id: serial("id").primaryKey(),
+  travelRequestId: integer("travel_request_id")
+    .notNull()
+    .references(() => travelRequests.id, { onDelete: "cascade" }),
+  // تفاصيل المصروف
+  expenseType: text("expense_type").notNull(), // flight, hotel, transport, meals, visa, other
+  description: text("description").notNull(),
+  amount: numeric("amount", { precision: 12, scale: 2 }).notNull(),
+  currency: text("currency").default("SAR"),
+  expenseDate: timestamp("expense_date").notNull(),
+  // الإيصال
+  receiptNumber: text("receipt_number"),
+  receiptUrl: text("receipt_url"),
+  vendor: text("vendor"), // المورد/الجهة
+  // الموافقة
+  status: text("status").default("pending"), // pending, approved, rejected
+  approvedBy: varchar("approved_by").references(() => users.id),
+  approvedAt: timestamp("approved_at"),
+  rejectionReason: text("rejection_reason"),
+  // ملاحظات
+  notes: text("notes"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_travel_expenses_request").on(table.travelRequestId),
+  index("idx_travel_expenses_type").on(table.expenseType),
+  index("idx_travel_expenses_status").on(table.status),
+]);
+
+export const insertTravelExpenseSchema = createInsertSchema(travelExpenses).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type TravelExpense = typeof travelExpenses.$inferSelect;
+export type InsertTravelExpense = z.infer<typeof insertTravelExpenseSchema>;
+
+// =====================================================
+// نظام التنبيهات - Notifications System
+// =====================================================
+
+export const notifications = pgTable("notifications", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id").references(() => branches.id),
+  // المستلم
+  userId: varchar("user_id").references(() => users.id), // null = إشعار عام
+  // محتوى التنبيه
+  title: text("title").notNull(),
+  message: text("message").notNull(),
+  type: text("type").default("info"), // info, warning, error, success, reminder
+  category: text("category"), // meeting, task, correspondence, visitor, travel, system
+  priority: text("priority").default("normal"), // low, normal, high, urgent
+  // الرابط المرتبط
+  linkType: text("link_type"), // meeting, task, correspondence, visitor, travel_request
+  linkId: integer("link_id"),
+  linkUrl: text("link_url"),
+  // الحالة
+  isRead: boolean("is_read").default(false),
+  readAt: timestamp("read_at"),
+  isDismissed: boolean("is_dismissed").default(false),
+  dismissedAt: timestamp("dismissed_at"),
+  // التوقيت
+  scheduledFor: timestamp("scheduled_for"), // للتذكيرات المجدولة
+  expiresAt: timestamp("expires_at"), // تاريخ انتهاء الصلاحية
+  // المرسل
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_notifications_user").on(table.userId),
+  index("idx_notifications_branch").on(table.branchId),
+  index("idx_notifications_type").on(table.type),
+  index("idx_notifications_category").on(table.category),
+  index("idx_notifications_read").on(table.isRead),
+  index("idx_notifications_scheduled").on(table.scheduledFor),
+]);
+
+export const insertNotificationSchema = createInsertSchema(notifications).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type Notification = typeof notifications.$inferSelect;
+export type InsertNotification = z.infer<typeof insertNotificationSchema>;
+
+// =====================================================
+// نظام الحوكمة ومجلس الإدارة - Corporate Governance System
+// =====================================================
+
+// أعضاء مجلس الإدارة - Board Members
+export const boardMembers = pgTable("board_members", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").references(() => users.id),
+  fullName: text("full_name").notNull(),
+  nationalId: text("national_id"),
+  email: text("email"),
+  phone: text("phone"),
+  position: text("position").notNull(), // chairman, vice_chairman, member, secretary, independent_member
+  memberType: text("member_type").default("executive"), // executive, non_executive, independent
+  nationality: text("nationality"),
+  dateOfBirth: date("date_of_birth"),
+  qualifications: text("qualifications"),
+  experience: text("experience"),
+  currentEmployer: text("current_employer"),
+  otherBoardMemberships: text("other_board_memberships"),
+  appointmentDate: date("appointment_date").notNull(),
+  termEndDate: date("term_end_date"),
+  termNumber: integer("term_number").default(1),
+  status: text("status").default("active"), // active, resigned, expired, suspended
+  resignationDate: date("resignation_date"),
+  resignationReason: text("resignation_reason"),
+  photoUrl: text("photo_url"),
+  signatureUrl: text("signature_url"),
+  committees: text("committees").array(), // لجان المجلس
+  votingPower: numeric("voting_power", { precision: 8, scale: 4 }).default("1.0000"),
+  notes: text("notes"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_board_members_status").on(table.status),
+  index("idx_board_members_position").on(table.position),
+  index("idx_board_members_type").on(table.memberType),
+]);
+
+export const insertBoardMemberSchema = createInsertSchema(boardMembers).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type BoardMember = typeof boardMembers.$inferSelect;
+export type InsertBoardMember = z.infer<typeof insertBoardMemberSchema>;
+
+// المساهمون - Shareholders
+export const shareholders = pgTable("shareholders", {
+  id: serial("id").primaryKey(),
+  shareholderType: text("shareholder_type").notNull(), // individual, company, government, institution
+  fullName: text("full_name").notNull(),
+  nationalId: text("national_id"),
+  commercialRegister: text("commercial_register"),
+  email: text("email"),
+  phone: text("phone"),
+  address: text("address"),
+  nationality: text("nationality"),
+  numberOfShares: integer("number_of_shares").notNull(),
+  sharePercentage: numeric("share_percentage", { precision: 8, scale: 4 }).notNull(),
+  shareClass: text("share_class").default("common"), // common, preferred, founders
+  acquisitionDate: date("acquisition_date").notNull(),
+  acquisitionPrice: numeric("acquisition_price", { precision: 12, scale: 2 }),
+  certificateNumber: text("certificate_number"),
+  bankName: text("bank_name"),
+  bankAccountNumber: text("bank_account_number"),
+  iban: text("iban"),
+  linkedUserId: varchar("linked_user_id").references(() => users.id),
+  isBoardMember: boolean("is_board_member").default(false),
+  boardMemberId: integer("board_member_id").references(() => boardMembers.id),
+  votingRights: boolean("voting_rights").default(true),
+  dividendRights: boolean("dividend_rights").default(true),
+  twoFactorEnabled: boolean("two_factor_enabled").default(false).notNull(), // تفعيل التحقق بخطوتين لهذا المساهم (للوضع الاختياري)
+  status: text("status").default("active"), // active, frozen, transferred
+  notes: text("notes"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_shareholders_type").on(table.shareholderType),
+  index("idx_shareholders_status").on(table.status),
+  index("idx_shareholders_percentage").on(table.sharePercentage),
+]);
+
+export const insertShareholderSchema = createInsertSchema(shareholders).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type Shareholder = typeof shareholders.$inferSelect;
+export type InsertShareholder = z.infer<typeof insertShareholderSchema>;
+
+// أخبار وإعلانات المساهمين - Shareholder Announcements (news / openings / events)
+export const shareholderAnnouncements = pgTable("shareholder_announcements", {
+  id: serial("id").primaryKey(),
+  category: text("category").notNull().default("announcement"), // news, announcement, opening, event
+  title: text("title").notNull(),
+  body: text("body").notNull(),
+  imageUrl: text("image_url"),
+  eventDate: date("event_date"),
+  isPublished: boolean("is_published").default(true).notNull(),
+  publishedAt: timestamp("published_at").defaultNow(),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_shareholder_announcements_category").on(table.category),
+  index("idx_shareholder_announcements_published").on(table.isPublished),
+]);
+
+export const insertShareholderAnnouncementSchema = createInsertSchema(shareholderAnnouncements).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  publishedAt: true,
+});
+
+export type ShareholderAnnouncement = typeof shareholderAnnouncements.$inferSelect;
+export type InsertShareholderAnnouncement = z.infer<typeof insertShareholderAnnouncementSchema>;
+
+// إشعارات المساهمين - Shareholder Notifications (fan-out: one row per shareholder)
+export const shareholderNotifications = pgTable("shareholder_notifications", {
+  id: serial("id").primaryKey(),
+  shareholderId: integer("shareholder_id").notNull().references(() => shareholders.id, { onDelete: 'cascade' }),
+  title: text("title").notNull(),
+  body: text("body").notNull(),
+  sentWhatsapp: boolean("sent_whatsapp").default(false).notNull(),
+  readAt: timestamp("read_at"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_shareholder_notifications_shareholder").on(table.shareholderId),
+  index("idx_shareholder_notifications_read").on(table.readAt),
+]);
+
+export const insertShareholderNotificationSchema = createInsertSchema(shareholderNotifications).omit({
+  id: true,
+  createdAt: true,
+  readAt: true,
+});
+
+export type ShareholderNotification = typeof shareholderNotifications.$inferSelect;
+export type InsertShareholderNotification = z.infer<typeof insertShareholderNotificationSchema>;
+
+// إعدادات بوابة المساهمين - Shareholder Portal Settings (singleton row id=1)
+// تتحكم لوحة الإدارة من خلالها في الأقسام الظاهرة للمساهم ورسالة الترحيب وقنوات التواصل
+export const shareholderPortalSettings = pgTable("shareholder_portal_settings", {
+  id: serial("id").primaryKey(),
+  welcomeTitle: text("welcome_title"),
+  welcomeMessage: text("welcome_message"),
+  showNews: boolean("show_news").default(true).notNull(),
+  showMeetings: boolean("show_meetings").default(true).notNull(),
+  showDividends: boolean("show_dividends").default(true).notNull(),
+  showVoting: boolean("show_voting").default(true).notNull(),
+  showDocuments: boolean("show_documents").default(true).notNull(),
+  showFinancials: boolean("show_financials").default(true).notNull(), // البيانات البنكية في الملف
+  showMessages: boolean("show_messages").default(true).notNull(), // صندوق الرسائل/الاستفسارات
+  showProfileEdits: boolean("show_profile_edits").default(true).notNull(), // طلبات تحديث البيانات الذاتية
+  supportEmail: text("support_email"),
+  supportPhone: text("support_phone"),
+  enableWhatsapp: boolean("enable_whatsapp").default(true).notNull(),
+  requireTwoFactor: boolean("require_two_factor").default(false).notNull(), // إلزام التحقق بخطوتين لجميع المساهمين عند الدخول
+  twoFactorChannel: text("two_factor_channel").default("whatsapp").notNull(), // whatsapp | sms | both
+  updatedBy: varchar("updated_by").references(() => users.id),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertShareholderPortalSettingsSchema = createInsertSchema(shareholderPortalSettings).omit({
+  id: true,
+  updatedAt: true,
+});
+
+export type ShareholderPortalSettings = typeof shareholderPortalSettings.$inferSelect;
+export type InsertShareholderPortalSettings = z.infer<typeof insertShareholderPortalSettingsSchema>;
+
+// تذاكر/استفسارات المساهمين - تواصل ثنائي الاتجاه (المرحلة 2)
+export const shareholderTickets = pgTable("shareholder_tickets", {
+  id: serial("id").primaryKey(),
+  shareholderId: integer("shareholder_id").notNull().references(() => shareholders.id, { onDelete: "cascade" }),
+  subject: text("subject").notNull(),
+  status: text("status").default("new").notNull(), // new | in_progress | closed
+  unreadByAdmin: boolean("unread_by_admin").default(true).notNull(),
+  unreadByShareholder: boolean("unread_by_shareholder").default(false).notNull(),
+  lastMessageAt: timestamp("last_message_at").defaultNow().notNull(),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_shareholder_tickets_shareholder").on(table.shareholderId),
+  index("idx_shareholder_tickets_status").on(table.status),
+  index("idx_shareholder_tickets_last_message").on(table.lastMessageAt),
+]);
+
+export const insertShareholderTicketSchema = createInsertSchema(shareholderTickets).omit({
+  id: true,
+  status: true,
+  unreadByAdmin: true,
+  unreadByShareholder: true,
+  lastMessageAt: true,
+  createdBy: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type ShareholderTicket = typeof shareholderTickets.$inferSelect;
+export type InsertShareholderTicket = z.infer<typeof insertShareholderTicketSchema>;
+
+export const shareholderTicketMessages = pgTable("shareholder_ticket_messages", {
+  id: serial("id").primaryKey(),
+  ticketId: integer("ticket_id").notNull().references(() => shareholderTickets.id, { onDelete: "cascade" }),
+  senderType: text("sender_type").notNull(), // shareholder | admin
+  senderUserId: varchar("sender_user_id").references(() => users.id),
+  senderName: text("sender_name"),
+  body: text("body").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_shareholder_ticket_messages_ticket").on(table.ticketId),
+]);
+
+export type ShareholderTicketMessage = typeof shareholderTicketMessages.$inferSelect;
+
+// طلبات تحديث بيانات المساهم الذاتية - Self-service profile update requests (المرحلة 3)
+export const shareholderProfileUpdateRequests = pgTable("shareholder_profile_update_requests", {
+  id: serial("id").primaryKey(),
+  shareholderId: integer("shareholder_id").notNull().references(() => shareholders.id, { onDelete: "cascade" }),
+  changes: jsonb("changes").notNull(), // [{ field, label, oldValue, newValue }]
+  note: text("note"), // ملاحظة المساهم (سبب التعديل)
+  status: text("status").default("pending").notNull(), // pending | approved | rejected
+  reviewNote: text("review_note"), // ملاحظة الإدارة عند المراجعة
+  reviewedBy: varchar("reviewed_by").references(() => users.id),
+  reviewedAt: timestamp("reviewed_at"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_shareholder_profile_requests_shareholder").on(table.shareholderId),
+  index("idx_shareholder_profile_requests_status").on(table.status),
+  // طلب معلّق واحد فقط لكل مساهم (حماية من التضارب على مستوى قاعدة البيانات)
+  uniqueIndex("uq_shareholder_pending_profile_request")
+    .on(table.shareholderId)
+    .where(sql`status = 'pending'`),
+]);
+
+export type ShareholderProfileUpdateRequest = typeof shareholderProfileUpdateRequests.$inferSelect;
+
+// دعوات افتتاح الفروع للمساهمين - Branch opening invitations (personalized luxury invites)
+export const branchOpeningInvitations = pgTable("branch_opening_invitations", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  branchName: text("branch_name"),
+  eventDate: timestamp("event_date"),
+  eventTime: text("event_time"),
+  location: text("location"),
+  locationUrl: text("location_url"), // رابط خرائط جوجل
+  message: text("message"), // نص الدعوة الفاخر
+  imageUrl: text("image_url"),
+  theme: text("theme").default("gold").notNull(), // gold, royal, emerald, rose
+  isActive: boolean("is_active").default(true).notNull(),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_branch_opening_invitations_active").on(table.isActive),
+]);
+
+export const insertBranchOpeningInvitationSchema = createInsertSchema(branchOpeningInvitations).omit({
+  id: true,
+  createdAt: true,
+}).extend({
+  eventDate: z.coerce.date().nullable().optional(),
+});
+
+export type BranchOpeningInvitation = typeof branchOpeningInvitations.$inferSelect;
+export type InsertBranchOpeningInvitation = z.infer<typeof insertBranchOpeningInvitationSchema>;
+
+// مستلمو الدعوة - per-shareholder personalized invitation token
+export const invitationRecipients = pgTable("invitation_recipients", {
+  id: serial("id").primaryKey(),
+  invitationId: integer("invitation_id").notNull().references(() => branchOpeningInvitations.id, { onDelete: "cascade" }),
+  shareholderId: integer("shareholder_id").notNull().references(() => shareholders.id, { onDelete: "cascade" }),
+  token: text("token").notNull().unique(),
+  openedAt: timestamp("opened_at"),
+  viewCount: integer("view_count").default(0).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_invitation_recipients_invitation").on(table.invitationId),
+  uniqueIndex("uq_invitation_recipient").on(table.invitationId, table.shareholderId),
+]);
+
+export type InvitationRecipient = typeof invitationRecipients.$inferSelect;
+
+// وثائق المساهمين - Shareholder Documents
+export const shareholderDocuments = pgTable("shareholder_documents", {
+  id: serial("id").primaryKey(),
+  shareholderId: integer("shareholder_id").notNull().references(() => shareholders.id, { onDelete: 'cascade' }),
+  documentType: text("document_type").notNull(), // national_id, share_certificate, commercial_register, contract, bank_statement, other
+  documentName: text("document_name").notNull(),
+  originalFileName: text("original_file_name").notNull(),
+  fileUrl: text("file_url").notNull(),
+  fileSize: integer("file_size"),
+  mimeType: text("mime_type"),
+  expiryDate: date("expiry_date"),
+  notes: text("notes"),
+  uploadedBy: varchar("uploaded_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_shareholder_docs_shareholder").on(table.shareholderId),
+  index("idx_shareholder_docs_type").on(table.documentType),
+]);
+
+export const insertShareholderDocumentSchema = createInsertSchema(shareholderDocuments).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type ShareholderDocument = typeof shareholderDocuments.$inferSelect;
+export type InsertShareholderDocument = z.infer<typeof insertShareholderDocumentSchema>;
+
+// تحويلات الأسهم - Share Transfers
+export const shareTransfers = pgTable("share_transfers", {
+  id: serial("id").primaryKey(),
+  transferNumber: text("transfer_number").notNull().unique(),
+  fromShareholderId: integer("from_shareholder_id").notNull().references(() => shareholders.id),
+  toShareholderId: integer("to_shareholder_id").notNull().references(() => shareholders.id),
+  numberOfShares: integer("number_of_shares").notNull(),
+  pricePerShare: numeric("price_per_share", { precision: 12, scale: 2 }).notNull(),
+  totalValue: numeric("total_value", { precision: 15, scale: 2 }).notNull(),
+  transferDate: date("transfer_date").notNull(),
+  transferType: text("transfer_type").notNull(), // sale, gift, inheritance, split
+  approvalStatus: text("approval_status").default("pending"), // pending, approved, rejected, cancelled
+  approvedBy: varchar("approved_by").references(() => users.id),
+  approvedAt: timestamp("approved_at"),
+  boardResolutionId: integer("board_resolution_id"),
+  certificateOldNumber: text("certificate_old_number"),
+  certificateNewNumber: text("certificate_new_number"),
+  attachmentUrl: text("attachment_url"),
+  notes: text("notes"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_share_transfers_from").on(table.fromShareholderId),
+  index("idx_share_transfers_to").on(table.toShareholderId),
+  index("idx_share_transfers_status").on(table.approvalStatus),
+  index("idx_share_transfers_date").on(table.transferDate),
+]);
+
+export const insertShareTransferSchema = createInsertSchema(shareTransfers).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type ShareTransfer = typeof shareTransfers.$inferSelect;
+export type InsertShareTransfer = z.infer<typeof insertShareTransferSchema>;
+
+// اجتماعات مجلس الإدارة والجمعية العمومية - Board & Assembly Meetings
+export const governanceMeetings = pgTable("governance_meetings", {
+  id: serial("id").primaryKey(),
+  meetingNumber: text("meeting_number").notNull().unique(),
+  meetingType: text("meeting_type").notNull(), // board, ordinary_assembly, extraordinary_assembly, committee
+  title: text("title").notNull(),
+  description: text("description"),
+  meetingDate: timestamp("meeting_date").notNull(),
+  startTime: text("start_time"),
+  endTime: text("end_time"),
+  location: text("location"),
+  locationType: text("location_type").default("in_person"), // in_person, virtual, hybrid
+  virtualMeetingLink: text("virtual_meeting_link"),
+  agenda: text("agenda"),
+  agendaItems: jsonb("agenda_items"), // [{order: 1, title: "", description: "", presenter: "", duration: 15}]
+  quorumRequired: numeric("quorum_required", { precision: 5, scale: 2 }).default("50.00"),
+  quorumAchieved: boolean("quorum_achieved"),
+  attendanceCount: integer("attendance_count").default(0),
+  totalEligibleVotes: integer("total_eligible_votes"),
+  status: text("status").default("scheduled"), // scheduled, in_progress, completed, cancelled, postponed
+  postponedTo: timestamp("postponed_to"),
+  cancellationReason: text("cancellation_reason"),
+  invitationSentAt: timestamp("invitation_sent_at"),
+  reminderSentAt: timestamp("reminder_sent_at"),
+  minutesStatus: text("minutes_status").default("pending"), // pending, draft, approved, signed
+  minutesApprovedAt: timestamp("minutes_approved_at"),
+  minutesApprovedBy: varchar("minutes_approved_by").references(() => users.id),
+  fiscalYear: text("fiscal_year"),
+  notes: text("notes"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_governance_meetings_type").on(table.meetingType),
+  index("idx_governance_meetings_status").on(table.status),
+  index("idx_governance_meetings_date").on(table.meetingDate),
+  index("idx_governance_meetings_fiscal_year").on(table.fiscalYear),
+]);
+
+export const insertGovernanceMeetingSchema = createInsertSchema(governanceMeetings).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type GovernanceMeeting = typeof governanceMeetings.$inferSelect;
+export type InsertGovernanceMeeting = z.infer<typeof insertGovernanceMeetingSchema>;
+
+// سجل حضور الاجتماعات - Meeting Attendance
+export const meetingAttendance = pgTable("meeting_attendance", {
+  id: serial("id").primaryKey(),
+  meetingId: integer("meeting_id").notNull().references(() => governanceMeetings.id, { onDelete: "cascade" }),
+  attendeeType: text("attendee_type").notNull(), // board_member, shareholder, proxy, observer, secretary
+  boardMemberId: integer("board_member_id").references(() => boardMembers.id),
+  shareholderId: integer("shareholder_id").references(() => shareholders.id),
+  attendeeName: text("attendee_name").notNull(),
+  attendeeRole: text("attendee_role"),
+  representedShares: integer("represented_shares"),
+  votingPower: numeric("voting_power", { precision: 8, scale: 4 }),
+  attendanceStatus: text("attendance_status").default("expected"), // expected, present, absent, excused, late, left_early
+  arrivalTime: timestamp("arrival_time"),
+  departureTime: timestamp("departure_time"),
+  attendanceMethod: text("attendance_method").default("in_person"), // in_person, virtual, proxy
+  proxyHolderName: text("proxy_holder_name"),
+  proxyDocumentUrl: text("proxy_document_url"),
+  signatureUrl: text("signature_url"),
+  signedAt: timestamp("signed_at"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_meeting_attendance_meeting").on(table.meetingId),
+  index("idx_meeting_attendance_board_member").on(table.boardMemberId),
+  index("idx_meeting_attendance_shareholder").on(table.shareholderId),
+  index("idx_meeting_attendance_status").on(table.attendanceStatus),
+]);
+
+export const insertMeetingAttendanceSchema = createInsertSchema(meetingAttendance).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type MeetingAttendance = typeof meetingAttendance.$inferSelect;
+export type InsertMeetingAttendance = z.infer<typeof insertMeetingAttendanceSchema>;
+
+// محاضر الاجتماعات - Meeting Minutes
+export const meetingMinutes = pgTable("meeting_minutes", {
+  id: serial("id").primaryKey(),
+  meetingId: integer("meeting_id").notNull().references(() => governanceMeetings.id, { onDelete: "cascade" }),
+  minutesNumber: text("minutes_number").notNull().unique(),
+  content: text("content").notNull(),
+  summary: text("summary"),
+  attendanceList: jsonb("attendance_list"), // [{name, role, status}]
+  discussionPoints: jsonb("discussion_points"), // [{topic, discussion, conclusion}]
+  decisions: jsonb("decisions"), // [{number, description, responsible, deadline}]
+  votingResults: jsonb("voting_results"), // [{item, forVotes, againstVotes, abstain, result}]
+  nextMeetingDate: timestamp("next_meeting_date"),
+  attachments: jsonb("attachments"), // [{name, url, type}]
+  status: text("status").default("draft"), // draft, pending_review, pending_signature, signed, archived
+  preparedBy: varchar("prepared_by").references(() => users.id),
+  preparedAt: timestamp("prepared_at"),
+  reviewedBy: varchar("reviewed_by").references(() => users.id),
+  reviewedAt: timestamp("reviewed_at"),
+  signedBy: jsonb("signed_by"), // [{userId, name, role, signatureUrl, signedAt}]
+  archivedAt: timestamp("archived_at"),
+  archiveReference: text("archive_reference"),
+  pdfUrl: text("pdf_url"),
+  notes: text("notes"),
+  // IMMUTABILITY (Saudi Companies Law M/132): once a minutes record is locked
+  // (signed/approved) it MUST NOT be silently editable. Server enforces.
+  isLocked: boolean("is_locked").default(false).notNull(),
+  lockedAt: timestamp("locked_at"),
+  lockedBy: varchar("locked_by").references(() => users.id),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_meeting_minutes_meeting").on(table.meetingId),
+  index("idx_meeting_minutes_status").on(table.status),
+  index("idx_meeting_minutes_number").on(table.minutesNumber),
+]);
+
+export const insertMeetingMinutesSchema = createInsertSchema(meetingMinutes).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type MeetingMinutes = typeof meetingMinutes.$inferSelect;
+export type InsertMeetingMinutes = z.infer<typeof insertMeetingMinutesSchema>;
+
+// قرارات مجلس الإدارة - Board Resolutions
+export const boardResolutions = pgTable("board_resolutions", {
+  id: serial("id").primaryKey(),
+  resolutionNumber: text("resolution_number").notNull().unique(),
+  meetingId: integer("meeting_id").references(() => governanceMeetings.id),
+  resolutionType: text("resolution_type").notNull(), // regular, circular, emergency, administrative, financial
+  title: text("title").notNull(),
+  description: text("description").notNull(),
+  category: text("category"), // financial, operational, strategic, hr, legal, governance
+  priority: text("priority").default("normal"), // low, normal, high, urgent
+  proposedBy: varchar("proposed_by").references(() => users.id),
+  proposedAt: timestamp("proposed_at").notNull(),
+  votingRequired: boolean("voting_required").default(true),
+  votingDeadline: timestamp("voting_deadline"),
+  forVotes: integer("for_votes").default(0),
+  againstVotes: integer("against_votes").default(0),
+  abstainVotes: integer("abstain_votes").default(0),
+  totalVotes: integer("total_votes").default(0),
+  requiredMajority: numeric("required_majority", { precision: 5, scale: 2 }).default("50.00"),
+  status: text("status").default("draft"), // draft, proposed, voting, approved, rejected, implemented, cancelled
+  approvedAt: timestamp("approved_at"),
+  implementationDeadline: date("implementation_deadline"),
+  implementationStatus: text("implementation_status").default("pending"), // pending, in_progress, completed, overdue
+  implementedAt: timestamp("implemented_at"),
+  responsiblePerson: varchar("responsible_person").references(() => users.id),
+  financialImpact: numeric("financial_impact", { precision: 15, scale: 2 }),
+  attachments: jsonb("attachments"),
+  relatedResolutions: integer("related_resolutions").array(),
+  expiryDate: date("expiry_date"),
+  notes: text("notes"),
+  // IMMUTABILITY — see meetingMinutes note above.
+  isLocked: boolean("is_locked").default(false).notNull(),
+  lockedAt: timestamp("locked_at"),
+  lockedBy: varchar("locked_by").references(() => users.id),
+  // SOFT DELETE — resolutions are never hard-deleted; they move to the recycle bin
+  // so a voted/signed decision can never be permanently lost. See delete route.
+  deletedAt: timestamp("deleted_at"),
+  deletedBy: varchar("deleted_by").references(() => users.id),
+  deletionReason: text("deletion_reason"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_board_resolutions_meeting").on(table.meetingId),
+  index("idx_board_resolutions_type").on(table.resolutionType),
+  index("idx_board_resolutions_status").on(table.status),
+  index("idx_board_resolutions_category").on(table.category),
+  index("idx_board_resolutions_implementation").on(table.implementationStatus),
+]);
+
+export const insertBoardResolutionSchema = createInsertSchema(boardResolutions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type BoardResolution = typeof boardResolutions.$inferSelect;
+export type InsertBoardResolution = z.infer<typeof insertBoardResolutionSchema>;
+
+// ============================================================================
+// قرارات الجمعية العمومية - Assembly Resolutions (OGM + EGM)
+// SEPARATED FROM Board Resolutions: assembly resolutions have legally distinct
+// quorums (¼/½ capital), majority requirements (simple vs ⅔ for EGM), and
+// disclosure obligations. Saudi Companies Law M/132 + CMA Nomu rules.
+// ============================================================================
+export const assemblyResolutions = pgTable("assembly_resolutions", {
+  id: serial("id").primaryKey(),
+  resolutionNumber: text("resolution_number").notNull().unique(),
+  meetingId: integer("meeting_id").references(() => governanceMeetings.id),
+  assemblyType: text("assembly_type").notNull(), // 'ordinary' | 'extraordinary'
+  resolutionType: text("resolution_type").notNull(), // regular | dividend | capital_change | statute_amendment | merger | dissolution | board_election
+  majorityType: text("majority_type").default("simple").notNull(), // 'simple' | 'two_thirds' | 'three_quarters'
+  title: text("title").notNull(),
+  description: text("description").notNull(),
+  category: text("category"),
+  priority: text("priority").default("normal"),
+  proposedBy: varchar("proposed_by").references(() => users.id),
+  proposedAt: timestamp("proposed_at").notNull(),
+  votingRequired: boolean("voting_required").default(true),
+  votingDeadline: timestamp("voting_deadline"),
+  forVotes: integer("for_votes").default(0),
+  againstVotes: integer("against_votes").default(0),
+  abstainVotes: integer("abstain_votes").default(0),
+  totalVotes: integer("total_votes").default(0),
+  // Share-weighted tallies (assemblies vote by shares, not heads)
+  forShares: numeric("for_shares", { precision: 18, scale: 4 }).default("0"),
+  againstShares: numeric("against_shares", { precision: 18, scale: 4 }).default("0"),
+  abstainShares: numeric("abstain_shares", { precision: 18, scale: 4 }).default("0"),
+  requiredMajority: numeric("required_majority", { precision: 5, scale: 2 }).default("50.00"),
+  quorumCapitalPct: numeric("quorum_capital_pct", { precision: 5, scale: 2 }), // % of capital present
+  status: text("status").default("draft"),
+  approvedAt: timestamp("approved_at"),
+  implementationDeadline: date("implementation_deadline"),
+  implementationStatus: text("implementation_status").default("pending"),
+  implementedAt: timestamp("implemented_at"),
+  responsiblePerson: varchar("responsible_person").references(() => users.id),
+  financialImpact: numeric("financial_impact", { precision: 15, scale: 2 }),
+  attachments: jsonb("attachments"),
+  relatedResolutions: integer("related_resolutions").array(),
+  expiryDate: date("expiry_date"),
+  notes: text("notes"),
+  isLocked: boolean("is_locked").default(false).notNull(),
+  lockedAt: timestamp("locked_at"),
+  lockedBy: varchar("locked_by").references(() => users.id),
+  // SOFT DELETE — see boardResolutions note above.
+  deletedAt: timestamp("deleted_at"),
+  deletedBy: varchar("deleted_by").references(() => users.id),
+  deletionReason: text("deletion_reason"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_assembly_resolutions_meeting").on(table.meetingId),
+  index("idx_assembly_resolutions_assembly_type").on(table.assemblyType),
+  index("idx_assembly_resolutions_status").on(table.status),
+  index("idx_assembly_resolutions_type").on(table.resolutionType),
+]);
+export const insertAssemblyResolutionSchema = createInsertSchema(assemblyResolutions).omit({
+  id: true, createdAt: true, updatedAt: true,
+});
+export type AssemblyResolution = typeof assemblyResolutions.$inferSelect;
+export type InsertAssemblyResolution = z.infer<typeof insertAssemblyResolutionSchema>;
+
+// بنود القرار — each clause of an assembly resolution can be voted on separately.
+export const assemblyResolutionItems = pgTable("assembly_resolution_items", {
+  id: serial("id").primaryKey(),
+  resolutionId: integer("resolution_id").notNull().references(() => assemblyResolutions.id, { onDelete: "cascade" }),
+  sequence: integer("sequence").default(0).notNull(),
+  text: text("text").notNull(),
+  // Optional per-clause majority override; falls back to the resolution majority.
+  majorityType: text("majority_type"), // 'simple' | 'two_thirds' | 'three_quarters'
+  forVotes: integer("for_votes").default(0).notNull(),
+  againstVotes: integer("against_votes").default(0).notNull(),
+  abstainVotes: integer("abstain_votes").default(0).notNull(),
+  totalVotes: integer("total_votes").default(0).notNull(),
+  forShares: numeric("for_shares", { precision: 18, scale: 4 }).default("0").notNull(),
+  againstShares: numeric("against_shares", { precision: 18, scale: 4 }).default("0").notNull(),
+  abstainShares: numeric("abstain_shares", { precision: 18, scale: 4 }).default("0").notNull(),
+  result: text("result").default("pending").notNull(), // 'pending' | 'approved' | 'rejected'
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_assembly_resolution_items_resolution").on(table.resolutionId),
+]);
+export const insertAssemblyResolutionItemSchema = createInsertSchema(assemblyResolutionItems).omit({
+  id: true, forVotes: true, againstVotes: true, abstainVotes: true, totalVotes: true,
+  forShares: true, againstShares: true, abstainShares: true, result: true,
+  createdAt: true, updatedAt: true,
+});
+export type AssemblyResolutionItem = typeof assemblyResolutionItems.$inferSelect;
+export type InsertAssemblyResolutionItem = z.infer<typeof insertAssemblyResolutionItemSchema>;
+
+export const assemblyResolutionVotes = pgTable("assembly_resolution_votes", {
+  id: serial("id").primaryKey(),
+  resolutionId: integer("resolution_id").notNull().references(() => assemblyResolutions.id, { onDelete: "cascade" }),
+  // NULL = legacy whole-resolution vote. When set, this vote is for a specific
+  // clause/item (بند) of the resolution (per-item voting).
+  itemId: integer("item_id").references(() => assemblyResolutionItems.id, { onDelete: "cascade" }),
+  shareholderId: integer("shareholder_id").references(() => shareholders.id),
+  voterName: text("voter_name").notNull(),
+  vote: text("vote").notNull(),
+  sharesVoted: numeric("shares_voted", { precision: 18, scale: 4 }),
+  votedAt: timestamp("voted_at").defaultNow().notNull(),
+  voteMethod: text("vote_method").default("in_meeting"),
+  proxyVoteId: integer("proxy_vote_id"),
+  ipAddress: text("ip_address"),
+  deviceInfo: text("device_info"),
+  signatureUrl: text("signature_url"),
+  comments: text("comments"),
+  isValid: boolean("is_valid").default(true),
+  invalidationReason: text("invalidation_reason"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_assembly_votes_resolution").on(table.resolutionId),
+  index("idx_assembly_votes_shareholder").on(table.shareholderId),
+  index("idx_assembly_votes_item").on(table.itemId),
+  // One per-clause vote per shareholder (item_id set).
+  uniqueIndex("uq_assembly_votes_item_shareholder")
+    .on(table.itemId, table.shareholderId)
+    .where(sql`item_id IS NOT NULL AND shareholder_id IS NOT NULL`),
+  // One legacy whole-resolution vote per shareholder (item_id null).
+  uniqueIndex("uq_assembly_votes_resolution_shareholder")
+    .on(table.resolutionId, table.shareholderId)
+    .where(sql`item_id IS NULL AND shareholder_id IS NOT NULL`),
+]);
+export const insertAssemblyResolutionVoteSchema = createInsertSchema(assemblyResolutionVotes).omit({
+  id: true, createdAt: true,
+});
+export type AssemblyResolutionVote = typeof assemblyResolutionVotes.$inferSelect;
+export type InsertAssemblyResolutionVote = z.infer<typeof insertAssemblyResolutionVoteSchema>;
+
+export const assemblyResolutionSignatures = pgTable("assembly_resolution_signatures", {
+  id: serial("id").primaryKey(),
+  resolutionId: integer("resolution_id").notNull().references(() => assemblyResolutions.id, { onDelete: "cascade" }),
+  shareholderId: integer("shareholder_id").references(() => shareholders.id, { onDelete: "cascade" }),
+  signerName: text("signer_name"),
+  signatureToken: text("signature_token").notNull().unique(),
+  signatureData: text("signature_data"),
+  signatureType: text("signature_type").default("draw"),
+  status: text("status").default("pending").notNull(),
+  signedAt: timestamp("signed_at"),
+  declinedAt: timestamp("declined_at"),
+  declineReason: text("decline_reason"),
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+  expiresAt: timestamp("expires_at"),
+  reminderSentAt: timestamp("reminder_sent_at"),
+  reminderCount: integer("reminder_count").default(0),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_assembly_sigs_resolution").on(table.resolutionId),
+  index("idx_assembly_sigs_shareholder").on(table.shareholderId),
+]);
+export const insertAssemblyResolutionSignatureSchema = createInsertSchema(assemblyResolutionSignatures).omit({
+  id: true, createdAt: true, updatedAt: true,
+});
+export type AssemblyResolutionSignature = typeof assemblyResolutionSignatures.$inferSelect;
+export type InsertAssemblyResolutionSignature = z.infer<typeof insertAssemblyResolutionSignatureSchema>;
+
+// إعادة فتح التصويت — admin grants a specific shareholder permission to (re)vote on a
+// resolution (whole) or a specific clause/بند. The latest vote supersedes the previous
+// one; totals are reversed/re-applied atomically and the old vote is archived to the
+// audit log. A grant can also back a one-time WhatsApp link (token) for re-voting.
+export const assemblyRevoteGrants = pgTable("assembly_revote_grants", {
+  id: serial("id").primaryKey(),
+  resolutionId: integer("resolution_id").notNull().references(() => assemblyResolutions.id, { onDelete: "cascade" }),
+  // NULL = re-vote on the whole (legacy) resolution; set = re-vote on a specific clause.
+  itemId: integer("item_id").references(() => assemblyResolutionItems.id, { onDelete: "cascade" }),
+  shareholderId: integer("shareholder_id").notNull().references(() => shareholders.id),
+  token: text("token").notNull().unique(),
+  status: text("status").default("open").notNull(), // 'open' | 'used' | 'revoked'
+  reason: text("reason"),
+  grantedBy: varchar("granted_by").references(() => users.id),
+  grantedAt: timestamp("granted_at").defaultNow().notNull(),
+  usedAt: timestamp("used_at"),
+  expiresAt: timestamp("expires_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_assembly_revote_grants_resolution").on(table.resolutionId),
+  index("idx_assembly_revote_grants_shareholder").on(table.shareholderId),
+]);
+export const insertAssemblyRevoteGrantSchema = createInsertSchema(assemblyRevoteGrants).omit({
+  id: true, createdAt: true,
+});
+export type AssemblyRevoteGrant = typeof assemblyRevoteGrants.$inferSelect;
+export type InsertAssemblyRevoteGrant = z.infer<typeof insertAssemblyRevoteGrantSchema>;
+
+// ============================================================================
+// سجل المطلعين - Insider Register (CMA / Nomu listing requirement)
+// ============================================================================
+export const insiderRegister = pgTable("insider_register", {
+  id: serial("id").primaryKey(),
+  fullName: text("full_name").notNull(),
+  nationalId: text("national_id"),
+  position: text("position").notNull(), // board_member | senior_executive | auditor | consultant | relative_of_insider | other
+  relationshipTo: integer("relationship_to"), // FK loop → another insider_register row
+  relatedBoardMemberId: integer("related_board_member_id").references(() => boardMembers.id),
+  relatedUserId: varchar("related_user_id").references(() => users.id),
+  email: text("email"),
+  phone: text("phone"),
+  notificationMethod: text("notification_method").default("email"),
+  startDate: date("start_date").notNull(),
+  endDate: date("end_date"),
+  reasonAdded: text("reason_added"),
+  reasonRemoved: text("reason_removed"),
+  acknowledgmentSigned: boolean("acknowledgment_signed").default(false).notNull(),
+  acknowledgmentDate: date("acknowledgment_date"),
+  acknowledgmentDocUrl: text("acknowledgment_doc_url"),
+  status: text("status").default("active").notNull(),
+  notes: text("notes"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_insider_register_status").on(table.status),
+  index("idx_insider_register_position").on(table.position),
+  index("idx_insider_register_member").on(table.relatedBoardMemberId),
+]);
+export const insertInsiderRegisterSchema = createInsertSchema(insiderRegister).omit({
+  id: true, createdAt: true, updatedAt: true,
+});
+export type InsiderRegister = typeof insiderRegister.$inferSelect;
+export type InsertInsiderRegister = z.infer<typeof insertInsiderRegisterSchema>;
+
+export const insiderBlackoutPeriods = pgTable("insider_blackout_periods", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  periodType: text("period_type").notNull(), // pre_earnings | pre_disclosure | event_specific | other
+  startDate: date("start_date").notNull(),
+  endDate: date("end_date").notNull(),
+  relatedDisclosureId: integer("related_disclosure_id"),
+  description: text("description"),
+  appliesToAll: boolean("applies_to_all").default(true).notNull(),
+  specificInsiderIds: integer("specific_insider_ids").array(),
+  notificationSentAt: timestamp("notification_sent_at"),
+  status: text("status").default("active").notNull(),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_blackout_status").on(table.status),
+  index("idx_blackout_dates").on(table.startDate, table.endDate),
+]);
+export const insertInsiderBlackoutPeriodSchema = createInsertSchema(insiderBlackoutPeriods).omit({
+  id: true, createdAt: true, updatedAt: true,
+});
+export type InsiderBlackoutPeriod = typeof insiderBlackoutPeriods.$inferSelect;
+export type InsertInsiderBlackoutPeriod = z.infer<typeof insertInsiderBlackoutPeriodSchema>;
+
+// التصويت على القرارات - Resolution Votes
+export const resolutionVotes = pgTable("resolution_votes", {
+  id: serial("id").primaryKey(),
+  resolutionId: integer("resolution_id").notNull().references(() => boardResolutions.id, { onDelete: "cascade" }),
+  voterType: text("voter_type").notNull(), // board_member, shareholder
+  boardMemberId: integer("board_member_id").references(() => boardMembers.id),
+  shareholderId: integer("shareholder_id").references(() => shareholders.id),
+  voterName: text("voter_name").notNull(),
+  vote: text("vote").notNull(), // for, against, abstain
+  votingPower: numeric("voting_power", { precision: 18, scale: 4 }).default("1.00"),
+  weightedVote: numeric("weighted_vote", { precision: 18, scale: 4 }),
+  votedAt: timestamp("voted_at").defaultNow().notNull(),
+  voteMethod: text("vote_method").default("in_meeting"), // in_meeting, electronic, written
+  ipAddress: text("ip_address"),
+  deviceInfo: text("device_info"),
+  signatureUrl: text("signature_url"),
+  comments: text("comments"),
+  isValid: boolean("is_valid").default(true),
+  invalidationReason: text("invalidation_reason"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_resolution_votes_resolution").on(table.resolutionId),
+  index("idx_resolution_votes_board_member").on(table.boardMemberId),
+  index("idx_resolution_votes_shareholder").on(table.shareholderId),
+  index("idx_resolution_votes_vote").on(table.vote),
+]);
+
+export const insertResolutionVoteSchema = createInsertSchema(resolutionVotes).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type ResolutionVote = typeof resolutionVotes.$inferSelect;
+export type InsertResolutionVote = z.infer<typeof insertResolutionVoteSchema>;
+
+// التوقيعات الإلكترونية على القرارات - Resolution Electronic Signatures
+export const resolutionSignatures = pgTable("resolution_signatures", {
+  id: serial("id").primaryKey(),
+  resolutionId: integer("resolution_id").notNull().references(() => boardResolutions.id, { onDelete: "cascade" }),
+  boardMemberId: integer("board_member_id").references(() => boardMembers.id, { onDelete: "cascade" }),
+  shareholderId: integer("shareholder_id").references(() => shareholders.id, { onDelete: "cascade" }),
+  signerName: text("signer_name"),
+  signerType: text("signer_type").default("board_member"), // board_member, shareholder
+  signatureToken: text("signature_token").notNull().unique(),
+  signatureData: text("signature_data"),
+  signatureType: text("signature_type").default("draw"), // draw, type, upload
+  status: text("status").default("pending").notNull(), // pending, signed, declined, expired
+  signedAt: timestamp("signed_at"),
+  declinedAt: timestamp("declined_at"),
+  declineReason: text("decline_reason"),
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+  expiresAt: timestamp("expires_at"),
+  reminderSentAt: timestamp("reminder_sent_at"),
+  reminderCount: integer("reminder_count").default(0),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_resolution_signatures_resolution").on(table.resolutionId),
+  index("idx_resolution_signatures_member").on(table.boardMemberId),
+  index("idx_resolution_signatures_shareholder").on(table.shareholderId),
+  index("idx_resolution_signatures_token").on(table.signatureToken),
+  index("idx_resolution_signatures_status").on(table.status),
+]);
+
+// دورات مراجعة القوائم المالية - Financial Statements Review Cycles
+export const financialReviewCycles = pgTable("financial_review_cycles", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(), // مثل: القوائم المالية النصف سنوية
+  periodStart: text("period_start").notNull(), // YYYY-MM-DD
+  periodEnd: text("period_end").notNull(),
+  status: text("status").default("active").notNull(), // active, closed
+  notes: text("notes"),
+  createdBy: text("created_by"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertFinancialReviewCycleSchema = createInsertSchema(financialReviewCycles).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+// مستندات القوائم المالية - Financial Review Documents (PDF files)
+export const financialDocuments = pgTable("financial_documents", {
+  id: serial("id").primaryKey(),
+  cycleId: integer("cycle_id").notNull().references(() => financialReviewCycles.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  category: text("category"), // ميزانية، قائمة دخل، تدفقات نقدية، إيضاحات، أخرى
+  fileName: text("file_name").notNull(),
+  storagePath: text("storage_path").notNull(), // Supabase storage path
+  fileSize: integer("file_size"),
+  status: text("status").default("pending_signatures").notNull(), // pending_signatures, completed, declined
+  uploadedBy: text("uploaded_by"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_financial_documents_cycle").on(table.cycleId),
+]);
+
+export const insertFinancialDocumentSchema = createInsertSchema(financialDocuments).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+// موقّعو مستندات القوائم المالية - Financial Document Signers (sequential)
+export const financialDocSigners = pgTable("financial_doc_signers", {
+  id: serial("id").primaryKey(),
+  documentId: integer("document_id").notNull().references(() => financialDocuments.id, { onDelete: "cascade" }),
+  signerName: text("signer_name").notNull(),
+  signerPosition: text("signer_position").notNull(), // cfo, ceo, chairman, other (free text label allowed)
+  signOrder: integer("sign_order").notNull(), // 1 = first
+  signToken: text("sign_token").notNull().unique(),
+  status: text("status").default("pending").notNull(), // pending, signed, declined
+  signatureData: text("signature_data"),
+  signedAt: timestamp("signed_at"),
+  declineReason: text("decline_reason"),
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+  expiresAt: timestamp("expires_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_financial_doc_signers_document").on(table.documentId),
+  index("idx_financial_doc_signers_token").on(table.signToken),
+]);
+
+export const insertFinancialDocSignerSchema = createInsertSchema(financialDocSigners).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type FinancialReviewCycle = typeof financialReviewCycles.$inferSelect;
+export type FinancialDocument = typeof financialDocuments.$inferSelect;
+export type FinancialDocSigner = typeof financialDocSigners.$inferSelect;
+
+// ============ بوابة المراجعة المالية (Audit Portal) ============
+// فترات مالية (سنوية / نصف سنوية / ربع سنوية) يعمل عليها فريق الإدارة المالية ومكتب المراجعة الخارجي
+export const auditPeriods = pgTable("audit_periods", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(), // مثل: النصف الأول 2026
+  periodType: text("period_type").default("semi_annual").notNull(), // annual, semi_annual, quarterly
+  fiscalYear: integer("fiscal_year").notNull(),
+  periodStart: text("period_start").notNull(), // YYYY-MM-DD
+  periodEnd: text("period_end").notNull(),
+  status: text("status").default("active").notNull(), // active, under_review, approved, closed
+  notes: text("notes"),
+  createdBy: text("created_by"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// متطلبات المراجعة: يطلبها المراجع الخارجي أو تُسجَّل داخلياً، ولها دورة حالة كاملة
+export const auditRequirements = pgTable("audit_requirements", {
+  id: serial("id").primaryKey(),
+  periodId: integer("period_id").notNull().references(() => auditPeriods.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  description: text("description"),
+  category: text("category"), // نفس تصنيفات الملفات
+  section: text("section"), // القسم المحاسبي (النقد، المخزون، الزكاة...) — لتجميع قائمة المتطلبات
+  titleEn: text("title_en"), // الاسم الإنجليزي للمتطلب (كما يرد من مكتب المراجعة)
+  assigneeName: text("assignee_name"), // المسؤول عن التجهيز
+  source: text("source").default("internal").notNull(), // internal, auditor
+  priority: text("priority").default("normal").notNull(), // high, normal, low
+  status: text("status").default("requested").notNull(), // requested, in_progress, ready, waiting_sample, not_applicable, uploaded, approved, rejected
+  dueDate: text("due_date"), // YYYY-MM-DD
+  createdByName: text("created_by_name"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_audit_requirements_period").on(table.periodId),
+]);
+
+// ملفات المراجعة (PDF/Excel/صور/مضغوطة) — قد تكون مرتبطة بمتطلب أو ملف عام ضمن تصنيف
+export const auditFiles = pgTable("audit_files", {
+  id: serial("id").primaryKey(),
+  periodId: integer("period_id").notNull().references(() => auditPeriods.id, { onDelete: "cascade" }),
+  requirementId: integer("requirement_id").references(() => auditRequirements.id, { onDelete: "set null" }),
+  category: text("category").default("other").notNull(), // financial_statements, trial_balance, banks, expenses, revenues, taxes, contracts, other
+  title: text("title").notNull(),
+  fileName: text("file_name").notNull(),
+  storagePath: text("storage_path").notNull(),
+  fileSize: integer("file_size"),
+  mimeType: text("mime_type"),
+  uploadedByName: text("uploaded_by_name"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_audit_files_period").on(table.periodId),
+  index("idx_audit_files_requirement").on(table.requirementId),
+]);
+
+// تعليقات متبادلة على المتطلبات بين الفريق الداخلي والمراجع الخارجي
+export const auditComments = pgTable("audit_comments", {
+  id: serial("id").primaryKey(),
+  requirementId: integer("requirement_id").notNull().references(() => auditRequirements.id, { onDelete: "cascade" }),
+  authorName: text("author_name").notNull(),
+  isAuditor: boolean("is_auditor").default(false).notNull(),
+  content: text("content").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_audit_comments_requirement").on(table.requirementId),
+]);
+
+// سجل نشاط البوابة: كل رفع/تحميل/اعتماد مسجَّل بالاسم والوقت
+export const auditActivityLog = pgTable("audit_activity_log", {
+  id: serial("id").primaryKey(),
+  periodId: integer("period_id").references(() => auditPeriods.id, { onDelete: "cascade" }),
+  userName: text("user_name").notNull(),
+  isAuditor: boolean("is_auditor").default(false).notNull(),
+  action: text("action").notNull(), // upload, download, approve, reject, request, comment, create_period, ...
+  details: text("details"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_audit_activity_period").on(table.periodId),
+]);
+
+export const insertAuditPeriodSchema = createInsertSchema(auditPeriods).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertAuditRequirementSchema = createInsertSchema(auditRequirements).omit({ id: true, createdAt: true, updatedAt: true });
+export type AuditPeriod = typeof auditPeriods.$inferSelect;
+export type AuditRequirement = typeof auditRequirements.$inferSelect;
+export type AuditFile = typeof auditFiles.$inferSelect;
+export type AuditComment = typeof auditComments.$inferSelect;
+export type AuditActivity = typeof auditActivityLog.$inferSelect;
+
+export const insertResolutionSignatureSchema = createInsertSchema(resolutionSignatures).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type ResolutionSignature = typeof resolutionSignatures.$inferSelect;
+export type InsertResolutionSignature = z.infer<typeof insertResolutionSignatureSchema>;
+
+// Voting Tokens - روابط التصويت العام للمساهمين
+export const votingTokens = pgTable("voting_tokens", {
+  id: serial("id").primaryKey(),
+  resolutionId: integer("resolution_id").notNull().references(() => boardResolutions.id, { onDelete: "cascade" }),
+  shareholderId: integer("shareholder_id").references(() => shareholders.id, { onDelete: "cascade" }),
+  boardMemberId: integer("board_member_id").references(() => boardMembers.id, { onDelete: "cascade" }),
+  voterType: text("voter_type").notNull().default("shareholder"), // shareholder, board_member
+  voteToken: text("vote_token").notNull().unique(),
+  vote: text("vote"), // for, against, abstain
+  voteWeight: integer("vote_weight").default(1), // وزن التصويت (عدد الأسهم أو وزن العضو)
+  comments: text("comments"),
+  signatureData: text("signature_data"), // توقيع المصوّت (base64 encoded)
+  status: text("status").default("pending").notNull(), // pending, voted, expired
+  votedAt: timestamp("voted_at"),
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+  expiresAt: timestamp("expires_at"),
+  reminderSentAt: timestamp("reminder_sent_at"),
+  reminderCount: integer("reminder_count").default(0),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_voting_tokens_resolution").on(table.resolutionId),
+  index("idx_voting_tokens_shareholder").on(table.shareholderId),
+  index("idx_voting_tokens_board_member").on(table.boardMemberId),
+  index("idx_voting_tokens_token").on(table.voteToken),
+  index("idx_voting_tokens_status").on(table.status),
+]);
+
+export const insertVotingTokenSchema = createInsertSchema(votingTokens).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type VotingToken = typeof votingTokens.$inferSelect;
+export type InsertVotingToken = z.infer<typeof insertVotingTokenSchema>;
+
+// رأس المال والأسهم - Capital & Shares Management
+export const capitalTransactions = pgTable("capital_transactions", {
+  id: serial("id").primaryKey(),
+  transactionNumber: text("transaction_number").notNull().unique(),
+  transactionType: text("transaction_type").notNull(), // increase, decrease, split, merge, bonus_issue
+  description: text("description").notNull(),
+  previousCapital: numeric("previous_capital", { precision: 15, scale: 2 }).notNull(),
+  newCapital: numeric("new_capital", { precision: 15, scale: 2 }).notNull(),
+  changeAmount: numeric("change_amount", { precision: 15, scale: 2 }).notNull(),
+  previousShares: integer("previous_shares").notNull(),
+  newShares: integer("new_shares").notNull(),
+  shareChange: integer("share_change").notNull(),
+  pricePerShare: numeric("price_per_share", { precision: 12, scale: 2 }),
+  effectiveDate: date("effective_date").notNull(),
+  boardResolutionId: integer("board_resolution_id").references(() => boardResolutions.id),
+  assemblyApprovalRequired: boolean("assembly_approval_required").default(true),
+  assemblyMeetingId: integer("assembly_meeting_id").references(() => governanceMeetings.id),
+  regulatoryApprovalDate: date("regulatory_approval_date"),
+  regulatoryApprovalNumber: text("regulatory_approval_number"),
+  registrationDate: date("registration_date"),
+  status: text("status").default("pending"), // pending, approved, registered, completed, cancelled
+  attachments: jsonb("attachments"),
+  notes: text("notes"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_capital_transactions_type").on(table.transactionType),
+  index("idx_capital_transactions_status").on(table.status),
+  index("idx_capital_transactions_date").on(table.effectiveDate),
+]);
+
+export const insertCapitalTransactionSchema = createInsertSchema(capitalTransactions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type CapitalTransaction = typeof capitalTransactions.$inferSelect;
+export type InsertCapitalTransaction = z.infer<typeof insertCapitalTransactionSchema>;
+
+// توزيعات الأرباح - Dividend Distributions
+export const dividendDistributions = pgTable("dividend_distributions", {
+  id: serial("id").primaryKey(),
+  distributionNumber: text("distribution_number").notNull().unique(),
+  fiscalYear: text("fiscal_year").notNull(),
+  distributionType: text("distribution_type").notNull(), // cash, stock, mixed
+  description: text("description"),
+  totalAmount: numeric("total_amount", { precision: 15, scale: 2 }).notNull(),
+  amountPerShare: numeric("amount_per_share", { precision: 12, scale: 4 }).notNull(),
+  eligibleShares: integer("eligible_shares").notNull(),
+  recordDate: date("record_date").notNull(),
+  paymentDate: date("payment_date").notNull(),
+  boardResolutionId: integer("board_resolution_id").references(() => boardResolutions.id),
+  assemblyMeetingId: integer("assembly_meeting_id").references(() => governanceMeetings.id),
+  status: text("status").default("announced"), // announced, record_closed, in_payment, completed
+  paidAmount: numeric("paid_amount", { precision: 15, scale: 2 }).default("0"),
+  withholdingTaxRate: numeric("withholding_tax_rate", { precision: 5, scale: 2 }).default("0"),
+  notes: text("notes"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_dividend_distributions_year").on(table.fiscalYear),
+  index("idx_dividend_distributions_status").on(table.status),
+  index("idx_dividend_distributions_payment_date").on(table.paymentDate),
+]);
+
+export const insertDividendDistributionSchema = createInsertSchema(dividendDistributions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type DividendDistribution = typeof dividendDistributions.$inferSelect;
+export type InsertDividendDistribution = z.infer<typeof insertDividendDistributionSchema>;
+
+// مدفوعات الأرباح للمساهمين - Shareholder Dividend Payments
+export const shareholderDividends = pgTable("shareholder_dividends", {
+  id: serial("id").primaryKey(),
+  distributionId: integer("distribution_id").notNull().references(() => dividendDistributions.id, { onDelete: "cascade" }),
+  shareholderId: integer("shareholder_id").notNull().references(() => shareholders.id),
+  sharesHeld: integer("shares_held").notNull(),
+  grossAmount: numeric("gross_amount", { precision: 12, scale: 2 }).notNull(),
+  withholdingTax: numeric("withholding_tax", { precision: 12, scale: 2 }).default("0"),
+  netAmount: numeric("net_amount", { precision: 12, scale: 2 }).notNull(),
+  paymentMethod: text("payment_method").default("bank_transfer"), // bank_transfer, cheque, cash
+  paymentReference: text("payment_reference"),
+  paymentDate: date("payment_date"),
+  status: text("status").default("pending"), // pending, processing, paid, failed, returned
+  failureReason: text("failure_reason"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_shareholder_dividends_distribution").on(table.distributionId),
+  index("idx_shareholder_dividends_shareholder").on(table.shareholderId),
+  index("idx_shareholder_dividends_status").on(table.status),
+]);
+
+export const insertShareholderDividendSchema = createInsertSchema(shareholderDividends).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type ShareholderDividend = typeof shareholderDividends.$inferSelect;
+export type InsertShareholderDividend = z.infer<typeof insertShareholderDividendSchema>;
+
+// الإفصاحات والتقارير النظامية - Disclosures & Regulatory Reports
+export const disclosures = pgTable("disclosures", {
+  id: serial("id").primaryKey(),
+  disclosureNumber: text("disclosure_number").notNull().unique(),
+  disclosureType: text("disclosure_type").notNull(), // annual_report, quarterly_report, material_event, ownership_change, related_party
+  title: text("title").notNull(),
+  description: text("description"),
+  fiscalYear: text("fiscal_year"),
+  fiscalQuarter: text("fiscal_quarter"),
+  reportingPeriodStart: date("reporting_period_start"),
+  reportingPeriodEnd: date("reporting_period_end"),
+  dueDate: date("due_date"),
+  submissionDate: timestamp("submission_date"),
+  publishDate: timestamp("publish_date"),
+  regulatoryBody: text("regulatory_body"), // ministry_of_commerce, capital_market_authority, stock_exchange
+  referenceNumber: text("reference_number"),
+  category: text("category"), // financial, operational, governance, legal
+  priority: text("priority").default("normal"), // low, normal, high, urgent
+  status: text("status").default("draft"), // draft, pending_review, pending_approval, submitted, published, rejected
+  content: text("content"),
+  attachments: jsonb("attachments"),
+  financialStatements: jsonb("financial_statements"),
+  reviewedBy: varchar("reviewed_by").references(() => users.id),
+  reviewedAt: timestamp("reviewed_at"),
+  approvedBy: varchar("approved_by").references(() => users.id),
+  approvedAt: timestamp("approved_at"),
+  rejectionReason: text("rejection_reason"),
+  isConfidential: boolean("is_confidential").default(false),
+  publishUrl: text("publish_url"),
+  notes: text("notes"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_disclosures_type").on(table.disclosureType),
+  index("idx_disclosures_status").on(table.status),
+  index("idx_disclosures_fiscal_year").on(table.fiscalYear),
+  index("idx_disclosures_due_date").on(table.dueDate),
+  index("idx_disclosures_category").on(table.category),
+]);
+
+export const insertDisclosureSchema = createInsertSchema(disclosures).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type Disclosure = typeof disclosures.$inferSelect;
+export type InsertDisclosure = z.infer<typeof insertDisclosureSchema>;
+
+// الامتثال والمتطلبات النظامية - Compliance Requirements
+export const complianceRequirements = pgTable("compliance_requirements", {
+  id: serial("id").primaryKey(),
+  requirementCode: text("requirement_code").notNull().unique(),
+  title: text("title").notNull(),
+  description: text("description"),
+  category: text("category").notNull(), // license, registration, permit, certification, report, filing
+  regulatoryBody: text("regulatory_body").notNull(),
+  applicableLaw: text("applicable_law"),
+  frequency: text("frequency").notNull(), // one_time, annual, semi_annual, quarterly, monthly, as_needed
+  isRecurring: boolean("is_recurring").default(true),
+  currentStatus: text("current_status").default("pending"), // pending, valid, expiring_soon, expired, under_renewal
+  validFrom: date("valid_from"),
+  validUntil: date("valid_until"),
+  lastRenewalDate: date("last_renewal_date"),
+  nextDueDate: date("next_due_date"),
+  reminderDays: integer("reminder_days").default(30),
+  documentNumber: text("document_number"),
+  documentUrl: text("document_url"),
+  cost: numeric("cost", { precision: 12, scale: 2 }),
+  responsiblePerson: varchar("responsible_person").references(() => users.id),
+  priority: text("priority").default("normal"), // low, normal, high, critical
+  penaltyForNonCompliance: text("penalty_for_non_compliance"),
+  notes: text("notes"),
+  attachments: jsonb("attachments"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_compliance_requirements_category").on(table.category),
+  index("idx_compliance_requirements_status").on(table.currentStatus),
+  index("idx_compliance_requirements_due_date").on(table.nextDueDate),
+  index("idx_compliance_requirements_frequency").on(table.frequency),
+]);
+
+export const insertComplianceRequirementSchema = createInsertSchema(complianceRequirements).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type ComplianceRequirement = typeof complianceRequirements.$inferSelect;
+export type InsertComplianceRequirement = z.infer<typeof insertComplianceRequirementSchema>;
+
+// سجل الامتثال والتجديدات - Compliance History
+export const complianceHistory = pgTable("compliance_history", {
+  id: serial("id").primaryKey(),
+  requirementId: integer("requirement_id").notNull().references(() => complianceRequirements.id, { onDelete: "cascade" }),
+  action: text("action").notNull(), // renewal, submission, approval, expiry, penalty, update
+  actionDate: timestamp("action_date").notNull(),
+  previousStatus: text("previous_status"),
+  newStatus: text("new_status"),
+  documentNumber: text("document_number"),
+  documentUrl: text("document_url"),
+  validFrom: date("valid_from"),
+  validUntil: date("valid_until"),
+  cost: numeric("cost", { precision: 12, scale: 2 }),
+  penaltyAmount: numeric("penalty_amount", { precision: 12, scale: 2 }),
+  notes: text("notes"),
+  performedBy: varchar("performed_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_compliance_history_requirement").on(table.requirementId),
+  index("idx_compliance_history_action").on(table.action),
+  index("idx_compliance_history_date").on(table.actionDate),
+]);
+
+export const insertComplianceHistorySchema = createInsertSchema(complianceHistory).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type ComplianceHistory = typeof complianceHistory.$inferSelect;
+export type InsertComplianceHistory = z.infer<typeof insertComplianceHistorySchema>;
+
+// =====================================================
+// جداول إضافية للحوكمة المتقدمة
+// =====================================================
+
+// لجان مجلس الإدارة - Board Committees
+export const boardCommittees = pgTable("board_committees", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  nameEn: text("name_en"),
+  description: text("description"),
+  committeeType: text("committee_type").notNull(), // audit, remuneration, nomination, risk, executive, investment
+  chairmanId: integer("chairman_id").references(() => boardMembers.id),
+  secretaryId: integer("secretary_id").references(() => boardMembers.id),
+  formationDate: date("formation_date").notNull(),
+  termEndDate: date("term_end_date"),
+  mandateDocument: text("mandate_document"),
+  meetingFrequency: text("meeting_frequency").default("quarterly"), // monthly, quarterly, semi_annually, annually, as_needed
+  quorumRequired: integer("quorum_required").default(2),
+  status: text("status").default("active"), // active, inactive, dissolved
+  notes: text("notes"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_board_committees_type").on(table.committeeType),
+  index("idx_board_committees_status").on(table.status),
+]);
+
+export const insertBoardCommitteeSchema = createInsertSchema(boardCommittees).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type BoardCommittee = typeof boardCommittees.$inferSelect;
+export type InsertBoardCommittee = z.infer<typeof insertBoardCommitteeSchema>;
+
+// عضوية اللجان - Committee Memberships
+export const committeeMemberships = pgTable("committee_memberships", {
+  id: serial("id").primaryKey(),
+  committeeId: integer("committee_id").notNull().references(() => boardCommittees.id, { onDelete: "cascade" }),
+  boardMemberId: integer("board_member_id").notNull().references(() => boardMembers.id, { onDelete: "cascade" }),
+  role: text("role").default("member"), // chairman, vice_chairman, member, secretary
+  appointmentDate: date("appointment_date").notNull(),
+  endDate: date("end_date"),
+  status: text("status").default("active"), // active, ended, suspended
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_committee_memberships_committee").on(table.committeeId),
+  index("idx_committee_memberships_member").on(table.boardMemberId),
+  index("idx_committee_memberships_status").on(table.status),
+]);
+
+export const insertCommitteeMembershipSchema = createInsertSchema(committeeMemberships).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type CommitteeMembership = typeof committeeMemberships.$inferSelect;
+export type InsertCommitteeMembership = z.infer<typeof insertCommitteeMembershipSchema>;
+
+// سجل المصالح والإفصاحات الشخصية - Interest Declarations
+export const interestDeclarations = pgTable("interest_declarations", {
+  id: serial("id").primaryKey(),
+  declarationNumber: text("declaration_number").notNull().unique(),
+  boardMemberId: integer("board_member_id").notNull().references(() => boardMembers.id, { onDelete: "cascade" }),
+  declarationType: text("declaration_type").notNull(), // annual, transaction, related_party, conflict, update
+  declarationDate: date("declaration_date").notNull(),
+  fiscalYear: text("fiscal_year"),
+  relatedPartyName: text("related_party_name"),
+  relationshipType: text("relationship_type"), // family, business, financial, ownership
+  description: text("description").notNull(),
+  transactionType: text("transaction_type"), // purchase, sale, contract, employment
+  transactionValue: numeric("transaction_value", { precision: 15, scale: 2 }),
+  actionTaken: text("action_taken"), // recused, disclosed, abstained, approved
+  boardDecision: text("board_decision"),
+  status: text("status").default("pending"), // pending, reviewed, acknowledged, requires_action
+  reviewedBy: varchar("reviewed_by").references(() => users.id),
+  reviewedAt: timestamp("reviewed_at"),
+  attachments: jsonb("attachments"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_interest_declarations_member").on(table.boardMemberId),
+  index("idx_interest_declarations_type").on(table.declarationType),
+  index("idx_interest_declarations_status").on(table.status),
+  index("idx_interest_declarations_year").on(table.fiscalYear),
+]);
+
+export const insertInterestDeclarationSchema = createInsertSchema(interestDeclarations).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InterestDeclaration = typeof interestDeclarations.$inferSelect;
+export type InsertInterestDeclaration = z.infer<typeof insertInterestDeclarationSchema>;
+
+// شهادات التدريب والتأهيل - Training Certificates
+export const boardMemberTraining = pgTable("board_member_training", {
+  id: serial("id").primaryKey(),
+  boardMemberId: integer("board_member_id").notNull().references(() => boardMembers.id, { onDelete: "cascade" }),
+  trainingType: text("training_type").notNull(), // governance, financial, legal, compliance, leadership, industry
+  title: text("title").notNull(),
+  provider: text("provider"),
+  startDate: date("start_date").notNull(),
+  endDate: date("end_date"),
+  duration: integer("duration"), // hours
+  certificateNumber: text("certificate_number"),
+  certificateUrl: text("certificate_url"),
+  expiryDate: date("expiry_date"),
+  status: text("status").default("completed"), // registered, in_progress, completed, expired
+  score: numeric("score", { precision: 5, scale: 2 }),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_board_member_training_member").on(table.boardMemberId),
+  index("idx_board_member_training_type").on(table.trainingType),
+  index("idx_board_member_training_status").on(table.status),
+]);
+
+export const insertBoardMemberTrainingSchema = createInsertSchema(boardMemberTraining).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type BoardMemberTraining = typeof boardMemberTraining.$inferSelect;
+export type InsertBoardMemberTraining = z.infer<typeof insertBoardMemberTrainingSchema>;
+
+// التصويت بالوكالة - Proxy Voting
+export const proxyVotes = pgTable("proxy_votes", {
+  id: serial("id").primaryKey(),
+  proxyNumber: text("proxy_number").notNull().unique(),
+  meetingId: integer("meeting_id").notNull().references(() => governanceMeetings.id, { onDelete: "cascade" }),
+  principalShareholderId: integer("principal_shareholder_id").notNull().references(() => shareholders.id),
+  proxyHolderShareholderId: integer("proxy_holder_shareholder_id").references(() => shareholders.id),
+  proxyHolderName: text("proxy_holder_name").notNull(),
+  proxyHolderNationalId: text("proxy_holder_national_id"),
+  sharesRepresented: integer("shares_represented").notNull(),
+  votingPower: numeric("voting_power", { precision: 8, scale: 4 }).notNull(),
+  proxyType: text("proxy_type").notNull(), // general, specific, limited
+  votingInstructions: jsonb("voting_instructions"), // [{resolutionId, vote}]
+  documentUrl: text("document_url"),
+  validFrom: timestamp("valid_from").notNull(),
+  validUntil: timestamp("valid_until").notNull(),
+  status: text("status").default("pending"), // pending, verified, active, used, expired, revoked
+  verifiedBy: varchar("verified_by").references(() => users.id),
+  verifiedAt: timestamp("verified_at"),
+  usedAt: timestamp("used_at"),
+  revokedAt: timestamp("revoked_at"),
+  revocationReason: text("revocation_reason"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_proxy_votes_meeting").on(table.meetingId),
+  index("idx_proxy_votes_principal").on(table.principalShareholderId),
+  index("idx_proxy_votes_holder").on(table.proxyHolderShareholderId),
+  index("idx_proxy_votes_status").on(table.status),
+]);
+
+export const insertProxyVoteSchema = createInsertSchema(proxyVotes).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type ProxyVote = typeof proxyVotes.$inferSelect;
+export type InsertProxyVote = z.infer<typeof insertProxyVoteSchema>;
+
+// سجل تدقيق التصويت - Voting Audit Log
+export const votingAuditLog = pgTable("voting_audit_log", {
+  id: serial("id").primaryKey(),
+  resolutionId: integer("resolution_id").references(() => boardResolutions.id, { onDelete: "cascade" }),
+  meetingId: integer("meeting_id").references(() => governanceMeetings.id),
+  action: text("action").notNull(), // vote_cast, vote_changed, vote_cancelled, proxy_used, quorum_calculated, results_published
+  actorType: text("actor_type").notNull(), // board_member, shareholder, proxy_holder, system, admin
+  actorId: varchar("actor_id"),
+  actorName: text("actor_name"),
+  voteId: integer("vote_id").references(() => resolutionVotes.id),
+  proxyId: integer("proxy_id").references(() => proxyVotes.id),
+  previousValue: text("previous_value"),
+  newValue: text("new_value"),
+  votingPower: numeric("voting_power", { precision: 8, scale: 4 }),
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+  deviceFingerprint: text("device_fingerprint"),
+  sessionId: text("session_id"),
+  timestamp: timestamp("timestamp").defaultNow().notNull(),
+  isValid: boolean("is_valid").default(true),
+  validationNotes: text("validation_notes"),
+}, (table) => [
+  index("idx_voting_audit_resolution").on(table.resolutionId),
+  index("idx_voting_audit_meeting").on(table.meetingId),
+  index("idx_voting_audit_action").on(table.action),
+  index("idx_voting_audit_actor").on(table.actorId),
+  index("idx_voting_audit_timestamp").on(table.timestamp),
+]);
+
+export const insertVotingAuditLogSchema = createInsertSchema(votingAuditLog).omit({
+  id: true,
+});
+
+export type VotingAuditLog = typeof votingAuditLog.$inferSelect;
+export type InsertVotingAuditLog = z.infer<typeof insertVotingAuditLogSchema>;
+
+// حساب النصاب - Quorum Calculations
+export const quorumCalculations = pgTable("quorum_calculations", {
+  id: serial("id").primaryKey(),
+  meetingId: integer("meeting_id").notNull().references(() => governanceMeetings.id, { onDelete: "cascade" }),
+  calculationType: text("calculation_type").notNull(), // opening, closing, per_resolution
+  resolutionId: integer("resolution_id").references(() => boardResolutions.id),
+  calculatedAt: timestamp("calculated_at").defaultNow().notNull(),
+  totalEligibleShares: integer("total_eligible_shares").notNull(),
+  totalEligibleVotes: integer("total_eligible_votes").notNull(),
+  presentShares: integer("present_shares").notNull(),
+  presentVotes: integer("present_votes").notNull(),
+  proxyShares: integer("proxy_shares").default(0),
+  proxyVotes: integer("proxy_votes").default(0),
+  totalRepresentedShares: integer("total_represented_shares").notNull(),
+  totalRepresentedVotes: integer("total_represented_votes").notNull(),
+  percentageRepresented: numeric("percentage_represented", { precision: 8, scale: 4 }).notNull(),
+  requiredQuorum: numeric("required_quorum", { precision: 5, scale: 2 }).notNull(),
+  quorumMet: boolean("quorum_met").notNull(),
+  notes: text("notes"),
+  calculatedBy: varchar("calculated_by").references(() => users.id),
+}, (table) => [
+  index("idx_quorum_calculations_meeting").on(table.meetingId),
+  index("idx_quorum_calculations_resolution").on(table.resolutionId),
+  index("idx_quorum_calculations_type").on(table.calculationType),
+]);
+
+export const insertQuorumCalculationSchema = createInsertSchema(quorumCalculations).omit({
+  id: true,
+});
+
+export type QuorumCalculation = typeof quorumCalculations.$inferSelect;
+export type InsertQuorumCalculation = z.infer<typeof insertQuorumCalculationSchema>;
+
+// ==================== نظام فتح وإغلاق الفروع ====================
+
+// قوالب قوائم التحقق - Checklist Templates
+export const checklistTemplates = pgTable("checklist_templates", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  nameEn: text("name_en"),
+  type: text("type").notNull(), // opening, closing
+  category: text("category").notNull(), // cleanliness, equipment, products, inventory, cashier, employees, security, waste
+  description: text("description"),
+  icon: text("icon"),
+  displayOrder: integer("display_order").default(0),
+  isActive: boolean("is_active").default(true),
+  requiresPhoto: boolean("requires_photo").default(false),
+  requiresNote: boolean("requires_note").default(false),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_checklist_templates_type").on(table.type),
+  index("idx_checklist_templates_category").on(table.category),
+]);
+
+export const insertChecklistTemplateSchema = createInsertSchema(checklistTemplates).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type ChecklistTemplate = typeof checklistTemplates.$inferSelect;
+export type InsertChecklistTemplate = z.infer<typeof insertChecklistTemplateSchema>;
+
+// بنود قوائم التحقق - Checklist Items
+export const checklistItems = pgTable("checklist_items", {
+  id: serial("id").primaryKey(),
+  templateId: integer("template_id").notNull().references(() => checklistTemplates.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  titleEn: text("title_en"),
+  description: text("description"),
+  displayOrder: integer("display_order").default(0),
+  requiresPhoto: boolean("requires_photo").default(false),
+  requiresNote: boolean("requires_note").default(false),
+  isCritical: boolean("is_critical").default(false),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_checklist_items_template").on(table.templateId),
+]);
+
+export const insertChecklistItemSchema = createInsertSchema(checklistItems).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type ChecklistItem = typeof checklistItems.$inferSelect;
+export type InsertChecklistItem = z.infer<typeof insertChecklistItemSchema>;
+
+// سجل الشفتات - Branch Shifts
+export const branchShifts = pgTable("branch_shifts", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
+  shiftType: text("shift_type").notNull(), // morning, evening, night
+  shiftDate: date("shift_date").notNull(),
+  status: text("status").default("in_progress"), // in_progress, completed, pending_review
+  supervisorId: varchar("supervisor_id").references(() => users.id),
+  supervisorName: text("supervisor_name"),
+  employeeCount: integer("employee_count"),
+  openingTime: timestamp("opening_time"),
+  closingTime: timestamp("closing_time"),
+  totalSales: numeric("total_sales", { precision: 12, scale: 2 }),
+  cashSales: numeric("cash_sales", { precision: 12, scale: 2 }),
+  cardSales: numeric("card_sales", { precision: 12, scale: 2 }),
+  transactionCount: integer("transaction_count"),
+  cashVariance: numeric("cash_variance", { precision: 10, scale: 2 }),
+  wasteAmount: numeric("waste_amount", { precision: 10, scale: 2 }),
+  supervisorNotes: text("supervisor_notes"),
+  customerFeedback: text("customer_feedback"),
+  teamPerformance: text("team_performance"),
+  improvements: text("improvements"),
+  issues: text("issues"),
+  openingCompleted: boolean("opening_completed").default(false),
+  closingCompleted: boolean("closing_completed").default(false),
+  openingCompletedAt: timestamp("opening_completed_at"),
+  closingCompletedAt: timestamp("closing_completed_at"),
+  // حقول الموقع الجغرافي GPS
+  openingGpsLatitude: numeric("opening_gps_latitude", { precision: 10, scale: 7 }),
+  openingGpsLongitude: numeric("opening_gps_longitude", { precision: 10, scale: 7 }),
+  closingGpsLatitude: numeric("closing_gps_latitude", { precision: 10, scale: 7 }),
+  closingGpsLongitude: numeric("closing_gps_longitude", { precision: 10, scale: 7 }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_branch_shifts_branch").on(table.branchId),
+  index("idx_branch_shifts_date").on(table.shiftDate),
+  index("idx_branch_shifts_status").on(table.status),
+  index("idx_branch_shifts_supervisor").on(table.supervisorId),
+]);
+
+export const insertBranchShiftSchema = createInsertSchema(branchShifts).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type BranchShift = typeof branchShifts.$inferSelect;
+export type InsertBranchShift = z.infer<typeof insertBranchShiftSchema>;
+
+// تنفيذ قوائم التحقق - Shift Checklist Responses
+export const shiftChecklistResponses = pgTable("shift_checklist_responses", {
+  id: serial("id").primaryKey(),
+  shiftId: integer("shift_id").notNull().references(() => branchShifts.id, { onDelete: "cascade" }),
+  itemId: integer("item_id").notNull().references(() => checklistItems.id),
+  checklistType: text("checklist_type").notNull(), // opening, closing
+  isCompleted: boolean("is_completed").default(false),
+  completedAt: timestamp("completed_at"),
+  completedBy: varchar("completed_by").references(() => users.id),
+  completedByName: text("completed_by_name"),
+  notes: text("notes"),
+  photoUrl: text("photo_url"),
+  status: text("status").default("pending"), // pending, passed, failed, needs_attention
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_shift_checklist_shift").on(table.shiftId),
+  index("idx_shift_checklist_item").on(table.itemId),
+  index("idx_shift_checklist_type").on(table.checklistType),
+]);
+
+export const insertShiftChecklistResponseSchema = createInsertSchema(shiftChecklistResponses).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type ShiftChecklistResponse = typeof shiftChecklistResponses.$inferSelect;
+export type InsertShiftChecklistResponse = z.infer<typeof insertShiftChecklistResponseSchema>;
+
+// صور الشفت - Shift Photos
+export const shiftPhotos = pgTable("shift_photos", {
+  id: serial("id").primaryKey(),
+  shiftId: integer("shift_id").notNull().references(() => branchShifts.id, { onDelete: "cascade" }),
+  checklistResponseId: integer("checklist_response_id").references(() => shiftChecklistResponses.id, { onDelete: "cascade" }),
+  photoType: text("photo_type").notNull(), // checklist, general, issue, team
+  category: text("category"), // cleanliness, equipment, products, etc.
+  photoUrl: text("photo_url").notNull(),
+  thumbnailUrl: text("thumbnail_url"),
+  caption: text("caption"),
+  uploadedBy: varchar("uploaded_by").references(() => users.id),
+  uploadedByName: text("uploaded_by_name"),
+  uploadedAt: timestamp("uploaded_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_shift_photos_shift").on(table.shiftId),
+  index("idx_shift_photos_response").on(table.checklistResponseId),
+  index("idx_shift_photos_type").on(table.photoType),
+]);
+
+export const insertShiftPhotoSchema = createInsertSchema(shiftPhotos).omit({
+  id: true,
+  uploadedAt: true,
+});
+
+export type ShiftPhoto = typeof shiftPhotos.$inferSelect;
+export type InsertShiftPhoto = z.infer<typeof insertShiftPhotoSchema>;
+
+// التوقيعات الإلكترونية - Shift Signatures
+export const shiftSignatures = pgTable("shift_signatures", {
+  id: serial("id").primaryKey(),
+  shiftId: integer("shift_id").notNull().references(() => branchShifts.id, { onDelete: "cascade" }),
+  signatureType: text("signature_type").notNull(), // opening_supervisor, closing_supervisor, cashier, manager
+  signatureData: text("signature_data").notNull(), // base64 or URL
+  signedBy: varchar("signed_by").references(() => users.id),
+  signerName: text("signer_name").notNull(),
+  signerRole: text("signer_role"),
+  signedAt: timestamp("signed_at").defaultNow().notNull(),
+  ipAddress: text("ip_address"),
+}, (table) => [
+  index("idx_shift_signatures_shift").on(table.shiftId),
+  index("idx_shift_signatures_type").on(table.signatureType),
+]);
+
+export const insertShiftSignatureSchema = createInsertSchema(shiftSignatures).omit({
+  id: true,
+  signedAt: true,
+});
+
+export type ShiftSignature = typeof shiftSignatures.$inferSelect;
+export type InsertShiftSignature = z.infer<typeof insertShiftSignatureSchema>;
+
+// سجل الهدر اليومي - Daily Waste Log
+export const dailyWasteLog = pgTable("daily_waste_log", {
+  id: serial("id").primaryKey(),
+  shiftId: integer("shift_id").notNull().references(() => branchShifts.id, { onDelete: "cascade" }),
+  productName: text("product_name").notNull(),
+  quantity: numeric("quantity", { precision: 10, scale: 2 }).notNull(),
+  unit: text("unit").default("piece"),
+  reason: text("reason").notNull(), // expired, damaged, overproduction, quality, other
+  estimatedCost: numeric("estimated_cost", { precision: 10, scale: 2 }),
+  photoUrl: text("photo_url"),
+  notes: text("notes"),
+  recordedBy: varchar("recorded_by").references(() => users.id),
+  recordedByName: text("recorded_by_name"),
+  recordedAt: timestamp("recorded_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_daily_waste_shift").on(table.shiftId),
+  index("idx_daily_waste_reason").on(table.reason),
+]);
+
+export const insertDailyWasteLogSchema = createInsertSchema(dailyWasteLog).omit({
+  id: true,
+  recordedAt: true,
+});
+
+export type DailyWasteLog = typeof dailyWasteLog.$inferSelect;
+export type InsertDailyWasteLog = z.infer<typeof insertDailyWasteLogSchema>;
+
+// سجل تدقيق الشفتات - Shift Audit Log
+export const shiftAuditLog = pgTable("shift_audit_log", {
+  id: serial("id").primaryKey(),
+  shiftId: integer("shift_id").notNull().references(() => branchShifts.id, { onDelete: "cascade" }),
+  action: text("action").notNull(), // create, update, complete_opening, complete_closing, add_photo, add_signature
+  fieldName: text("field_name"),
+  oldValue: text("old_value"),
+  newValue: text("new_value"),
+  performedBy: varchar("performed_by").references(() => users.id),
+  performedByName: text("performed_by_name"),
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+  gpsLatitude: numeric("gps_latitude", { precision: 10, scale: 7 }),
+  gpsLongitude: numeric("gps_longitude", { precision: 10, scale: 7 }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_shift_audit_shift").on(table.shiftId),
+  index("idx_shift_audit_action").on(table.action),
+  index("idx_shift_audit_date").on(table.createdAt),
+]);
+
+export const insertShiftAuditLogSchema = createInsertSchema(shiftAuditLog).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type ShiftAuditLog = typeof shiftAuditLog.$inferSelect;
+export type InsertShiftAuditLog = z.infer<typeof insertShiftAuditLogSchema>;
+
+// بنود قوائم التحقق المخصصة للفروع - Branch Custom Checklist Items
+export const branchCustomChecklistItems = pgTable("branch_custom_checklist_items", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
+  templateId: integer("template_id").notNull().references(() => checklistTemplates.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  titleEn: text("title_en"),
+  description: text("description"),
+  displayOrder: integer("display_order").default(100),
+  requiresPhoto: boolean("requires_photo").default(false),
+  requiresNote: boolean("requires_note").default(false),
+  isCritical: boolean("is_critical").default(false),
+  isActive: boolean("is_active").default(true),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_branch_custom_items_branch").on(table.branchId),
+  index("idx_branch_custom_items_template").on(table.templateId),
+]);
+
+export const insertBranchCustomChecklistItemSchema = createInsertSchema(branchCustomChecklistItems).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type BranchCustomChecklistItem = typeof branchCustomChecklistItems.$inferSelect;
+export type InsertBranchCustomChecklistItem = z.infer<typeof insertBranchCustomChecklistItemSchema>;
+
+// تذكيرات الشفتات - Shift Reminders
+export const shiftReminders = pgTable("shift_reminders", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
+  reminderType: text("reminder_type").notNull(), // opening_not_started, opening_incomplete, closing_not_started, closing_incomplete
+  shiftDate: date("shift_date").notNull(),
+  shiftType: text("shift_type").notNull(),
+  reminderTime: timestamp("reminder_time").notNull(),
+  isSent: boolean("is_sent").default(false),
+  sentAt: timestamp("sent_at"),
+  notificationChannels: text("notification_channels").array().default(["system"]),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_shift_reminders_branch").on(table.branchId),
+  index("idx_shift_reminders_date").on(table.shiftDate),
+  index("idx_shift_reminders_sent").on(table.isSent),
+]);
+
+export const insertShiftReminderSchema = createInsertSchema(shiftReminders).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type ShiftReminder = typeof shiftReminders.$inferSelect;
+export type InsertShiftReminder = z.infer<typeof insertShiftReminderSchema>;
+
+// =====================================================
+// Social Responsibility - المسؤولية الاجتماعية
+// =====================================================
+
+// الجهات المستفيدة - Beneficiary Organizations
+export const beneficiaryOrganizations = pgTable("beneficiary_organizations", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  nameEn: text("name_en"),
+  organizationType: text("organization_type").notNull(), // government, charity, ngo, club, educational, healthcare, other
+  category: text("category"), // social, environmental, health, education, sports, cultural
+  contactPerson: text("contact_person"),
+  email: text("email"),
+  phone: text("phone"),
+  address: text("address"),
+  city: text("city"),
+  registrationNumber: text("registration_number"),
+  taxNumber: text("tax_number"),
+  website: text("website"),
+  logoUrl: text("logo_url"),
+  description: text("description"),
+  partnershipType: text("partnership_type"), // discount, donation, sponsorship, collaboration
+  discountPercentage: numeric("discount_percentage", { precision: 5, scale: 2 }),
+  status: text("status").default("active"), // active, inactive, suspended
+  validFrom: date("valid_from"),
+  validTo: date("valid_to"),
+  notes: text("notes"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_beneficiary_org_type").on(table.organizationType),
+  index("idx_beneficiary_org_status").on(table.status),
+  index("idx_beneficiary_org_partnership").on(table.partnershipType),
+]);
+
+export const insertBeneficiaryOrganizationSchema = createInsertSchema(beneficiaryOrganizations).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type BeneficiaryOrganization = typeof beneficiaryOrganizations.$inferSelect;
+export type InsertBeneficiaryOrganization = z.infer<typeof insertBeneficiaryOrganizationSchema>;
+
+// المبادرات الاجتماعية - Social Initiatives
+export const socialInitiatives = pgTable("social_initiatives", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  titleEn: text("title_en"),
+  initiativeType: text("initiative_type").notNull(), // campaign, event, donation, sponsorship, awareness, volunteering
+  category: text("category"), // social, environmental, health, education, sports, cultural
+  description: text("description"),
+  objectives: text("objectives"),
+  targetAudience: text("target_audience"),
+  startDate: date("start_date"),
+  endDate: date("end_date"),
+  budget: numeric("budget", { precision: 12, scale: 2 }),
+  actualCost: numeric("actual_cost", { precision: 12, scale: 2 }),
+  beneficiaryOrganizationId: integer("beneficiary_organization_id").references(() => beneficiaryOrganizations.id),
+  partnersNames: text("partners_names"),
+  channels: text("channels").array(), // social_media, website, print, tv, radio, outdoor
+  status: text("status").default("planned"), // planned, active, completed, cancelled
+  impactMetrics: text("impact_metrics"),
+  beneficiariesCount: integer("beneficiaries_count"),
+  mediaLinks: text("media_links").array(),
+  attachments: text("attachments").array(),
+  notes: text("notes"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_social_init_type").on(table.initiativeType),
+  index("idx_social_init_status").on(table.status),
+  index("idx_social_init_dates").on(table.startDate, table.endDate),
+  index("idx_social_init_beneficiary").on(table.beneficiaryOrganizationId),
+]);
+
+export const insertSocialInitiativeSchema = createInsertSchema(socialInitiatives).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type SocialInitiative = typeof socialInitiatives.$inferSelect;
+export type InsertSocialInitiative = z.infer<typeof insertSocialInitiativeSchema>;
+
+// رموز الخصم المجتمعية - Community Discount Codes
+export const communityDiscounts = pgTable("community_discounts", {
+  id: serial("id").primaryKey(),
+  code: text("code").notNull().unique(),
+  name: text("name").notNull(),
+  description: text("description"),
+  discountType: text("discount_type").notNull(), // percentage, fixed_amount
+  discountValue: numeric("discount_value", { precision: 10, scale: 2 }).notNull(),
+  minimumOrder: numeric("minimum_order", { precision: 10, scale: 2 }),
+  maximumDiscount: numeric("maximum_discount", { precision: 10, scale: 2 }),
+  beneficiaryOrganizationId: integer("beneficiary_organization_id").references(() => beneficiaryOrganizations.id),
+  initiativeId: integer("initiative_id").references(() => socialInitiatives.id),
+  validFrom: date("valid_from").notNull(),
+  validTo: date("valid_to").notNull(),
+  usageLimit: integer("usage_limit"),
+  usageCount: integer("usage_count").default(0),
+  usageLimitPerUser: integer("usage_limit_per_user"),
+  applicableBranches: text("applicable_branches").array(),
+  applicableProducts: text("applicable_products").array(),
+  status: text("status").default("active"), // active, inactive, expired
+  terms: text("terms"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_community_discount_code").on(table.code),
+  index("idx_community_discount_status").on(table.status),
+  index("idx_community_discount_validity").on(table.validFrom, table.validTo),
+  index("idx_community_discount_org").on(table.beneficiaryOrganizationId),
+]);
+
+export const insertCommunityDiscountSchema = createInsertSchema(communityDiscounts).omit({
+  id: true,
+  usageCount: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type CommunityDiscount = typeof communityDiscounts.$inferSelect;
+export type InsertCommunityDiscount = z.infer<typeof insertCommunityDiscountSchema>;
+
+// سجل استخدام الخصومات - Discount Usage Log
+export const discountUsageLogs = pgTable("discount_usage_logs", {
+  id: serial("id").primaryKey(),
+  discountId: integer("discount_id").notNull().references(() => communityDiscounts.id, { onDelete: "cascade" }),
+  branchId: varchar("branch_id").references(() => branches.id),
+  orderId: text("order_id"),
+  orderAmount: numeric("order_amount", { precision: 12, scale: 2 }),
+  discountAmount: numeric("discount_amount", { precision: 10, scale: 2 }),
+  customerName: text("customer_name"),
+  customerPhone: text("customer_phone"),
+  usedBy: varchar("used_by").references(() => users.id),
+  usedAt: timestamp("used_at").defaultNow().notNull(),
+  notes: text("notes"),
+}, (table) => [
+  index("idx_discount_usage_discount").on(table.discountId),
+  index("idx_discount_usage_branch").on(table.branchId),
+  index("idx_discount_usage_date").on(table.usedAt),
+]);
+
+export const insertDiscountUsageLogSchema = createInsertSchema(discountUsageLogs).omit({
+  id: true,
+  usedAt: true,
+});
+
+export type DiscountUsageLog = typeof discountUsageLogs.$inferSelect;
+export type InsertDiscountUsageLog = z.infer<typeof insertDiscountUsageLogSchema>;
+
+// =====================================================
+// نظام حملات الولاء وبطاقات QR - Loyalty / QR Campaign System
+// General reusable digital discount-card engine. Each campaign issues a
+// unique personal code per customer, usable a configurable number of times,
+// redeemable at the POS.
+// =====================================================
+
+// حملة الولاء - reusable campaign definition (public /join/:slug page)
+export const loyaltyCampaigns = pgTable("loyalty_campaigns", {
+  id: serial("id").primaryKey(),
+  slug: text("slug").notNull().unique(), // public URL slug, e.g. "military-hospital"
+  name: text("name").notNull(),
+  description: text("description"), // also holds the gift text for gift-type campaigns
+  discountType: text("discount_type").notNull(), // percentage, fixed_amount, gift
+  discountValue: numeric("discount_value", { precision: 10, scale: 2 }).notNull(),
+  maxUsesPerCustomer: integer("max_uses_per_customer").default(1).notNull(), // configurable per-customer usage limit
+  minimumOrder: numeric("minimum_order", { precision: 10, scale: 2 }),
+  maximumDiscount: numeric("maximum_discount", { precision: 10, scale: 2 }),
+  codePrefix: text("code_prefix"), // prefix for generated member codes, e.g. "MIL"
+  applicableBranches: text("applicable_branches").array(), // null = all branches
+  validFrom: date("valid_from"),
+  validTo: date("valid_to"),
+  status: text("status").default("active").notNull(), // active, inactive, expired
+  terms: text("terms"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_loyalty_campaign_slug").on(table.slug),
+  index("idx_loyalty_campaign_status").on(table.status),
+]);
+
+export const insertLoyaltyCampaignSchema = createInsertSchema(loyaltyCampaigns).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type LoyaltyCampaign = typeof loyaltyCampaigns.$inferSelect;
+export type InsertLoyaltyCampaign = z.infer<typeof insertLoyaltyCampaignSchema>;
+
+// عميل الولاء - central CRM, one row per phone number across all campaigns
+export const loyaltyCustomers = pgTable("loyalty_customers", {
+  id: serial("id").primaryKey(),
+  phone: text("phone").notNull().unique(),
+  name: text("name").notNull(),
+  gender: text("gender"), // "male" | "female" — collected at registration
+  city: text("city"), // free-text city name
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_loyalty_customer_phone").on(table.phone),
+]);
+
+export const insertLoyaltyCustomerSchema = createInsertSchema(loyaltyCustomers).omit({
+  id: true,
+  createdAt: true,
+});
+export type LoyaltyCustomer = typeof loyaltyCustomers.$inferSelect;
+export type InsertLoyaltyCustomer = z.infer<typeof insertLoyaltyCustomerSchema>;
+
+// عضوية الولاء - per customer per campaign, holds the unique personal code
+export const loyaltyMembers = pgTable("loyalty_members", {
+  id: serial("id").primaryKey(),
+  campaignId: integer("campaign_id").notNull().references(() => loyaltyCampaigns.id, { onDelete: "cascade" }),
+  customerId: integer("customer_id").notNull().references(() => loyaltyCustomers.id, { onDelete: "cascade" }),
+  code: text("code").notNull().unique(), // unique personal discount code
+  maxUses: integer("max_uses").notNull(), // snapshot of campaign maxUsesPerCustomer at issue time
+  usedCount: integer("used_count").default(0).notNull(),
+  status: text("status").default("active").notNull(), // active, exhausted, disabled
+  appleSerial: text("apple_serial"), // reserved for future Apple Wallet pass
+  googleObjectId: text("google_object_id"), // reserved for future Google Wallet pass
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("idx_loyalty_member_campaign_customer").on(table.campaignId, table.customerId),
+  index("idx_loyalty_member_code").on(table.code),
+  index("idx_loyalty_member_campaign").on(table.campaignId),
+]);
+
+export const insertLoyaltyMemberSchema = createInsertSchema(loyaltyMembers).omit({
+  id: true,
+  usedCount: true,
+  createdAt: true,
+});
+export type LoyaltyMember = typeof loyaltyMembers.$inferSelect;
+export type InsertLoyaltyMember = z.infer<typeof insertLoyaltyMemberSchema>;
+
+// استخدام بطاقة الولاء - one row per POS redemption
+export const loyaltyRedemptions = pgTable("loyalty_redemptions", {
+  id: serial("id").primaryKey(),
+  memberId: integer("member_id").notNull().references(() => loyaltyMembers.id, { onDelete: "cascade" }),
+  campaignId: integer("campaign_id").notNull().references(() => loyaltyCampaigns.id, { onDelete: "cascade" }),
+  posSaleId: integer("pos_sale_id").references(() => posSales.id, { onDelete: "set null" }),
+  branchId: varchar("branch_id").references(() => branches.id),
+  orderAmount: numeric("order_amount", { precision: 12, scale: 2 }),
+  discountAmount: numeric("discount_amount", { precision: 10, scale: 2 }),
+  redeemedBy: varchar("redeemed_by").references(() => users.id),
+  redeemedAt: timestamp("redeemed_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_loyalty_redemption_member").on(table.memberId),
+  index("idx_loyalty_redemption_campaign").on(table.campaignId),
+  index("idx_loyalty_redemption_date").on(table.redeemedAt),
+]);
+
+export const insertLoyaltyRedemptionSchema = createInsertSchema(loyaltyRedemptions).omit({
+  id: true,
+  redeemedAt: true,
+});
+export type LoyaltyRedemption = typeof loyaltyRedemptions.$inferSelect;
+export type InsertLoyaltyRedemption = z.infer<typeof insertLoyaltyRedemptionSchema>;
+
+// رموز التحقق (OTP) لإثبات ملكية رقم الجوال قبل إصدار/إظهار بطاقة الولاء.
+// One pending OTP per (phone, campaign). The 6-digit code is stored hashed only.
+export const loyaltyOtpCodes = pgTable("loyalty_otp_codes", {
+  id: serial("id").primaryKey(),
+  phone: text("phone").notNull(), // canonical stored phone, e.g. 05XXXXXXXX
+  campaignId: integer("campaign_id").notNull().references(() => loyaltyCampaigns.id, { onDelete: "cascade" }),
+  codeHash: text("code_hash").notNull(), // sha256(code:phone) — never store the code itself
+  payload: jsonb("payload"), // pending registration data { name, gender, city } collected at request time
+  attempts: integer("attempts").default(0).notNull(), // wrong-code attempts on the current code
+  sendCount: integer("send_count").default(1).notNull(), // SMS sends within the current OTP lifetime
+  expiresAt: timestamp("expires_at").notNull(),
+  lastSentAt: timestamp("last_sent_at").defaultNow().notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("idx_loyalty_otp_phone_campaign").on(table.phone, table.campaignId),
+  index("idx_loyalty_otp_expires").on(table.expiresAt),
+]);
+
+export type LoyaltyOtpCode = typeof loyaltyOtpCodes.$inferSelect;
+
+// رموز التحقق بخطوتين لدخول المساهمين (المرحلة 5) — يُخزَّن الرمز مُشفّراً فقط
+export const shareholderOtpCodes = pgTable("shareholder_otp_codes", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  codeHash: text("code_hash").notNull(), // sha256(code:userId) — لا يُخزَّن الرمز نفسه أبداً
+  channel: text("channel").default("whatsapp").notNull(), // whatsapp | sms
+  phone: text("phone"), // الوجهة التي أُرسل إليها الرمز
+  attempts: integer("attempts").default(0).notNull(), // المحاولات الخاطئة على الرمز الحالي
+  sendCount: integer("send_count").default(1).notNull(), // عدد مرات الإرسال خلال عمر الرمز
+  expiresAt: timestamp("expires_at").notNull(),
+  consumedAt: timestamp("consumed_at"), // وقت الاستخدام (NULL = لم يُستخدم)
+  lastSentAt: timestamp("last_sent_at").defaultNow().notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("idx_shareholder_otp_user").on(table.userId),
+  index("idx_shareholder_otp_expires").on(table.expiresAt),
+]);
+
+export type ShareholderOtpCode = typeof shareholderOtpCodes.$inferSelect;
+
+// سجل نشاط المساهمين (المرحلة 5) — دخول، تصويت، طلبات تعديل، عرض مستندات
+export const shareholderActivityLog = pgTable("shareholder_activity_log", {
+  id: serial("id").primaryKey(),
+  shareholderId: integer("shareholder_id").notNull().references(() => shareholders.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").references(() => users.id),
+  action: text("action").notNull(), // login | otp_verified | vote | profile_request | view_document ...
+  description: text("description"), // وصف عربي مقروء
+  metadata: jsonb("metadata"), // { resolutionId, documentId, ... }
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_shareholder_activity_shareholder").on(table.shareholderId),
+  index("idx_shareholder_activity_created").on(table.createdAt),
+]);
+
+export const insertShareholderActivityLogSchema = createInsertSchema(shareholderActivityLog).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type ShareholderActivityLog = typeof shareholderActivityLog.$inferSelect;
+export type InsertShareholderActivityLog = z.infer<typeof insertShareholderActivityLogSchema>;
+
+export const meetingRsvps = pgTable("meeting_rsvps", {
+  id: serial("id").primaryKey(),
+  meetingId: integer("meeting_id").notNull().references(() => governanceMeetings.id, { onDelete: "cascade" }),
+  shareholderId: integer("shareholder_id").notNull().references(() => shareholders.id, { onDelete: "cascade" }),
+  token: text("token").notNull().unique(),
+  status: text("status").default("pending"),
+  confirmedAt: timestamp("confirmed_at"),
+  declinedAt: timestamp("declined_at"),
+  responseNote: text("response_note"),
+  shareholderName: text("shareholder_name").notNull(),
+  shareholderPhone: text("shareholder_phone"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_meeting_rsvps_meeting").on(table.meetingId),
+  index("idx_meeting_rsvps_shareholder").on(table.shareholderId),
+  index("idx_meeting_rsvps_token").on(table.token),
+]);
+
+export const insertMeetingRsvpSchema = createInsertSchema(meetingRsvps).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type MeetingRsvp = typeof meetingRsvps.$inferSelect;
+export type InsertMeetingRsvp = z.infer<typeof insertMeetingRsvpSchema>;
+
+// WebAuthn Biometric Credentials - بيانات البصمة البيومترية
+export const biometricCredentials = pgTable("biometric_credentials", {
+  id: serial("id").primaryKey(),
+  employeeId: varchar("employee_id").notNull(),
+  employeeName: text("employee_name").notNull(),
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
+  credentialId: text("credential_id").notNull(),
+  publicKey: text("public_key").notNull(),
+  counter: integer("counter").default(0).notNull(),
+  deviceInfo: text("device_info"),
+  deviceType: text("device_type"), // mobile_android, mobile_ios, tablet, desktop
+  deviceModel: text("device_model"), // Samsung Galaxy S24, iPhone 15, etc.
+  registrationMethod: text("registration_method").default("fingerprint"), // fingerprint, face, pin
+  verificationPin: text("verification_pin"), // hashed 4-6 digit PIN for cross-device verification
+  registeredBy: varchar("registered_by").references(() => users.id),
+  registeredByName: text("registered_by_name"),
+  isActive: boolean("is_active").default(true).notNull(),
+  deactivatedAt: timestamp("deactivated_at"),
+  deactivatedBy: varchar("deactivated_by"),
+  deactivationReason: text("deactivation_reason"),
+  lastUsedAt: timestamp("last_used_at"),
+  usageCount: integer("usage_count").default(0),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_biometric_employee").on(table.employeeId),
+  index("idx_biometric_branch").on(table.branchId),
+  index("idx_biometric_credential").on(table.credentialId),
+]);
+
+export const insertBiometricCredentialSchema = createInsertSchema(biometricCredentials).omit({
+  id: true,
+  lastUsedAt: true,
+  usageCount: true,
+  deactivatedAt: true,
+  deactivatedBy: true,
+  deactivationReason: true,
+  createdAt: true,
+});
+
+export type BiometricCredential = typeof biometricCredentials.$inferSelect;
+export type InsertBiometricCredential = z.infer<typeof insertBiometricCredentialSchema>;
+
+// System Notifications & Broadcast Messages - الإشعارات والرسائل العامة
+export const systemNotifications = pgTable("system_notifications", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  content: text("content").notNull(),
+  messageType: text("message_type").notNull().default("announcement"),
+  displayStyle: text("display_style").notNull().default("modal"),
+  priority: integer("priority").default(1).notNull(),
+  isActive: boolean("is_active").default(true).notNull(),
+  targetAllBranches: boolean("target_all_branches").default(true).notNull(),
+  targetBranchIds: text("target_branch_ids").array(),
+  startDate: timestamp("start_date"),
+  endDate: timestamp("end_date"),
+  displayTimeStart: text("display_time_start"),
+  displayTimeEnd: text("display_time_end"),
+  soundEnabled: boolean("sound_enabled").default(false).notNull(),
+  soundType: text("sound_type").default("default"),
+  customSoundUrl: text("custom_sound_url"),
+  backgroundColor: text("background_color").default("#ffffff"),
+  textColor: text("text_color").default("#1a1a1a"),
+  accentColor: text("accent_color").default("#d4a017"),
+  animationType: text("animation_type").default("fade"),
+  effectType: text("effect_type"),
+  emoji: text("emoji"),
+  imageUrl: text("image_url"),
+  buttonText: text("button_text"),
+  buttonAction: text("button_action"),
+  showOnce: boolean("show_once").default(false).notNull(),
+  autoCloseSeconds: integer("auto_close_seconds"),
+  designConfig: jsonb("design_config"),
+  // Phase 4: Role-based targeting (optional, applied in addition to branch targeting)
+  targetRoleIds: text("target_role_ids").array(),
+  // Per-user targeting (optional). When set & non-empty, ONLY these users see the
+  // notification — branch/role targeting is bypassed. Used for "specific person" messages.
+  targetUserIds: text("target_user_ids").array(),
+  // Phase 3: Automation provenance (set when notification was auto-created by scheduler)
+  autoGenerated: boolean("auto_generated").default(false).notNull(),
+  autoSource: text("auto_source"), // e.g. 'work_anniversary'
+  // Optional live authorization scope for workflow notifications. Recipients
+  // are re-checked against this scope when reading the bell and sending push,
+  // so revoking a permission or branch removes historical visibility too.
+  accessModule: text("access_module"),
+  accessBranchIds: text("access_branch_ids").array(),
+  dedupeKey: text("dedupe_key"),
+  createdBy: varchar("created_by").references(() => users.id),
+  // وقت إرسال إشعار الجوال (Push) — يمنع الإرسال المزدوج بين الإنشاء والمسح الدوري للمجدولة
+  pushSentAt: timestamp("push_sent_at"),
+  pushClaimedAt: timestamp("push_claimed_at"),
+  pushAttemptCount: integer("push_attempt_count").default(0).notNull(),
+  pushNextRetryAt: timestamp("push_next_retry_at"),
+  pushFailedAt: timestamp("push_failed_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_sys_notif_active").on(table.isActive),
+  index("idx_sys_notif_dates").on(table.startDate, table.endDate),
+  index("idx_sys_notif_priority").on(table.priority),
+  uniqueIndex("uq_sys_notif_dedupe_key").on(table.dedupeKey),
+]);
+
+// Phase 3: Tracks auto-generated notifications to prevent duplicates
+export const notificationAutomations = pgTable("notification_automations", {
+  id: serial("id").primaryKey(),
+  automationType: text("automation_type").notNull(), // 'work_anniversary'
+  branchEmployeeId: integer("branch_employee_id").notNull(),
+  year: integer("year").notNull(),
+  notificationId: integer("notification_id"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("idx_notif_auto_unique").on(table.automationType, table.branchEmployeeId, table.year),
+  index("idx_notif_auto_type_year").on(table.automationType, table.year),
+]);
+
+export type NotificationAutomation = typeof notificationAutomations.$inferSelect;
+
+export const insertSystemNotificationSchema = createInsertSchema(systemNotifications).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type SystemNotification = typeof systemNotifications.$inferSelect;
+export type InsertSystemNotification = z.infer<typeof insertSystemNotificationSchema>;
+
+// Notification Reads - تتبع قراءة الإشعارات
+export const notificationReads = pgTable("notification_reads", {
+  id: serial("id").primaryKey(),
+  notificationId: integer("notification_id").notNull().references(() => systemNotifications.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  readAt: timestamp("read_at").defaultNow().notNull(),
+  dismissed: boolean("dismissed").default(false).notNull(),
+}, (table) => [
+  uniqueIndex("idx_notif_read_unique").on(table.notificationId, table.userId),
+  index("idx_notif_read_user").on(table.userId),
+]);
+
+export const insertNotificationReadSchema = createInsertSchema(notificationReads).omit({
+  id: true,
+  readAt: true,
+});
+
+export type NotificationRead = typeof notificationReads.$inferSelect;
+export type InsertNotificationRead = z.infer<typeof insertNotificationReadSchema>;
+
+// Notification Share Links - روابط المشاركة المميزة (Phase 5)
+export const notificationShareLinks = pgTable("notification_share_links", {
+  id: serial("id").primaryKey(),
+  notificationId: integer("notification_id").notNull().references(() => systemNotifications.id, { onDelete: "cascade" }),
+  slug: text("slug").notNull().unique(),
+  expiresAt: timestamp("expires_at"),
+  viewCount: integer("view_count").default(0).notNull(),
+  defaultRecipientName: text("default_recipient_name"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("idx_notif_share_slug").on(table.slug),
+  index("idx_notif_share_notif").on(table.notificationId),
+]);
+
+export const insertNotificationShareLinkSchema = createInsertSchema(notificationShareLinks).omit({
+  id: true,
+  createdAt: true,
+  viewCount: true,
+});
+
+export type NotificationShareLink = typeof notificationShareLinks.$inferSelect;
+export type InsertNotificationShareLink = z.infer<typeof insertNotificationShareLinkSchema>;
+
+// ============================================
+// نقطة البيع - Event POS
+// ============================================
+
+// منتجات الفرع - ربط المنتجات بالفروع
+export const branchProducts = pgTable("branch_products", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id").notNull().references(() => branches.id, { onDelete: "cascade" }),
+  productId: integer("product_id").notNull().references(() => products.id, { onDelete: "cascade" }),
+  isActive: boolean("is_active").default(true).notNull(),
+  priceOverride: doublePrecision("price_override"),
+  sortOrder: integer("sort_order").default(0),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("idx_branch_product_unique").on(table.branchId, table.productId),
+  index("idx_branch_products_branch").on(table.branchId),
+]);
+
+export const insertBranchProductSchema = createInsertSchema(branchProducts).omit({
+  id: true,
+  createdAt: true,
+});
+export type BranchProduct = typeof branchProducts.$inferSelect;
+export type InsertBranchProduct = z.infer<typeof insertBranchProductSchema>;
+
+// إعدادات الفاتورة الضريبية المبسطة
+export const posInvoiceSettings = pgTable("pos_invoice_settings", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id").notNull().references(() => branches.id, { onDelete: "cascade" }),
+  businessName: text("business_name").notNull(),
+  businessNameEn: text("business_name_en"),
+  vatNumber: text("vat_number").notNull(),
+  crNumber: text("cr_number"),
+  address: text("address"),
+  city: text("city"),
+  phone: text("phone"),
+  logoUrl: text("logo_url"),
+  footerText: text("footer_text"),
+  showQrCode: boolean("show_qr_code").default(true).notNull(),
+  invoicePrefix: text("invoice_prefix").default("EV"),
+  nextInvoiceNumber: integer("next_invoice_number").default(1).notNull(),
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("idx_pos_invoice_settings_branch_unique").on(table.branchId),
+]);
+
+export const insertPosInvoiceSettingsSchema = createInsertSchema(posInvoiceSettings).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type PosInvoiceSettings = typeof posInvoiceSettings.$inferSelect;
+export type InsertPosInvoiceSettings = z.infer<typeof insertPosInvoiceSettingsSchema>;
+
+// عمليات البيع POS
+export const posSales = pgTable("pos_sales", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id").notNull().references(() => branches.id, { onDelete: "cascade" }),
+  cashierId: varchar("cashier_id").notNull().references(() => users.id),
+  cashierName: text("cashier_name").notNull(),
+  invoiceNumber: text("invoice_number").notNull(),
+  saleDate: text("sale_date").notNull(),
+  saleTime: text("sale_time").notNull(),
+  subtotal: doublePrecision("subtotal").default(0).notNull(),
+  vatAmount: doublePrecision("vat_amount").default(0).notNull(),
+  totalAmount: doublePrecision("total_amount").default(0).notNull(),
+  discountType: text("discount_type"),
+  discountValue: doublePrecision("discount_value").default(0),
+  discountAmount: doublePrecision("discount_amount").default(0),
+  paymentMethod: text("payment_method").notNull(),
+  cashAmount: doublePrecision("cash_amount").default(0),
+  networkAmount: doublePrecision("network_amount").default(0),
+  cardType: text("card_type"),
+  amountPaid: doublePrecision("amount_paid").default(0),
+  changeAmount: doublePrecision("change_amount").default(0),
+  customerName: text("customer_name"),
+  customerPhone: text("customer_phone"),
+  journalId: integer("journal_id").references(() => cashierSalesJournals.id),
+  status: text("status").default("completed").notNull(),
+  voidReason: text("void_reason"),
+  voidedBy: varchar("voided_by"),
+  voidedAt: timestamp("voided_at"),
+  refundReason: text("refund_reason"),
+  refundedBy: varchar("refunded_by"),
+  refundedAt: timestamp("refunded_at"),
+  originalSaleId: integer("original_sale_id"),
+  eventId: integer("event_id"),
+  shiftId: integer("shift_id"),
+  notes: text("notes"),
+  idempotencyKey: text("idempotency_key"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("uniq_pos_sales_idempotency").on(table.branchId, table.idempotencyKey).where(sql`idempotency_key IS NOT NULL`),
+  index("idx_pos_sales_branch_date").on(table.branchId, table.saleDate),
+  index("idx_pos_sales_event").on(table.eventId),
+  index("idx_pos_sales_shift").on(table.shiftId),
+  index("idx_pos_sales_cashier").on(table.cashierId),
+  index("idx_pos_sales_invoice").on(table.invoiceNumber),
+  index("idx_pos_sales_status").on(table.status),
+]);
+
+export const insertPosSaleSchema = createInsertSchema(posSales).omit({
+  id: true,
+  createdAt: true,
+});
+export type PosSale = typeof posSales.$inferSelect;
+export type InsertPosSale = z.infer<typeof insertPosSaleSchema>;
+
+// تفاصيل عمليات البيع
+export const posSaleItems = pgTable("pos_sale_items", {
+  id: serial("id").primaryKey(),
+  saleId: integer("sale_id").notNull().references(() => posSales.id, { onDelete: "cascade" }),
+  productId: integer("product_id").notNull().references(() => products.id),
+  productName: text("product_name").notNull(),
+  quantity: integer("quantity").notNull(),
+  unitPrice: doublePrecision("unit_price").notNull(),
+  vatRate: doublePrecision("vat_rate").default(0.15).notNull(),
+  vatAmount: doublePrecision("vat_amount").default(0).notNull(),
+  totalPrice: doublePrecision("total_price").notNull(),
+  refundedQuantity: integer("refunded_quantity").default(0).notNull(),
+}, (table) => [
+  index("idx_pos_sale_items_sale").on(table.saleId),
+  index("idx_pos_sale_items_product").on(table.productId),
+])
+
+export const insertPosSaleItemSchema = createInsertSchema(posSaleItems).omit({
+  id: true,
+});
+export type PosSaleItem = typeof posSaleItems.$inferSelect;
+export type InsertPosSaleItem = z.infer<typeof insertPosSaleItemSchema>;
+
+// طلبات معلقة POS
+export const posHeldOrders = pgTable("pos_held_orders", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id").notNull().references(() => branches.id, { onDelete: "cascade" }),
+  cashierId: varchar("cashier_id").notNull().references(() => users.id),
+  cashierName: text("cashier_name").notNull(),
+  label: text("label"),
+  cartData: text("cart_data").notNull(),
+  paymentMethod: text("payment_method").default("cash"),
+  customerName: text("customer_name"),
+  discountType: text("discount_type"),
+  discountValue: doublePrecision("discount_value").default(0),
+  totalAmount: doublePrecision("total_amount").default(0),
+  eventId: integer("event_id"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_pos_held_orders_branch").on(table.branchId),
+  index("idx_pos_held_orders_cashier").on(table.cashierId),
+]);
+
+export const insertPosHeldOrderSchema = createInsertSchema(posHeldOrders).omit({
+  id: true,
+  createdAt: true,
+});
+export type PosHeldOrder = typeof posHeldOrders.$inferSelect;
+export type InsertPosHeldOrder = z.infer<typeof insertPosHeldOrderSchema>;
+
+// الإيفنتات الموسمية المتعددة
+export const posEvents = pgTable("pos_events", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  location: text("location"),
+  branchId: varchar("branch_id").notNull().references(() => branches.id, { onDelete: "cascade" }),
+  startDate: text("start_date"),
+  endDate: text("end_date"),
+  status: text("status").default("active").notNull(), // active | closed | archived
+  invoicePrefix: text("invoice_prefix"),
+  notes: text("notes"),
+  createdBy: varchar("created_by"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_pos_events_branch").on(table.branchId),
+  index("idx_pos_events_status").on(table.status),
+]);
+
+export const insertPosEventSchema = createInsertSchema(posEvents).omit({
+  id: true,
+  createdAt: true,
+});
+export type PosEvent = typeof posEvents.$inferSelect;
+export type InsertPosEvent = z.infer<typeof insertPosEventSchema>;
+
+// ورديات كاشير الإيفنت
+export const posShifts = pgTable("pos_shifts", {
+  id: serial("id").primaryKey(),
+  eventId: integer("event_id").notNull().references(() => posEvents.id, { onDelete: "cascade" }),
+  branchId: varchar("branch_id").notNull().references(() => branches.id, { onDelete: "cascade" }),
+  cashierId: varchar("cashier_id").notNull().references(() => users.id),
+  cashierName: text("cashier_name").notNull(),
+  openedAt: timestamp("opened_at").defaultNow().notNull(),
+  closedAt: timestamp("closed_at"),
+  openingCash: doublePrecision("opening_cash").default(0).notNull(),
+  expectedCash: doublePrecision("expected_cash"),
+  expectedNetwork: doublePrecision("expected_network"),
+  actualCash: doublePrecision("actual_cash"),
+  actualNetwork: doublePrecision("actual_network"),
+  cashDiscrepancy: doublePrecision("cash_discrepancy"),
+  salesCount: integer("sales_count"),
+  salesTotal: doublePrecision("sales_total"),
+  refundsTotal: doublePrecision("refunds_total"),
+  status: text("status").default("open").notNull(), // open | closed
+  notes: text("notes"),
+  closedBy: varchar("closed_by"),
+}, (table) => [
+  index("idx_pos_shifts_event").on(table.eventId),
+  index("idx_pos_shifts_cashier").on(table.cashierId),
+  index("idx_pos_shifts_status").on(table.status),
+  // وردية مفتوحة واحدة فقط لكل (إيفنت، كاشير)
+  uniqueIndex("uniq_pos_shifts_open").on(table.eventId, table.cashierId).where(sql`status = 'open'`),
+]);
+
+export const insertPosShiftSchema = createInsertSchema(posShifts).omit({
+  id: true,
+  openedAt: true,
+});
+export type PosShift = typeof posShifts.$inferSelect;
+export type InsertPosShift = z.infer<typeof insertPosShiftSchema>;
+
+// الاسترجاع الجزئي
+export const posRefunds = pgTable("pos_refunds", {
+  id: serial("id").primaryKey(),
+  saleId: integer("sale_id").notNull().references(() => posSales.id, { onDelete: "cascade" }),
+  eventId: integer("event_id").references(() => posEvents.id),
+  shiftId: integer("shift_id").references(() => posShifts.id),
+  refundNumber: text("refund_number").notNull(),
+  subtotal: doublePrecision("subtotal").default(0).notNull(),
+  vatAmount: doublePrecision("vat_amount").default(0).notNull(),
+  totalAmount: doublePrecision("total_amount").default(0).notNull(),
+  refundMethod: text("refund_method").default("cash").notNull(), // cash | network
+  reason: text("reason"),
+  refundedBy: varchar("refunded_by").notNull(),
+  refundedByName: text("refunded_by_name"),
+  idempotencyKey: text("idempotency_key"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_pos_refunds_sale").on(table.saleId),
+  index("idx_pos_refunds_event").on(table.eventId),
+]);
+
+export const insertPosRefundSchema = createInsertSchema(posRefunds).omit({
+  id: true,
+  createdAt: true,
+});
+export type PosRefund = typeof posRefunds.$inferSelect;
+export type InsertPosRefund = z.infer<typeof insertPosRefundSchema>;
+
+export const posRefundItems = pgTable("pos_refund_items", {
+  id: serial("id").primaryKey(),
+  refundId: integer("refund_id").notNull().references(() => posRefunds.id, { onDelete: "cascade" }),
+  saleItemId: integer("sale_item_id").notNull().references(() => posSaleItems.id),
+  productId: integer("product_id").notNull(),
+  productName: text("product_name").notNull(),
+  quantity: integer("quantity").notNull(),
+  unitPrice: doublePrecision("unit_price").notNull(),
+  vatAmount: doublePrecision("vat_amount").default(0).notNull(),
+  totalPrice: doublePrecision("total_price").notNull(),
+}, (table) => [
+  index("idx_pos_refund_items_refund").on(table.refundId),
+]);
+
+export const insertPosRefundItemSchema = createInsertSchema(posRefundItems).omit({
+  id: true,
+});
+export type PosRefundItem = typeof posRefundItems.$inferSelect;
+export type InsertPosRefundItem = z.infer<typeof insertPosRefundItemSchema>;
+
+// المرحلة 11: جداول جدولة التقارير الشهرية الآلية
+export const reportSchedules = pgTable("report_schedules", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  reportType: text("report_type").notNull(),
+  branchId: varchar("branch_id").references(() => branches.id, { onDelete: "set null" }),
+  recipients: jsonb("recipients").notNull(),
+  dayOfMonth: integer("day_of_month").default(1).notNull(),
+  hour: integer("hour").default(8).notNull(),
+  isActive: boolean("is_active").default(true).notNull(),
+  lastRunAt: timestamp("last_run_at"),
+  nextRunAt: timestamp("next_run_at"),
+  notes: text("notes"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_report_schedules_active").on(table.isActive),
+  index("idx_report_schedules_next_run").on(table.nextRunAt),
+  index("idx_report_schedules_branch").on(table.branchId),
+]);
+
+export const insertReportScheduleSchema = createInsertSchema(reportSchedules).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  lastRunAt: true,
+  nextRunAt: true,
+});
+export type ReportSchedule = typeof reportSchedules.$inferSelect;
+export type InsertReportSchedule = z.infer<typeof insertReportScheduleSchema>;
+
+export const reportRuns = pgTable("report_runs", {
+  id: serial("id").primaryKey(),
+  scheduleId: integer("schedule_id").notNull().references(() => reportSchedules.id, { onDelete: "cascade" }),
+  runAt: timestamp("run_at").defaultNow().notNull(),
+  periodMonth: text("period_month").notNull(),
+  status: text("status").default("pending").notNull(),
+  summary: jsonb("summary"),
+  messageBody: text("message_body"),
+  recipientsCount: integer("recipients_count").default(0).notNull(),
+  sentCount: integer("sent_count").default(0).notNull(),
+  failedCount: integer("failed_count").default(0).notNull(),
+  errorMessage: text("error_message"),
+  triggeredBy: varchar("triggered_by").references(() => users.id),
+}, (table) => [
+  index("idx_report_runs_schedule").on(table.scheduleId),
+  index("idx_report_runs_run_at").on(table.runAt),
+]);
+
+export const insertReportRunSchema = createInsertSchema(reportRuns).omit({
+  id: true,
+  runAt: true,
+});
+export type ReportRun = typeof reportRuns.$inferSelect;
+export type InsertReportRun = z.infer<typeof insertReportRunSchema>;
+
+// =====================================================
+// عروض العمل (Job Offers) — Phase 12
+// =====================================================
+export const jobOffers = pgTable("job_offers", {
+  id: serial("id").primaryKey(),
+  offerNumber: text("offer_number").notNull().unique(),
+  // بيانات المرشح
+  candidateName: text("candidate_name").notNull(),
+  candidateNameEn: text("candidate_name_en"),
+  nationality: text("nationality"),
+  idNumber: text("id_number"),
+  idPlace: text("id_place"),
+  idExpiry: text("id_expiry"),
+  phone: text("phone").notNull(),
+  email: text("email"),
+  qualification: text("qualification"),
+  // الوظيفة
+  position: text("position").notNull(),
+  positionEn: text("position_en"),
+  department: text("department"),
+  branchId: varchar("branch_id").references(() => branches.id),
+  branchName: text("branch_name"),
+  startDate: text("start_date").notNull(),
+  contractDurationMonths: integer("contract_duration_months").default(12).notNull(),
+  probationDays: integer("probation_days").default(180).notNull(),
+  workingHours: text("working_hours").default("8 ساعات / 6 أيام في الأسبوع"),
+  // الراتب
+  basicSalary: integer("basic_salary").default(0).notNull(),
+  housingAllowance: integer("housing_allowance").default(0).notNull(),
+  transportAllowance: integer("transport_allowance").default(0).notNull(),
+  otherAllowances: integer("other_allowances").default(0).notNull(),
+  // المزايا
+  annualLeaveDays: integer("annual_leave_days").default(21).notNull(),
+  hasMedicalInsurance: boolean("has_medical_insurance").default(true).notNull(),
+  hasTravelTickets: boolean("has_travel_tickets").default(false).notNull(),
+  benefitsNotes: text("benefits_notes"),
+  termsNotes: text("terms_notes"),
+  // الحالة
+  status: text("status").default("draft").notNull(), // draft | sent | viewed | accepted | declined | expired | cancelled
+  validityDays: integer("validity_days").default(2).notNull(),
+  sentAt: timestamp("sent_at"),
+  viewedAt: timestamp("viewed_at"),
+  respondedAt: timestamp("responded_at"),
+  expiresAt: timestamp("expires_at"),
+  // التوقيع والقبول
+  candidateSignature: text("candidate_signature"),
+  acceptedAtSignature: timestamp("accepted_at_signature"),
+  declineReason: text("decline_reason"),
+  candidateIp: text("candidate_ip"),
+  candidateUserAgent: text("candidate_user_agent"),
+  // النظام
+  createdBy: varchar("created_by").references(() => users.id),
+  cancelledBy: varchar("cancelled_by").references(() => users.id),
+  cancelReason: text("cancel_reason"),
+  // ربط الموظف بعد القبول (UUID من users.id)
+  hiredEmployeeId: varchar("hired_employee_id").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_job_offers_status").on(table.status),
+  index("idx_job_offers_branch").on(table.branchId),
+  index("idx_job_offers_phone").on(table.phone),
+  index("idx_job_offers_created_at").on(table.createdAt),
+]);
+
+export const jobOfferTokens = pgTable("job_offer_tokens", {
+  id: serial("id").primaryKey(),
+  offerId: integer("offer_id").notNull().references(() => jobOffers.id, { onDelete: "cascade" }),
+  token: text("token").notNull().unique(),
+  expiresAt: timestamp("expires_at").notNull(),
+  usedAt: timestamp("used_at"),
+  revokedAt: timestamp("revoked_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_job_offer_tokens_token").on(table.token),
+  index("idx_job_offer_tokens_offer").on(table.offerId),
+]);
+
+export const jobOfferAuditLog = pgTable("job_offer_audit_log", {
+  id: serial("id").primaryKey(),
+  offerId: integer("offer_id").notNull().references(() => jobOffers.id, { onDelete: "cascade" }),
+  action: text("action").notNull(), // created | updated | sent | viewed | accepted | declined | extended | cancelled | expired
+  performedBy: varchar("performed_by").references(() => users.id),
+  performedByName: text("performed_by_name"),
+  ipAddress: text("ip_address"),
+  details: jsonb("details"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_job_offer_audit_offer").on(table.offerId),
+  index("idx_job_offer_audit_created_at").on(table.createdAt),
+]);
+
+export const insertJobOfferSchema = createInsertSchema(jobOffers).omit({
+  id: true,
+  offerNumber: true,
+  status: true,
+  sentAt: true,
+  viewedAt: true,
+  respondedAt: true,
+  expiresAt: true,
+  candidateSignature: true,
+  acceptedAtSignature: true,
+  declineReason: true,
+  candidateIp: true,
+  candidateUserAgent: true,
+  cancelledBy: true,
+  cancelReason: true,
+  hiredEmployeeId: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export const updateJobOfferSchema = insertJobOfferSchema.partial().omit({ createdBy: true });
+export type JobOffer = typeof jobOffers.$inferSelect;
+export type InsertJobOffer = z.infer<typeof insertJobOfferSchema>;
+export type JobOfferToken = typeof jobOfferTokens.$inferSelect;
+export type JobOfferAuditLog = typeof jobOfferAuditLog.$inferSelect;
+
+// =====================================================
+// مباشرة العمل (Onboarding / Work Commencement) — Phase 14
+// =====================================================
+export const onboardingNotifications = pgTable("onboarding_notifications", {
+  id: serial("id").primaryKey(),
+  notificationNumber: text("notification_number").notNull().unique(),
+  // ربط بعرض العمل المقبول
+  jobOfferId: integer("job_offer_id").notNull().references(() => jobOffers.id, { onDelete: "cascade" }),
+  // بيانات مكرّرة من العرض (للأداء + للسجل التاريخي)
+  candidateName: text("candidate_name").notNull(),
+  phone: text("phone").notNull(),
+  position: text("position").notNull(),
+  branchId: varchar("branch_id").references(() => branches.id),
+  branchName: text("branch_name"),
+  // تفاصيل المباشرة
+  actualStartDate: text("actual_start_date").notNull(),
+  workingHours: text("working_hours"),
+  reportingTo: text("reporting_to"),
+  notes: text("notes"),
+  // الحالة
+  status: text("status").default("pending").notNull(), // pending | sent | signed | confirmed | converted | cancelled
+  // الرابط العام
+  validityDays: integer("validity_days").default(7).notNull(),
+  sentAt: timestamp("sent_at"),
+  expiresAt: timestamp("expires_at"),
+  // إثبات الموظف
+  selfiePhotoUrl: text("selfie_photo_url"),
+  selfieLat: doublePrecision("selfie_lat"),
+  selfieLng: doublePrecision("selfie_lng"),
+  selfieAccuracy: doublePrecision("selfie_accuracy"),
+  selfieCapturedAt: timestamp("selfie_captured_at"),
+  // مسافة من الفرع (محسوبة وقت التوقيع)
+  distanceFromBranchM: integer("distance_from_branch_m"),
+  withinBranchRadius: boolean("within_branch_radius"),
+  employeeSignature: text("employee_signature"),
+  signedAt: timestamp("signed_at"),
+  signedIp: text("signed_ip"),
+  signedUserAgent: text("signed_user_agent"),
+  // التأكيد والتحويل
+  confirmedAt: timestamp("confirmed_at"),
+  confirmedBy: varchar("confirmed_by").references(() => users.id),
+  confirmedNotes: text("confirmed_notes"),
+  convertedAt: timestamp("converted_at"),
+  convertedBy: varchar("converted_by").references(() => users.id),
+  convertedEmployeeId: varchar("converted_employee_id").references(() => users.id), // حساب الدخول (اختياري)
+  convertedBranchEmployeeId: integer("converted_branch_employee_id").references(() => branchEmployees.id), // سجل HR في موظفي الفرع
+  // النظام
+  createdBy: varchar("created_by").references(() => users.id),
+  cancelledAt: timestamp("cancelled_at"),
+  cancelReason: text("cancel_reason"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_onboarding_status").on(table.status),
+  index("idx_onboarding_branch").on(table.branchId),
+  uniqueIndex("uq_onboarding_offer").on(table.jobOfferId),
+  index("idx_onboarding_created_at").on(table.createdAt),
+]);
+
+export const onboardingTokens = pgTable("onboarding_tokens", {
+  id: serial("id").primaryKey(),
+  notificationId: integer("notification_id").notNull().references(() => onboardingNotifications.id, { onDelete: "cascade" }),
+  token: text("token").notNull().unique(),
+  expiresAt: timestamp("expires_at").notNull(),
+  usedAt: timestamp("used_at"),
+  revokedAt: timestamp("revoked_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_onboarding_tokens_token").on(table.token),
+  index("idx_onboarding_tokens_notification").on(table.notificationId),
+]);
+
+export const insertOnboardingNotificationSchema = createInsertSchema(onboardingNotifications).omit({
+  id: true,
+  notificationNumber: true,
+  status: true,
+  sentAt: true,
+  expiresAt: true,
+  selfiePhotoUrl: true,
+  selfieLat: true,
+  selfieLng: true,
+  selfieAccuracy: true,
+  selfieCapturedAt: true,
+  distanceFromBranchM: true,
+  withinBranchRadius: true,
+  employeeSignature: true,
+  signedAt: true,
+  signedIp: true,
+  signedUserAgent: true,
+  confirmedAt: true,
+  confirmedBy: true,
+  confirmedNotes: true,
+  convertedAt: true,
+  convertedBy: true,
+  convertedEmployeeId: true,
+  convertedBranchEmployeeId: true,
+  cancelledAt: true,
+  cancelReason: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export const updateOnboardingNotificationSchema = insertOnboardingNotificationSchema.partial().omit({ jobOfferId: true, createdBy: true });
+export type OnboardingNotification = typeof onboardingNotifications.$inferSelect;
+export type InsertOnboardingNotification = z.infer<typeof insertOnboardingNotificationSchema>;
+export type OnboardingToken = typeof onboardingTokens.$inferSelect;
+
+// =====================================================
+// طلبات التوظيف (Employment Applications) — Phase 13
+// =====================================================
+export const jobVacancies = pgTable("job_vacancies", {
+  id: serial("id").primaryKey(),
+  slug: text("slug").notNull().unique(), // public URL slug
+  title: text("title").notNull(),
+  titleEn: text("title_en"),
+  department: text("department"),
+  branchId: varchar("branch_id").references(() => branches.id),
+  branchName: text("branch_name"),
+  description: text("description"),
+  requirements: text("requirements"),
+  isOpen: boolean("is_open").default(true).notNull(),
+  closedAt: timestamp("closed_at"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_job_vacancies_slug").on(table.slug),
+  index("idx_job_vacancies_branch").on(table.branchId),
+  index("idx_job_vacancies_is_open").on(table.isOpen),
+]);
+
+export const employmentApplications = pgTable("employment_applications", {
+  id: serial("id").primaryKey(),
+  applicationNumber: text("application_number").notNull().unique(),
+  source: text("source").default("directed").notNull(), // 'directed' | 'open'
+  vacancyId: integer("vacancy_id").references(() => jobVacancies.id, { onDelete: "set null" }),
+  // الوظيفة المستهدفة
+  targetPosition: text("target_position"),
+  targetBranchId: varchar("target_branch_id").references(() => branches.id),
+  targetBranchName: text("target_branch_name"),
+  // البيانات الشخصية
+  fullNameAr: text("full_name_ar"),
+  fullNameEn: text("full_name_en"),
+  nationality: text("nationality"),
+  idNumber: text("id_number"),
+  idType: text("id_type"), // 'national' | 'iqama' | 'passport'
+  idExpiry: text("id_expiry"),
+  dob: text("dob"),
+  gender: text("gender"),
+  maritalStatus: text("marital_status"),
+  city: text("city"),
+  address: text("address"),
+  // التواصل (phone مطلوب للموجّه)
+  phone: text("phone").notNull(),
+  whatsapp: text("whatsapp"),
+  email: text("email"),
+  // المؤهلات / الخبرات / المهارات
+  education: jsonb("education"), // [{degree, field, institution, yearFrom, yearTo, gpa?}]
+  experience: jsonb("experience"), // [{company, position, from, to, current?, summary?}]
+  skills: jsonb("skills"), // string[]
+  languages: jsonb("languages"), // [{name, level}]
+  references: jsonb("references"), // [{name, position, company, phone, email}]
+  // التوقعات
+  expectedSalary: integer("expected_salary"),
+  availabilityDate: text("availability_date"),
+  // المرفقات (data URL أو رابط خارجي)
+  cvUrl: text("cv_url"),
+  photoUrl: text("photo_url"),
+  idCopyUrl: text("id_copy_url"),
+  // البيانات الموسّعة (تطابق النموذج الرسمي طلب توظيف)
+  // تشمل: تفاصيل الاسم الرباعي ar/en، مكان الميلاد، الديانة، تفاصيل الهوية والجواز،
+  // هواتف منزل/عمل، ص.ب، المعالين، الأمراض المزمنة، الحمل، فصيلة الدم،
+  // عمل سابق بالشركة، يعمل حالياً، GOSI، الحد الأدنى للراتب،
+  // رخصة القيادة، السوابق، الدورات التدريبية، مستويات اللغات (تحدث/قراءة/كتابة)،
+  // سرعة الطباعة، مهارات أخرى، هوايات، كيف عرف عن الوظيفة، أقارب في الشركة،
+  // معلومات أخرى يود إضافتها.
+  additionalData: jsonb("additional_data"),
+  // التوقيع والإقرار
+  signature: text("signature"),
+  agreedToTerms: boolean("agreed_to_terms").default(false).notNull(),
+  // الحالة
+  status: text("status").default("invited").notNull(),
+  // invited | submitted | under_review | shortlisted | interviewed | accepted | rejected | withdrawn | expired | cancelled
+  rating: integer("rating"), // 1-5
+  hrNotes: text("hr_notes"),
+  rejectionReason: text("rejection_reason"),
+  // ربط بعرض العمل بعد القبول
+  convertedToOfferId: integer("converted_to_offer_id"),
+  // التواقيت
+  invitedAt: timestamp("invited_at"),
+  submittedAt: timestamp("submitted_at"),
+  reviewedAt: timestamp("reviewed_at"),
+  decidedAt: timestamp("decided_at"),
+  expiresAt: timestamp("expires_at"),
+  // الميتا
+  applicantIp: text("applicant_ip"),
+  applicantUserAgent: text("applicant_user_agent"),
+  createdBy: varchar("created_by").references(() => users.id),
+  reviewedBy: varchar("reviewed_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_emp_app_status").on(table.status),
+  index("idx_emp_app_branch").on(table.targetBranchId),
+  index("idx_emp_app_phone").on(table.phone),
+  index("idx_emp_app_vacancy").on(table.vacancyId),
+  index("idx_emp_app_created_at").on(table.createdAt),
+]);
+
+export const employmentApplicationTokens = pgTable("employment_application_tokens", {
+  id: serial("id").primaryKey(),
+  applicationId: integer("application_id").notNull().references(() => employmentApplications.id, { onDelete: "cascade" }),
+  token: text("token").notNull().unique(),
+  expiresAt: timestamp("expires_at").notNull(),
+  usedAt: timestamp("used_at"),
+  revokedAt: timestamp("revoked_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_emp_app_tokens_token").on(table.token),
+  index("idx_emp_app_tokens_app").on(table.applicationId),
+]);
+
+export const employmentApplicationAuditLog = pgTable("employment_application_audit_log", {
+  id: serial("id").primaryKey(),
+  applicationId: integer("application_id").notNull().references(() => employmentApplications.id, { onDelete: "cascade" }),
+  action: text("action").notNull(),
+  performedBy: varchar("performed_by").references(() => users.id),
+  performedByName: text("performed_by_name"),
+  ipAddress: text("ip_address"),
+  details: jsonb("details"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_emp_app_audit_app").on(table.applicationId),
+  index("idx_emp_app_audit_created_at").on(table.createdAt),
+]);
+
+export const insertJobVacancySchema = createInsertSchema(jobVacancies).omit({
+  id: true, slug: true, createdAt: true, updatedAt: true, closedAt: true, createdBy: true,
+});
+export const updateJobVacancySchema = insertJobVacancySchema.partial();
+export type JobVacancy = typeof jobVacancies.$inferSelect;
+export type InsertJobVacancy = z.infer<typeof insertJobVacancySchema>;
+
+export const insertEmploymentApplicationSchema = createInsertSchema(employmentApplications).omit({
+  id: true, applicationNumber: true, status: true, submittedAt: true, reviewedAt: true,
+  decidedAt: true, expiresAt: true, applicantIp: true, applicantUserAgent: true,
+  reviewedBy: true, convertedToOfferId: true, createdAt: true, updatedAt: true,
+});
+export const updateEmploymentApplicationSchema = insertEmploymentApplicationSchema.partial();
+export type EmploymentApplication = typeof employmentApplications.$inferSelect;
+export type InsertEmploymentApplication = z.infer<typeof insertEmploymentApplicationSchema>;
+export type EmploymentApplicationToken = typeof employmentApplicationTokens.$inferSelect;
+export type EmploymentApplicationAuditLog = typeof employmentApplicationAuditLog.$inferSelect;
+
+// =====================================================
+// Branch Floor Plan — مخطط أرضية الفرع لتوزيع فريق العمل
+// =====================================================
+export const branchFloorPlans = pgTable("branch_floor_plans", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id").notNull().references(() => branches.id, { onDelete: "cascade" }),
+  name: text("name"),
+  width: integer("width").default(1200).notNull(),
+  height: integer("height").default(800).notNull(),
+  backgroundColor: text("background_color").default("#f8fafc"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("uq_branch_floor_plans_branch").on(table.branchId),
+]);
+
+export const floorPlanZones = pgTable("floor_plan_zones", {
+  id: serial("id").primaryKey(),
+  floorPlanId: integer("floor_plan_id").notNull().references(() => branchFloorPlans.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  color: text("color").default("#fde68a").notNull(),
+  x: integer("x").notNull(),
+  y: integer("y").notNull(),
+  width: integer("width").notNull(),
+  height: integer("height").notNull(),
+  // Rotation in degrees around the zone's center. 0 = no rotation.
+  rotation: integer("rotation").default(0).notNull(),
+  // Stacking order — higher zIndex renders on top. Used by
+  // "إلى الأمام / إلى الخلف" context-menu actions to resolve overlaps.
+  zIndex: integer("z_index").default(0).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_floor_plan_zones_plan").on(table.floorPlanId),
+]);
+
+// A row represents either an unfilled "role slot" (employeeId IS NULL) or a
+// role slot already filled by a specific employee. The plan is distributed
+// primarily by role/shape; assigning a person is the optional second step.
+export const floorPlanAssignments = pgTable("floor_plan_assignments", {
+  id: serial("id").primaryKey(),
+  floorPlanId: integer("floor_plan_id").notNull().references(() => branchFloorPlans.id, { onDelete: "cascade" }),
+  // Nullable — empty slots are allowed
+  employeeId: integer("employee_id").references(() => branchEmployees.id, { onDelete: "cascade" }),
+  shiftType: text("shift_type").notNull().default("morning"), // 'morning' | 'evening' | 'night'
+  role: text("role"),
+  notes: text("notes"),
+  x: integer("x").notNull(),
+  y: integer("y").notNull(),
+  // Stacking order — higher zIndex renders on top. Used by
+  // "إلى الأمام / إلى الخلف" context-menu actions for overlapping pawns.
+  zIndex: integer("z_index").default(0).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  // Partial unique: same employee may only be placed once per (plan, shift),
+  // but unlimited empty slots are allowed.
+  uniqueIndex("uq_floor_plan_assignments_emp_shift")
+    .on(table.floorPlanId, table.employeeId, table.shiftType)
+    .where(sql`employee_id IS NOT NULL`),
+  index("idx_floor_plan_assignments_plan").on(table.floorPlanId),
+  index("idx_floor_plan_assignments_plan_shift").on(table.floorPlanId, table.shiftType),
+]);
+
+export const insertBranchFloorPlanSchema = createInsertSchema(branchFloorPlans).omit({
+  id: true, createdAt: true, updatedAt: true,
+});
+export const insertFloorPlanZoneSchema = createInsertSchema(floorPlanZones).omit({
+  id: true, createdAt: true,
+});
+export const insertFloorPlanAssignmentSchema = createInsertSchema(floorPlanAssignments).omit({
+  id: true, createdAt: true, updatedAt: true,
+});
+
+export type BranchFloorPlan = typeof branchFloorPlans.$inferSelect;
+export type InsertBranchFloorPlan = z.infer<typeof insertBranchFloorPlanSchema>;
+export type FloorPlanZone = typeof floorPlanZones.$inferSelect;
+export type InsertFloorPlanZone = z.infer<typeof insertFloorPlanZoneSchema>;
+export type FloorPlanAssignment = typeof floorPlanAssignments.$inferSelect;
+export type InsertFloorPlanAssignment = z.infer<typeof insertFloorPlanAssignmentSchema>;
+
+// Reusable floor-plan template. Stores a normalized snapshot (zones +
+// role slots) so a manager can save the layout of one shift/branch and
+// later apply it to any branch+shift in one click. The payload is the
+// minimum needed to rebuild the layout — no employee bindings, no ids.
+export const floorPlanTemplates = pgTable("floor_plan_templates", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  description: text("description"),
+  // Scope: "branch" (only that branch can apply) or "global" (any branch).
+  // Null branchId = global.
+  branchId: varchar("branch_id").references(() => branches.id, { onDelete: "cascade" }),
+  // Snapshot of zones (sans ids) and role slots (sans employeeId).
+  // Shape: { zones: ZoneTemplate[], assignments: SlotTemplate[] }
+  payload: jsonb("payload").notNull(),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_floor_plan_templates_branch").on(table.branchId),
+  index("idx_floor_plan_templates_created_at").on(table.createdAt),
+]);
+
+export const insertFloorPlanTemplateSchema = createInsertSchema(floorPlanTemplates).omit({
+  id: true, createdAt: true, updatedAt: true,
+});
+export type FloorPlanTemplate = typeof floorPlanTemplates.$inferSelect;
+export type InsertFloorPlanTemplate = z.infer<typeof insertFloorPlanTemplateSchema>;
+
+// Multi-task links — visual line connecting two assignments in the same shift,
+// used to indicate one employee (or a tightly-coupled pair) covers both
+// positions. Purely visual; doesn't move employees or change RBAC.
+// Direction is irrelevant — we always store the smaller assignment id in
+// `fromAssignmentId` to make the (from,to) pair unique regardless of which
+// pawn the user dragged from first.
+export const floorPlanLinks = pgTable("floor_plan_links", {
+  id: serial("id").primaryKey(),
+  floorPlanId: integer("floor_plan_id").notNull().references(() => branchFloorPlans.id, { onDelete: "cascade" }),
+  shiftType: text("shift_type").notNull().default("morning"),
+  fromAssignmentId: integer("from_assignment_id").notNull().references(() => floorPlanAssignments.id, { onDelete: "cascade" }),
+  toAssignmentId: integer("to_assignment_id").notNull().references(() => floorPlanAssignments.id, { onDelete: "cascade" }),
+  label: text("label"),
+  color: text("color").notNull().default("#6366f1"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("uq_floor_plan_links_pair")
+    .on(table.floorPlanId, table.shiftType, table.fromAssignmentId, table.toAssignmentId),
+  index("idx_floor_plan_links_plan_shift").on(table.floorPlanId, table.shiftType),
+  // Enforce a canonical ordering at the DB layer so the pair (A,B) and (B,A)
+  // cannot both exist regardless of insert path. Storage layer normalizes
+  // before insert, and this CHECK is a defence-in-depth backstop.
+  check("floor_plan_links_ordered_pair", sql`${table.fromAssignmentId} < ${table.toAssignmentId}`),
+]);
+
+export const insertFloorPlanLinkSchema = createInsertSchema(floorPlanLinks).omit({
+  id: true, createdAt: true,
+});
+export type FloorPlanLink = typeof floorPlanLinks.$inferSelect;
+export type InsertFloorPlanLink = z.infer<typeof insertFloorPlanLinkSchema>;
+
+// =====================================================
+// Branch Opening Campaigns — حملات افتتاح الفروع الجديدة
+// لتوليد لينك مخصص لكل افتتاح + QR + تجميع بيانات الضيوف
+// =====================================================
+export const branchOpeningCampaigns = pgTable("branch_opening_campaigns", {
+  id: serial("id").primaryKey(),
+  slug: text("slug").notNull().unique(), // معرّف الرابط العام (مثل: opening-medina-2026)
+  title: text("title").notNull(), // عنوان الحملة الداخلي
+  branchName: text("branch_name").notNull(), // اسم الفرع الجديد
+  branchCity: text("branch_city").notNull(), // مدينة الفرع
+  branchAddress: text("branch_address"), // عنوان الفرع التفصيلي
+  openingDate: text("opening_date"), // تاريخ الافتتاح (YYYY-MM-DD)
+  headline: text("headline"), // عنوان جذاب يظهر للعميل
+  description: text("description"), // وصف ترحيبي
+  prizesJson: text("prizes_json"), // JSON array لجوائز عجلة الحظ ["وجبة مجانية", "خصم 20%", ...]
+  isActive: boolean("is_active").default(true).notNull(),
+  maxGuests: integer("max_guests"), // حد أقصى للتسجيلات (اختياري)
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_branch_opening_campaigns_slug").on(table.slug),
+  index("idx_branch_opening_campaigns_active").on(table.isActive),
+]);
+
+export const branchOpeningGuests = pgTable("branch_opening_guests", {
+  id: serial("id").primaryKey(),
+  campaignId: integer("campaign_id").notNull().references(() => branchOpeningCampaigns.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  phone: text("phone").notNull(),
+  gender: text("gender").notNull(),
+  city: text("city").notNull(),
+  district: text("district").notNull(),
+  ticketNumber: text("ticket_number").notNull(), // رقم تذكرة الضيف (مولّد تلقائياً)
+  prizeWon: text("prize_won"), // الجائزة التي حصل عليها من عجلة الحظ
+  ipAddress: text("ip_address"), // لمنع تكرار التسجيل
+  userAgent: text("user_agent"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_branch_opening_guests_campaign").on(table.campaignId),
+  index("idx_branch_opening_guests_phone").on(table.phone),
+  index("idx_branch_opening_guests_campaign_phone").on(table.campaignId, table.phone),
+]);
+
+export const insertBranchOpeningCampaignSchema = createInsertSchema(branchOpeningCampaigns).omit({
+  id: true, createdAt: true, updatedAt: true, slug: true,
+});
+export const updateBranchOpeningCampaignSchema = insertBranchOpeningCampaignSchema.partial().omit({ createdBy: true });
+export type BranchOpeningCampaign = typeof branchOpeningCampaigns.$inferSelect;
+export type InsertBranchOpeningCampaign = z.infer<typeof insertBranchOpeningCampaignSchema>;
+
+export const insertBranchOpeningGuestSchema = createInsertSchema(branchOpeningGuests).omit({
+  id: true, createdAt: true, ticketNumber: true, prizeWon: true, ipAddress: true, userAgent: true,
+});
+export type BranchOpeningGuest = typeof branchOpeningGuests.$inferSelect;
+export type InsertBranchOpeningGuest = z.infer<typeof insertBranchOpeningGuestSchema>;
+
+// ===== فريق التصوير والميديا =====
+export const mediaAssets = pgTable("media_assets", {
+  id: serial("id").primaryKey(),
+  category: text("category").notNull(), // identity | photos | products | templates | archive
+  title: text("title").notNull(),
+  description: text("description"),
+  fileType: text("file_type").notNull(), // image | video | design | document | other
+  mimeType: text("mime_type").notNull(),
+  fileName: text("file_name").notNull(),
+  storagePath: text("storage_path").notNull(),
+  fileSize: integer("file_size").notNull(),
+  thumbnailPath: text("thumbnail_path"),
+  tags: text("tags").array().default(sql`'{}'::text[]`),
+  branchId: integer("branch_id"),
+  campaignId: integer("campaign_id"),
+  platform: text("platform"), // instagram | tiktok | snapchat | twitter | youtube | other
+  publishDate: text("publish_date"),
+  designer: text("designer"),
+  uploadedBy: varchar("uploaded_by"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_media_assets_category").on(table.category),
+  index("idx_media_assets_branch").on(table.branchId),
+  index("idx_media_assets_campaign").on(table.campaignId),
+  index("idx_media_assets_platform").on(table.platform),
+]);
+
+export const brandColors = pgTable("brand_colors", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  hex: text("hex").notNull(),
+  description: text("description"),
+  usage: text("usage"),
+  sortOrder: integer("sort_order").default(0),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const brandFonts = pgTable("brand_fonts", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  family: text("family").notNull(),
+  language: text("language").notNull(), // ar | en | both
+  weights: text("weights"),
+  downloadUrl: text("download_url"),
+  notes: text("notes"),
+  sortOrder: integer("sort_order").default(0),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertMediaAssetSchema = createInsertSchema(mediaAssets).omit({ id: true, createdAt: true });
+export const updateMediaAssetSchema = insertMediaAssetSchema.partial().omit({ uploadedBy: true, storagePath: true, fileName: true, fileSize: true, mimeType: true });
+export type MediaAsset = typeof mediaAssets.$inferSelect;
+export type InsertMediaAsset = z.infer<typeof insertMediaAssetSchema>;
+
+export const insertBrandColorSchema = createInsertSchema(brandColors).omit({ id: true, createdAt: true });
+export type BrandColor = typeof brandColors.$inferSelect;
+export type InsertBrandColor = z.infer<typeof insertBrandColorSchema>;
+
+export const insertBrandFontSchema = createInsertSchema(brandFonts).omit({ id: true, createdAt: true });
+export type BrandFont = typeof brandFonts.$inferSelect;
+export type InsertBrandFont = z.infer<typeof insertBrandFontSchema>;
+
+// حملات التصميم — مجلدات منظّمة تجمع كل أصول حملة/مشروع معيّن
+export const mediaCampaigns = pgTable("media_campaigns", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  description: text("description"),
+  coverColor: text("cover_color").default("#D4A574"),
+  status: text("status").notNull().default("active"), // active | archived
+  startDate: text("start_date"),
+  endDate: text("end_date"),
+  branchId: integer("branch_id"),
+  createdBy: varchar("created_by"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_media_campaigns_status").on(table.status),
+  index("idx_media_campaigns_branch").on(table.branchId),
+]);
+
+export const insertMediaCampaignSchema = createInsertSchema(mediaCampaigns).omit({ id: true, createdAt: true, createdBy: true });
+export type MediaCampaign = typeof mediaCampaigns.$inferSelect;
+export type InsertMediaCampaign = z.infer<typeof insertMediaCampaignSchema>;
+
+// ============================================================================
+// HR Hub - 4 New Modules (Documents | Leaves | Warnings | EOS)
+// ============================================================================
+
+// 1) وثائق الموظفين — هويات/إقامات/رخص/تأمينات مع تنبيهات انتهاء الصلاحية
+export const employeeDocuments = pgTable("employee_documents", {
+  id: serial("id").primaryKey(),
+  branchEmployeeId: integer("branch_employee_id").notNull().references(() => branchEmployees.id, { onDelete: "cascade" }),
+  branchId: varchar("branch_id").references(() => branches.id),
+  documentType: text("document_type").notNull(), // id_card | residence | passport | driving_license | health_certificate | work_permit | contract | other
+  documentNumber: text("document_number"),
+  issueDate: text("issue_date"), // YYYY-MM-DD
+  expiryDate: text("expiry_date"), // YYYY-MM-DD
+  issuingAuthority: text("issuing_authority"),
+  fileUrl: text("file_url"),
+  notes: text("notes"),
+  status: text("status").notNull().default("active"), // active | expired | expiring_soon | archived
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_employee_documents_employee").on(table.branchEmployeeId),
+  index("idx_employee_documents_branch").on(table.branchId),
+  index("idx_employee_documents_type").on(table.documentType),
+  index("idx_employee_documents_expiry").on(table.expiryDate),
+  index("idx_employee_documents_status").on(table.status),
+]);
+
+export const insertEmployeeDocumentSchema = createInsertSchema(employeeDocuments, {
+  documentType: z.enum(["id_card", "residence", "passport", "driving_license", "health_certificate", "work_permit", "contract", "other"]),
+  status: z.enum(["active", "expired", "expiring_soon", "archived"]).optional(),
+}).omit({ id: true, createdAt: true, updatedAt: true });
+
+export type EmployeeDocument = typeof employeeDocuments.$inferSelect;
+export type InsertEmployeeDocument = z.infer<typeof insertEmployeeDocumentSchema>;
+
+export const EMPLOYEE_DOCUMENT_TYPE_LABELS: Record<string, string> = {
+  id_card: "بطاقة هوية وطنية",
+  residence: "إقامة",
+  passport: "جواز سفر",
+  driving_license: "رخصة قيادة",
+  health_certificate: "شهادة صحية",
+  work_permit: "رخصة عمل",
+  contract: "عقد عمل",
+  other: "أخرى",
+};
+
+// 2) طلبات الإجازات
+export const leaveRequests = pgTable("leave_requests", {
+  id: serial("id").primaryKey(),
+  branchEmployeeId: integer("branch_employee_id").notNull().references(() => branchEmployees.id, { onDelete: "cascade" }),
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
+  leaveType: text("leave_type").notNull(), // annual | sick | emergency | maternity | paternity | unpaid | hajj | marriage | bereavement | other
+  startDate: text("start_date").notNull(), // YYYY-MM-DD
+  endDate: text("end_date").notNull(), // YYYY-MM-DD
+  totalDays: real("total_days").notNull(), // calendar days (inclusive)
+  workingDays: real("working_days"), // working days excluding weekly rest (server-computed)
+  reason: text("reason"),
+  status: text("status").notNull().default("pending"), // pending | approved | rejected | cancelled
+  reviewedBy: varchar("reviewed_by").references(() => users.id),
+  reviewedAt: timestamp("reviewed_at"),
+  reviewerNote: text("reviewer_note"),
+  attachmentUrl: text("attachment_url"),
+  // إلغاء/سحب إجازة معتمدة (Phase 2)
+  cancelReason: text("cancel_reason"),
+  cancelledBy: varchar("cancelled_by").references(() => users.id),
+  cancelledAt: timestamp("cancelled_at"),
+  // تدرّج الموافقات (Phase 3) — سلسلة الموافقات المتعددة
+  approvalFlow: jsonb("approval_flow"), // [{level, title, approverId, approverName, decision, note, at}]
+  currentLevel: integer("current_level").default(1).notNull(),
+  requiredLevels: integer("required_levels").default(1).notNull(),
+  // لقطة سلسلة الاعتمادات المطبّقة وقت الإنشاء (نظام الموافقات والاعتمادات)
+  approvalChain: jsonb("approval_chain"), // [{level, jobTitle, stepName}]
+  // تفصيل مراحل الإجازة المرضية حسب المادة 117 (يُحفظ عند الاعتماد النهائي)
+  sickTierBreakdown: jsonb("sick_tier_breakdown"), // {fullPayDays, threeQuarterPayDays, unpaidDays, usedBefore, year}
+  // ===== دورة الخروج والعودة (مباشرة الخروج / مباشرة العمل) =====
+  actualExitDate: text("actual_exit_date"), // YYYY-MM-DD تاريخ الخروج الفعلي
+  exitConfirmedBy: varchar("exit_confirmed_by").references(() => users.id),
+  exitConfirmedAt: timestamp("exit_confirmed_at"),
+  actualReturnDate: text("actual_return_date"), // YYYY-MM-DD تاريخ المباشرة الفعلي
+  returnConfirmedBy: varchar("return_confirmed_by").references(() => users.id),
+  returnConfirmedAt: timestamp("return_confirmed_at"),
+  returnStatus: text("return_status"), // on_time | late | early
+  lateDays: real("late_days").default(0), // أيام التأخير عن موعد العودة
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_leave_requests_employee").on(table.branchEmployeeId),
+  index("idx_leave_requests_branch").on(table.branchId),
+  index("idx_leave_requests_status").on(table.status),
+  index("idx_leave_requests_type").on(table.leaveType),
+  index("idx_leave_requests_start").on(table.startDate),
+]);
+
+// ===== العطلات الرسمية (تُستثنى من أيام العمل عند حساب الإجازات) =====
+export const publicHolidays = pgTable("public_holidays", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(), // مثل: عيد الفطر، اليوم الوطني
+  startDate: text("start_date").notNull(), // YYYY-MM-DD
+  endDate: text("end_date").notNull(), // YYYY-MM-DD (شامل)
+  isActive: boolean("is_active").default(true).notNull(),
+  note: text("note"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_public_holidays_dates").on(table.startDate, table.endDate),
+]);
+
+export const insertPublicHolidaySchema = createInsertSchema(publicHolidays).omit({
+  id: true,
+  createdAt: true,
+  createdBy: true,
+});
+export type InsertPublicHoliday = z.infer<typeof insertPublicHolidaySchema>;
+export type PublicHoliday = typeof publicHolidays.$inferSelect;
+
+// ===== خطة الإجازات السنوية (حجز مواعيد مقترحة مقدماً لكل فرع) =====
+export const leavePlanEntries = pgTable("leave_plan_entries", {
+  id: serial("id").primaryKey(),
+  branchEmployeeId: integer("branch_employee_id").notNull().references(() => branchEmployees.id, { onDelete: "cascade" }),
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
+  year: integer("year").notNull(),
+  plannedStartDate: text("planned_start_date").notNull(), // YYYY-MM-DD
+  plannedEndDate: text("planned_end_date").notNull(), // YYYY-MM-DD (شامل)
+  days: real("days").notNull(), // أيام تقويمية شاملة
+  status: text("status").notNull().default("planned"), // planned | converted | cancelled
+  leaveRequestId: integer("leave_request_id").references(() => leaveRequests.id, { onDelete: "set null" }),
+  note: text("note"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_leave_plan_branch_year").on(table.branchId, table.year),
+  index("idx_leave_plan_employee").on(table.branchEmployeeId),
+]);
+
+export const insertLeavePlanEntrySchema = createInsertSchema(leavePlanEntries).omit({
+  id: true,
+  branchId: true,
+  year: true,
+  days: true,
+  status: true,
+  leaveRequestId: true,
+  createdBy: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type InsertLeavePlanEntry = z.infer<typeof insertLeavePlanEntrySchema>;
+export type LeavePlanEntry = typeof leavePlanEntries.$inferSelect;
+
+// ===== نظام الموافقات والاعتمادات (Approval Chains) =====
+// سلسلة موافقات واحدة لكل (فرع + نوع طلب). branchId = null تعني سلسلة افتراضية لكل الفروع.
+export const approvalWorkflows = pgTable("approval_workflows", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id").references(() => branches.id), // null = افتراضي لكل الفروع
+  requestType: text("request_type").notNull().default("leave"), // leave (حالياً)
+  name: text("name").notNull(),
+  isActive: boolean("is_active").default(true).notNull(),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_approval_workflows_branch").on(table.branchId),
+  index("idx_approval_workflows_type").on(table.requestType),
+  // سلسلة واحدة فقط لكل (نوع طلب + فرع) — وفريدة افتراضية واحدة لكل نوع طلب
+  uniqueIndex("uniq_approval_workflows_branch_type")
+    .on(table.requestType, table.branchId)
+    .where(sql`${table.branchId} IS NOT NULL`),
+  uniqueIndex("uniq_approval_workflows_default_type")
+    .on(table.requestType)
+    .where(sql`${table.branchId} IS NULL`),
+]);
+
+// مراحل سلسلة الموافقة بالترتيب
+export const approvalWorkflowSteps = pgTable("approval_workflow_steps", {
+  id: serial("id").primaryKey(),
+  workflowId: integer("workflow_id").notNull().references(() => approvalWorkflows.id, { onDelete: "cascade" }),
+  stepOrder: integer("step_order").notNull(), // 1, 2, 3...
+  approverType: text("approver_type").notNull().default("job_role"), // job_role (حالياً)
+  jobTitle: text("job_title"), // يطابق org_job_roles.title_ar / branch_employees.job_title
+  stepName: text("step_name"), // تسمية المرحلة الظاهرة (مثلاً: موافقة مدير الفرع)
+  isRequired: boolean("is_required").default(true).notNull(),
+}, (table) => [
+  index("idx_approval_workflow_steps_wf").on(table.workflowId),
+]);
+
+export const insertApprovalWorkflowSchema = createInsertSchema(approvalWorkflows).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type InsertApprovalWorkflow = z.infer<typeof insertApprovalWorkflowSchema>;
+export type ApprovalWorkflow = typeof approvalWorkflows.$inferSelect;
+
+export const insertApprovalWorkflowStepSchema = createInsertSchema(approvalWorkflowSteps).omit({
+  id: true,
+});
+export type InsertApprovalWorkflowStep = z.infer<typeof insertApprovalWorkflowStepSchema>;
+export type ApprovalWorkflowStep = typeof approvalWorkflowSteps.$inferSelect;
+
+// رصيد الإجازات السنوي لكل موظف (Phase 1)
+export const leaveBalances = pgTable("leave_balances", {
+  id: serial("id").primaryKey(),
+  branchEmployeeId: integer("branch_employee_id").notNull().references(() => branchEmployees.id, { onDelete: "cascade" }),
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
+  year: integer("year").notNull(),
+  leaveType: text("leave_type").notNull().default("annual"),
+  entitledDays: real("entitled_days").notNull().default(21), // المستحق سنوياً
+  carriedOverDays: real("carried_over_days").notNull().default(0), // مرحّل من العام السابق
+  adjustmentDays: real("adjustment_days").notNull().default(0), // تعديل يدوي (+/-)
+  settledDays: real("settled_days").notNull().default(0), // أيام تمت تصفيتها نقداً (تُخصم من الرصيد)
+  note: text("note"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("uq_leave_balance_emp_year_type").on(table.branchEmployeeId, table.year, table.leaveType),
+  index("idx_leave_balances_branch").on(table.branchId),
+  index("idx_leave_balances_year").on(table.year),
+]);
+
+export const insertLeaveBalanceSchema = createInsertSchema(leaveBalances, {
+  year: z.number().int().min(2020).max(2100),
+  entitledDays: z.number().min(0).max(365),
+  carriedOverDays: z.number().min(0).max(365),
+  adjustmentDays: z.number().min(-365).max(365),
+}).omit({ id: true, createdAt: true, updatedAt: true, createdBy: true, settledDays: true });
+
+export type LeaveBalance = typeof leaveBalances.$inferSelect;
+export type InsertLeaveBalance = z.infer<typeof insertLeaveBalanceSchema>;
+
+// ===== تصفية رصيد الإجازة (سند صرف بدل الإجازة) =====
+export const leaveSettlements = pgTable("leave_settlements", {
+  id: serial("id").primaryKey(),
+  leaveRequestId: integer("leave_request_id").notNull().references(() => leaveRequests.id, { onDelete: "cascade" }),
+  branchEmployeeId: integer("branch_employee_id").notNull().references(() => branchEmployees.id, { onDelete: "cascade" }),
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
+  year: integer("year").notNull(),
+  leaveType: text("leave_type").notNull().default("annual"),
+  settledDays: real("settled_days").notNull(), // الأيام المصفّاة
+  divisor: integer("divisor").notNull(), // 30 أو 21 حسب استحقاق الموظف
+  grossSalary: real("gross_salary").notNull(), // الراتب الإجمالي وقت التصفية
+  dailyRate: real("daily_rate").notNull(), // الراتب ÷ المقسوم
+  calculatedAmount: real("calculated_amount").notNull(), // المبلغ المحسوب آلياً
+  finalAmount: real("final_amount").notNull(), // المبلغ النهائي (قد يكون يدوياً)
+  isManualAmount: boolean("is_manual_amount").notNull().default(false),
+  settlementDate: text("settlement_date").notNull(), // YYYY-MM-DD
+  note: text("note"),
+  status: text("status").notNull().default("active"), // active | cancelled
+  cancelledBy: varchar("cancelled_by").references(() => users.id),
+  cancelledAt: timestamp("cancelled_at"),
+  cancelReason: text("cancel_reason"),
+  // ===== دورة عمل التصفية (Phase: كشف الحساب والتصفيات) =====
+  // issued → awaiting_signature (حُوّلت للمالية وأُشعر الموظف) → signed (وقّع الموظف) → disbursed (مصروفة)
+  workflowStatus: text("workflow_status").notNull().default("issued"),
+  sentFinanceAt: timestamp("sent_finance_at"),
+  sentFinanceBy: varchar("sent_finance_by").references(() => users.id),
+  signatureData: text("signature_data"), // data:image/png;base64 توقيع الموظف
+  signedAt: timestamp("signed_at"),
+  acknowledgedAt: timestamp("acknowledged_at"), // إقرار الاستلام
+  disbursedAt: timestamp("disbursed_at"),
+  disbursedBy: varchar("disbursed_by").references(() => users.id),
+  disbursementNote: text("disbursement_note"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_leave_settlements_employee").on(table.branchEmployeeId),
+  index("idx_leave_settlements_branch").on(table.branchId),
+  // تصفية نشطة واحدة فقط لكل طلب إجازة
+  uniqueIndex("uq_leave_settlements_request_active")
+    .on(table.leaveRequestId)
+    .where(sql`${table.status} = 'active'`),
+]);
+
+export type LeaveSettlement = typeof leaveSettlements.$inferSelect;
+
+export const insertLeaveRequestSchema = createInsertSchema(leaveRequests, {
+  leaveType: z.enum(["annual", "sick", "emergency", "maternity", "paternity", "unpaid", "hajj", "marriage", "bereavement", "other"]),
+  status: z.enum(["pending", "approved", "rejected", "cancelled"]).optional(),
+  totalDays: z.number().positive("عدد الأيام يجب أن يكون موجباً"),
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "تاريخ غير صحيح"),
+  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "تاريخ غير صحيح"),
+}).omit({
+  id: true, createdAt: true, updatedAt: true, reviewedBy: true, reviewedAt: true,
+  actualExitDate: true, exitConfirmedBy: true, exitConfirmedAt: true,
+  actualReturnDate: true, returnConfirmedBy: true, returnConfirmedAt: true,
+  returnStatus: true, lateDays: true,
+});
+
+export type LeaveRequest = typeof leaveRequests.$inferSelect;
+export type InsertLeaveRequest = z.infer<typeof insertLeaveRequestSchema>;
+
+export const LEAVE_TYPE_LABELS: Record<string, string> = {
+  annual: "إجازة سنوية",
+  sick: "إجازة مرضية",
+  emergency: "إجازة طارئة",
+  maternity: "إجازة أمومة",
+  paternity: "إجازة أبوة",
+  unpaid: "إجازة بدون راتب",
+  hajj: "إجازة حج",
+  marriage: "إجازة زواج",
+  bereavement: "إجازة وفاة",
+  other: "أخرى",
+};
+
+export const LEAVE_STATUS_LABELS: Record<string, string> = {
+  pending: "قيد المراجعة",
+  approved: "معتمدة",
+  rejected: "مرفوضة",
+  cancelled: "ملغاة",
+};
+
+// 3) الإنذارات والمخالفات الإدارية
+export const employeeWarnings = pgTable("employee_warnings", {
+  id: serial("id").primaryKey(),
+  branchEmployeeId: integer("branch_employee_id").notNull().references(() => branchEmployees.id, { onDelete: "cascade" }),
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
+  level: text("level").notNull(), // verbal | written_1 | written_2 | written_3 | final | termination
+  reason: text("reason").notNull(),
+  description: text("description"),
+  issuedDate: text("issued_date").notNull(), // YYYY-MM-DD
+  issuedBy: varchar("issued_by").references(() => users.id),
+  acknowledgedAt: timestamp("acknowledged_at"),
+  acknowledgedSignature: text("acknowledged_signature"),
+  deductionAmount: real("deduction_amount").default(0),
+  attachmentUrl: text("attachment_url"),
+  // NEW (Phase 12) — template + categorized reason + attachments + public signing
+  templateId: text("template_id"), // key from shared/warning-templates.ts
+  reasonCategory: text("reason_category"), // key from WARNING_REASON_CATEGORIES
+  attachments: jsonb("attachments").$type<Array<{ url: string; name: string; mimeType?: string; size?: number }>>().default([]),
+  publicToken: text("public_token"), // random URL token for WhatsApp signing link
+  signedAt: timestamp("signed_at"),
+  signatureData: text("signature_data"), // base64 PNG data URL captured from SignaturePad
+  signedIp: text("signed_ip"),
+  signedUserAgent: text("signed_user_agent"),
+  companyNameSnapshot: text("company_name_snapshot"),
+  // تذكيرات التوقيع التلقائية (بحد أقصى تذكيرين لكل إنذار)
+  reminderCount: integer("reminder_count").default(0).notNull(),
+  lastReminderAt: timestamp("last_reminder_at"),
+  status: text("status").notNull().default("active"), // active | appealed | cancelled | expired
+  expiresAt: text("expires_at"), // YYYY-MM-DD
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_employee_warnings_employee").on(table.branchEmployeeId),
+  index("idx_employee_warnings_branch").on(table.branchId),
+  index("idx_employee_warnings_status").on(table.status),
+  index("idx_employee_warnings_level").on(table.level),
+  index("idx_employee_warnings_date").on(table.issuedDate),
+  index("idx_employee_warnings_employee_date").on(table.branchEmployeeId, table.issuedDate),
+  uniqueIndex("idx_employee_warnings_public_token").on(table.publicToken),
+]);
+
+export const insertEmployeeWarningSchema = createInsertSchema(employeeWarnings, {
+  level: z.enum(["verbal", "written_1", "written_2", "written_3", "final", "termination"]),
+  status: z.enum(["active", "appealed", "cancelled", "expired"]).optional(),
+  deductionAmount: z.number().min(0).optional(),
+  issuedDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "تاريخ غير صحيح"),
+  templateId: z.string().optional(),
+  reasonCategory: z.string().optional(),
+  attachments: z.array(z.object({
+    url: z.string(),
+    name: z.string(),
+    mimeType: z.string().optional(),
+    size: z.number().optional(),
+  })).optional(),
+}).omit({
+  id: true, createdAt: true, updatedAt: true,
+  acknowledgedAt: true, acknowledgedSignature: true,
+  publicToken: true, signedAt: true, signatureData: true,
+  signedIp: true, signedUserAgent: true, companyNameSnapshot: true,
+});
+
+export type EmployeeWarning = typeof employeeWarnings.$inferSelect;
+export type InsertEmployeeWarning = z.infer<typeof insertEmployeeWarningSchema>;
+
+export const WARNING_LEVEL_LABELS: Record<string, string> = {
+  verbal: "إنذار شفهي",
+  written_1: "إنذار كتابي أول",
+  written_2: "إنذار كتابي ثانٍ",
+  written_3: "إنذار كتابي ثالث",
+  final: "إنذار نهائي",
+  termination: "قرار فصل",
+};
+
+export const WARNING_STATUS_LABELS: Record<string, string> = {
+  active: "ساري",
+  appealed: "قيد الاعتراض",
+  cancelled: "ملغي",
+  expired: "منتهي",
+};
+
+// 3.5) تقييم الأداء الدوري للموظفين
+export const employeeEvaluations = pgTable("employee_evaluations", {
+  id: serial("id").primaryKey(),
+  branchEmployeeId: integer("branch_employee_id").notNull().references(() => branchEmployees.id, { onDelete: "cascade" }),
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
+  periodType: text("period_type").notNull().default("quarterly"), // quarterly | semi_annual | annual | probation
+  periodStart: text("period_start").notNull(), // YYYY-MM-DD
+  periodEnd: text("period_end").notNull(),     // YYYY-MM-DD
+  // معايير التقييم: [{ key, label, weight (0-100), score (1-5), comment? }]
+  criteria: jsonb("criteria").notNull(),
+  overallScore: real("overall_score").default(0).notNull(), // محسوبة على الخادم (1-5 موزونة)
+  strengths: text("strengths"),
+  improvements: text("improvements"),
+  goals: text("goals"),
+  notes: text("notes"),
+  status: text("status").notNull().default("draft"), // draft | submitted | approved
+  evaluatorId: varchar("evaluator_id").references(() => users.id),
+  evaluatorName: text("evaluator_name"),
+  approvedBy: varchar("approved_by").references(() => users.id),
+  approvedByName: text("approved_by_name"),
+  approvedAt: timestamp("approved_at"),
+  // إقرار الموظف بالاطلاع من بوابته (بعد الاعتماد)
+  employeeAckAt: timestamp("employee_ack_at"),
+  employeeAckComment: text("employee_ack_comment"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_employee_evaluations_employee").on(table.branchEmployeeId),
+  index("idx_employee_evaluations_branch").on(table.branchId),
+  index("idx_employee_evaluations_status").on(table.status),
+  // منع تقييمين لنفس الموظف بنفس النوع ونفس بداية الفترة
+  uniqueIndex("uq_employee_evaluations_period").on(table.branchEmployeeId, table.periodType, table.periodStart),
+]);
+
+export const evaluationCriterionSchema = z.object({
+  key: z.string().min(1),
+  label: z.string().min(1),
+  weight: z.number().min(0).max(100),
+  score: z.number().min(1).max(5),
+  comment: z.string().optional(),
+});
+
+// ملاحظة: نحجب الحقول التي يتحكم بها الخادم (الحالة/الاعتماد/الدرجة) حتى لا تتسرب من العميل
+export const insertEmployeeEvaluationSchema = createInsertSchema(employeeEvaluations, {
+  periodType: z.enum(["quarterly", "semi_annual", "annual", "probation"]),
+  periodStart: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  periodEnd: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  criteria: z.array(evaluationCriterionSchema).min(1),
+}).omit({
+  id: true, createdAt: true, updatedAt: true,
+  overallScore: true, status: true,
+  evaluatorId: true, evaluatorName: true,
+  approvedBy: true, approvedByName: true, approvedAt: true,
+  employeeAckAt: true, employeeAckComment: true,
+});
+
+export type EmployeeEvaluation = typeof employeeEvaluations.$inferSelect;
+export type InsertEmployeeEvaluation = z.infer<typeof insertEmployeeEvaluationSchema>;
+
+export const EVALUATION_PERIOD_LABELS: Record<string, string> = {
+  quarterly: "ربع سنوي",
+  semi_annual: "نصف سنوي",
+  annual: "سنوي",
+  probation: "فترة تجربة",
+};
+
+export const DEFAULT_EVALUATION_CRITERIA: { key: string; label: string; weight: number }[] = [
+  { key: "work_quality", label: "جودة العمل وإتقانه", weight: 25 },
+  { key: "attendance", label: "الالتزام بالحضور والمواعيد", weight: 20 },
+  { key: "customer_service", label: "التعامل مع العملاء والزملاء", weight: 20 },
+  { key: "teamwork", label: "العمل الجماعي والتعاون", weight: 15 },
+  { key: "compliance", label: "الالتزام بالتعليمات والسياسات", weight: 20 },
+];
+
+// 4) حسابات نهاية الخدمة (EOS)
+export const eosCalculations = pgTable("eos_calculations", {
+  id: serial("id").primaryKey(),
+  branchEmployeeId: integer("branch_employee_id").notNull().references(() => branchEmployees.id, { onDelete: "cascade" }),
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
+  calculationDate: text("calculation_date").notNull(), // YYYY-MM-DD
+  terminationType: text("termination_type").notNull(), // resignation | termination | end_of_contract | retirement | death
+  startDate: text("start_date").notNull(), // YYYY-MM-DD (تاريخ بداية الخدمة)
+  endDate: text("end_date").notNull(), // YYYY-MM-DD (تاريخ نهاية الخدمة)
+  totalServiceYears: real("total_service_years").notNull(),
+  basicSalary: real("basic_salary").notNull(),
+  totalSalary: real("total_salary").notNull(), // الراتب الإجمالي للحساب
+  eosAmount: real("eos_amount").notNull(), // مكافأة نهاية الخدمة (طبقاً لنظام العمل السعودي)
+  vacationBalance: real("vacation_balance").default(0), // رصيد الإجازات المتبقي بالأيام
+  vacationAmount: real("vacation_amount").default(0), // قيمة رصيد الإجازات
+  otherDues: real("other_dues").default(0), // مستحقات أخرى
+  totalDeductions: real("total_deductions").default(0), // إجمالي الخصومات (سلف غير مسددة..)
+  netAmount: real("net_amount").notNull(), // الصافي المستحق
+  notes: text("notes"),
+  status: text("status").notNull().default("draft"), // draft | approved | paid
+  approvedBy: varchar("approved_by").references(() => users.id),
+  approvedAt: timestamp("approved_at"),
+  paidAt: timestamp("paid_at"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_eos_calculations_employee").on(table.branchEmployeeId),
+  index("idx_eos_calculations_branch").on(table.branchId),
+  index("idx_eos_calculations_status").on(table.status),
+  index("idx_eos_calculations_date").on(table.calculationDate),
+]);
+
+export const insertEosCalculationSchema = createInsertSchema(eosCalculations, {
+  terminationType: z.enum(["resignation", "termination", "termination_article_80", "resignation_marriage_childbirth", "force_majeure", "end_of_contract", "retirement", "death"]),
+  status: z.enum(["draft", "approved", "paid"]).optional(),
+  totalServiceYears: z.number().min(0),
+  basicSalary: z.number().min(0),
+  totalSalary: z.number().min(0),
+  eosAmount: z.number().min(0),
+  netAmount: z.number(),
+  calculationDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+}).omit({ id: true, createdAt: true, updatedAt: true, approvedBy: true, approvedAt: true, paidAt: true });
+
+export type EosCalculation = typeof eosCalculations.$inferSelect;
+export type InsertEosCalculation = z.infer<typeof insertEosCalculationSchema>;
+
+export const TERMINATION_TYPE_LABELS: Record<string, string> = {
+  resignation: "استقالة",
+  termination: "فصل (إنهاء من صاحب العمل)",
+  termination_article_80: "فصل بموجب المادة 80 (بدون مكافأة)",
+  resignation_marriage_childbirth: "استقالة لزواج/إنجاب (المادة 87)",
+  force_majeure: "ترك العمل لقوة قاهرة (المادة 87)",
+  end_of_contract: "نهاية عقد",
+  retirement: "تقاعد",
+  death: "وفاة",
+};
+
+export const EOS_STATUS_LABELS: Record<string, string> = {
+  draft: "مسودة",
+  approved: "معتمد",
+  paid: "مدفوع",
+};
+
+// ============================================================================
+// PHASE 3 — NOMU READINESS (Audit Committee | Prospectus | IR | Material
+// Disclosures | Internal Audit)
+// ============================================================================
+
+// 1) Audit Committee
+export const auditCommittees = pgTable("audit_committees", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  charter: text("charter"),
+  charterDocUrl: text("charter_doc_url"),
+  formationDate: date("formation_date").notNull(),
+  status: text("status").default("active").notNull(),
+  notes: text("notes"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+export const insertAuditCommitteeSchema = createInsertSchema(auditCommittees).omit({ id: true, createdAt: true, updatedAt: true });
+export type AuditCommittee = typeof auditCommittees.$inferSelect;
+export type InsertAuditCommittee = z.infer<typeof insertAuditCommitteeSchema>;
+
+export const auditCommitteeMembers = pgTable("audit_committee_members", {
+  id: serial("id").primaryKey(),
+  committeeId: integer("committee_id").notNull().references(() => auditCommittees.id, { onDelete: "cascade" }),
+  boardMemberId: integer("board_member_id").references(() => boardMembers.id),
+  fullName: text("full_name").notNull(),
+  role: text("role").default("member").notNull(),
+  isIndependent: boolean("is_independent").default(false).notNull(),
+  isFinancialExpert: boolean("is_financial_expert").default(false).notNull(),
+  appointmentDate: date("appointment_date").notNull(),
+  endDate: date("end_date"),
+  status: text("status").default("active").notNull(),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+export const insertAuditCommitteeMemberSchema = createInsertSchema(auditCommitteeMembers).omit({ id: true, createdAt: true, updatedAt: true });
+export type AuditCommitteeMember = typeof auditCommitteeMembers.$inferSelect;
+export type InsertAuditCommitteeMember = z.infer<typeof insertAuditCommitteeMemberSchema>;
+
+export const auditCommitteeReports = pgTable("audit_committee_reports", {
+  id: serial("id").primaryKey(),
+  committeeId: integer("committee_id").notNull().references(() => auditCommittees.id, { onDelete: "cascade" }),
+  reportType: text("report_type").notNull(),
+  fiscalYear: text("fiscal_year").notNull(),
+  period: text("period").notNull(),
+  title: text("title").notNull(),
+  summary: text("summary"),
+  findings: jsonb("findings"),
+  recommendations: text("recommendations"),
+  attachments: jsonb("attachments"),
+  status: text("status").default("draft").notNull(),
+  submittedAt: timestamp("submitted_at"),
+  approvedBy: varchar("approved_by").references(() => users.id),
+  approvedAt: timestamp("approved_at"),
+  isLocked: boolean("is_locked").default(false).notNull(),
+  lockedAt: timestamp("locked_at"),
+  lockedBy: varchar("locked_by").references(() => users.id),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+export const insertAuditCommitteeReportSchema = createInsertSchema(auditCommitteeReports).omit({ id: true, createdAt: true, updatedAt: true });
+export type AuditCommitteeReport = typeof auditCommitteeReports.$inferSelect;
+export type InsertAuditCommitteeReport = z.infer<typeof insertAuditCommitteeReportSchema>;
+
+// 2) Prospectus
+export const prospectuses = pgTable("prospectuses", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  issueType: text("issue_type").default("ipo").notNull(),
+  targetMarket: text("target_market").default("nomu").notNull(),
+  version: text("version").default("v1.0").notNull(),
+  status: text("status").default("draft").notNull(),
+  offeringSize: numeric("offering_size", { precision: 20, scale: 2 }),
+  sharePrice: numeric("share_price", { precision: 12, scale: 4 }),
+  totalShares: bigint("total_shares", { mode: "number" }),
+  offeringStartDate: date("offering_start_date"),
+  offeringEndDate: date("offering_end_date"),
+  leadManager: text("lead_manager"),
+  legalAdvisor: text("legal_advisor"),
+  auditor: text("auditor"),
+  approvedBy: varchar("approved_by").references(() => users.id),
+  approvedAt: timestamp("approved_at"),
+  publishedAt: timestamp("published_at"),
+  notes: text("notes"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+export const insertProspectusSchema = createInsertSchema(prospectuses).omit({ id: true, createdAt: true, updatedAt: true });
+export type Prospectus = typeof prospectuses.$inferSelect;
+export type InsertProspectus = z.infer<typeof insertProspectusSchema>;
+
+export const prospectusSections = pgTable("prospectus_sections", {
+  id: serial("id").primaryKey(),
+  prospectusId: integer("prospectus_id").notNull().references(() => prospectuses.id, { onDelete: "cascade" }),
+  sectionKey: text("section_key").notNull(),
+  title: text("title").notNull(),
+  content: text("content"),
+  orderIndex: integer("order_index").default(0).notNull(),
+  requiredByCma: boolean("required_by_cma").default(true).notNull(),
+  status: text("status").default("pending").notNull(),
+  reviewedBy: varchar("reviewed_by").references(() => users.id),
+  reviewedAt: timestamp("reviewed_at"),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+export const insertProspectusSectionSchema = createInsertSchema(prospectusSections).omit({ id: true, createdAt: true, updatedAt: true });
+export type ProspectusSection = typeof prospectusSections.$inferSelect;
+export type InsertProspectusSection = z.infer<typeof insertProspectusSectionSchema>;
+
+// 3) Investor Relations
+export const irEvents = pgTable("ir_events", {
+  id: serial("id").primaryKey(),
+  eventType: text("event_type").notNull(),
+  title: text("title").notNull(),
+  description: text("description"),
+  eventDate: date("event_date").notNull(),
+  eventTime: text("event_time"),
+  endDate: date("end_date"),
+  location: text("location"),
+  isVirtual: boolean("is_virtual").default(false).notNull(),
+  meetingLink: text("meeting_link"),
+  registrationLink: text("registration_link"),
+  fiscalYear: text("fiscal_year"),
+  fiscalQuarter: text("fiscal_quarter"),
+  status: text("status").default("scheduled").notNull(),
+  attendeesExpected: integer("attendees_expected"),
+  attendeesActual: integer("attendees_actual"),
+  materials: jsonb("materials"),
+  notes: text("notes"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+export const insertIrEventSchema = createInsertSchema(irEvents).omit({ id: true, createdAt: true, updatedAt: true });
+export type IrEvent = typeof irEvents.$inferSelect;
+export type InsertIrEvent = z.infer<typeof insertIrEventSchema>;
+
+export const irContacts = pgTable("ir_contacts", {
+  id: serial("id").primaryKey(),
+  fullName: text("full_name").notNull(),
+  institution: text("institution"),
+  institutionType: text("institution_type"),
+  position: text("position"),
+  email: text("email"),
+  phone: text("phone"),
+  country: text("country"),
+  city: text("city"),
+  languagePreference: text("language_preference").default("ar"),
+  subscribedChannels: jsonb("subscribed_channels"),
+  lastContactedAt: timestamp("last_contacted_at"),
+  notes: text("notes"),
+  status: text("status").default("active").notNull(),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+export const insertIrContactSchema = createInsertSchema(irContacts).omit({ id: true, createdAt: true, updatedAt: true });
+export type IrContact = typeof irContacts.$inferSelect;
+export type InsertIrContact = z.infer<typeof insertIrContactSchema>;
+
+// 4) Material Disclosures
+export const materialDisclosures = pgTable("material_disclosures", {
+  id: serial("id").primaryKey(),
+  disclosureNumber: text("disclosure_number").notNull().unique(),
+  category: text("category").notNull(),
+  severity: text("severity").default("medium").notNull(),
+  titleAr: text("title_ar").notNull(),
+  titleEn: text("title_en"),
+  contentAr: text("content_ar").notNull(),
+  contentEn: text("content_en"),
+  eventDate: date("event_date").notNull(),
+  discoveryDate: date("discovery_date"),
+  requiresImmediateDisclosure: boolean("requires_immediate_disclosure").default(false).notNull(),
+  status: text("status").default("draft").notNull(),
+  reviewedBy: varchar("reviewed_by").references(() => users.id),
+  reviewedAt: timestamp("reviewed_at"),
+  approvedBy: varchar("approved_by").references(() => users.id),
+  approvedAt: timestamp("approved_at"),
+  publishedToTadawul: boolean("published_to_tadawul").default(false).notNull(),
+  tadawulReference: text("tadawul_reference"),
+  tadawulPublishedAt: timestamp("tadawul_published_at"),
+  publicationChannels: jsonb("publication_channels"),
+  attachments: jsonb("attachments"),
+  regulatoryReference: text("regulatory_reference"),
+  relatedDisclosureId: integer("related_disclosure_id"),
+  isLocked: boolean("is_locked").default(false).notNull(),
+  lockedAt: timestamp("locked_at"),
+  lockedBy: varchar("locked_by").references(() => users.id),
+  notes: text("notes"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+export const insertMaterialDisclosureSchema = createInsertSchema(materialDisclosures).omit({ id: true, createdAt: true, updatedAt: true });
+export type MaterialDisclosure = typeof materialDisclosures.$inferSelect;
+export type InsertMaterialDisclosure = z.infer<typeof insertMaterialDisclosureSchema>;
+
+// 5) Internal Audit
+export const internalAuditPlans = pgTable("internal_audit_plans", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  fiscalYear: text("fiscal_year").notNull(),
+  scope: text("scope"),
+  objectives: text("objectives"),
+  status: text("status").default("draft").notNull(),
+  approvedBy: varchar("approved_by").references(() => users.id),
+  approvedAt: timestamp("approved_at"),
+  totalEngagements: integer("total_engagements").default(0).notNull(),
+  completedEngagements: integer("completed_engagements").default(0).notNull(),
+  notes: text("notes"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+export const insertInternalAuditPlanSchema = createInsertSchema(internalAuditPlans).omit({ id: true, createdAt: true, updatedAt: true });
+export type InternalAuditPlan = typeof internalAuditPlans.$inferSelect;
+export type InsertInternalAuditPlan = z.infer<typeof insertInternalAuditPlanSchema>;
+
+export const internalAuditEngagements = pgTable("internal_audit_engagements", {
+  id: serial("id").primaryKey(),
+  planId: integer("plan_id").references(() => internalAuditPlans.id, { onDelete: "set null" }),
+  reference: text("reference").notNull().unique(),
+  title: text("title").notNull(),
+  area: text("area").notNull(),
+  branchId: integer("branch_id"),
+  scope: text("scope"),
+  objectives: text("objectives"),
+  leadAuditor: text("lead_auditor"),
+  teamMembers: jsonb("team_members"),
+  plannedStart: date("planned_start"),
+  plannedEnd: date("planned_end"),
+  actualStart: date("actual_start"),
+  actualEnd: date("actual_end"),
+  status: text("status").default("planned").notNull(),
+  totalFindings: integer("total_findings").default(0).notNull(),
+  openFindings: integer("open_findings").default(0).notNull(),
+  reportUrl: text("report_url"),
+  notes: text("notes"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+export const insertInternalAuditEngagementSchema = createInsertSchema(internalAuditEngagements).omit({ id: true, createdAt: true, updatedAt: true });
+export type InternalAuditEngagement = typeof internalAuditEngagements.$inferSelect;
+export type InsertInternalAuditEngagement = z.infer<typeof insertInternalAuditEngagementSchema>;
+
+export const internalAuditFindings = pgTable("internal_audit_findings", {
+  id: serial("id").primaryKey(),
+  engagementId: integer("engagement_id").notNull().references(() => internalAuditEngagements.id, { onDelete: "cascade" }),
+  findingRef: text("finding_ref").notNull(),
+  title: text("title").notNull(),
+  description: text("description"),
+  severity: text("severity").default("medium").notNull(),
+  category: text("category"),
+  recommendation: text("recommendation"),
+  managementResponse: text("management_response"),
+  ownerName: text("owner_name"),
+  ownerUserId: varchar("owner_user_id").references(() => users.id),
+  dueDate: date("due_date"),
+  status: text("status").default("open").notNull(),
+  resolvedAt: timestamp("resolved_at"),
+  resolutionNotes: text("resolution_notes"),
+  attachments: jsonb("attachments"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+export const insertInternalAuditFindingSchema = createInsertSchema(internalAuditFindings).omit({ id: true, createdAt: true, updatedAt: true });
+export type InternalAuditFinding = typeof internalAuditFindings.$inferSelect;
+export type InsertInternalAuditFinding = z.infer<typeof insertInternalAuditFindingSchema>;
+
+// ===== إشعارات الجوال (Web Push) =====
+// اشتراكات أجهزة الموظفين — كل جهاز حفظ التطبيق وسمح بالإشعارات يُسجَّل هنا
+export const pushSubscriptions = pgTable("push_subscriptions", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  endpoint: text("endpoint").notNull().unique(),
+  p256dh: text("p256dh").notNull(),
+  auth: text("auth").notNull(),
+  userAgent: text("user_agent"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (t) => [
+  index("idx_push_subs_user").on(t.userId),
+]);
+export type PushSubscription = typeof pushSubscriptions.$inferSelect;
+
+// INSERT-triggered outbox; intentionally no backfill for pre-install notifications.
+export const personalNotificationPushOutbox = pgTable("personal_notification_push_outbox", {
+  notificationId: integer("notification_id").primaryKey().references(() => notifications.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  claimedAt: timestamp("claimed_at"),
+  attemptCount: integer("attempt_count").default(0).notNull(),
+  nextRetryAt: timestamp("next_retry_at"),
+  deliveredAt: timestamp("delivered_at"),
+  failedAt: timestamp("failed_at"),
+  lastError: text("last_error"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (t) => [
+  index("idx_personal_push_due").on(t.nextRetryAt, t.notificationId)
+    .where(sql`${t.deliveredAt} IS NULL AND ${t.failedAt} IS NULL`),
+]);
+
+export const personalNotificationPushDeliveries = pgTable("personal_notification_push_deliveries", {
+  notificationId: integer("notification_id").notNull().references(() => personalNotificationPushOutbox.notificationId, { onDelete: "cascade" }),
+  subscriptionId: integer("subscription_id").notNull().references(() => pushSubscriptions.id, { onDelete: "cascade" }),
+  status: text("status").notNull(),
+  attempts: integer("attempts").default(0).notNull(),
+  lastError: text("last_error"),
+  deliveredAt: timestamp("delivered_at"),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (t) => [
+  primaryKey({ columns: [t.notificationId, t.subscriptionId] }),
+]);
+
+// Per-device receipts make a partial provider failure retryable without
+// delivering the same notification again to devices which already accepted it.
+export const pushNotificationDeliveries = pgTable("push_notification_deliveries", {
+  id: serial("id").primaryKey(),
+  notificationId: integer("notification_id").notNull().references(() => systemNotifications.id, { onDelete: "cascade" }),
+  subscriptionId: integer("subscription_id").notNull().references(() => pushSubscriptions.id, { onDelete: "cascade" }),
+  status: text("status").notNull(),
+  attempts: integer("attempts").default(0).notNull(),
+  lastError: text("last_error"),
+  deliveredAt: timestamp("delivered_at"),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (t) => [
+  uniqueIndex("idx_push_delivery_notification_subscription").on(t.notificationId, t.subscriptionId),
+  index("idx_push_delivery_notification").on(t.notificationId),
+]);
+
+// مفاتيح VAPID تُولَّد تلقائياً عند أول تشغيل وتُخزَّن هنا (تعمل في التطوير والإنتاج بدون إعداد يدوي)
+export const pushVapidConfig = pgTable("push_vapid_config", {
+  id: serial("id").primaryKey(),
+  publicKey: text("public_key").notNull(),
+  privateKey: text("private_key").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// ===== Central kitchen branch orders (workflow only; no inventory posting) =====
+export const centralKitchenRouting = pgTable("central_kitchen_routing", {
+  branchId: varchar("branch_id").primaryKey().references(() => branches.id),
+  responsibleUserId: varchar("responsible_user_id").references(() => users.id),
+  deputyUserId: varchar("deputy_user_id").references(() => users.id),
+  receiverUserId: varchar("receiver_user_id").references(() => users.id),
+  updatedBy: varchar("updated_by").references(() => users.id),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  check("central_kitchen_routing_distinct", sql`${table.responsibleUserId} IS DISTINCT FROM ${table.deputyUserId} OR ${table.responsibleUserId} IS NULL`),
+  check("central_kitchen_routing_receiver_distinct", sql`(${table.receiverUserId} IS NULL OR ${table.responsibleUserId} IS NULL OR ${table.receiverUserId} <> ${table.responsibleUserId}) AND (${table.receiverUserId} IS NULL OR ${table.deputyUserId} IS NULL OR ${table.receiverUserId} <> ${table.deputyUserId})`),
+]);
+
+export const centralKitchenOrders = pgTable("central_kitchen_orders", {
+  id: serial("id").primaryKey(),
+  orderNumber: text("order_number").notNull().unique(),
+  requestBranchId: varchar("request_branch_id").notNull().references(() => branches.id),
+  centralKitchenId: varchar("central_kitchen_id").notNull().references(() => branches.id),
+  orderDate: date("order_date").notNull(),
+  neededDate: date("needed_date"),
+  neededTime: text("needed_time"),
+  status: text("status").notNull().default("requested"),
+  // Null identifies pre-live historical orders. Application code always
+  // snapshots shadow or real for newly-created orders.
+  inventoryMode: text("inventory_mode"),
+  notes: text("notes"),
+  idempotencyKey: varchar("idempotency_key", { length: 128 }).notNull(),
+  payloadFingerprint: varchar("payload_fingerprint", { length: 64 }).notNull(),
+  createdBy: varchar("created_by").notNull().references(() => users.id),
+  approvedBy: varchar("approved_by").references(() => users.id),
+  preparedBy: varchar("prepared_by").references(() => users.id),
+  dispatchedBy: varchar("dispatched_by").references(() => users.id),
+  receivedBy: varchar("received_by").references(() => users.id),
+  driverName: text("driver_name"),
+  vehicleNumber: text("vehicle_number"),
+  discrepancyStatus: text("discrepancy_status").notNull().default("none"),
+  discrepancyResolvedBy: varchar("discrepancy_resolved_by").references(() => users.id),
+  discrepancyResolvedAt: timestamp("discrepancy_resolved_at"),
+  discrepancyResolutionNotes: text("discrepancy_resolution_notes"),
+  approvedAt: timestamp("approved_at"),
+  preparedAt: timestamp("prepared_at"),
+  dispatchedAt: timestamp("dispatched_at"),
+  receivedAt: timestamp("received_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("uq_central_kitchen_orders_creator_idempotency").on(table.createdBy, table.idempotencyKey),
+  index("idx_central_kitchen_orders_request_branch").on(table.requestBranchId),
+  index("idx_central_kitchen_orders_kitchen").on(table.centralKitchenId),
+  index("idx_central_kitchen_orders_request_created").on(table.requestBranchId, table.createdAt),
+  index("idx_central_kitchen_orders_kitchen_created").on(table.centralKitchenId, table.createdAt),
+  index("idx_central_kitchen_orders_status").on(table.status),
+  check("ck_central_kitchen_orders_status", sql`${table.status} IN ('requested', 'approved', 'prepared', 'dispatched', 'received', 'cancelled')`),
+  check("ck_central_kitchen_orders_distinct_branches", sql`${table.requestBranchId} <> ${table.centralKitchenId}`),
+  check("ck_central_kitchen_orders_discrepancy_status", sql`${table.discrepancyStatus} IN ('none', 'open', 'resolved')`),
+  check("ck_central_kitchen_orders_inventory_mode", sql`${table.inventoryMode} IS NULL OR ${table.inventoryMode} IN ('shadow', 'real')`),
+]);
+
+export const centralKitchenOrderItems = pgTable("central_kitchen_order_items", {
+  id: serial("id").primaryKey(),
+  orderId: integer("order_id").notNull().references(() => centralKitchenOrders.id, { onDelete: "cascade" }),
+  productId: integer("product_id").references(() => products.id, { onDelete: "set null" }),
+  warehouseItemId: integer("warehouse_item_id").references(() => warehouseItems.id, { onDelete: "set null" }),
+  productName: text("product_name").notNull(),
+  requestedQuantity: numeric("requested_quantity", { precision: 18, scale: 6, mode: "number" }).notNull(),
+  // A branch employee's declaration at request time. Null is reserved for
+  // historical rows created before the declaration became mandatory.
+  reportedAvailableQuantity: numeric("reported_available_quantity", { precision: 18, scale: 6, mode: "number" }),
+  unit: text("unit").notNull(),
+  notes: text("notes"),
+  preparedQuantity: numeric("prepared_quantity", { precision: 18, scale: 6, mode: "number" }),
+  // Null deliberately means the preparation predates source classification.
+  // New real-product preparations may split the original quantity between
+  // finished stock and verified linked production.
+  preparedFromStock: numeric("prepared_from_stock", { precision: 18, scale: 6, mode: "number" }),
+  preparedFromProduction: numeric("prepared_from_production", { precision: 18, scale: 6, mode: "number" }),
+  productionFulfillmentEvidence: jsonb("production_fulfillment_evidence"),
+  substituteQuantity: numeric("substitute_quantity", { precision: 18, scale: 6, mode: "number" }),
+  substituteProductId: integer("substitute_product_id").references(() => products.id, { onDelete: "set null" }),
+  substituteWarehouseItemId: integer("substitute_warehouse_item_id").references(() => warehouseItems.id, { onDelete: "set null" }),
+  substituteProductName: text("substitute_product_name"),
+  substituteUnit: text("substitute_unit"),
+  shortageReason: text("shortage_reason"),
+  preparationNotes: text("preparation_notes"),
+  dispatchedQuantity: numeric("dispatched_quantity", { precision: 18, scale: 6, mode: "number" }),
+  receivedQuantity: numeric("received_quantity", { precision: 18, scale: 6, mode: "number" }),
+  damagedQuantity: numeric("damaged_quantity", { precision: 18, scale: 6, mode: "number" }),
+  missingQuantity: numeric("missing_quantity", { precision: 18, scale: 6, mode: "number" }),
+  receivingNotes: text("receiving_notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_central_kitchen_order_items_order").on(table.orderId),
+  unique("uq_central_kitchen_order_items_order_identity").on(table.orderId, table.id),
+  check("ck_central_kitchen_order_items_catalog_identity", sql`NOT (${table.productId} IS NOT NULL AND ${table.warehouseItemId} IS NOT NULL)`),
+  check("ck_central_kitchen_order_items_quantity", sql`${table.requestedQuantity} > 0`),
+  check("ck_central_kitchen_order_items_reported_available_quantity", sql`${table.reportedAvailableQuantity} IS NULL OR ${table.reportedAvailableQuantity} >= 0`),
+  check("ck_central_kitchen_order_items_prepared_quantity", sql`${table.preparedQuantity} IS NULL OR ${table.preparedQuantity} >= 0`),
+  check("ck_central_kitchen_order_items_preparation_source_pair", sql`(${table.preparedFromStock} IS NULL) = (${table.preparedFromProduction} IS NULL)`),
+  check("ck_central_kitchen_order_items_preparation_sources", sql`${table.preparedFromStock} IS NULL OR (${table.preparedQuantity} IS NOT NULL AND ${table.preparedFromStock} >= 0 AND ${table.preparedFromProduction} >= 0 AND ${table.preparedFromStock} + ${table.preparedFromProduction} = ${table.preparedQuantity})`),
+  check("ck_central_kitchen_order_items_production_evidence", sql`(${table.preparedFromProduction} IS NULL OR ${table.preparedFromProduction} = 0) = (${table.productionFulfillmentEvidence} IS NULL)`),
+  check("ck_central_kitchen_order_items_substitute_quantity", sql`${table.substituteQuantity} IS NULL OR ${table.substituteQuantity} >= 0`),
+  check("ck_central_kitchen_order_items_total_ready", sql`${table.preparedQuantity} IS NULL OR COALESCE(${table.preparedQuantity}, 0) + COALESCE(${table.substituteQuantity}, 0) <= ${table.requestedQuantity}`),
+  check("ck_central_kitchen_order_items_substitute_identity", sql`(COALESCE(${table.substituteQuantity}, 0) = 0 AND ${table.substituteProductId} IS NULL AND ${table.substituteWarehouseItemId} IS NULL AND ${table.substituteProductName} IS NULL AND ${table.substituteUnit} IS NULL) OR (COALESCE(${table.substituteQuantity}, 0) > 0 AND NOT (${table.substituteProductId} IS NOT NULL AND ${table.substituteWarehouseItemId} IS NOT NULL) AND NULLIF(BTRIM(${table.substituteProductName}), '') IS NOT NULL AND ${table.substituteUnit} = ${table.unit})`),
+  check("ck_central_kitchen_order_items_shortage_reason", sql`${table.preparedQuantity} IS NULL OR (COALESCE(${table.preparedQuantity}, 0) + COALESCE(${table.substituteQuantity}, 0) < ${table.requestedQuantity} AND ${table.shortageReason} IN ('unavailable', 'out_of_stock', 'production_issue', 'quality_issue', 'other')) OR (COALESCE(${table.preparedQuantity}, 0) + COALESCE(${table.substituteQuantity}, 0) >= ${table.requestedQuantity} AND ${table.shortageReason} IS NULL)`),
+  check("ck_central_kitchen_order_items_preparation_consistency", sql`${table.preparedQuantity} IS NOT NULL OR (${table.substituteQuantity} IS NULL AND ${table.substituteProductId} IS NULL AND ${table.substituteWarehouseItemId} IS NULL AND ${table.substituteProductName} IS NULL AND ${table.substituteUnit} IS NULL AND ${table.shortageReason} IS NULL AND ${table.preparationNotes} IS NULL)`),
+  check("ck_central_kitchen_order_items_dispatched_quantity", sql`${table.dispatchedQuantity} IS NULL OR (${table.dispatchedQuantity} >= 0 AND ${table.dispatchedQuantity} <= COALESCE(${table.preparedQuantity}, 0) + COALESCE(${table.substituteQuantity}, 0))`),
+  check("ck_central_kitchen_order_items_receipt_quantities", sql`${table.receivedQuantity} IS NULL OR (${table.receivedQuantity} >= 0 AND COALESCE(${table.damagedQuantity}, 0) >= 0 AND COALESCE(${table.missingQuantity}, 0) >= 0 AND ${table.receivedQuantity} + COALESCE(${table.damagedQuantity}, 0) + COALESCE(${table.missingQuantity}, 0) = ${table.dispatchedQuantity})`),
+]);
+
+export const centralKitchenOrderEvents = pgTable("central_kitchen_order_events", {
+  id: serial("id").primaryKey(),
+  orderId: integer("order_id").notNull().references(() => centralKitchenOrders.id, { onDelete: "restrict" }),
+  eventType: text("event_type").notNull(),
+  fromStatus: text("from_status"),
+  toStatus: text("to_status").notNull(),
+  notes: text("notes"),
+  changeSnapshot: jsonb("change_snapshot"),
+  idempotencyKey: varchar("idempotency_key", { length: 128 }).notNull(),
+  payloadFingerprint: varchar("payload_fingerprint", { length: 64 }),
+  actorId: varchar("actor_id").notNull().references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("uq_central_kitchen_order_events_idempotency").on(table.orderId, table.idempotencyKey),
+  index("idx_central_kitchen_order_events_order").on(table.orderId),
+  index("idx_central_kitchen_order_events_created").on(table.createdAt),
+]);
+
+// An unmet-demand commitment is bookkeeping for the ORIGINAL request item. It
+// deliberately has no inventory foreign keys or posting hooks: stock continues
+// to move only through the normal dispatch/receipt pipeline.
+export const centralKitchenDemandCommitments = pgTable("central_kitchen_demand_commitments", {
+  id: serial("id").primaryKey(),
+  originalOrderId: integer("original_order_id").notNull().references(() => centralKitchenOrders.id, { onDelete: "restrict" }),
+  originalOrderItemId: integer("original_order_item_id").notNull().references(() => centralKitchenOrderItems.id, { onDelete: "restrict" }),
+  requestBranchId: varchar("request_branch_id").notNull().references(() => branches.id, { onDelete: "restrict" }),
+  centralKitchenId: varchar("central_kitchen_id").notNull().references(() => branches.id, { onDelete: "restrict" }),
+  inventoryMode: text("inventory_mode"),
+  productId: integer("product_id").references(() => products.id, { onDelete: "set null" }),
+  warehouseItemId: integer("warehouse_item_id").references(() => warehouseItems.id, { onDelete: "set null" }),
+  productName: text("product_name").notNull(),
+  unit: text("unit").notNull(),
+  requestedQuantity: numeric("requested_quantity", { precision: 18, scale: 6 }).notNull(),
+  originalGoodReceivedQuantity: numeric("original_good_received_quantity", { precision: 18, scale: 6 }).notNull(),
+  totalGoodReceivedQuantity: numeric("total_good_received_quantity", { precision: 18, scale: 6 }).notNull(),
+  preparationShortfallQuantity: numeric("preparation_shortfall_quantity", { precision: 18, scale: 6 }).notNull(),
+  transitLossQuantity: numeric("transit_loss_quantity", { precision: 18, scale: 6 }).notNull(),
+  substitutePreparedQuantity: numeric("substitute_prepared_quantity", { precision: 18, scale: 6 }).notNull(),
+  substituteOfferedQuantity: numeric("substitute_offered_quantity", { precision: 18, scale: 6 }).notNull(),
+  receiptAttributionBasis: text("receipt_attribution_basis").notNull().default("estimated_original_first"),
+  reasonCode: text("reason_code").notNull(),
+  status: text("status").notNull().default("open"),
+  activationKind: text("activation_kind").notNull(),
+  version: integer("version").notNull().default(1),
+  activatedBy: varchar("activated_by").notNull().references(() => users.id, { onDelete: "restrict" }),
+  activatedAt: timestamp("activated_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  unique("uq_central_kitchen_demand_commitment_item").on(table.originalOrderItemId),
+  index("idx_central_kitchen_demand_commitments_scope").on(table.centralKitchenId, table.requestBranchId, table.status),
+  check("ck_central_kitchen_demand_commitment_mode", sql`${table.inventoryMode} IS NULL OR ${table.inventoryMode} IN ('real', 'shadow')`),
+  check("ck_central_kitchen_demand_commitment_status", sql`${table.status} IN ('open', 'replacement_planned', 'substitute_pending', 'partially_settled', 'fulfilled', 'waived')`),
+  check("ck_central_kitchen_demand_commitment_activation", sql`${table.activationKind} IN ('receipt', 'legacy_reconciliation')`),
+  check("ck_central_kitchen_demand_commitment_receipt_basis", sql`${table.receiptAttributionBasis} IN ('estimated_original_first', 'branch_confirmed')`),
+  check("ck_central_kitchen_demand_commitment_quantities", sql`${table.requestedQuantity} > 0 AND ${table.originalGoodReceivedQuantity} >= 0 AND ${table.originalGoodReceivedQuantity} <= ${table.requestedQuantity} AND ${table.totalGoodReceivedQuantity} >= ${table.originalGoodReceivedQuantity} AND ${table.totalGoodReceivedQuantity} <= ${table.requestedQuantity} AND ${table.preparationShortfallQuantity} >= 0 AND ${table.transitLossQuantity} >= 0 AND ${table.substitutePreparedQuantity} >= 0 AND ${table.substitutePreparedQuantity} <= ${table.requestedQuantity} AND ${table.substituteOfferedQuantity} >= 0 AND ${table.substituteOfferedQuantity} <= ${table.substitutePreparedQuantity}`),
+]);
+
+export const centralKitchenDemandActions = pgTable("central_kitchen_demand_actions", {
+  id: serial("id").primaryKey(),
+  commitmentId: integer("commitment_id").notNull().references(() => centralKitchenDemandCommitments.id, { onDelete: "restrict" }),
+  actionType: text("action_type").notNull(),
+  quantity: numeric("quantity", { precision: 18, scale: 6 }).notNull(),
+  secondaryQuantity: numeric("secondary_quantity", { precision: 18, scale: 6 }),
+  dueDate: date("due_date"),
+  responsibleUserId: varchar("responsible_user_id").references(() => users.id, { onDelete: "restrict" }),
+  replacementOrderId: integer("replacement_order_id").references(() => centralKitchenOrders.id, { onDelete: "restrict" }),
+  replacementOrderItemId: integer("replacement_order_item_id").references(() => centralKitchenOrderItems.id, { onDelete: "restrict" }),
+  reason: text("reason"),
+  actorId: varchar("actor_id").notNull().references(() => users.id, { onDelete: "restrict" }),
+  idempotencyKey: varchar("idempotency_key", { length: 128 }).notNull(),
+  payloadFingerprint: varchar("payload_fingerprint", { length: 64 }).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  unique("uq_central_kitchen_demand_action_key").on(table.commitmentId, table.idempotencyKey),
+  index("idx_central_kitchen_demand_actions_commitment").on(table.commitmentId, table.createdAt),
+  foreignKey({
+    columns: [table.replacementOrderId, table.replacementOrderItemId],
+    foreignColumns: [centralKitchenOrderItems.orderId, centralKitchenOrderItems.id],
+    name: "fk_central_kitchen_demand_replacement_item",
+  }),
+  check("ck_central_kitchen_demand_action_type", sql`${table.actionType} IN ('replacement_created', 'substitute_accepted', 'remainder_waived', 'receipt_attribution_confirmed')`),
+  check("ck_central_kitchen_demand_action_quantity", sql`(${table.actionType} = 'receipt_attribution_confirmed' AND ${table.quantity} >= 0 AND ${table.secondaryQuantity} >= 0) OR (${table.actionType} <> 'receipt_attribution_confirmed' AND ${table.quantity} > 0 AND ${table.secondaryQuantity} IS NULL)`),
+  check("ck_central_kitchen_demand_action_shape", sql`(${table.actionType} = 'replacement_created' AND ${table.dueDate} IS NOT NULL AND ${table.responsibleUserId} IS NOT NULL AND ${table.replacementOrderId} IS NOT NULL AND ${table.replacementOrderItemId} IS NOT NULL) OR (${table.actionType} = 'substitute_accepted' AND ${table.replacementOrderId} IS NULL AND ${table.replacementOrderItemId} IS NULL) OR (${table.actionType} = 'remainder_waived' AND NULLIF(BTRIM(${table.reason}), '') IS NOT NULL AND ${table.replacementOrderId} IS NULL AND ${table.replacementOrderItemId} IS NULL) OR (${table.actionType} = 'receipt_attribution_confirmed' AND ${table.replacementOrderId} IS NULL AND ${table.replacementOrderItemId} IS NULL)`),
+]);
+
+export const centralKitchenShadowInventoryConfig = pgTable("central_kitchen_shadow_inventory_config", {
+  id: integer("id").primaryKey(),
+  activatedAt: timestamp("activated_at").defaultNow().notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  check("ck_central_kitchen_shadow_config_singleton", sql`${table.id} = 1`),
+]);
+
+export const centralKitchenShadowInventoryEntries = pgTable("central_kitchen_shadow_inventory_entries", {
+  id: serial("id").primaryKey(),
+  orderId: integer("order_id").notNull().references(() => centralKitchenOrders.id, { onDelete: "restrict" }),
+  orderItemId: integer("order_item_id").notNull().references(() => centralKitchenOrderItems.id, { onDelete: "restrict" }),
+  sourceEventId: integer("source_event_id").notNull().references(() => centralKitchenOrderEvents.id, { onDelete: "restrict" }),
+  direction: text("direction").notNull(),
+  component: text("component").notNull(),
+  branchId: varchar("branch_id").notNull().references(() => branches.id, { onDelete: "restrict" }),
+  counterpartyBranchId: varchar("counterparty_branch_id").notNull().references(() => branches.id, { onDelete: "restrict" }),
+  productId: integer("product_id").references(() => products.id, { onDelete: "set null" }),
+  warehouseItemId: integer("warehouse_item_id").references(() => warehouseItems.id, { onDelete: "restrict" }),
+  productName: text("product_name").notNull(),
+  unit: text("unit").notNull(),
+  quantity: numeric("quantity", { precision: 18, scale: 6, mode: "number" }).notNull(),
+  actorId: varchar("actor_id").notNull().references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  unique("uq_central_kitchen_shadow_inventory_source").on(table.orderItemId, table.direction, table.component),
+  index("idx_central_kitchen_shadow_inventory_order").on(table.orderId),
+  index("idx_central_kitchen_shadow_inventory_branch").on(table.branchId, table.createdAt),
+  check("ck_central_kitchen_shadow_inventory_direction", sql`${table.direction} IN ('projected_kitchen_out', 'projected_branch_in')`),
+  check("ck_central_kitchen_shadow_inventory_component", sql`${table.component} IN ('original', 'substitute')`),
+  check("ck_central_kitchen_shadow_inventory_quantity", sql`${table.quantity} > 0`),
+]);
+
+export const centralKitchenRuntime = pgTable("central_kitchen_runtime", {
+  kitchenId: varchar("kitchen_id").primaryKey().references(() => branches.id, { onDelete: "cascade" }),
+  mode: text("mode").notNull().default("shadow"),
+  activatedAt: timestamp("activated_at"),
+  activatedBy: varchar("activated_by").references(() => users.id),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  check("ck_central_kitchen_runtime_mode", sql`${table.mode} IN ('shadow', 'real', 'paused')`),
+]);
+
+export const centralKitchenInventoryAllocations = pgTable("central_kitchen_inventory_allocations", {
+  id: serial("id").primaryKey(),
+  orderId: integer("order_id").notNull().references(() => centralKitchenOrders.id, { onDelete: "restrict" }),
+  orderItemId: integer("order_item_id").notNull().references(() => centralKitchenOrderItems.id, { onDelete: "restrict" }),
+  component: text("component").notNull(),
+  kind: text("kind").notNull(),
+  catalogId: integer("catalog_id").notNull(),
+  sourceFinishedGoodsId: integer("source_finished_goods_id").references(() => finishedGoodsInventory.id, { onDelete: "restrict" }),
+  sourceBranchStockId: integer("source_branch_stock_id").references(() => branchStock.id, { onDelete: "restrict" }),
+  unit: text("unit").notNull(),
+  reservedQuantity: numeric("reserved_quantity", { precision: 18, scale: 6, mode: "number" }).notNull(),
+  dispatchedQuantity: numeric("dispatched_quantity", { precision: 18, scale: 6, mode: "number" }).notNull().default(0),
+  releasedQuantity: numeric("released_quantity", { precision: 18, scale: 6, mode: "number" }).notNull().default(0),
+  receivedQuantity: numeric("received_quantity", { precision: 18, scale: 6, mode: "number" }).notNull().default(0),
+  status: text("status").notNull().default("reserved"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("uq_central_kitchen_allocation_finished_source")
+    .on(table.orderItemId, table.component, table.sourceFinishedGoodsId)
+    .where(sql`${table.sourceFinishedGoodsId} IS NOT NULL`),
+  uniqueIndex("uq_central_kitchen_allocation_branch_source")
+    .on(table.orderItemId, table.component, table.sourceBranchStockId)
+    .where(sql`${table.sourceBranchStockId} IS NOT NULL`),
+  index("idx_central_kitchen_allocations_order").on(table.orderId),
+  index("idx_central_kitchen_allocations_item").on(table.orderItemId),
+  check("ck_central_kitchen_allocation_component", sql`${table.component} IN ('original', 'substitute')`),
+  check("ck_central_kitchen_allocation_kind", sql`${table.kind} IN ('product', 'warehouse')`),
+  check("ck_central_kitchen_allocation_source", sql`(${table.kind} = 'product' AND ${table.sourceFinishedGoodsId} IS NOT NULL AND ${table.sourceBranchStockId} IS NULL) OR (${table.kind} = 'warehouse' AND ${table.sourceFinishedGoodsId} IS NULL AND ${table.sourceBranchStockId} IS NOT NULL)`),
+  check("ck_central_kitchen_allocation_quantities", sql`${table.reservedQuantity} > 0 AND ${table.dispatchedQuantity} >= 0 AND ${table.releasedQuantity} >= 0 AND ${table.receivedQuantity} >= 0 AND ${table.dispatchedQuantity} + ${table.releasedQuantity} <= ${table.reservedQuantity} AND ${table.receivedQuantity} <= ${table.dispatchedQuantity}`),
+  check("ck_central_kitchen_allocation_status", sql`${table.status} IN ('reserved', 'dispatched', 'released')`),
+]);
+
+export const centralKitchenInventoryMovements = pgTable("central_kitchen_inventory_movements", {
+  id: serial("id").primaryKey(),
+  allocationId: integer("allocation_id").notNull().references(() => centralKitchenInventoryAllocations.id, { onDelete: "restrict" }),
+  orderId: integer("order_id").notNull().references(() => centralKitchenOrders.id, { onDelete: "restrict" }),
+  orderItemId: integer("order_item_id").notNull().references(() => centralKitchenOrderItems.id, { onDelete: "restrict" }),
+  movementType: text("movement_type").notNull(),
+  branchId: varchar("branch_id").notNull().references(() => branches.id, { onDelete: "restrict" }),
+  kind: text("kind").notNull(),
+  catalogId: integer("catalog_id").notNull(),
+  quantity: numeric("quantity", { precision: 18, scale: 6, mode: "number" }).notNull(),
+  unit: text("unit").notNull(),
+  eventId: integer("event_id").notNull().references(() => centralKitchenOrderEvents.id, { onDelete: "restrict" }),
+  actorId: varchar("actor_id").notNull().references(() => users.id, { onDelete: "restrict" }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  unique("uq_central_kitchen_inventory_movement_reference").on(table.allocationId, table.movementType),
+  index("idx_central_kitchen_inventory_movements_order").on(table.orderId, table.createdAt),
+  check("ck_central_kitchen_inventory_movement_type", sql`${table.movementType} IN ('dispatch_debit', 'reservation_release', 'receipt_credit')`),
+  check("ck_central_kitchen_inventory_movement_quantity", sql`${table.quantity} > 0`),
+]);
+
+export type CentralKitchenOrder = typeof centralKitchenOrders.$inferSelect;
+export type CentralKitchenOrderItem = typeof centralKitchenOrderItems.$inferSelect;
+export type CentralKitchenOrderEvent = typeof centralKitchenOrderEvents.$inferSelect;
+export const centralKitchenRecipes = pgTable("central_kitchen_recipes", {
+  id: serial("id").primaryKey(),
+  kitchenId: varchar("kitchen_id").notNull().references(() => branches.id, { onDelete: "restrict" }),
+  productId: integer("product_id").notNull().references(() => products.id, { onDelete: "restrict" }),
+  outputQuantity: numeric("output_quantity", { precision: 18, scale: 6 }).notNull(),
+  outputUnit: text("output_unit").notNull(),
+  notes: text("notes"),
+  status: text("status").notNull().default("draft"),
+  version: integer("version").notNull().default(1),
+  updateToken: varchar("update_token", { length: 128 }).notNull().default(sql`gen_random_uuid()::text`),
+  supersedesRecipeId: integer("supersedes_recipe_id"),
+  supersededByRecipeId: integer("superseded_by_recipe_id"),
+  idempotencyKey: varchar("idempotency_key", { length: 128 }),
+  payloadFingerprint: varchar("payload_fingerprint", { length: 64 }),
+  createdBy: varchar("created_by").notNull().references(() => users.id, { onDelete: "restrict" }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedBy: varchar("updated_by").notNull().references(() => users.id, { onDelete: "restrict" }),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  approvedBy: varchar("approved_by").references(() => users.id, { onDelete: "restrict" }),
+  approvedAt: timestamp("approved_at"),
+  supersededAt: timestamp("superseded_at"),
+}, (table) => [
+  uniqueIndex("uq_central_kitchen_recipes_current_draft")
+    .on(table.kitchenId, table.productId)
+    .where(sql`${table.status} = 'draft'`),
+  uniqueIndex("uq_central_kitchen_recipes_current_approved")
+    .on(table.kitchenId, table.productId)
+    .where(sql`${table.status} = 'approved'`),
+  uniqueIndex("uq_central_kitchen_recipes_creator_idempotency")
+    .on(table.createdBy, table.idempotencyKey)
+    .where(sql`${table.idempotencyKey} IS NOT NULL`),
+  index("idx_central_kitchen_recipes_kitchen_product")
+    .on(table.kitchenId, table.productId),
+  index("idx_central_kitchen_recipes_status")
+    .on(table.status),
+  check("ck_central_kitchen_recipes_status", sql`${table.status} IN ('draft', 'approved', 'superseded')`),
+  check("ck_central_kitchen_recipes_output_quantity", sql`${table.outputQuantity} > 0`),
+  check("ck_central_kitchen_recipes_version", sql`${table.version} > 0`),
+]);
+
+export const centralKitchenRecipeIngredients = pgTable("central_kitchen_recipe_ingredients", {
+  id: serial("id").primaryKey(),
+  recipeId: integer("recipe_id").notNull().references(() => centralKitchenRecipes.id, { onDelete: "cascade" }),
+  warehouseItemId: integer("warehouse_item_id").notNull().references(() => warehouseItems.id, { onDelete: "restrict" }),
+  quantity: numeric("quantity", { precision: 18, scale: 6 }).notNull(),
+  unit: text("unit").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  unique("uq_central_kitchen_recipe_ingredients_item").on(table.recipeId, table.warehouseItemId),
+  index("idx_central_kitchen_recipe_ingredients_recipe").on(table.recipeId),
+  index("idx_central_kitchen_recipe_ingredients_item").on(table.warehouseItemId),
+  check("ck_central_kitchen_recipe_ingredients_quantity", sql`${table.quantity} > 0`),
+]);
+
+export const centralKitchenRecipeOperations = pgTable("central_kitchen_recipe_operations", {
+  id: serial("id").primaryKey(),
+  actorId: varchar("actor_id").notNull().references(() => users.id, { onDelete: "restrict" }),
+  action: text("action").notNull(),
+  idempotencyKey: varchar("idempotency_key", { length: 128 }).notNull(),
+  fingerprint: varchar("fingerprint", { length: 64 }).notNull(),
+  recipeId: integer("recipe_id").notNull(),
+  kitchenId: varchar("kitchen_id").notNull().references(() => branches.id, { onDelete: "restrict" }),
+  productId: integer("product_id").notNull().references(() => products.id, { onDelete: "restrict" }),
+  snapshotJson: jsonb("snapshot_json").$type<Record<string, unknown>>().notNull(),
+  responseJson: jsonb("response_json").$type<Record<string, unknown>>().notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("uq_central_kitchen_recipe_operations_actor_key")
+    .on(table.actorId, table.idempotencyKey),
+  index("idx_central_kitchen_recipe_operations_recipe")
+    .on(table.recipeId),
+  check(
+    "ck_central_kitchen_recipe_operations_action",
+    sql`${table.action} IN ('create', 'update', 'approve', 'revise', 'delete')`,
+  ),
+]);
+
+export type CentralKitchenRecipe = typeof centralKitchenRecipes.$inferSelect;
+export type CentralKitchenRecipeIngredient = typeof centralKitchenRecipeIngredients.$inferSelect;
+export type CentralKitchenRecipeOperation = typeof centralKitchenRecipeOperations.$inferSelect;
+
+export type MaintenanceTicket = typeof maintenanceTickets.$inferSelect;
+
+export const maintenanceTicketAttachments = pgTable("maintenance_ticket_attachments", {
+  id: serial("id").primaryKey(),
+  ticketId: integer("ticket_id").notNull().references(() => maintenanceTickets.id),
+  originalName: text("original_name").notNull(),
+  storagePath: text("storage_path").notNull(),
+  mimeType: text("mime_type").notNull(),
+  sizeBytes: integer("size_bytes").notNull(),
+  uploadedBy: varchar("uploaded_by").notNull().references(() => users.id),
+  archivedAt: timestamp("archived_at"),
+  archivedBy: varchar("archived_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, t => [
+  index("idx_maintenance_ticket_attachments_ticket").on(t.ticketId),
+  uniqueIndex("uq_maintenance_ticket_attachment_path").on(t.storagePath),
+  check("chk_maintenance_ticket_attachment_size", sql`${t.sizeBytes} > 0`),
+]);
+
+export const maintenanceTicketEvents = pgTable("maintenance_ticket_events", {
+  id: serial("id").primaryKey(),
+  ticketId: integer("ticket_id").notNull().references(() => maintenanceTickets.id),
+  actorUserId: varchar("actor_user_id").notNull().references(() => users.id),
+  eventType: text("event_type").notNull(),
+  fromStatus: text("from_status"),
+  toStatus: text("to_status"),
+  reason: text("reason"),
+  changes: jsonb("changes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, t => [index("idx_maintenance_ticket_events_ticket").on(t.ticketId, t.createdAt)]);
+
+export type MaintenanceTicketEvent = typeof maintenanceTicketEvents.$inferSelect;
+
+export type MaintenanceTicketAttachment = typeof maintenanceTicketAttachments.$inferSelect;
+
+// Main warehouse inventory remains warehouse_items.current_stock. Only managed
+// satellite warehouses require an additional per-location balance.
+export const managedWarehouses = pgTable("managed_warehouses", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  name: text("name").notNull().unique(),
+  active: boolean("active").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export const managedWarehouseStock = pgTable("managed_warehouse_stock", {
+  warehouseId: bigint("warehouse_id", { mode: "number" }).notNull().references(() => managedWarehouses.id),
+  itemId: integer("item_id").notNull().references(() => warehouseItems.id),
+  quantity: numeric("quantity", { precision: 18, scale: 6, mode: "number" }).notNull().default(0),
+  reservedQuantity: numeric("reserved_quantity", { precision: 18, scale: 6, mode: "number" }).notNull().default(0),
+}, t => [primaryKey({ columns: [t.warehouseId,t.itemId] })]);
+export const reverseMovements = pgTable("reverse_movements", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  kind: text("kind").notNull(),
+  status: text("status").notNull().default("draft"),
+  sourceBranchId: varchar("source_branch_id").references(() => branches.id),
+  destinationBranchId: varchar("destination_branch_id").references(() => branches.id),
+  sourceWarehouseId: bigint("source_warehouse_id", { mode: "number" }).references(() => managedWarehouses.id),
+  destinationWarehouseId: bigint("destination_warehouse_id", { mode: "number" }).references(() => managedWarehouses.id),
+  originalTransferItemId: integer("original_transfer_item_id").references(() => materialTransferItems.id),
+  originalOrderItemId: integer("original_order_item_id").references(() => centralKitchenOrderItems.id),
+  component: text("component"),
+  itemId: integer("item_id").references(() => warehouseItems.id),
+  productId: integer("product_id").references(() => products.id),
+  itemName: text("item_name").notNull(),
+  unit: text("unit").notNull(),
+  quantity: numeric("quantity", { precision: 18, scale: 6, mode: "number" }).notNull(),
+  shippedQuantity: numeric("shipped_quantity", { precision: 18, scale: 6, mode: "number" }).notNull().default(0),
+  receivedQuantity: numeric("received_quantity", { precision: 18, scale: 6, mode: "number" }).notNull().default(0),
+  usableQuantity: numeric("usable_quantity", { precision: 18, scale: 6, mode: "number" }).notNull().default(0),
+  damagedQuantity: numeric("damaged_quantity", { precision: 18, scale: 6, mode: "number" }).notNull().default(0),
+  writtenOffQuantity: numeric("written_off_quantity", { precision: 18, scale: 6, mode: "number" }).notNull().default(0),
+  carrierName: text("carrier_name"),
+  vehicleNumber: text("vehicle_number"),
+  notes: text("notes"),
+  createdBy: varchar("created_by").notNull().references(() => users.id),
+  createKey: varchar("create_key", { length: 128 }).notNull(),
+  createFingerprint: varchar("create_fingerprint", { length: 64 }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export const reverseMovementEvents = pgTable("reverse_movement_events", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  movementId: bigint("movement_id", { mode: "number" }).notNull().references(() => reverseMovements.id),
+  action: text("action").notNull(),
+  actorId: varchar("actor_id").notNull().references(() => users.id),
+  idempotencyKey: varchar("idempotency_key", { length: 128 }).notNull(),
+  payload: jsonb("payload").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, t => [uniqueIndex("reverse_movement_events_movement_id_key").on(t.movementId,t.idempotencyKey)]);
+export const reverseProductReservations = pgTable("reverse_product_reservations", {
+  movementId: bigint("movement_id", { mode: "number" }).notNull().references(() => reverseMovements.id),
+  stockId: integer("stock_id").notNull().references(() => finishedGoodsInventory.id),
+  quantity: integer("quantity").notNull(),
+}, t => [primaryKey({ columns: [t.movementId,t.stockId] })]);
+export const managedWarehouseMovementLogs = pgTable("managed_warehouse_movement_logs", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  warehouseId: bigint("warehouse_id", { mode: "number" }).notNull().references(() => managedWarehouses.id),
+  itemId: integer("item_id").notNull().references(() => warehouseItems.id),
+  movementId: bigint("movement_id", { mode: "number" }).notNull().references(() => reverseMovements.id),
+  movementType: text("movement_type").notNull(),
+  quantity: numeric("quantity", { precision: 18, scale: 6, mode: "number" }).notNull(),
+  balanceBefore: numeric("balance_before", { precision: 18, scale: 6, mode: "number" }).notNull(),
+  balanceAfter: numeric("balance_after", { precision: 18, scale: 6, mode: "number" }).notNull(),
+  actorId: varchar("actor_id").notNull().references(() => users.id),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});

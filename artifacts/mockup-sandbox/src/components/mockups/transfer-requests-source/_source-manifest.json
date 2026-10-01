@@ -1,0 +1,273 @@
+{
+  "syntheticDataOnly": true,
+  "scope": "Exact transfer page and presentation dependencies; global app shell is isolated.",
+  "adaptation": "Imports rewritten; direct fetch/window/navigator bound to local effect boundaries; public asset URLs remapped to byte-identical sandbox copies. Exact AccessDeniedPage retained, unrelated auth guard exports omitted. Global @theme converted to equivalent HSL runtime tokens. No page markup/layout edits.",
+  "fixtures": "Three synthetic transfers: pending, in_transit, delivered (received); two synthetic branches; branch manager by default, ?role=keeper for warehouse desk.",
+  "page": "artifacts/mockup-sandbox/src/components/mockups/transfer-requests-source/_source/client/src/pages/transfer-requests.tsx",
+  "globals": {
+    "css": "24bcb51399770f24ef7dc4042a9e3fa0da14a73647678bb28d075ea7ca513795",
+    "html": "528c4c9955d4d0b21620b3022d921154f7bc892a7a286e71d42280bda5cedc84"
+  },
+  "files": [
+    {
+      "source": "client/src/pages/transfer-requests.tsx",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/transfer-requests-source/_source/client/src/pages/transfer-requests.tsx",
+      "sha256": "077bac01d71459380bfa7fe56e20969ea94bcc1eaf2d2bce7959b2f6b944a9c1"
+    },
+    {
+      "source": "client/src/pages/transfer-requests.css",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/transfer-requests-source/_source/client/src/pages/transfer-requests.css",
+      "sha256": "35b5e9ef24382bb683556d165357da2e6c071ce403c21ab004f8707bffdfbd21"
+    },
+    {
+      "source": "client/src/components/ui/card.tsx",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/transfer-requests-source/_source/client/src/components/ui/card.tsx",
+      "sha256": "525c4bb2c051987be64df0e92e1d90174912b219bf541e24ffbc4a3406de49e8"
+    },
+    {
+      "source": "client/src/lib/utils.ts",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/transfer-requests-source/_source/client/src/lib/utils.ts",
+      "sha256": "7c8c3dfc0cdd370d44932828eb067ef771c8fe7996693221d5d4b90af6d54f2d"
+    },
+    {
+      "source": "client/src/components/ui/button.tsx",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/transfer-requests-source/_source/client/src/components/ui/button.tsx",
+      "sha256": "006b001aa748fd61f9e936058b2f64f4aae4805c12725e883b841bc3a1ebeabc"
+    },
+    {
+      "source": "client/src/components/ui/input.tsx",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/transfer-requests-source/_source/client/src/components/ui/input.tsx",
+      "sha256": "82dcd3f49330857c20c3889d5c3e3219de1561ff720401d67c3848a96e130544"
+    },
+    {
+      "source": "client/src/components/ui/label.tsx",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/transfer-requests-source/_source/client/src/components/ui/label.tsx",
+      "sha256": "2eac8fbb04002c42b0fbc4062d20d131e421796eaf65c37d2049e29e42ecbc5a"
+    },
+    {
+      "source": "client/src/components/ui/textarea.tsx",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/transfer-requests-source/_source/client/src/components/ui/textarea.tsx",
+      "sha256": "ec7c92aaed80f6923a7caa4bfe4eead395b50a7001504fd7fbb0b9381804dae9"
+    },
+    {
+      "source": "client/src/components/ui/badge.tsx",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/transfer-requests-source/_source/client/src/components/ui/badge.tsx",
+      "sha256": "3c339f439797dba9b3872a9d89db42420ffd900504b4e0b27e9dad51e87bc41c"
+    },
+    {
+      "source": "client/src/components/ui/select.tsx",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/transfer-requests-source/_source/client/src/components/ui/select.tsx",
+      "sha256": "138cf21c61964d1192244a275fab998deb7409852766811eea7c689253e87e93"
+    },
+    {
+      "source": "client/src/components/ui/dialog.tsx",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/transfer-requests-source/_source/client/src/components/ui/dialog.tsx",
+      "sha256": "6d27cd86d4c94119aa9b0bad03ce648e92dc5a81596befe2e7682a3b2418e1fa"
+    },
+    {
+      "source": "client/src/components/dashboard/page-header.tsx",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/transfer-requests-source/_source/client/src/components/dashboard/page-header.tsx",
+      "sha256": "5468e23e66d30e7212fc789a9b68d41a7cb8f428c82d1666e4812e0e9b5035ae"
+    },
+    {
+      "source": "client/src/components/ui/table.tsx",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/transfer-requests-source/_source/client/src/components/ui/table.tsx",
+      "sha256": "e9b5569e64e908c6eae7a428a9c38ac929f5a86c2250a2229aa90dc27772d36b"
+    },
+    {
+      "source": "client/src/components/ui/dropdown-menu.tsx",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/transfer-requests-source/_source/client/src/components/ui/dropdown-menu.tsx",
+      "sha256": "dc109123ecd59af01d07aa9f3a8e8a7085bd3f337388c5369799ab1ce6c2d45f"
+    },
+    {
+      "source": "client/src/components/signature-pad.tsx",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/transfer-requests-source/_source/client/src/components/signature-pad.tsx",
+      "sha256": "29baa71ad7a3665da2e8e43b36d3758b263c9cd53c6a1c9d5239882c63de7155"
+    },
+    {
+      "source": "client/src/components/export-buttons.tsx",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/transfer-requests-source/_source/client/src/components/export-buttons.tsx",
+      "sha256": "f854bf459c2af81dbbe7cc98449bfa6fed96cd913b76482f62118ec321056555"
+    },
+    {
+      "source": "client/src/lib/export-utils.ts",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/transfer-requests-source/_source/client/src/lib/export-utils.ts",
+      "sha256": "0480f0ec70438693ded5d6507b79f8b16f78bc026b20afc5f518d6a96734e8e8"
+    },
+    {
+      "source": "client/src/lib/warehouse-keeper-list.ts",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/transfer-requests-source/_source/client/src/lib/warehouse-keeper-list.ts",
+      "sha256": "8f6442db8699a20fee8c26716756585d1347a8cc0a48bbbac0e709a3bd91aa79"
+    },
+    {
+      "source": "client/src/components/ui/skeleton.tsx",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/transfer-requests-source/_source/client/src/components/ui/skeleton.tsx",
+      "sha256": "a2276a34dc1f37f52a0ed463b14bda8144c9aaf246fa2152e31860d33e2b84ce"
+    },
+    {
+      "source": "client/src/hooks/use-branch-navigation.ts",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/transfer-requests-source/_source/client/src/hooks/use-branch-navigation.ts",
+      "sha256": "f65ebc9c3bd24e694136963ca11468f0c063f297ebf5c920cd6ba40f004394c6"
+    },
+    {
+      "source": "client/src/hooks/use-branch-desk-intent.ts",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/transfer-requests-source/_source/client/src/hooks/use-branch-desk-intent.ts",
+      "sha256": "16bd4c325a944aef05a525ad24d213d683378e59a961b52223d74362b44de45b"
+    },
+    {
+      "source": "client/src/components/branch-supply/sources.tsx",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/transfer-requests-source/_source/client/src/components/branch-supply/sources.tsx",
+      "sha256": "65e33eee9d6c51d3a51991976d0d81ccfd20e787131dc348b22bdf72292283bd"
+    },
+    {
+      "source": "client/src/components/platform-app-icon.tsx",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/transfer-requests-source/_source/client/src/components/platform-app-icon.tsx",
+      "sha256": "3d2fd6e88c7b99912205b1d20a53b66798115ecc52a8b977227afbb2fbf60114"
+    },
+    {
+      "source": "client/src/lib/branch-supply-navigation.ts",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/transfer-requests-source/_source/client/src/lib/branch-supply-navigation.ts",
+      "sha256": "91245789e07feec64b2a89ff2d35893c14ef9005e64d21fe92a0ea8441c2aab9"
+    },
+    {
+      "source": "client/src/lib/operations-center-navigation.ts",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/transfer-requests-source/_source/client/src/lib/operations-center-navigation.ts",
+      "sha256": "8702b872c5f37e91ffbc3ea254424b584af0a53f3edffbe4be31dc16ebaa0a82"
+    },
+    {
+      "source": "shared/operations-center-notifications.ts",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/transfer-requests-source/_source/shared/operations-center-notifications.ts",
+      "sha256": "e9200dee3cf06966f7197f474e165253a09faa42de6642d340334f41a2e86f0d"
+    },
+    {
+      "source": "shared/schema.ts",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/transfer-requests-source/_source/shared/schema.ts",
+      "sha256": "84c1e0df20d8c493106262a99586006638f6c80746e688cb2e5afdf3bcc9cf8f"
+    },
+    {
+      "source": "shared/material-quantity.ts",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/transfer-requests-source/_source/shared/material-quantity.ts",
+      "sha256": "49c7f13ad2892a1960bb080fb1d6c89d8130a50b3475d8dffdc1401abba8e4f8"
+    },
+    {
+      "source": "client/src/components/warehouse-entry/warehouse-item-entry.tsx",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/transfer-requests-source/_source/client/src/components/warehouse-entry/warehouse-item-entry.tsx",
+      "sha256": "25772937419737ecb17ce649cac7556751ec01e65e3ff3d8b6633d0f32ef447d"
+    },
+    {
+      "source": "client/src/components/warehouse-entry/warehouse-item-entry-helpers.ts",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/transfer-requests-source/_source/client/src/components/warehouse-entry/warehouse-item-entry-helpers.ts",
+      "sha256": "faf849e4aa7e6116dba8356cc74dece8853541eab9061f25da6b117da749457a"
+    },
+    {
+      "source": "client/src/lib/pdf-utils.ts",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/transfer-requests-source/_source/client/src/lib/pdf-utils.ts",
+      "sha256": "bb9d058a8dc56e58a979a2d599852f75d5c5630ead4941f0d3c3cc91f9596d1a"
+    },
+    {
+      "source": "client/src/lib/transfer-document.ts",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/transfer-requests-source/_source/client/src/lib/transfer-document.ts",
+      "sha256": "10d13e0de9d1ae6acc3abd043b55661e789cb6ce3b6bdedb4ba51562497d7c92"
+    },
+    {
+      "source": "public/assets/logo.png",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/transfer-requests-source/_source/public/assets/logo.png",
+      "sha256": "655e71f8310c85ffa33a60c1705ca74746d10587dbeef1d63121e54fc2f9cc4b"
+    },
+    {
+      "source": "public/assets/Amiri-Regular.ttf",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/transfer-requests-source/_source/public/assets/Amiri-Regular.ttf",
+      "sha256": "b092096eb992aebe59084b0cb5cf0015ae82c7e76b0aac5e7d60ae5113af5f54"
+    },
+    {
+      "source": "public/assets/Amiri-Bold.ttf",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/transfer-requests-source/_source/public/assets/Amiri-Bold.ttf",
+      "sha256": "c20c5fda0b648bfd7672fd3ded17488daa3a4810673b9b012fbb4a0af6a26aab"
+    },
+    {
+      "source": "client/src/components/transfer-document.tsx",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/transfer-requests-source/_source/client/src/components/transfer-document.tsx",
+      "sha256": "3bf85c20c24c26814e184970af9e2dc362f5e4d5ef543aded4753a3dec7964da"
+    },
+    {
+      "source": "client/src/lib/transfer-export.ts",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/transfer-requests-source/_source/client/src/lib/transfer-export.ts",
+      "sha256": "68ca393a039831a078c3c9385b71aa75a7ae585f4254d51dbe522d25ab4bc120"
+    },
+    {
+      "source": "client/src/lib/warehouse-branch-supply.ts",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/transfer-requests-source/_source/client/src/lib/warehouse-branch-supply.ts",
+      "sha256": "9ee4ecdf1ad13d6f98e5a7e0202d64f804c1d9d9efb762be11fb247b155a7042"
+    },
+    {
+      "source": "client/src/pages/driver-deliveries.tsx",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/transfer-requests-source/_source/client/src/pages/driver-deliveries.tsx",
+      "sha256": "34811bd4f654479577301148e8b668db638179848a56fe47f171b46e079db707"
+    },
+    {
+      "source": "client/src/components/protected-route.tsx",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/transfer-requests-source/_source/client/src/components/protected-route.tsx",
+      "sha256": "5b09de695e2ac84a0edc4740379d0d0122117f7e28b79fd44454de2d013e2ade"
+    },
+    {
+      "source": "shared/delivery-workspace-access.ts",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/transfer-requests-source/_source/shared/delivery-workspace-access.ts",
+      "sha256": "a86714f570168ff15dfa0d1e118f009f329d773dd35595e41b0725c97523ebed"
+    },
+    {
+      "source": "client/src/components/delivery/delivery-ui.tsx",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/transfer-requests-source/_source/client/src/components/delivery/delivery-ui.tsx",
+      "sha256": "6f263d5a99eebfe036c5906c0a8747dddc4cd3c0d4bd07afe381f2c2f7b7582a"
+    },
+    {
+      "source": "client/src/components/delivery/workspace-list.tsx",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/transfer-requests-source/_source/client/src/components/delivery/workspace-list.tsx",
+      "sha256": "368861a012a2bd8e02616faa8a04e09d0ccff68c4ecdd21e34577770d0a70be1"
+    },
+    {
+      "source": "client/src/hooks/use-delivery-workspace.ts",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/transfer-requests-source/_source/client/src/hooks/use-delivery-workspace.ts",
+      "sha256": "406e602e4d08549b9c82b256eebe072990b56b4dd4e19b0bc0832797647da9ac"
+    },
+    {
+      "source": "shared/delivery-workspace-list.ts",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/transfer-requests-source/_source/shared/delivery-workspace-list.ts",
+      "sha256": "3d67a02e10bf8af331373cfccddfa585d6b2737a7faf7c58e7669851b5a6e09f"
+    },
+    {
+      "source": "shared/delivery.ts",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/transfer-requests-source/_source/shared/delivery.ts",
+      "sha256": "c1c891cc4d5f6ed97d4a82970212120de77f2e6d316092bc01241caf6b48b74d"
+    },
+    {
+      "source": "client/src/components/delivery/workspace.css",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/transfer-requests-source/_source/client/src/components/delivery/workspace.css",
+      "sha256": "4b6082594ffd197776498828692561ae476c81d7a4c3e899203b53bab472e662"
+    },
+    {
+      "source": "client/src/components/delivery/signature-capture.tsx",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/transfer-requests-source/_source/client/src/components/delivery/signature-capture.tsx",
+      "sha256": "b282319c211bf3e886cd1dfc9ce36558ecb0c53dfc2582ea446c5ea26e576e9b"
+    },
+    {
+      "source": "client/src/components/ui/checkbox.tsx",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/transfer-requests-source/_source/client/src/components/ui/checkbox.tsx",
+      "sha256": "ac389a574651c8bedffc10f80674c5fc2f02ab81291a5f4ad9c587d1f775fdce"
+    },
+    {
+      "source": "client/src/components/ui/tabs.tsx",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/transfer-requests-source/_source/client/src/components/ui/tabs.tsx",
+      "sha256": "5c7fb11a13f803c4286b8a0455e6308b931c87c2ce518a4d28fc5b3dee435f0a"
+    },
+    {
+      "source": "client/src/lib/pdfmake-rtl.d.ts",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/transfer-requests-source/_source/client/src/lib/pdfmake-rtl.d.ts",
+      "sha256": "1924c12c83fc33906a05b5f2705b34593f05b7e8e710c130ffb8f01958af7fd8"
+    },
+    {
+      "source": "client/src/assets/fonts/SaudiRiyal.ttf",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/transfer-requests-source/_source/client/src/assets/fonts/SaudiRiyal.ttf",
+      "sha256": "5e51a1bdcb79cd0b702355c47c361a1f3c0ef58d07b5602f4223a731eb8e92d0"
+    }
+  ]
+}
