@@ -1,0 +1,415 @@
+{
+  "syntheticDataOnly": true,
+  "scope": "Exact central-kitchen-orders and all presentation dependencies, including lazy workspaces. Platform Layout isolated.",
+  "adaptation": "Import rewrites; local fetch/window/navigator/notification/storage effect boundaries; byte-identical public assets. Exact AccessDeniedPage retained without unrelated guards. Global @theme adapted to HSL runtime tokens. No page markup/layout edits.",
+  "fixtures": "Default synthetic medina branch-manager with kitchen create/edit, no approval or warehouse-admin access. ?role=operations selects synthetic operations-manager with kitchen approval/preparation/dispatch authority and operations presentation. Nonempty requested/approved/prepared/dispatched/received orders; local filtering and policy. All mutations remain inert.",
+  "route": "/central-kitchen-orders?from=branch-supply&branchId=medina",
+  "operationsRoute": "/central-kitchen-orders?role=operations&from=branch-supply&branchId=medina",
+  "page": "artifacts/mockup-sandbox/src/components/mockups/kitchen-daily-source/_source/client/src/pages/central-kitchen-orders.tsx",
+  "globals": {
+    "css": "24bcb51399770f24ef7dc4042a9e3fa0da14a73647678bb28d075ea7ca513795",
+    "html": "528c4c9955d4d0b21620b3022d921154f7bc892a7a286e71d42280bda5cedc84"
+  },
+  "files": [
+    {
+      "source": "client/src/pages/central-kitchen-orders.tsx",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/kitchen-daily-source/_source/client/src/pages/central-kitchen-orders.tsx",
+      "sha256": "17709a4d3e68c743d337ca689f472de61427cb3c5081ae77a4a963afad9d5e06"
+    },
+    {
+      "source": "client/src/lib/branch-supply-navigation.ts",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/kitchen-daily-source/_source/client/src/lib/branch-supply-navigation.ts",
+      "sha256": "91245789e07feec64b2a89ff2d35893c14ef9005e64d21fe92a0ea8441c2aab9"
+    },
+    {
+      "source": "client/src/components/branch-supply/sources.tsx",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/kitchen-daily-source/_source/client/src/components/branch-supply/sources.tsx",
+      "sha256": "65e33eee9d6c51d3a51991976d0d81ccfd20e787131dc348b22bdf72292283bd"
+    },
+    {
+      "source": "client/src/components/platform-app-icon.tsx",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/kitchen-daily-source/_source/client/src/components/platform-app-icon.tsx",
+      "sha256": "3d2fd6e88c7b99912205b1d20a53b66798115ecc52a8b977227afbb2fbf60114"
+    },
+    {
+      "source": "client/src/components/ui/button.tsx",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/kitchen-daily-source/_source/client/src/components/ui/button.tsx",
+      "sha256": "006b001aa748fd61f9e936058b2f64f4aae4805c12725e883b841bc3a1ebeabc"
+    },
+    {
+      "source": "client/src/lib/utils.ts",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/kitchen-daily-source/_source/client/src/lib/utils.ts",
+      "sha256": "7c8c3dfc0cdd370d44932828eb067ef771c8fe7996693221d5d4b90af6d54f2d"
+    },
+    {
+      "source": "client/src/components/ui/badge.tsx",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/kitchen-daily-source/_source/client/src/components/ui/badge.tsx",
+      "sha256": "3c339f439797dba9b3872a9d89db42420ffd900504b4e0b27e9dad51e87bc41c"
+    },
+    {
+      "source": "client/src/components/dashboard/page-header.tsx",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/kitchen-daily-source/_source/client/src/components/dashboard/page-header.tsx",
+      "sha256": "5468e23e66d30e7212fc789a9b68d41a7cb8f428c82d1666e4812e0e9b5035ae"
+    },
+    {
+      "source": "client/src/components/ui/card.tsx",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/kitchen-daily-source/_source/client/src/components/ui/card.tsx",
+      "sha256": "525c4bb2c051987be64df0e92e1d90174912b219bf541e24ffbc4a3406de49e8"
+    },
+    {
+      "source": "client/src/components/ui/dialog.tsx",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/kitchen-daily-source/_source/client/src/components/ui/dialog.tsx",
+      "sha256": "6d27cd86d4c94119aa9b0bad03ce648e92dc5a81596befe2e7682a3b2418e1fa"
+    },
+    {
+      "source": "client/src/components/ui/input.tsx",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/kitchen-daily-source/_source/client/src/components/ui/input.tsx",
+      "sha256": "82dcd3f49330857c20c3889d5c3e3219de1561ff720401d67c3848a96e130544"
+    },
+    {
+      "source": "client/src/components/ui/label.tsx",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/kitchen-daily-source/_source/client/src/components/ui/label.tsx",
+      "sha256": "2eac8fbb04002c42b0fbc4062d20d131e421796eaf65c37d2049e29e42ecbc5a"
+    },
+    {
+      "source": "client/src/components/ui/select.tsx",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/kitchen-daily-source/_source/client/src/components/ui/select.tsx",
+      "sha256": "138cf21c61964d1192244a275fab998deb7409852766811eea7c689253e87e93"
+    },
+    {
+      "source": "client/src/components/ui/skeleton.tsx",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/kitchen-daily-source/_source/client/src/components/ui/skeleton.tsx",
+      "sha256": "a2276a34dc1f37f52a0ed463b14bda8144c9aaf246fa2152e31860d33e2b84ce"
+    },
+    {
+      "source": "client/src/components/ui/table.tsx",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/kitchen-daily-source/_source/client/src/components/ui/table.tsx",
+      "sha256": "e9b5569e64e908c6eae7a428a9c38ac929f5a86c2250a2229aa90dc27772d36b"
+    },
+    {
+      "source": "client/src/hooks/use-branch-navigation.ts",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/kitchen-daily-source/_source/client/src/hooks/use-branch-navigation.ts",
+      "sha256": "f65ebc9c3bd24e694136963ca11468f0c063f297ebf5c920cd6ba40f004394c6"
+    },
+    {
+      "source": "client/src/hooks/use-branch-desk-intent.ts",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/kitchen-daily-source/_source/client/src/hooks/use-branch-desk-intent.ts",
+      "sha256": "16bd4c325a944aef05a525ad24d213d683378e59a961b52223d74362b44de45b"
+    },
+    {
+      "source": "client/src/lib/branch-operation-navigation.ts",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/kitchen-daily-source/_source/client/src/lib/branch-operation-navigation.ts",
+      "sha256": "64ae65c0f4ff209f1ff258a61bc4c43a964ef8e1629875b2919c45872cf4df04"
+    },
+    {
+      "source": "client/src/components/central-kitchen/operations-workspace.ts",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/kitchen-daily-source/_source/client/src/components/central-kitchen/operations-workspace.ts",
+      "sha256": "353ddb1233db6dc129df07ee6f6a7de5e2a3b4d873f4ee703a7976cb95a472bc"
+    },
+    {
+      "source": "client/src/lib/kitchen-operations-summary.ts",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/kitchen-daily-source/_source/client/src/lib/kitchen-operations-summary.ts",
+      "sha256": "aa2f2e21b3c632dbe5b5838ca8a7c4db11f08aab357dfd326560c5c49254d6a0"
+    },
+    {
+      "source": "shared/material-quantity.ts",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/kitchen-daily-source/_source/shared/material-quantity.ts",
+      "sha256": "49c7f13ad2892a1960bb080fb1d6c89d8130a50b3475d8dffdc1401abba8e4f8"
+    },
+    {
+      "source": "client/src/lib/company-logo-data.ts",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/kitchen-daily-source/_source/client/src/lib/company-logo-data.ts",
+      "sha256": "494023633aedbdde8ca0e73057e8d874ae8b5f9b13ed82b13330e8b666867738"
+    },
+    {
+      "source": "client/public/company-logo.png",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/kitchen-daily-source/_source/client/public/company-logo.png",
+      "sha256": "769843312b5ad8a941989f890973293a1928fb2400195857e6d3a8fb07165d42"
+    },
+    {
+      "source": "client/public/butter-logo.png",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/kitchen-daily-source/_source/client/public/butter-logo.png",
+      "sha256": "655e71f8310c85ffa33a60c1705ca74746d10587dbeef1d63121e54fc2f9cc4b"
+    },
+    {
+      "source": "client/src/components/central-kitchen/order-line-editor.tsx",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/kitchen-daily-source/_source/client/src/components/central-kitchen/order-line-editor.tsx",
+      "sha256": "9daa800ecf9b50bf9f87ba3b7f5e1adc9e833bb01f05c07b2178e4cb5f8e17d4"
+    },
+    {
+      "source": "client/src/components/central-kitchen/availability-snapshot.tsx",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/kitchen-daily-source/_source/client/src/components/central-kitchen/availability-snapshot.tsx",
+      "sha256": "9ec14ed4de4c6b9d85e0dfe5fa77b3cde7cb740bdabcf6a60ab5f43ba05b4376"
+    },
+    {
+      "source": "shared/central-kitchen-live.ts",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/kitchen-daily-source/_source/shared/central-kitchen-live.ts",
+      "sha256": "00557defe8e524139639fb234bf27b5c4f5684bf7573994ce1d765bd46541757"
+    },
+    {
+      "source": "shared/central-kitchen-catalog.ts",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/kitchen-daily-source/_source/shared/central-kitchen-catalog.ts",
+      "sha256": "aa188e3c2a1ce30c56b1f265f697693d41e187738771047b7b12a45b3115377b"
+    },
+    {
+      "source": "client/src/components/central-kitchen/linked-batches.tsx",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/kitchen-daily-source/_source/client/src/components/central-kitchen/linked-batches.tsx",
+      "sha256": "77b8038b4376f9d21e1b53a65f7cabc217de8f6cb2ae7cf590ca8d7dafe245f1"
+    },
+    {
+      "source": "client/src/components/ui/alert-dialog.tsx",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/kitchen-daily-source/_source/client/src/components/ui/alert-dialog.tsx",
+      "sha256": "311bede35f785d7b1ecd7398986757e26409d1049352a94ccf83586b8603c92d"
+    },
+    {
+      "source": "client/src/components/central-kitchen/recipe-materials.tsx",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/kitchen-daily-source/_source/client/src/components/central-kitchen/recipe-materials.tsx",
+      "sha256": "c5a5b7f80534b76a66bf908c913b540102c07e2546d979ce669e94ffb670fafc"
+    },
+    {
+      "source": "client/src/components/central-kitchen/display-format.ts",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/kitchen-daily-source/_source/client/src/components/central-kitchen/display-format.ts",
+      "sha256": "b1b0f8ee485d90342c7812ada4a317479fc042ee7b18898d42bf792a49c2be6a"
+    },
+    {
+      "source": "shared/central-kitchen-batch-materials.ts",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/kitchen-daily-source/_source/shared/central-kitchen-batch-materials.ts",
+      "sha256": "cddf48f2f6e93b2c67c372f494523c200bd20abb6a6a8aeef1e7e799147d5496"
+    },
+    {
+      "source": "client/src/components/ui/checkbox.tsx",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/kitchen-daily-source/_source/client/src/components/ui/checkbox.tsx",
+      "sha256": "ac389a574651c8bedffc10f80674c5fc2f02ab81291a5f4ad9c587d1f775fdce"
+    },
+    {
+      "source": "client/src/components/central-kitchen/finish-readiness.ts",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/kitchen-daily-source/_source/client/src/components/central-kitchen/finish-readiness.ts",
+      "sha256": "7eed1ed77dac335444b7fc8da6e56b00417a0436f9ccb7e78da930b8304908aa"
+    },
+    {
+      "source": "client/src/components/central-kitchen/use-visual-viewport-dialog.ts",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/kitchen-daily-source/_source/client/src/components/central-kitchen/use-visual-viewport-dialog.ts",
+      "sha256": "521c6a214bf36aa87e5ac5f01e929ac4655ed0fb5b305a7a72598f07deef0eb4"
+    },
+    {
+      "source": "client/src/components/central-kitchen/recipe-exceptions.tsx",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/kitchen-daily-source/_source/client/src/components/central-kitchen/recipe-exceptions.tsx",
+      "sha256": "e2b6b1770aa9333fc13882280bc6c40daeaaba201d3bcc0e3d598b9b4e3d30e6"
+    },
+    {
+      "source": "shared/recipe-exceptions.ts",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/kitchen-daily-source/_source/shared/recipe-exceptions.ts",
+      "sha256": "a47bd7e7bc9cdc7d1114918bdf1f6c5f56ced7abdeee8c4eb1657478a4404a0d"
+    },
+    {
+      "source": "client/src/components/ui/textarea.tsx",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/kitchen-daily-source/_source/client/src/components/ui/textarea.tsx",
+      "sha256": "ec7c92aaed80f6923a7caa4bfe4eead395b50a7001504fd7fbb0b9381804dae9"
+    },
+    {
+      "source": "client/src/components/central-kitchen/recipe-exception-flow.ts",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/kitchen-daily-source/_source/client/src/components/central-kitchen/recipe-exception-flow.ts",
+      "sha256": "c0ddba2d50611c156d3744310b961ab4cc807925a1c34c398a0785b8ab136a5e"
+    },
+    {
+      "source": "client/src/components/central-kitchen/kitchen-stage-rail.tsx",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/kitchen-daily-source/_source/client/src/components/central-kitchen/kitchen-stage-rail.tsx",
+      "sha256": "0a0e8e77c8f134dbc9806a6f42175880a37c6a6559cdd01f736b4b00b4ec7fc3"
+    },
+    {
+      "source": "client/src/components/central-kitchen/order-journey.tsx",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/kitchen-daily-source/_source/client/src/components/central-kitchen/order-journey.tsx",
+      "sha256": "b39c97349b68568429d1fc70a1c96babd83d600c1b67406676a1648340db86c6"
+    },
+    {
+      "source": "shared/central-kitchen-journey.ts",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/kitchen-daily-source/_source/shared/central-kitchen-journey.ts",
+      "sha256": "34fc7d7aecf9a35f74b3cb68d61b4b26b6450f74b05a02b37520dd411bc5670c"
+    },
+    {
+      "source": "client/src/pages/driver-deliveries.tsx",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/kitchen-daily-source/_source/client/src/pages/driver-deliveries.tsx",
+      "sha256": "34811bd4f654479577301148e8b668db638179848a56fe47f171b46e079db707"
+    },
+    {
+      "source": "client/src/components/protected-route.tsx",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/kitchen-daily-source/_source/client/src/components/protected-route.tsx",
+      "sha256": "5b09de695e2ac84a0edc4740379d0d0122117f7e28b79fd44454de2d013e2ade"
+    },
+    {
+      "source": "shared/delivery-workspace-access.ts",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/kitchen-daily-source/_source/shared/delivery-workspace-access.ts",
+      "sha256": "a86714f570168ff15dfa0d1e118f009f329d773dd35595e41b0725c97523ebed"
+    },
+    {
+      "source": "client/src/components/delivery/delivery-ui.tsx",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/kitchen-daily-source/_source/client/src/components/delivery/delivery-ui.tsx",
+      "sha256": "6f263d5a99eebfe036c5906c0a8747dddc4cd3c0d4bd07afe381f2c2f7b7582a"
+    },
+    {
+      "source": "client/src/components/delivery/workspace-list.tsx",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/kitchen-daily-source/_source/client/src/components/delivery/workspace-list.tsx",
+      "sha256": "368861a012a2bd8e02616faa8a04e09d0ccff68c4ecdd21e34577770d0a70be1"
+    },
+    {
+      "source": "client/src/hooks/use-delivery-workspace.ts",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/kitchen-daily-source/_source/client/src/hooks/use-delivery-workspace.ts",
+      "sha256": "406e602e4d08549b9c82b256eebe072990b56b4dd4e19b0bc0832797647da9ac"
+    },
+    {
+      "source": "shared/delivery-workspace-list.ts",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/kitchen-daily-source/_source/shared/delivery-workspace-list.ts",
+      "sha256": "3d67a02e10bf8af331373cfccddfa585d6b2737a7faf7c58e7669851b5a6e09f"
+    },
+    {
+      "source": "shared/delivery.ts",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/kitchen-daily-source/_source/shared/delivery.ts",
+      "sha256": "c1c891cc4d5f6ed97d4a82970212120de77f2e6d316092bc01241caf6b48b74d"
+    },
+    {
+      "source": "client/src/components/delivery/workspace.css",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/kitchen-daily-source/_source/client/src/components/delivery/workspace.css",
+      "sha256": "4b6082594ffd197776498828692561ae476c81d7a4c3e899203b53bab472e662"
+    },
+    {
+      "source": "client/src/components/delivery/signature-capture.tsx",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/kitchen-daily-source/_source/client/src/components/delivery/signature-capture.tsx",
+      "sha256": "b282319c211bf3e886cd1dfc9ce36558ecb0c53dfc2582ea446c5ea26e576e9b"
+    },
+    {
+      "source": "client/src/components/ui/tabs.tsx",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/kitchen-daily-source/_source/client/src/components/ui/tabs.tsx",
+      "sha256": "5c7fb11a13f803c4286b8a0455e6308b931c87c2ce518a4d28fc5b3dee435f0a"
+    },
+    {
+      "source": "client/src/pages/finished-goods-inventory.tsx",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/kitchen-daily-source/_source/client/src/pages/finished-goods-inventory.tsx",
+      "sha256": "8d6ce0fd9f1b777d6e133a1f7a3410d7ef9e7707040fe9144628f171f1733c94"
+    },
+    {
+      "source": "client/src/components/branch-bar-handoffs.tsx",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/kitchen-daily-source/_source/client/src/components/branch-bar-handoffs.tsx",
+      "sha256": "f91f26e40a53d6313481831165696c6ec10a1143b932a027c0ae4975f816d5cb"
+    },
+    {
+      "source": "client/src/components/ui/pagination.tsx",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/kitchen-daily-source/_source/client/src/components/ui/pagination.tsx",
+      "sha256": "566ad4eb3ef756d6cdd4047e67390dc8270d77f94c2ac064830a13149b181b2d"
+    },
+    {
+      "source": "shared/schema.ts",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/kitchen-daily-source/_source/shared/schema.ts",
+      "sha256": "84c1e0df20d8c493106262a99586006638f6c80746e688cb2e5afdf3bcc9cf8f"
+    },
+    {
+      "source": "shared/catalog-activity.ts",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/kitchen-daily-source/_source/shared/catalog-activity.ts",
+      "sha256": "c04ee4a3c60de4632d8ea7626e84c2944c9d6177cbb597ab4544dcb38eaf6523"
+    },
+    {
+      "source": "client/src/components/ui/dropdown-menu.tsx",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/kitchen-daily-source/_source/client/src/components/ui/dropdown-menu.tsx",
+      "sha256": "dc109123ecd59af01d07aa9f3a8e8a7085bd3f337388c5369799ab1ce6c2d45f"
+    },
+    {
+      "source": "client/src/components/central-kitchen/order-queue.ts",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/kitchen-daily-source/_source/client/src/components/central-kitchen/order-queue.ts",
+      "sha256": "24a2b1de3c0ea4ce0a4517b960933e9cc0f7c6a865c08d2f62ad2b80e0f44af6"
+    },
+    {
+      "source": "client/src/components/central-kitchen/order-notifications-opt-in.tsx",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/kitchen-daily-source/_source/client/src/components/central-kitchen/order-notifications-opt-in.tsx",
+      "sha256": "04c9a38ce672a51246b0353a7dfb1897dc64c877daefdbc2f40485587eb1c099"
+    },
+    {
+      "source": "client/src/components/central-kitchen/ordering-schedule.tsx",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/kitchen-daily-source/_source/client/src/components/central-kitchen/ordering-schedule.tsx",
+      "sha256": "046577373c270ccc3fc9c40e9b1f810f91b21a0da45e182604082480ab7ccbfc"
+    },
+    {
+      "source": "shared/central-kitchen-ordering-policy.ts",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/kitchen-daily-source/_source/shared/central-kitchen-ordering-policy.ts",
+      "sha256": "8d1b1151ad72d2763001a791ae894d7136749340d278baa61cf9c7778e7a539f"
+    },
+    {
+      "source": "client/src/components/central-kitchen/prepare-fulfillment.tsx",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/kitchen-daily-source/_source/client/src/components/central-kitchen/prepare-fulfillment.tsx",
+      "sha256": "a9b518d1139d42bd01a33aa82453daa301f1d0dc5ca8dd97d70bce27558d4471"
+    },
+    {
+      "source": "client/src/components/ui/searchable-select.tsx",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/kitchen-daily-source/_source/client/src/components/ui/searchable-select.tsx",
+      "sha256": "9ad0768894d4e2b5ce430a028761d5ef6cbf992fa67c41cba47b91dee1404348"
+    },
+    {
+      "source": "client/src/components/ui/command.tsx",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/kitchen-daily-source/_source/client/src/components/ui/command.tsx",
+      "sha256": "5a57ebc119f2357b097098d22865d45de8fda623ee88fe98b99999838c13633b"
+    },
+    {
+      "source": "client/src/components/ui/popover.tsx",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/kitchen-daily-source/_source/client/src/components/ui/popover.tsx",
+      "sha256": "04cf38bf94abd3fe1b51e90227e6e235ca74776f6fc6af718bfc149e7424f582"
+    },
+    {
+      "source": "client/src/components/central-kitchen/prepare-fulfillment-model.ts",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/kitchen-daily-source/_source/client/src/components/central-kitchen/prepare-fulfillment-model.ts",
+      "sha256": "a94fec6bee6991e74e59f080edfed9d64007fa6684b7b79765a50f199cd461a6"
+    },
+    {
+      "source": "client/src/components/central-kitchen/demand-commitments.tsx",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/kitchen-daily-source/_source/client/src/components/central-kitchen/demand-commitments.tsx",
+      "sha256": "98fee1947d8aadb1c370d52ea3c7ab8fceaef001873eaa6bb5dbd094753421d1"
+    },
+    {
+      "source": "client/src/components/central-kitchen/kitchen-order-sharing.tsx",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/kitchen-daily-source/_source/client/src/components/central-kitchen/kitchen-order-sharing.tsx",
+      "sha256": "ca2d241b0b5aabfb4b88a86d182e7ba0ac9fa55efcae188127689fc472e4571d"
+    },
+    {
+      "source": "client/src/components/central-kitchen/kitchen-order-share-model.ts",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/kitchen-daily-source/_source/client/src/components/central-kitchen/kitchen-order-share-model.ts",
+      "sha256": "1b2ad2fcabc44c151f257e57540f323133272cd2adc0b015b79c44f089d99b40"
+    },
+    {
+      "source": "client/src/components/central-kitchen/kitchen-order-pdf.ts",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/kitchen-daily-source/_source/client/src/components/central-kitchen/kitchen-order-pdf.ts",
+      "sha256": "37cbd2d32bf9bb8c511fbe4641337a4f14dbac08ab22e253248d95ff3cb9dd5d"
+    },
+    {
+      "source": "public/assets/Amiri-Regular.ttf",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/kitchen-daily-source/_source/public/assets/Amiri-Regular.ttf",
+      "sha256": "b092096eb992aebe59084b0cb5cf0015ae82c7e76b0aac5e7d60ae5113af5f54"
+    },
+    {
+      "source": "public/assets/Amiri-Bold.ttf",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/kitchen-daily-source/_source/public/assets/Amiri-Bold.ttf",
+      "sha256": "c20c5fda0b648bfd7672fd3ded17488daa3a4810673b9b012fbb4a0af6a26aab"
+    },
+    {
+      "source": "client/src/components/central-kitchen/kitchen-order-excel.ts",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/kitchen-daily-source/_source/client/src/components/central-kitchen/kitchen-order-excel.ts",
+      "sha256": "23bd663ae5b22168202f429dacde7e6ee6500625bb8d18c4a405e655f2fda0dc"
+    },
+    {
+      "source": "client/src/pages/central-kitchen-orders.css",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/kitchen-daily-source/_source/client/src/pages/central-kitchen-orders.css",
+      "sha256": "79e082d0ead949c9792df40db44e405fc03e0f6549effcca5f73d5c45c2e6261"
+    },
+    {
+      "source": "shared/central-kitchen-next-step.ts",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/kitchen-daily-source/_source/shared/central-kitchen-next-step.ts",
+      "sha256": "ff74f4e5c8e9ab709c2f03472b328e413ca856889cade6cc64357e19ef5d94a9"
+    },
+    {
+      "source": "client/src/lib/pdfmake-rtl.d.ts",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/kitchen-daily-source/_source/client/src/lib/pdfmake-rtl.d.ts",
+      "sha256": "1924c12c83fc33906a05b5f2705b34593f05b7e8e710c130ffb8f01958af7fd8"
+    },
+    {
+      "source": "client/src/assets/fonts/SaudiRiyal.ttf",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/kitchen-daily-source/_source/client/src/assets/fonts/SaudiRiyal.ttf",
+      "sha256": "5e51a1bdcb79cd0b702355c47c361a1f3c0ef58d07b5602f4223a731eb8e92d0"
+    }
+  ]
+}

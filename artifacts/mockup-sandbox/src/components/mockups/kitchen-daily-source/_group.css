@@ -1,0 +1,1117 @@
+@import url("https://fonts.googleapis.com");
+@import url("https://fonts.googleapis.com");
+@import url("https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap&subset=arabic,latin");
+@import url("https://fonts.googleapis.com/css2?family=Caveat:wght@400;700&family=Plus+Jakarta+Sans:wght@400;600;700&display=optional");
+@import url("https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap&subset=arabic,latin");
+@reference "../../../index.css";
+/* Actual app globals; @theme adapted to equivalent runtime HSL tokens. */
+
+
+/* Operations center: overview → filtered domain → explicit record drilldown. */
+.oc-tab-strip { scrollbar-width: none; }
+.oc-tab-strip::-webkit-scrollbar { display: none; }
+.oc-branch-results { scrollbar-width: thin; scrollbar-color: #d1bec1 transparent; }
+
+/* Kitchen operations is deliberately an inbox on a phone: one decision at a
+   time, with dense scan lines rather than a shrunken desktop report. */
+@media (max-width: 767px) {
+  .kitchen-mobile-header p { display: none; }
+  .kitchen-mobile-header [data-testid="page-header-actions"] { width: 100%; }
+  .kitchen-mobile-header [data-testid="page-header-actions"] > div { display: flex; flex-wrap: nowrap; width: 100%; }
+  .kitchen-mobile-header [data-testid="create-kitchen-order"] { flex: 1; }
+  .kitchen-utility-status, .kitchen-secondary-metrics { display: none; }
+  .kitchen-stage-rail { position: sticky; top: 0; z-index: 20; margin-inline: -0.75rem; padding-inline: 0.75rem; background: color-mix(in srgb, var(--color-background) 97%, transparent); box-shadow: 0 8px 18px color-mix(in srgb, var(--color-foreground) 7%, transparent); }
+  .kitchen-queue-toolbar { display: grid; grid-template-columns: minmax(0, 1fr) auto; padding: .75rem !important; }
+  .kitchen-queue-toolbar > .kitchen-search { grid-column: 1 / -1; }
+  .kitchen-queue-toolbar > span { align-self: center; }
+  .kitchen-detail-dialog [data-slot="dialog-content"] { border-radius: 0; }
+  .kitchen-detail-dialog .kitchen-detail-body { min-width: 0; overflow-x: hidden; padding: .9rem .85rem 5.5rem; }
+  .demand-mobile-summary { position: sticky; top: 0; z-index: 15; margin-inline: -.75rem; padding: .6rem .75rem; background: hsl(var(--background) / .97); border-bottom: 1px solid hsl(var(--border)); }
+  .demand-workspace [data-testid="page-header"] p,
+  .demand-workspace [data-testid="page-header-actions"],
+  .demand-explanation { display: none; }
+  .demand-row-card { padding: .8rem !important; }
+  .demand-decision { margin-inline: -.15rem; border-width: 2px !important; padding: .85rem !important; }
+}
+
+/* Central kitchen stage rail: a compact workflow switcher rather than a
+   generic tab row. It stays dense at desktop scale and becomes a deliberate,
+   touch-scrollable lane on phones. */
+.kitchen-stage-rail {
+  --stage-rail-surface: color-mix(in srgb, var(--color-card) 86%, var(--color-secondary));
+  --stage-rail-line: color-mix(in srgb, var(--color-border) 86%, var(--color-primary));
+  --stage-rail-active: color-mix(in srgb, var(--color-primary) 13%, var(--color-card));
+  --stage-rail-active-line: color-mix(in srgb, var(--color-primary) 42%, var(--color-border));
+  border: 1px solid var(--stage-rail-line);
+  border-radius: .8rem;
+  background: var(--stage-rail-surface);
+  min-width: 0;
+}
+.kitchen-stage-rail__scroller {
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.kitchen-stage-rail__scroller::-webkit-scrollbar { display: none; }
+.kitchen-stage-rail__track {
+  display: flex;
+  align-items: stretch;
+  width: max-content;
+  min-width: 100%;
+  padding: .22rem;
+  gap: .15rem;
+}
+.kitchen-stage-rail__item {
+  display: inline-flex;
+  min-height: 2.75rem;
+  flex: 1 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: .38rem;
+  border: 1px solid transparent;
+  border-radius: .58rem;
+  padding: .35rem .56rem;
+  color: var(--color-muted-foreground);
+  font-size: .82rem;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+  transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease, transform 140ms ease;
+}
+.kitchen-stage-rail__icon { width: .9rem; height: .9rem; stroke-width: 1.9; }
+.kitchen-stage-rail__count {
+  display: inline-grid;
+  min-width: 1.2rem;
+  height: 1.2rem;
+  place-items: center;
+  border-radius: 999px;
+  padding-inline: .27rem;
+  background: color-mix(in srgb, var(--color-muted) 83%, var(--color-border));
+  color: var(--color-muted-foreground);
+  font-size: .62rem;
+  font-variant-numeric: tabular-nums;
+}
+.kitchen-stage-rail__item[data-active="true"] {
+  border-color: var(--stage-rail-active-line);
+  background: var(--stage-rail-active);
+  color: var(--color-primary);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--color-foreground) 8%, transparent);
+}
+.kitchen-stage-rail__item[data-active="true"] .kitchen-stage-rail__count {
+  background: var(--color-primary);
+  color: var(--color-primary-foreground);
+}
+.kitchen-stage-rail__item[data-stage="attention"][data-active="true"] {
+  border-color: color-mix(in srgb, var(--color-destructive) 35%, var(--color-border));
+  background: color-mix(in srgb, var(--color-destructive) 9%, var(--color-card));
+  color: var(--color-destructive);
+}
+.kitchen-stage-rail__item[data-stage="attention"][data-active="true"] .kitchen-stage-rail__count {
+  background: var(--color-destructive);
+  color: var(--color-destructive-foreground);
+}
+.kitchen-stage-rail__item:focus-visible { outline: 2px solid var(--color-ring); outline-offset: 2px; }
+@media (hover: hover) {
+  .kitchen-stage-rail__item:not([data-active="true"]):hover { background: color-mix(in srgb, var(--color-muted) 72%, var(--color-card)); color: var(--color-foreground); }
+  .kitchen-stage-rail__item:hover { transform: translateY(-1px); }
+}
+.kitchen-stage-rail__item:active { transform: scale(.985); }
+@media (min-width: 768px) {
+  .kitchen-stage-rail__track { width: 100%; }
+  .kitchen-stage-rail__item { min-width: 0; padding-inline: .52rem; font-size: .82rem; }
+}
+@media (max-width: 767px) {
+  .kitchen-stage-rail { border-inline: 0; border-radius: 0; }
+  .kitchen-stage-rail__track { padding-block: .32rem; }
+  .kitchen-stage-rail__item { min-height: 2.55rem; padding-inline: .72rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .kitchen-stage-rail__item { transition: none; }
+  .kitchen-stage-rail__item:hover, .kitchen-stage-rail__item:active { transform: none; }
+}
+
+/* Safelist: narrowly scoped to the exact KPI tone + tab active-state classes
+   used by client/src/components/dashboard/kpi-card.tsx (TONE_ICON map)
+   and the operations-reports tab pills. Keep this list tight to avoid CSS bloat. */
+@source inline("{bg,text}-{teal,emerald,blue,amber,rose,violet,gray}-{100,700}");
+@source inline("dark:bg-{teal,emerald,blue,amber,rose,violet}-950/40");
+@source inline("dark:text-{teal,emerald,blue,amber,rose,violet}-400");
+@source inline("data-[state=active]:bg-{amber,emerald,blue,violet,rose,teal}-100");
+@source inline("data-[state=active]:text-{amber,emerald,blue,violet,rose,teal}-800");
+@source inline("dark:data-[state=active]:bg-{amber,emerald,blue,violet,rose,teal}-950/40");
+@source inline("dark:data-[state=active]:text-{amber,emerald,blue,violet,rose,teal}-300");
+
+@font-face {
+  font-family: "SaudiRiyal";
+  src: url("./_source/client/src/assets/fonts/SaudiRiyal.ttf") format("truetype");
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+.font-riyal {
+  font-family: "SaudiRiyal", sans-serif;
+}
+
+
+
+:root {
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  /* Butter Bakery Theme - Royal Violet (light mode) */
+  --color-background: hsl(270 40% 99%);              /* Soft lavender-white */
+  --color-foreground: hsl(260 20% 12%);              /* Deep ink violet */
+
+  --color-card: hsl(0 0% 100%);
+  --color-card-foreground: hsl(260 20% 12%);
+
+  --color-popover: hsl(0 0% 100%);
+  --color-popover-foreground: hsl(260 20% 12%);
+
+  --color-primary: hsl(262 83% 58%);                 /* Royal Violet */
+  --color-primary-foreground: hsl(0 0% 100%);
+
+  --color-secondary: hsl(265 30% 96%);               /* Pale lavender */
+  --color-secondary-foreground: hsl(260 25% 18%);
+
+  --color-muted: hsl(265 25% 95%);
+  --color-muted-foreground: hsl(260 10% 42%);
+
+  --color-accent: hsl(265 70% 94%);                  /* Light violet tint */
+  --color-accent-foreground: hsl(262 60% 30%);
+
+  --color-destructive: hsl(0 84% 60%);
+  --color-destructive-foreground: hsl(0 0% 98%);
+
+  --color-border: hsl(265 25% 90%);
+  --color-input: hsl(265 25% 90%);
+  --color-ring: hsl(262 83% 58%);
+
+  --color-chart-1: hsl(262 83% 58%);                 /* Primary violet */
+  --color-chart-2: hsl(280 70% 65%);                 /* Magenta */
+  --color-chart-3: hsl(220 75% 60%);                 /* Indigo blue */
+  --color-chart-4: hsl(42 87% 55%);                  /* Butter gold accent */
+  --color-chart-5: hsl(160 60% 45%);                 /* Mint */
+
+  --font-sans: 'Cairo', 'Plus Jakarta Sans', sans-serif;
+
+  --radius: 0.5rem;
+  --background: 270 40% 99%;
+  --foreground: 260 20% 12%;
+  --card: 0 0% 100%;
+  --card-foreground: 260 20% 12%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 260 20% 12%;
+  --primary: 262 83% 58%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 265 30% 96%;
+  --secondary-foreground: 260 25% 18%;
+  --muted: 265 25% 95%;
+  --muted-foreground: 260 10% 42%;
+  --accent: 265 70% 94%;
+  --accent-foreground: 262 60% 30%;
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 0 0% 98%;
+  --border: 265 25% 90%;
+  --input: 265 25% 90%;
+  --ring: 262 83% 58%;
+  --chart-1: 262 83% 58%;
+  --chart-2: 280 70% 65%;
+  --chart-3: 220 75% 60%;
+  --chart-4: 42 87% 55%;
+  --chart-5: 160 60% 45%;
+}
+
+/* Dark mode — true color swap (was previously only toggling a class). */
+.dark {
+  --color-background: hsl(260 25% 8%);
+  --color-foreground: hsl(265 20% 96%);
+
+  --color-card: hsl(260 22% 12%);
+  --color-card-foreground: hsl(265 20% 96%);
+
+  --color-popover: hsl(260 22% 12%);
+  --color-popover-foreground: hsl(265 20% 96%);
+
+  --color-primary: hsl(265 90% 70%);
+  --color-primary-foreground: hsl(260 30% 10%);
+
+  --color-secondary: hsl(260 18% 18%);
+  --color-secondary-foreground: hsl(265 20% 96%);
+
+  --color-muted: hsl(260 15% 16%);
+  --color-muted-foreground: hsl(265 12% 65%);
+
+  --color-accent: hsl(262 35% 24%);
+  --color-accent-foreground: hsl(265 90% 88%);
+
+  --color-destructive: hsl(0 70% 55%);
+  --color-destructive-foreground: hsl(0 0% 98%);
+
+  --color-border: hsl(260 15% 28%);
+  --color-input: hsl(260 15% 28%);
+  --color-ring: hsl(265 90% 70%);
+
+  --color-chart-1: hsl(265 90% 70%);
+  --color-chart-2: hsl(285 80% 72%);
+  --color-chart-3: hsl(220 80% 68%);
+  --color-chart-4: hsl(42 90% 65%);
+  --color-chart-5: hsl(160 65% 55%);
+  --background: 260 25% 8%;
+  --foreground: 265 20% 96%;
+  --card: 260 22% 12%;
+  --card-foreground: 265 20% 96%;
+  --popover: 260 22% 12%;
+  --popover-foreground: 265 20% 96%;
+  --primary: 265 90% 70%;
+  --primary-foreground: 260 30% 10%;
+  --secondary: 260 18% 18%;
+  --secondary-foreground: 265 20% 96%;
+  --muted: 260 15% 16%;
+  --muted-foreground: 265 12% 65%;
+  --accent: 262 35% 24%;
+  --accent-foreground: 265 90% 88%;
+  --destructive: 0 70% 55%;
+  --destructive-foreground: 0 0% 98%;
+  --border: 260 15% 28%;
+  --input: 260 15% 28%;
+  --ring: 265 90% 70%;
+  --chart-1: 265 90% 70%;
+  --chart-2: 285 80% 72%;
+  --chart-3: 220 80% 68%;
+  --chart-4: 42 90% 65%;
+  --chart-5: 160 65% 55%;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply font-sans antialiased bg-background text-foreground;
+  }
+  
+  /* Touch-friendly targets on phones (≤640px). iPad/tablet keeps standard sizes
+     so layouts stay dense and useful. Inputs always use ≥16px on touch devices
+     to prevent unwanted iOS zoom. */
+  @media (max-width: 640px) {
+    button:not(.btn-compact), a:not(.link-compact), [role="button"]:not(.btn-compact) {
+      min-height: 40px;
+    }
+    button[data-touch="lg"], a[data-touch="lg"], [role="button"][data-touch="lg"] {
+      min-height: 44px;
+      min-width: 44px;
+    }
+  }
+
+  /* Prevent iOS auto-zoom on focus. Target touch devices and iPadOS only —
+     do NOT apply to narrow desktop windows (mouse users keep compact text). */
+  @media (hover: none), (pointer: coarse) {
+    input:not([type="checkbox"]):not([type="radio"]), select, textarea {
+      font-size: 16px !important;
+    }
+  }
+
+  html, body {
+    overscroll-behavior-y: none;
+  }
+}
+
+/* Responsive utilities */
+@layer utilities {
+  /* Shared sizing for home shortcuts and branch-operation illustrations. */
+  .platform-app-icon {
+    width: 72px;
+    height: 72px;
+    flex-shrink: 0;
+    border-radius: 1rem;
+  }
+  @media (min-width: 640px) {
+    .platform-app-icon { width: 80px; height: 80px; }
+  }
+  .branch-ops-shell .platform-app-icon { width: 42px; height: 42px; border-radius: .7rem; }
+  .branch-ops-shell .platform-app-icon svg { width: 21px; height: 21px; }
+  @media (min-width: 640px) {
+    .branch-ops-shell .platform-app-icon { width: 46px; height: 46px; }
+    .branch-ops-shell .platform-app-icon svg { width: 23px; height: 23px; }
+  }
+  /* Branch operations board: layout-only rules (container-query grid and the
+     compact card variant). Colors are Tailwind theme utilities on the elements
+     so the board follows the platform theme exactly like every other page. */
+  .branch-ops-shell {
+    min-height: 100%;
+    max-width: 100%;
+    overflow-x: clip;
+    padding-bottom: max(2.5rem, env(safe-area-inset-bottom));
+    container-type: inline-size;
+    container-name: branchops;
+  }
+   /* The daily-work deck is deliberately isolated from the work-page grid below. */
+   .branch-ops-daily-deck { display: grid; gap: .75rem; margin-top: .75rem; min-width: 0; }
+   .branch-ops-head { display: grid; gap: .5rem; min-width: 0; }
+   .branch-ops-day-strip { display: grid; gap: .45rem; min-width: 0; }
+   .branch-ops-day-strip-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); min-width: 0; }
+   .branch-ops-day-strip-metric { min-width: 0; padding-inline: .35rem; }
+   .branch-ops-day-strip-note { font-size: .6875rem; line-height: 1.25; }
+   .branch-ops-action-layout { display: grid; gap: .75rem; min-width: 0; }
+   .branch-ops-side-stack { display: grid; gap: .75rem; align-content: start; min-width: 0; }
+   .branch-ops-compact-panel { margin-top: 0; border-radius: .875rem; padding: .75rem; }
+   .branch-ops-compact-actions { display: grid; grid-template-columns: minmax(0, 1fr); gap: .45rem; margin-top: .6rem; }
+   .branch-ops-compact-action {
+     display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: .5rem;
+     min-width: 0; border: 1px solid var(--color-border); border-radius: .65rem; padding: .5rem .55rem;
+   }
+   .branch-ops-compact-action[data-urgent="true"] { border-color: color-mix(in oklab, var(--color-destructive) 32%, var(--color-border)); }
+   .branch-ops-compact-action-copy { min-width: 0; font-size: .75rem; line-height: 1.25; }
+   .branch-ops-compact-action-copy p { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+   .branch-ops-compact-action .branch-ops-followup { min-height: 44px; white-space: nowrap; }
+   .branch-ops-compact-warning { margin-top: .55rem; font-size: .75rem; }
+   @media (min-width: 768px) {
+     .branch-ops-head { grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
+     .branch-ops-day-strip { grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: .75rem; min-height: 3.75rem; }
+     .branch-ops-day-strip-title { display: block; }
+     .branch-ops-day-strip-title p { display: none; }
+     .branch-ops-day-strip-metrics { display: flex; }
+     .branch-ops-day-strip-metric { flex: 1; }
+     .branch-ops-day-strip-note { max-width: 10rem; }
+     .branch-ops-action-layout { grid-template-columns: minmax(0, 1.18fr) minmax(0, .82fr); align-items: start; }
+     .branch-ops-action-layout > [data-testid="branch-operations-needs-action"] { grid-column: 1; grid-row: 1; }
+     .branch-ops-side-stack { grid-column: 2; grid-row: 1; }
+   }
+  .branch-ops-sections {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 1.4rem 1.25rem;
+  }
+  .branch-ops-section {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+  .branch-ops-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 10rem), 1fr));
+    gap: .65rem;
+    align-items: start;
+  }
+  .branch-ops-grid > .branch-ops-card { max-width: 17rem; }
+  .branch-ops-card {
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    min-width: 0;
+    container-type: inline-size;
+    container-name: opscard;
+    border-radius: 1rem;
+    min-height: 6.5rem;
+    transition: box-shadow 160ms ease, transform 160ms ease;
+  }
+  .branch-ops-card-main {
+    flex: 1;
+    display: block;
+    position: relative;
+    width: 100%;
+    min-height: 4.9rem;
+    padding: .65rem;
+    border-radius: .95rem;
+    text-align: right;
+  }
+  .branch-ops-card-expanded { min-height: auto; }
+  .branch-ops-card-title {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+  .branch-ops-card-chevron { transition: transform 160ms ease; }
+  .branch-ops-card-details {
+    display: inline-flex;
+    min-height: 44px;
+    min-width: 44px;
+    align-items: center;
+    align-self: flex-start;
+    gap: .25rem;
+    margin-inline-start: .75rem;
+    padding: .25rem .25rem;
+    color: var(--color-primary);
+    font-size: .75rem;
+    font-weight: 800;
+    touch-action: manipulation;
+  }
+  .branch-ops-card-panel {
+    border-top: 1px solid var(--color-border);
+    padding: .75rem;
+  }
+  .branch-ops-card-main:focus-visible,
+  .branch-ops-card-details:focus-visible,
+  .branch-ops-action:focus-visible,
+  .branch-ops-refresh:focus-visible {
+    outline: 3px solid var(--color-ring);
+    outline-offset: 2px;
+  }
+  .branch-ops-icon {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+  }
+  .branch-ops-icon svg { width: 32px; height: 32px; stroke-width: 1.8; }
+  .branch-ops-icon img {
+    width: 48px;
+    height: 48px;
+    object-fit: contain;
+    filter: drop-shadow(0 2px 2px rgb(76 29 149 / .16));
+    transition: transform 160ms ease;
+  }
+  .branch-ops-badge img { object-fit: contain; filter: drop-shadow(0 1px 1.5px rgb(76 29 149 / .16)); }
+  .branch-ops-alerts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .4rem;
+    padding: 0 .75rem .75rem;
+  }
+  /* Shape only; the urgency colors are Tailwind utilities on the element. */
+  .branch-ops-action {
+    min-height: 44px;
+    max-width: 100%;
+    border-width: 1px;
+    border-radius: .7rem;
+    padding: .35rem .55rem;
+    font-size: .75rem;
+    font-weight: 800;
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+    touch-action: manipulation;
+    transition: transform 120ms ease, background-color 120ms ease;
+  }
+  .branch-ops-shimmer {
+    background: linear-gradient(100deg, hsl(265 25% 95%) 25%, hsl(0 0% 100%) 42%, hsl(265 25% 95%) 58%);
+    background-size: 220% 100%;
+    animation: branch-ops-shimmer 1.35s linear infinite;
+  }
+  @media (min-width: 640px) {
+    .branch-ops-icon img { width: 52px; height: 52px; }
+  }
+  @container branchops (min-width: 380px) {
+    .branch-ops-grid { grid-template-columns: repeat(auto-fill, minmax(min(100%, 9rem), 1fr)); }
+  }
+  @container branchops (max-width: 759px) {
+    .branch-ops-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr)); }
+    .branch-ops-grid > .branch-ops-card { max-width: none; }
+  }
+  @container branchops (min-width: 760px) {
+    .branch-ops-section { flex: 1 1 calc(50% - .625rem); }
+    .branch-ops-section[data-card-count="1"] { flex: 0 1 13.5rem; }
+    .branch-ops-section[data-card-count="2"] { flex: 0 1 28rem; }
+    .branch-ops-grid { gap: .75rem; }
+  }
+  @container branchops (min-width: 1100px) {
+    .branch-ops-section { flex-basis: calc(50% - .625rem); }
+    .branch-ops-section[data-card-count="1"] { flex-basis: 14rem; }
+    .branch-ops-section[data-card-count="2"] { flex-basis: 30rem; }
+  }
+  @media (hover: hover) {
+    .branch-ops-card:hover { box-shadow: 0 10px 24px -12px color-mix(in oklab, var(--color-primary) 35%, transparent); transform: translateY(-2px); }
+    .branch-ops-card:hover .branch-ops-icon img { transform: translateY(-1px) scale(1.05); }
+    .branch-ops-action:hover { transform: translateY(-1px); }
+  }
+  .branch-ops-card-main:active, .branch-ops-card-details:active, .branch-ops-action:active { transform: scale(.985); }
+  @keyframes branch-ops-shimmer { to { background-position: -220% 0; } }
+  @media (prefers-reduced-motion: reduce) {
+    .branch-ops-card, .branch-ops-card-main, .branch-ops-card-details, .branch-ops-action, .branch-ops-shimmer, .branch-ops-icon img, .branch-ops-shell .animate-spin { transition: none; animation: none !important; }
+    .branch-ops-card:hover, .branch-ops-card:hover .branch-ops-icon img { transform: none; }
+    .branch-ops-card-main:active, .branch-ops-card-details:active, .branch-ops-action:active { transform: none; }
+  }
+  /* Safe area for notched devices */
+  .safe-area-inset-top {
+    padding-top: env(safe-area-inset-top);
+  }
+  .safe-area-inset-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  /* Standardized page container — consistent breathing room across devices.
+     Phones: tight padding. Tablets/iPad: comfortable. Laptops+: capped width
+     centered, with extra side padding so content doesn't hug the edges. */
+  .page-container {
+    width: 100%;
+    margin-inline: auto;
+    padding-inline: 0.75rem;
+    padding-block: 0.75rem;
+    max-width: 100%;
+  }
+  @media (min-width: 640px) {
+    .page-container {
+      padding-inline: 1.25rem;
+      padding-block: 1rem;
+    }
+  }
+  @media (min-width: 768px) {
+    .page-container {
+      padding-inline: 1.5rem;
+      padding-block: 1.25rem;
+    }
+  }
+  @media (min-width: 1024px) {
+    .page-container {
+      padding-inline: 2rem;
+      padding-block: 1.5rem;
+      max-width: 1400px;
+    }
+  }
+  @media (min-width: 1536px) {
+    .page-container {
+      max-width: 1560px;
+    }
+  }
+
+  /* Narrow centered container for forms / read-focused pages. */
+  .page-container-narrow {
+    width: 100%;
+    margin-inline: auto;
+    padding-inline: 0.75rem;
+    padding-block: 0.75rem;
+    max-width: 100%;
+  }
+  @media (min-width: 640px) {
+    .page-container-narrow {
+      padding-inline: 1.25rem;
+      padding-block: 1rem;
+      max-width: 720px;
+    }
+  }
+  @media (min-width: 1024px) {
+    .page-container-narrow {
+      max-width: 880px;
+      padding-block: 1.5rem;
+    }
+  }
+
+  /* Responsive KPI grid: 1col phone tiny, 2col phone, 3col tablet, 4col laptop+ */
+  .kpi-grid {
+    display: grid;
+    gap: 0.75rem;
+    grid-template-columns: repeat(1, minmax(0, 1fr));
+  }
+  @media (min-width: 360px) {
+    .kpi-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+  @media (min-width: 768px) {
+    .kpi-grid {
+      gap: 1rem;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+  }
+  @media (min-width: 1024px) {
+    .kpi-grid {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+  }
+
+  /* Responsive fluid heading */
+  .heading-fluid {
+    font-size: clamp(1.125rem, 1rem + 1vw, 1.75rem);
+    line-height: 1.25;
+  }
+  .heading-fluid-lg {
+    font-size: clamp(1.25rem, 1.1rem + 1.5vw, 2rem);
+    line-height: 1.2;
+  }
+
+  /* Sticky last-column for action cells in horizontally scrolling tables.
+     Apply `.table-actions-sticky` on the wrapping <Table> by adding the
+     class to the parent. The last <td>/<th> stays visible while the user
+     swipes horizontally on mobile. */
+  .table-actions-sticky tbody td:last-child,
+  .table-actions-sticky thead th:last-child {
+    position: sticky;
+    inset-inline-end: 0;
+    z-index: 10;
+    background: var(--color-card);
+    box-shadow: -6px 0 8px -6px rgba(0,0,0,0.08);
+  }
+  [dir="rtl"] .table-actions-sticky tbody td:last-child,
+  [dir="rtl"] .table-actions-sticky thead th:last-child {
+    box-shadow: 6px 0 8px -6px rgba(0,0,0,0.08);
+  }
+
+  /* Horizontally scrolling wrapper (plain, no fade) — kept as a
+     semantic alias for table containers. */
+  .table-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+  }
+
+  /* Edge fade hint for the ACTUAL horizontal scroller. Applied by the
+     base Table component wrapper below lg, and only when the content
+     actually overflows (guarded via scrollable check in table.tsx or
+     harmless soft dim otherwise). Works in RTL and LTR. */
+  @media (max-width: 1023.98px) {
+    .table-fade {
+      mask-image: linear-gradient(
+        to left,
+        rgba(0, 0, 0, 0.45) 0,
+        black 14px,
+        black calc(100% - 14px),
+        rgba(0, 0, 0, 0.45) 100%
+      );
+      -webkit-mask-image: linear-gradient(
+        to left,
+        rgba(0, 0, 0, 0.45) 0,
+        black 14px,
+        black calc(100% - 14px),
+        rgba(0, 0, 0, 0.45) 100%
+      );
+    }
+  }
+  
+  /* Smooth scrolling */
+  .scroll-smooth {
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  /* Hide scrollbar but keep functionality */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+  
+  /* Responsive text */
+  .text-responsive {
+    font-size: clamp(0.875rem, 2vw, 1rem);
+  }
+  
+  /* Card hover effects - disabled on touch */
+  @media (hover: hover) {
+    .card-hover:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+    }
+  }
+  
+  /* Touch feedback */
+  @media (hover: none) {
+    .touch-active:active {
+      transform: scale(0.98);
+      opacity: 0.9;
+    }
+  }
+}
+
+@media print {
+  @page {
+    margin: 1cm;
+    size: A4 portrait;
+  }
+
+  body {
+    background: white !important;
+    color: black !important;
+  }
+
+  /* Hide sidebar and non-printable elements */
+  aside, 
+  button, 
+  input, 
+  nav,
+  [role="tablist"],
+  .no-print {
+    display: none !important;
+  }
+
+  /* Reset main content layout */
+  main {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  div[class*="flex"] {
+    display: block !important;
+  }
+
+  /* Ensure cards break properly */
+  .break-inside-avoid {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  /* Custom print styling for tables */
+  table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+  }
+  
+  th, td {
+    border: 1px solid #ddd !important;
+    padding: 8px !important;
+    text-align: right !important;
+    color: black !important;
+  }
+
+  th {
+    background-color: #f3f3f3 !important;
+    font-weight: bold !important;
+  }
+
+  /* Hide card borders/shadows but keep content */
+  .shadow-sm, .ring-1 {
+    box-shadow: none !important;
+    border: none !important;
+    --tw-ring-offset-shadow: 0 0 #0000;
+    --tw-ring-shadow: 0 0 #0000;
+    --tw-shadow: 0 0 #0000;
+    --tw-shadow-colored: 0 0 #0000;
+  }
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+.transition-all {
+  transition-duration: 100ms !important;
+}
+
+.transition-colors {
+  transition-duration: 75ms !important;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeInFast {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes pageSlideIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Smooth, flicker-free page mount.
+   Old animation `pageReady` (opacity 0.85→1 in 90ms) caused a visible
+   flash on every navigation. Replaced with a no-op for normal mounts;
+   view transitions use a dedicated keyframe (vtPageIn) below. */
+@keyframes vtPageIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.page-ready {
+  /* no animation — prevents brief opacity flash on every navigation */
+}
+
+html.vt-active .page-ready {
+  animation: none;
+}
+
+.skeleton-delayed {
+  animation: fadeInFast 160ms ease-out both;
+}
+
+::view-transition-old(root) {
+  animation: fadeInFast 50ms ease-out reverse;
+}
+
+::view-transition-new(root) {
+  animation: vtPageIn 100ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes nprogress-bar {
+  0% { width: 0%; }
+  5% { width: 22%; }
+  12% { width: 40%; }
+  25% { width: 58%; }
+  45% { width: 72%; }
+  65% { width: 82%; }
+  85% { width: 91%; }
+  100% { width: 95%; }
+}
+
+@keyframes nprogress-complete {
+  0% { opacity: 1; }
+  20% { width: 100%; opacity: 1; }
+  100% { width: 100%; opacity: 0; height: 0; }
+}
+
+@keyframes nprogress-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+@keyframes nprogress-glow-pulse {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 0.9; }
+}
+
+#nav-progress-bar {
+  position: fixed;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 2.5px;
+  background: linear-gradient(90deg, hsl(262 83% 48%), hsl(262 83% 58%), hsl(280 80% 70%), hsl(265 90% 65%), hsl(262 83% 58%));
+  background-size: 300% 100%;
+  z-index: 9999;
+  pointer-events: none;
+  width: 0%;
+  opacity: 0;
+  box-shadow: 0 0 10px hsla(262, 83%, 58%, 0.6);
+  transform: translateZ(0);
+  will-change: width, opacity;
+  contain: layout style;
+}
+
+#nav-progress-bar::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: -1px;
+  width: 60px;
+  height: 4px;
+  border-radius: 50%;
+  background: radial-gradient(ellipse, hsla(280, 80%, 75%, 0.85), transparent 70%);
+  box-shadow: 0 0 10px 3px hsla(262, 83%, 58%, 0.35);
+  opacity: 0;
+  animation: nprogress-glow-pulse 0.5s ease-in-out infinite;
+}
+
+#nav-progress-bar.loading {
+  opacity: 1;
+  animation: nprogress-bar 800ms cubic-bezier(0.12, 0.8, 0.2, 1) forwards,
+             nprogress-shimmer 0.7s linear infinite;
+}
+
+#nav-progress-bar.loading::after {
+  opacity: 1;
+}
+
+#nav-progress-bar.complete {
+  animation: nprogress-complete 120ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+#nav-progress-bar.complete::after {
+  opacity: 0;
+  transition: opacity 60ms;
+}
+
+@keyframes skeletonShimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+@keyframes skeletonFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.skeleton-shimmer {
+  background: hsl(35 12% 91%);
+  border-radius: 8px;
+  position: relative;
+  overflow: hidden;
+  transform: translateZ(0);
+  contain: layout paint;
+  animation: skeletonFadeIn 120ms ease-out both;
+}
+.dark .skeleton-shimmer {
+  background: hsl(30 6% 18%);
+}
+
+/* Professional skeleton — subtle, neutral, on-brand. Used by the generic
+   <Skeleton> component throughout the app. Replaces the previous loud
+   cream block + pulse animation with a soft warm-gray base + sliding
+   shine, matching the visual language of Linear / Notion / Stripe. */
+.skeleton-pro {
+  position: relative;
+  overflow: hidden;
+  background: hsl(35 12% 91%);
+  isolation: isolate;
+  contain: layout paint;
+}
+.dark .skeleton-pro {
+  background: hsl(30 6% 18%);
+}
+.skeleton-pro::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.55) 50%,
+    transparent 100%
+  );
+  transform: translateX(-100%);
+  animation: skeletonSlide 1.6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  will-change: transform;
+}
+.dark .skeleton-pro::after {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.06) 50%,
+    transparent 100%
+  );
+}
+@keyframes skeletonSlide {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-pro::after { animation: none; }
+}
+
+.skeleton-shimmer::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.55) 50%, transparent 100%);
+  transform: translateX(-100%);
+  animation: skeletonSlide 1.6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  will-change: transform;
+}
+.dark .skeleton-shimmer::after {
+  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.06) 50%, transparent 100%);
+}
+
+@keyframes nav-active-slide {
+  from { opacity: 0; transform: scale(0); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes nav-active-glow {
+  0% { box-shadow: 0 0 0 rgba(212, 168, 83, 0); }
+  40% { box-shadow: 0 0 8px rgba(212, 168, 83, 0.5); }
+  100% { box-shadow: 0 0 4px rgba(212, 168, 83, 0.2); }
+}
+
+.nav-active-indicator {
+  animation: nav-active-slide 160ms cubic-bezier(0.34, 1.56, 0.64, 1),
+             nav-active-glow 400ms ease-out 60ms both;
+}
+
+@keyframes nav-ripple {
+  0% { transform: scale(0); opacity: 0.15; }
+  100% { transform: scale(3); opacity: 0; }
+}
+
+.nav-item-inner {
+  position: relative;
+  overflow: hidden;
+  transform: translateZ(0);
+  transition: background-color 120ms ease;
+}
+
+.nav-item-inner::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle, var(--color-primary) 10%, transparent 70%);
+  opacity: 0;
+  transform: scale(0);
+  pointer-events: none;
+}
+
+.nav-item-inner:active::after {
+  animation: nav-ripple 300ms ease-out forwards;
+}
+
+table {
+  contain: layout style;
+}
+
+.animate-spin {
+  will-change: transform;
+}
+
+.perf-contain {
+  contain: layout style paint;
+}
+
+.page-content {
+  contain: layout style;
+  will-change: scroll-position;
+}
+
+nav [data-state] {
+  contain: layout style;
+}
+
+[data-state="closed"] > [data-radix-collapsible-content] {
+  content-visibility: hidden;
+  contain-intrinsic-size: 0 auto;
+}
+
+[data-radix-collapsible-content] {
+  transition: height 150ms cubic-bezier(0.16, 1, 0.3, 1), opacity 120ms ease;
+}
+
+[data-state="closed"] [data-radix-collapsible-content] {
+  opacity: 0;
+}
+
+[data-state="open"] [data-radix-collapsible-content] {
+  opacity: 1;
+}
+
+nav a {
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 50ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@media (hover: hover) {
+  nav a:hover .nav-item-inner {
+    transform: translateX(-2px);
+    transition: transform 80ms cubic-bezier(0.22, 1, 0.36, 1), background-color 80ms ease;
+    background-color: hsl(265 25% 96%);
+  }
+}
+
+nav a:active .nav-item-inner {
+  transform: scale(0.97);
+  transition: transform 30ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page-ready, .skeleton-delayed {
+    animation: none !important;
+  }
+  .transition-all, .transition-colors {
+    transition-duration: 0ms !important;
+  }
+  #nav-progress-bar { display: none; }
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none !important;
+  }
+  .nav-item-inner::after {
+    display: none;
+  }
+  .nav-active-indicator {
+    animation: none !important;
+  }
+  nav a:hover .nav-item-inner {
+    transform: none;
+  }
+  .skeleton-shimmer, .skeleton-shimmer::after {
+    animation: none !important;
+  }
+}
