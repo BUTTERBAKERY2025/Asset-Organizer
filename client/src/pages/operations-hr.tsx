@@ -185,7 +185,7 @@ export function OperationsHrContent({ permissions }: {
               {exporting ? `جار تجهيز ${exporting === "xlsx" ? "Excel" : exporting.toUpperCase()}…` : "تصدير كامل الفرع"}
             </Button></DropdownMenuTrigger>
             <DropdownMenuContent align="start">
-              <DropdownMenuItem disabled={!!exporting} onSelect={() => void exportPayroll("pdf")}>PDF — نسخة مراجعة</DropdownMenuItem>
+              <DropdownMenuItem disabled={!!exporting} onSelect={() => void exportPayroll("pdf")}>PDF — مراجعة مختصرة</DropdownMenuItem>
               <DropdownMenuItem disabled={!!exporting} onSelect={() => void exportPayroll("xlsx")}>Excel (.xlsx) — كامل الفرع</DropdownMenuItem>
               <DropdownMenuItem disabled={!!exporting} onSelect={() => void exportPayroll("csv")}>CSV — كامل الفرع</DropdownMenuItem>
             </DropdownMenuContent>

@@ -33,6 +33,12 @@ Operations payroll must expose the same substantive detailed report as HR salary
 
 **How to apply:** Reuse the authoritative calculation and closed snapshots, retain detailed financial and attendance visibility, but never infer HR editing or financial closing authority from report access.
 
+The default Operations payroll review PDF must be compact like the screen table: one row per employee and concise authoritative totals, not an individual detail dossier for each employee.
+
+**Why:** The user rejected a 39-page review PDF for 18 employees and explicitly requested a short screen-like report. This changes PDF presentation, not the requirement for substantive report data.
+
+**How to apply:** Keep full branch/month scope, readable RTL rows, unknown-versus-zero and warning indicators, and the review-only watermark. Leave full dates, itemized deductions and payment transaction details in the source report and Excel/CSV, without recalculating salary totals.
+
 Ordinary joining-link resend is a retry, not an instruction to invalidate an existing valid link. Explicit replacement is a separate intent, and all send surfaces must respect signing/confirmation state.
 
 **Why:** Automatic replacement on every retry can send a link that a simultaneous request has already revoked. A provider failure after link creation does not mean creation failed.

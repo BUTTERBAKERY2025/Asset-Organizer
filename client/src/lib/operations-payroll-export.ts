@@ -44,7 +44,7 @@ export function operationsPayrollRtlTable(headers: string[], rows: Array<Array<s
     ...(heading ? { fillColor: "#eee7f8" } : {}),
   });
   return {
-    table: { headerRows: 1, widths: boundedWidths.reverse(), body: [
+    table: { headerRows: 1, dontBreakRows: true, widths: boundedWidths.reverse(), body: [
       headers.map(value => cell(value, true)).reverse(),
       ...rows.map(row => row.map(value => cell(value)).reverse()),
     ] },
@@ -58,59 +58,88 @@ export function operationsPayrollRtlTable(headers: string[], rows: Array<Array<s
 
 export function operationsPayrollPdfDefinition(data: OperationsPayrollExport): TDocumentDefinitions {
   const text = (value: string, heading = false) => ({
-    text: value, alignment: "right", ...(heading ? { bold: true, fontSize: 13, color: "#664294" } : {}),
-    margin: [0, 4, 0, 4],
+    text: value, alignment: "right", ...(heading ? { bold: true, fontSize: 9, color: "#664294" } : {}),
+    margin: [0, 2, 0, 2],
   });
-  const content: any[] = [
-    text("تقرير مراجعة رواتب التشغيل — كامل الفرع", true),
-    text(`${data.branchName} · ${data.month}`),
-    operationsPayrollRtlTable(["البيان", "القيمة"], operationsPayrollExportSummary(data), [170, "*"]),
-    text("ملخص جميع موظفي الفرع والشهر (المبالغ بالريال السعودي)", true),
-    operationsPayrollRtlTable(
-      ["الموظف", "الرقم الوظيفي", "الإجمالي", "خصم الغياب", "خصم المرضية", "التأمينات", "السلف والخصومات", "الصافي", "المصروف", "المتبقي"],
-      data.lines.map((line, index) => [
-        line.employeeName, exportValue(line.employeeNumber), exportValue(line.grossSalary),
-        exportValue(line.absenceDeduction), exportValue(line.sickLeaveDeduction), exportValue(line.socialInsurance),
-        exportValue(line.manualDeductionsTotal), exportValue(line.netSalary),
+  // Match the screen's core attendance counts and salary/settlement columns.
+  // This review is deliberately not the full 49-field Excel/CSV detail export.
+  // Do not sum/recalculate salaries or replace missing snapshot values with zero.
+  const employeeTable = operationsPayrollRtlTable(
+    ["الموظف", "الرقم الوظيفي", "الحضور", "الغياب", "الراحة", "إجازة مدفوعة", "إجازة بدون راتب", "الإجمالي", "الصافي", "المصروف", "المتبقي"],
+    [
+      ...data.lines.map((line, index) => [
+        line.employeeName, exportValue(line.employeeNumber), exportValue(line.presentDays),
+        exportValue(line.absentDays), exportValue(line.offDays), exportValue(line.paidLeaveDays),
+        exportValue(line.unpaidLeaveDays), exportValue(line.grossSalary), exportValue(line.netSalary),
         exportValue(data.settlements[index]?.paid), exportValue(data.settlements[index]?.outstanding),
-      ]), [110, 58, "*", "*", "*", "*", "*", "*", "*", "*"],
-    ),
+      ]),
+      ["إجمالي المصدر", "", "—", "—", "—", "—", "—", exportValue(data.totals.totalGross),
+        exportValue(data.totals.totalNet), exportValue(data.paymentTotals.paid), exportValue(data.paymentTotals.outstanding)],
+    ], [116, 58, 32, 32, 32, 42, 42, "*", "*", "*", "*"],
+  );
+  const totalRow = employeeTable.table.body[employeeTable.table.body.length - 1];
+  totalRow.forEach(cell => {
+    cell.stack[0].bold = true;
+    cell.fillColor = "#eee7f8";
+  });
+  // Less vertical padding, never a smaller font or narrower identity column.
+  employeeTable.layout.paddingTop = () => 1.5;
+  employeeTable.layout.paddingBottom = () => 1.5;
+  employeeTable.margin = [0, 6, 0, 8];
+  const warningCounts: Array<[string, number]> = [
+    ["تنبيهات التقرير", data.warnings.length],
+    ["تعذر إثراء البيانات", data.enrichmentFailures.length],
+    ["حضور غير مرتبط", data.unlinkedSummary.totalRecords],
+    ["صرف غير مرتبط بالكشف", data.paymentTotals.unmatchedPaymentCount],
+    ["تسويات غير معلومة", data.paymentTotals.unknownSettlementCount],
+  ];
+  if (data.totals.employeeCount !== data.lines.length) warningCounts.push(["اختلاف عدد المصدر والسطور", 1]);
+  const noWorkCount = data.lines.filter(line => line.noWorkAtAll).length;
+  const adjustedCount = data.lines.filter(line => line.originalPresentDays != null).length;
+  if (noWorkCount) warningCounts.push(["بلا بيانات دوام", noWorkCount]);
+  if (adjustedCount) warningCounts.push(["حضور معدل يدوياً", adjustedCount]);
+  const summaryTable = operationsPayrollRtlTable(
+    ["عدد موظفي المصدر", "الأساسي", "البدلات", "خصم الغياب", "خصم المرضية", "التأمينات", "السلف والخصومات", "كل الصرف المسجل"],
+    [[data.totals.employeeCount, data.totals.totalBase, data.totals.totalAllowances, data.totals.totalAbsenceDeduction,
+      data.totals.totalSickLeaveDeduction, data.totals.totalSocialInsurance,
+      data.totals.totalManualDeductions, data.paymentTotals.recordedPaid].map(exportValue)],
+    ["*", "*", "*", "*", "*", "*", "*", "*"],
+  );
+  // Separate heading and count cells keep their association readable in the
+  // RTL fork, which can move digits away from labels in mixed-text paragraphs.
+  const warningTable = operationsPayrollRtlTable(
+    warningCounts.map(([label]) => label), [warningCounts.map(([, count]) => count)],
+    warningCounts.map(() => "*"),
+  );
+  for (const table of [summaryTable, warningTable]) {
+    table.layout.paddingTop = () => 2;
+    table.layout.paddingBottom = () => 2;
+    table.margin = [0, 4, 0, 6];
+  }
+  const content: any[] = [
+    text(`كامل الفرع والشهر دون فلاتر · سطور الكشف: ${data.lines.length} · المبالغ بالريال السعودي`, true),
+    employeeTable,
+    { unbreakable: true, stack: [text("إجماليات المصدر — دون إعادة احتساب", true), summaryTable] },
+    text(`سجلات الصرف الحالية: ${data.payments.length} — ليست جزءاً من لقطة الإغلاق. غير مسجل لا يعني صفراً أو تسوية كاملة.`),
+    { ...warningTable, unbreakable: true },
   ];
   if (!data.lines.length) content.push(text("لا توجد سطور رواتب في الفرع والشهر المحددين. الإجماليات أعلاه كما وردت من المصدر."));
-  // Detailed fields stay readable instead of squeezing the 49 CSV/XLSX columns
-  // into one illegible PDF table. The same full logical field list is used.
-  data.lines.forEach((line, index) => {
-    const values = operationsPayrollExportRows({ ...data, lines: [line], settlements: [data.settlements[index]] })[0];
-    const fields = operationsPayrollExportHeaders().map((title, i): [string, string | number] => [title, values[i]]);
-    const rows: Array<Array<string | number>> = [];
-    for (let i = 0; i < fields.length; i += 2) rows.push([...fields[i], ...(fields[i + 1] ?? ["", ""])]);
-    content.push(
-      { ...text(`تفاصيل الموظف ${index + 1}: ${line.employeeName}`, true), pageBreak: "before" },
-      operationsPayrollRtlTable(["الحقل", "القيمة", "الحقل", "القيمة"], rows, [110, "*", 110, "*"]),
-    );
-  });
-  content.push(text("سجلات صرف الفرع والشهر — المصدر الحالي، وليس لقطة الإغلاق", true));
-  if (data.payments.length) content.push(operationsPayrollRtlTable(
-    ["معرف السجل", "معرف الموظف", "المبلغ", "الطريقة", "التاريخ", "ملاحظات"],
-    data.payments.map(p => [p.id, p.branchEmployeeId, exportValue(p.amount), p.paymentMethod, p.paidAt, exportValue(p.notes)]),
-    [60, 70, 85, 70, 145, "*"],
-  ));
-  else content.push(text("لا توجد سجلات صرف لهذا الفرع والشهر."));
   return {
     pageSize: "A4", pageOrientation: "landscape", pageMargins: [28, 62, 28, 52],
-    defaultStyle: { font: "Nillima", fontSize: 8, alignment: "right", color: "#30243f" },
+    defaultStyle: { font: "Nillima", fontSize: 8.5, alignment: "right", color: "#30243f" },
     content,
     watermark: { text: OPERATIONS_PAYROLL_WATERMARK, color: "#8054b4", opacity: 0.07, fontSize: 36, angle: -18 },
     header: {
       stack: [
-        text(`${OPERATIONS_PAYROLL_WATERMARK} · ${data.branchName} · ${data.month}`, true),
+        { ...text(`${OPERATIONS_PAYROLL_WATERMARK} · ${data.branchName} · ${data.month} · ${data.source === "closed_snapshot" ? "لقطة إغلاق محفوظة" : "احتساب حي على الخادم — قابل للتغير"}`, true), fontSize: 11 },
         { text: "نسخة استشارية — ليست اعتماد شؤون الموظفين النهائي أو اعتماداً مالياً", alignment: "right", fontSize: 8, color: "#77558f" },
       ], margin: [28, 12, 28, 0],
     },
     footer: (page, pages) => ({
       stack: [
-        { text: OPERATIONS_PAYROLL_REVIEW_NOTICE, alignment: "right", fontSize: 7, color: "#77558f" },
-        { text: `صفحة ${page} من ${pages} · إنشاء النسخة: ${data.generatedAt}`, alignment: "right", fontSize: 7, color: "#77558f" },
+        { text: OPERATIONS_PAYROLL_REVIEW_NOTICE, alignment: "right", fontSize: 8, color: "#77558f" },
+        { text: "تفاصيل التنبيهات والتواريخ والخصومات وسجلات الصرف: تقرير المصدر وتصدير Excel / CSV الكامل.", alignment: "right", fontSize: 8, color: "#77558f" },
+        { text: `صفحة ${page} من ${pages} · إنشاء النسخة: ${data.generatedAt}`, alignment: "right", fontSize: 8, color: "#77558f" },
       ], margin: [28, 7, 28, 0],
     }),
   } as TDocumentDefinitions;
