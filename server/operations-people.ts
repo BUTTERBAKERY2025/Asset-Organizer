@@ -18,12 +18,13 @@ export type PeopleRow = {
   exit_confirmed_at?: Date | string | null; return_confirmed_at?: Date | string | null;
   approved_at?: Date | string | null; employee_id?: number | null;
   employee_name?: string | null; employee_number?: string | null; job_title?: string | null; offer_id?: number;
+  attendance_date?: string | null; actual_check_in?: string | null; actual_check_out?: string | null;
 };
 const descriptions: Record<OperationsPeopleSource, { label: string; definition: string }> = {
   leaves: { label: "طلبات إجازة معلقة", definition: "جميع طلبات الإجازة pending ضمن الفروع المحددة؛ القرار حسب سلسلة الاعتماد الحالية وسلطة المراجع." },
   leave_movements: { label: "متابعة خروج وعودة الإجازة", definition: "إجازات approved بلا تأكيد عودة بدأت بلا تأكيد خروج مسجل، أو انتهت بعد خروج مؤكد؛ ليست إثبات غياب أو تأخر." },
   advances: { label: "طلبات سلف مفتوحة", definition: "طلبات pending/pre_approved/awaiting_signature/signed؛ المبدئي منفصل عن مراجعة الموارد والتوقيع والاعتماد النهائي." },
-  attendance: { label: "سجلات حضور اليوم غير المعتمدة", definition: "سجلات تاريخ الرياض الحالي حيث approved_at فارغ، مهما كانت حالة الحضور؛ لا يُستنتج غياب من فقدان سجل أو قرار من status." },
+  attendance: { label: "سجلات حضور اليوم للمتابعة", definition: "سجلات اليوم بلا توقيت اعتماد محفوظ؛ للعرض والمتابعة فقط، وليست طلبات اعتماد أو دليلاً على الغياب." },
   joining: { label: "مباشرات موقعة بانتظار اعتماد التشغيل", definition: "إشعارات signed بتوقيع مسجل وعرض accepted في الفرع نفسه بلا تأكيد أو تحويل أو حظر؛ ليست جميع عروض التوظيف." },
 };
 
@@ -67,7 +68,7 @@ export function projectPeopleRecord(domain: OperationsPeopleSource, row: PeopleR
     const module = domain === "advances" ? "hr_advances" : domain === "attendance" ? "attendance" : "hr_leaves";
     const stage = domain === "leaves" ? `level_${row.current_level}`
       : domain === "leave_movements" ? row.exit_confirmed_at ? "confirm_return" : "confirm_exit"
-      : domain === "attendance" ? "unapproved" : row.status;
+      : domain === "attendance" ? "attendance_review" : row.status;
     const path = domain === "advances" ? "/hr/advances" : domain === "attendance" ? "/employee-attendance-report" : "/hr/leaves";
     const query = new URLSearchParams({ branchId: row.branch_id,
       ...(domain === "attendance" ? { startDate: businessDate, endDate: businessDate } : {}) });
@@ -91,9 +92,10 @@ export function projectPeopleRecord(domain: OperationsPeopleSource, row: PeopleR
           : "مراجعة شروط السلفة وإرسالها للتوقيع قبل الاعتماد النهائي";
       }
     } else if (domain === "attendance") {
-      item.reason = "لا يوجد توقيت اعتماد مسجل لهذا السجل اليوم؛ الحالة لا تثبت اعتماداً أو غياباً";
-      item.decision = operationsDecisionMetadata(item, actor.id, grants.attendanceEdit, row.approved_at == null,
-        { module, action: "edit" }, "مراجعة واعتماد سجل الحضور");
+      item.reason = "متابعة سجل الحضور فقط؛ عدم وجود توقيت اعتماد لا يعني وجود طلب اعتماد مطلوب منك.";
+      item.actions = [{ label: "عرض سجل الحضور", href: item.href, capability: "read" }];
+      item.attendance = { date: row.attendance_date ?? null,
+        checkIn: row.actual_check_in ?? null, checkOut: row.actual_check_out ?? null };
     } else {
       item.owner = "مسجل حركة الإجازة المخول";
       item.reason = stage === "confirm_exit" ? "بدأ موعد الإجازة ولا يوجد تأكيد خروج مسجل؛ ليس إثبات غياب"
@@ -106,6 +108,7 @@ export function projectPeopleRecord(domain: OperationsPeopleSource, row: PeopleR
   if (row.employee_name) item.employee = {
     ...(row.employee_id != null ? { id: row.employee_id } : {}),
     name: row.employee_name,
+    number: row.employee_number ?? null,
     ...(row.job_title !== undefined ? { jobTitle: row.job_title } : {}),
   };
   return item;

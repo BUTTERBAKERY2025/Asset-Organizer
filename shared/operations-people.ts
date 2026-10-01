@@ -8,6 +8,7 @@ export type OperationsPeopleRecord = OperationsQueueItem & {
   employee?: { id?: number; name: string; number?: string | null; jobTitle?: string | null };
   offerId?: number;
   notificationId?: number;
+  attendance?: { date: string | null; checkIn: string | null; checkOut: string | null };
 };
 export type OperationsPeopleSummary = {
   source: OperationsPeopleSource; label: string; definition: string;

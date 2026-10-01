@@ -224,11 +224,19 @@ export function PeopleRecordDetail({ record, branches, actorId, businessDate, re
     {source.decision && <p className="oc-panel bg-violet-50 p-3 text-xs leading-7"><strong>سبب القرار المصرح به: </strong>{record.decision!.reason}</p>}
     <dl className="oc-panel oc-people-facts divide-y divide-[#e7def0] text-sm">{[
       ["رقم المصدر", `#${record.sourceId}`], ["الموظف", record.employee?.name || "لا يقدم المصدر هوية موظف هنا"],
-      ["الرقم الوظيفي", record.employee?.number || "غير مسجل في المصدر"],
+      ["الرقم الوظيفي", record.employee?.number || (record.domain === "joining"
+        ? "لا ينطبق قبل إنشاء ملف الموظف" : record.employee?.id
+          ? "غير مدخل في ملف الموظف المرتبط" : "تعذر ربط السجل بملف موظف ضمن هذا الفرع")],
       ["المرحلة الحالية", peopleStageLabel(record.step)], ["الحالة المسجلة", peopleStageLabel(record.status)],
-      ["الجهة المسؤولة", record.owner || "غير مسجلة في المصدر"],
-      ["الإسناد الفردي", record.ownerId ? "مسجل في المصدر؛ لا يمنح صلاحية قرار" : "غير مسجل في المصدر"],
-      ["الموعد المسجل", record.dueAt ? time(record.dueAt) : "غير مسجل؛ لا نفترض موعدًا"],
+      ...(record.domain === "attendance" ? [
+        ["تاريخ الحضور", record.attendance?.date || "غير متاح في بيانات السجل"],
+        ["وقت الدخول", record.attendance?.checkIn || "لا يوجد وقت دخول مسجل"],
+        ["وقت الخروج", record.attendance?.checkOut || "لم يُسجل خروج بعد"],
+      ] : [
+        ...(record.owner && record.owner !== "غير محدد" ? [["الجهة المسؤولة", record.owner]] : []),
+        ...(record.ownerId ? [["الإسناد الفردي", "مسجل في المصدر؛ لا يمنح صلاحية قرار"]] : []),
+        ...(record.dueAt ? [["الموعد المسجل", time(record.dueAt)]] : []),
+      ]),
     ].map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
     {record.history && record.history.length > 0 && <section><h4 className="text-sm font-bold">وقائع مسجلة في المصدر</h4><div className="mt-2 space-y-2">{record.history.map((fact, index) => <p key={index} className="oc-panel p-3 text-xs leading-6">{fact.label}{fact.at && <small className="block text-muted-foreground">{time(fact.at)}</small>}</p>)}</div></section>}
     <p className="text-xs leading-6 text-muted-foreground">العرض والفتح لا يغيّران الحالة. الاعتماد وتعديل بيانات الموظف والحسابات تتم في المسار المختص وحده؛ لا يعيد المركز حساب الرواتب أو السلف أو الإجازات.</p>

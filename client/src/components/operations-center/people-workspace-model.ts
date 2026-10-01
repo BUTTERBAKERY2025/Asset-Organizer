@@ -29,8 +29,10 @@ export function peopleStageLabel(stage: string): string {
     awaiting_operations_approval: "بانتظار اعتماد التشغيل", awaiting_signature: "بانتظار التوقيع",
     signed: "موقّع", accepted: "مقبول", sent: "مرسل", active: "نشط", late: "تأخر مسجل",
     incomplete: "سجل غير مكتمل", absent: "غياب مسجل في المصدر", on_leave: "إجازة مسجلة",
+    early_leave: "خروج مبكر مسجل",
     present: "حضور مسجل", completed: "مكتمل في المصدر", rejected: "مرفوض", cancelled: "ملغى",
     pre_approved: "موافقة أولية · ليست اعتمادًا نهائيًا", unapproved: "اعتماد الحضور غير مسجل",
+    attendance_review: "متابعة الحضور · ليست طلب اعتماد",
     confirm_exit: "متابعة تأكيد الخروج", confirm_return: "متابعة تأكيد العودة",
   };
   if (/^level_[1-9]\d*$/.test(stage)) return `مرحلة مراجعة الإجازة ${stage.slice(6)}`;
@@ -86,7 +88,7 @@ export function peopleScopeMatches(response: OperationsPeopleResponse, request: 
 }
 
 export function peopleHasDecision(record: OperationsPeopleRecord, actorId?: string): boolean {
-  return !!actorId && record.decision?.awaitingActor === true && record.decision.actorId === actorId;
+  return record.domain !== "attendance" && !!actorId && record.decision?.awaitingActor === true && record.decision.actorId === actorId;
 }
 
 export function peopleNextAction(record: OperationsPeopleRecord, actorId?: string): string {
@@ -132,7 +134,8 @@ export function peopleSourceHref(record: OperationsPeopleRecord, actorId: string
   href: string | null; label: string; decision: boolean;
 } {
   const decision = peopleHasDecision(record, actorId);
-  const label = decision ? `${record.decision!.label} في المصدر` : "فتح السجل للمتابعة في المصدر";
+  const label = record.domain === "attendance" ? "عرض سجل الحضور" :
+    decision ? `${record.decision!.label} في المصدر` : "فتح السجل للمتابعة في المصدر";
   try {
     const url = new URL(decision ? record.decision!.href : record.href, origin);
     const route = destinations[record.sourceType];

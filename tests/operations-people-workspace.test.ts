@@ -123,6 +123,7 @@ describe("page filters, source identity and real decision facts", () => {
     expect(peoplePageFacts(records, "other")).toEqual({ count: 4, awaitingActor: 0 });
     expect(peopleHasDecision(leave, "me")).toBe(false);
     expect(peopleHasDecision(attendance, "me")).toBe(false);
+    expect(peopleHasDecision({ ...attendance, decision: joining.decision }, "me")).toBe(false);
     expect(peopleHasDecision(joining, undefined)).toBe(false);
     expect(peopleNextAction(attendance, "me")).not.toContain("اعتماد");
     expect(peopleNextAction(advance, "me")).toBe("اعتماد التشغيل");
@@ -230,16 +231,32 @@ describe("strict canonical people source navigation", () => {
     const html = renderToStaticMarkup(React.createElement(PeopleRecordDetail, { record: attendance, branches, actorId: "me", refreshing: true, onOpen: vi.fn() }));
     expect(html).toContain("#22");
     expect(html).toContain("صاحب سجل الحضور");
-    expect(html).toContain("مسؤول الحضور");
+    expect(html).not.toContain("الجهة المسؤولة");
     expect(html).toContain("السجل المعلّق لا يعني الغياب");
-    expect(html).toContain("غير مسجل؛ لا نفترض موعدًا");
-    expect(html).toContain("فتح السجل للمتابعة في المصدر");
+    expect(html).not.toContain("الموعد المسجل");
+    expect(html).not.toContain("الإسناد الفردي");
+    expect(html).toContain("وقت الدخول");
+    expect(html).toContain("لم يُسجل خروج بعد");
+    expect(html).toContain("عرض سجل الحضور");
     expect(html).toContain('disabled=""');
     expect(html).not.toContain("بانتظار قرارك وفق");
     expect(html).not.toContain("اعتماد وإكمال");
     const decisionHtml = renderToStaticMarkup(React.createElement(PeopleRecordDetail, { record: advance, branches, actorId: "me", refreshing: false, onOpen: vi.fn() }));
     expect(decisionHtml).toContain("بانتظار قرارك وفق صلاحية الحالة الحالية");
     expect(decisionHtml).toContain("اعتماد التشغيل في المصدر");
+  });
+});
+
+describe("actual attendance detail", () => {
+  it("renders linked employee number and recorded times instead of task placeholders", () => {
+    const html = renderToStaticMarkup(React.createElement(PeopleRecordDetail, {
+      record: { ...attendance, employee: { id: 5, name: "Test", number: "MED-005" },
+        attendance: { date: "2026-10-01", checkIn: "08:05:00", checkOut: "16:15:00" } },
+      branches, actorId: "me", refreshing: false, onOpen: vi.fn(),
+    }));
+    for (const value of ["MED-005", "2026-10-01", "08:05:00", "16:15:00"]) expect(html).toContain(value);
+    expect(html).not.toContain("غير مسجل في المصدر");
+    expect(html).not.toContain("الإسناد الفردي");
   });
 });
 

@@ -62,3 +62,9 @@ The People workspace is a case-first follow-up desk, not a second employee direc
 **Why:** The user found a branch catalogue with a generic employee button insufficient for organizing actual work. Recreating HR commands inside the center would introduce competing workflow authority.
 
 **How to apply:** Distinguish actual actor decisions, employee-signature waits, HR waits and attendance evidence. A pending attendance status alone proves neither absence nor an outstanding approval. Completed employee transfers remain history, and operations payroll review remains advisory. Preserve canonical source selection and outer scope on return.
+
+An empty attendance approval timestamp is also not a decision assignment. A read-only report destination must not be advertised as an approval tool, and fields omitted by a projection must not be labelled missing in the source.
+
+**Why:** The People window labelled ordinary recorded attendance “awaiting your decision” from an empty approval timestamp and presented unqueried employee numbers and inapplicable task fields as missing source data.
+
+**How to apply:** Use source-specific attendance facts and a read-only source action; keep these rows out of decision counters. Resolve employee identities inside authorized branch scope, distinguish unresolved linkage from an actually empty employee field, and omit inapplicable assignment/deadline rows.

@@ -230,12 +230,26 @@ describe("source stages, actual authority and minimal payload", () => {
     expect(sql.values).toEqual([["a"], "2026-10-01"]);
     for (const status of ["present", "late", "absent", "on_leave", "pending"]) {
       const item = projectPeopleRecord("attendance", { ...row, status, approved_at: null }, actor, grants, "2026-10-01");
-      expect(item.decision?.permission).toEqual({ module: "attendance", action: "edit" });
+      expect(item.decision).toBeUndefined();
+      expect(item.step).toBe("attendance_review");
       expect(item.href).toContain("/employee-attendance-report?");
       expect(peopleSourceHref(item, actor.id, "https://local.invalid", "2026-10-01").href).not.toBeNull();
     }
     expect(projectPeopleRecord("attendance", { ...row, approved_at: "2026-10-01" }, actor, grants, "2026-10-01").decision).toBeUndefined();
     expect(projectPeopleRecord("attendance", row, actor, { ...grants, attendanceEdit: false }, "2026-10-01").decision).toBeUndefined();
+  });
+  it("projects actual attendance facts and linked employee number without inventing missing times", () => {
+    const item = projectPeopleRecord("attendance", { ...row, employee_name: "Test", employee_number: "MED-001",
+      attendance_date: "2026-10-01", actual_check_in: "08:05:00", actual_check_out: null }, actor, grants, "2026-10-01");
+    expect(item.employee?.number).toBe("MED-001");
+    expect(item.attendance).toEqual({ date: "2026-10-01", checkIn: "08:05:00", checkOut: null });
+    expect(item.decision).toBeUndefined();
+    const sql = operationsPeopleSql("attendance", ["a"], "2026-10-01");
+    expect(sql.from).toContain("e.branch_id=r.branch_id");
+    expect(sql.from).toContain("r.branch_employee_id IS NULL");
+    expect(sql.from).toContain("e.linked_user_id");
+    expect(sql.from).toContain("LIMIT 1");
+    expect(sql.select).toContain("e.employee_number");
   });
   it("approved leave movement followup uses persisted confirmation fields and never fabricates approval/absence", () => {
     const sql = operationsPeopleSql("leave_movements", ["a"], "2026-10-01");
@@ -292,7 +306,7 @@ describe("source stages, actual authority and minimal payload", () => {
     for (const domain of operationsPeopleSources) {
       const item = projectPeopleRecord(domain, sensitive, actor, grants, "2026-10-01");
       expect(JSON.stringify(item)).not.toContain("SECRET");
-      expect(item.employee).toEqual({ id: 5, name: row.employee_name, jobTitle: row.job_title });
+      expect(item.employee).toEqual({ id: 5, name: row.employee_name, number: row.employee_number, jobTitle: row.job_title });
       expect(operationsPeopleSql(domain, ["a"], "2026-10-01").select).not.toMatch(/\*|phone|email|bank|token|signature|notes/);
     }
   });

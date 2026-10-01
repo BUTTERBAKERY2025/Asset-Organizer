@@ -46,7 +46,7 @@ export function peopleAdvanceAuthority(status: string, actor: PeopleActor, grant
 
 /** Parameterized active filters are identical for counts and pages. No PII blobs. */
 export function operationsPeopleSql(source: OperationsPeopleSource, branchIds: string[], businessDate: string) {
-  const employee = "e.id AS employee_id,e.employee_name,e.job_title";
+  const employee = "e.id AS employee_id,e.employee_name,e.employee_number,e.job_title";
   const join = "LEFT JOIN branch_employees e ON e.id=r.branch_employee_id AND e.branch_id=r.branch_id";
   const scope = "r.branch_id=ANY($1::varchar[])";
   const values: unknown[] = [branchIds];
@@ -73,8 +73,17 @@ export function operationsPeopleSql(source: OperationsPeopleSource, branchIds: s
   if (source === "attendance") {
     values.push(businessDate);
     return {
-      from: "attendance_records r", where: `${scope} AND r.attendance_date=$2 AND r.approved_at IS NULL`,
-      select: "r.id,r.branch_id,r.status,r.employee_name,r.branch_employee_id AS employee_id,r.approved_at",
+      // Never match by name or multiply source rows. A canonical FK wins;
+      // legacy identities are resolved only within the recorded branch.
+      from: `attendance_records r LEFT JOIN LATERAL (
+        SELECT e.id,e.employee_number,e.job_title FROM branch_employees e
+        WHERE e.branch_id=r.branch_id AND (
+          e.id=r.branch_employee_id OR (r.branch_employee_id IS NULL AND
+          (r.employee_id='branch_emp_' || e.id::text OR r.employee_id=e.linked_user_id)))
+        ORDER BY e.id LIMIT 1
+      ) e ON true`, where: `${scope} AND r.attendance_date=$2 AND r.approved_at IS NULL`,
+      select: `r.id,r.branch_id,r.status,r.employee_name,e.id AS employee_id,e.employee_number,e.job_title,
+        r.approved_at,r.attendance_date::text AS attendance_date,r.actual_check_in,r.actual_check_out`,
       order: "r.id DESC", values,
     };
   }
