@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { ChevronDown, ChevronLeft, FileWarning, MoreHorizontal, RefreshCw } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { partitionActions, type OperationCard } from "./presentation";
+import { Button } from "../ui/button.tsx";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "../ui/dropdown-menu.tsx";
+import { partitionActions, type OperationCard } from "./presentation.tsx";
 
 // Keep the same quick-access card set as the former QuickActions panel. A fallback
 // href is navigation, never evidence of permission to create or receive.

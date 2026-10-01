@@ -1,0 +1,73 @@
+{
+  "syntheticDataOnly": true,
+  "scope": "Exact branch page; platform-wide Layout is an explicitly isolated context boundary.",
+  "adaptation": "Imports only for page/presentation/daily-workspace/UI. Unused global PushNotificationPrompt export omitted; MobilePushSettings preserved. Global @theme converted to equivalent HSL runtime tokens; no layout rule edits.",
+  "page": "artifacts/mockup-sandbox/src/components/mockups/branch-operations-source/_source/client/src/pages/branch-operations.tsx",
+  "files": [
+    {
+      "source": "client/src/pages/branch-operations.tsx",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/branch-operations-source/_source/client/src/pages/branch-operations.tsx",
+      "sha256": "9d3337b49f85107b044889abf626ad4aff34ee4c7dd162d43752b398bc647771"
+    },
+    {
+      "source": "client/src/components/branch-operations/daily-workspace.tsx",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/branch-operations-source/_source/client/src/components/branch-operations/daily-workspace.tsx",
+      "sha256": "1786aecd4354fe0445b9d488c8789cd57a43bcc86e44d06c97f47738adb24784"
+    },
+    {
+      "source": "client/src/components/ui/button.tsx",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/branch-operations-source/_source/client/src/components/ui/button.tsx",
+      "sha256": "006b001aa748fd61f9e936058b2f64f4aae4805c12725e883b841bc3a1ebeabc"
+    },
+    {
+      "source": "client/src/lib/utils.ts",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/branch-operations-source/_source/client/src/lib/utils.ts",
+      "sha256": "7c8c3dfc0cdd370d44932828eb067ef771c8fe7996693221d5d4b90af6d54f2d"
+    },
+    {
+      "source": "client/src/components/ui/dropdown-menu.tsx",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/branch-operations-source/_source/client/src/components/ui/dropdown-menu.tsx",
+      "sha256": "dc109123ecd59af01d07aa9f3a8e8a7085bd3f337388c5369799ab1ce6c2d45f"
+    },
+    {
+      "source": "client/src/components/branch-operations/presentation.tsx",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/branch-operations-source/_source/client/src/components/branch-operations/presentation.tsx",
+      "sha256": "c5320f2c49c55f8a948985ed88bfb22f27ba4ef346fa2e3db1fe154c1140465c"
+    },
+    {
+      "source": "client/src/components/platform-app-icon.tsx",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/branch-operations-source/_source/client/src/components/platform-app-icon.tsx",
+      "sha256": "3d2fd6e88c7b99912205b1d20a53b66798115ecc52a8b977227afbb2fbf60114"
+    },
+    {
+      "source": "client/src/components/branch-operations/daily-workspace.css",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/branch-operations-source/_source/client/src/components/branch-operations/daily-workspace.css",
+      "sha256": "23b72a9f7ff183ea217adb1816ed3d3563679bbe37e914d495af72e44c837056"
+    },
+    {
+      "source": "client/src/components/push-notification-prompt.tsx",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/branch-operations-source/_source/client/src/components/push-notification-prompt.tsx",
+      "sha256": "b8a725f3afbcf5b74541035a14b97b0d4e0e52e7c92076cc8947066cb3ecb491"
+    },
+    {
+      "source": "client/src/components/ui/select.tsx",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/branch-operations-source/_source/client/src/components/ui/select.tsx",
+      "sha256": "138cf21c61964d1192244a275fab998deb7409852766811eea7c689253e87e93"
+    },
+    {
+      "source": "client/src/hooks/use-branch-navigation.ts",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/branch-operations-source/_source/client/src/hooks/use-branch-navigation.ts",
+      "sha256": "f65ebc9c3bd24e694136963ca11468f0c063f297ebf5c920cd6ba40f004394c6"
+    },
+    {
+      "source": "client/src/lib/branch-operation-navigation.ts",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/branch-operations-source/_source/client/src/lib/branch-operation-navigation.ts",
+      "sha256": "64ae65c0f4ff209f1ff258a61bc4c43a964ef8e1629875b2919c45872cf4df04"
+    },
+    {
+      "source": "client/src/assets/fonts/SaudiRiyal.ttf",
+      "preview": "artifacts/mockup-sandbox/src/components/mockups/branch-operations-source/_source/client/src/assets/fonts/SaudiRiyal.ttf",
+      "sha256": "5e51a1bdcb79cd0b702355c47c361a1f3c0ef58d07b5602f4223a731eb8e92d0"
+    }
+  ]
+}

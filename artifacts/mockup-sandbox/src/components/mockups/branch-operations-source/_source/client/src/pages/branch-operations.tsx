@@ -1,24 +1,24 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useLocation } from "wouter";
+import { useQuery, useQueryClient } from "../../../../_stubs/query.ts";
+import { useLocation } from "../../../../_stubs/router.tsx";
 import {
   RefreshCw,
 } from "lucide-react";
-import { DailyWorkspace } from "@/components/branch-operations/daily-workspace";
-import "@/components/branch-operations/daily-workspace.css";
-import { Layout } from "@/components/layout";
-import { MobilePushSettings } from "@/components/push-notification-prompt";
-import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useAuth } from "@/hooks/useAuth";
-import { useBranches } from "@/hooks/useBranches";
-import { useBranchNavigation } from "@/hooks/use-branch-navigation";
-import { branchBoardUrl, branchOperationUrl, resolveBoardBranch } from "@/lib/branch-operation-navigation";
-import { captureBranchDeskReturn, resolveBranchDeskReturnForCurrentSession, restoreBranchDeskScroll } from "@/lib/branch-operation-return-state";
+import { DailyWorkspace } from "../components/branch-operations/daily-workspace.tsx";
+import "../components/branch-operations/daily-workspace.css";
+import { Layout } from "../../../../_stubs/layout.tsx";
+import { MobilePushSettings } from "../components/push-notification-prompt.tsx";
+import { Button } from "../components/ui/button.tsx";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select.tsx";
+import { useAuth } from "../../../../_stubs/data.ts";
+import { useBranches } from "../../../../_stubs/data.ts";
+import { useBranchNavigation } from "../hooks/use-branch-navigation.ts";
+import { branchBoardUrl, branchOperationUrl, resolveBoardBranch } from "../lib/branch-operation-navigation.ts";
+import { captureBranchDeskReturn, resolveBranchDeskReturnForCurrentSession, restoreBranchDeskScroll } from "../../../../_stubs/return-state.ts";
 import {
   AlertTriangle, BoardSkeleton, EmptyState,
   OperationCardView, SectionHeader, Settings2, ShieldAlert, Store, formatServerDate, groupCards, isNavigationOnly, SECTIONS, type OperationCard,
-} from "@/components/branch-operations/presentation";
+} from "../components/branch-operations/presentation.tsx";
 
 type BranchOperationsSummary = {
   branchId: string;

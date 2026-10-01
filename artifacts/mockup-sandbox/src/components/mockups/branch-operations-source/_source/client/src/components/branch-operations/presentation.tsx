@@ -4,8 +4,8 @@ import {
   FileText, Gauge, MessageSquareWarning, PackageCheck, RefreshCw, Settings2, ShieldAlert,
   ShoppingBasket, Store, TrendingUp, Truck, UsersRound, Receipt, Wrench, Warehouse, Clock,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { PlatformAppIcon, type SemanticColor } from "@/components/platform-app-icon";
+import { Button } from "../ui/button.tsx";
+import { PlatformAppIcon, type SemanticColor } from "../platform-app-icon.tsx";
 
 export type OperationCard = {
   id: string;
