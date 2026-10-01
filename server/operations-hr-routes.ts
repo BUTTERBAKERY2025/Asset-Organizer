@@ -1,4 +1,5 @@
 import type { Express } from "express";
+import type { SalaryClosingLine } from "./salary-closing-calc";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "./db";
 import { getAllowedBranchIds, isAuthenticated, requirePermission } from "./auth";
@@ -22,16 +23,39 @@ export function operationsHrManagerOnly(req: any, res: any, next: any) {
   return req.currentUser?.role === "operations_manager" ? next() : res.status(403).json({ error: "هذه المساحة مخصصة لمدير التشغيل" });
 }
 
-export function operationsPayrollCsv(lines: { branchEmployeeId?: number | null; employeeName: string; grossSalary: number; netSalary: number }[]) {
+export function operationsPayrollCsv(lines: (Partial<SalaryClosingLine> & Pick<SalaryClosingLine, "employeeName" | "grossSalary" | "netSalary">)[]) {
   const csvCell = (value: unknown) => {
     const text = String(value ?? "");
     // Spreadsheet programs interpret formulas even when cells are quoted.
     const safe = !/^-?\d+(?:\.\d+)?$/.test(text) && /^[\s]*[=+\-@\t\r\n]/.test(text) ? `'${text}` : text;
     return `"${safe.replace(/"/g, '""')}"`;
   };
+  const columns: Array<[keyof SalaryClosingLine, string]> = [
+    ["branchEmployeeId", "معرف الموظف"], ["employeeNumber", "الرقم الوظيفي"], ["employeeName", "الموظف"],
+    ["employeeStatus", "حالة الموظف"], ["jobTitle", "الوظيفة"], ["department", "الإدارة"],
+    ["nationality", "الجنسية"], ["iqamaNumber", "الإقامة"], ["bankName", "البنك"], ["bankAccountNumber", "الحساب البنكي"],
+    ["presentDays", "أيام الحضور"], ["originalPresentDays", "الحضور قبل التعديل"],
+    ["attendanceAdjustmentReason", "سبب تعديل الحضور"], ["attendanceAdjustmentBy", "معدل الحضور"],
+    ["absentDays", "أيام الغياب"], ["offDays", "أيام الراحة"], ["paidLeaveDays", "الإجازة المدفوعة"],
+    ["unpaidLeaveDays", "الإجازة بدون أجر"], ["unpaidDays", "الأيام غير المدفوعة"],
+    ["sickThreeQuarterDays", "أيام المرضية 75%"], ["sickUnpaidDays", "أيام المرضية بدون أجر"],
+    ["scheduledWorkDays", "أيام العمل المجدولة"], ["scheduledHours", "الساعات المجدولة"],
+    ["lateDays", "أيام التأخير"], ["totalHours", "ساعات العمل"],
+    ["baseSalary", "الأساسي"], ["housingAllowance", "بدل السكن"], ["allowances", "إجمالي البدلات"], ["dailyRate", "قيمة اليوم"],
+    ["absenceDeduction", "خصم الأيام غير المدفوعة"], ["sickLeaveDeduction", "خصم المرضية"],
+    ["socialInsurance", "التأمينات"], ["manualDeductionsTotal", "إجمالي السلف والخصومات"],
+    ["manualDeductions", "تفاصيل السلف والخصومات"], ["leaveBreakdown", "تفاصيل الإجازات"],
+    ["presentDates", "تواريخ الحضور"], ["absentDates", "تواريخ الغياب"],
+    ["absentDatesExplicit", "تواريخ الغياب الصريح"], ["absentDatesMissing", "تواريخ الأيام غير المسجلة"],
+    ["offDates", "تواريخ الراحة"], ["dataSource", "مصدر الاحتساب"], ["noWorkAtAll", "بدون بيانات عمل"],
+    ["grossSalary", "الإجمالي"], ["netSalary", "الصافي"],
+  ];
   const rows = [
-    ["رقم الموظف", "الموظف", "الإجمالي", "الصافي"],
-    ...lines.map(line => [line.branchEmployeeId ?? "", line.employeeName, line.grossSalary, line.netSalary]),
+    columns.map(([, title]) => title),
+    ...lines.map(line => columns.map(([key]) => {
+      const value = line[key];
+      return Array.isArray(value) ? JSON.stringify(value) : value ?? "";
+    })),
   ];
   return "\uFEFF" + rows.map(row => row.map(csvCell).join(",")).join("\r\n");
 }

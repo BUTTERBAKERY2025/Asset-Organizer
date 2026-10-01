@@ -193,15 +193,8 @@ const pageImports: Record<string, () => Promise<any>> = {
   "invitation": () => import("@/pages/invitation"),
 };
 
-const preloadedChunks = new Set<string>();
-
 export function preloadPage(pageKey: string) {
-  if (preloadedChunks.has(pageKey)) return;
-  const loader = pageImports[pageKey];
-  if (loader) {
-    preloadedChunks.add(pageKey);
-    preloadAndCache(pageKey);
-  }
+  pageLoader.preloadPage(pageKey);
 }
 
 const PRIORITY_WAVE_1 = [
@@ -452,7 +445,31 @@ export function preloadRoute(href: string, role?: string | null) {
   if (pageKey) preloadPage(pageKey);
 }
 
-const resolvedModules = new Map<string, any>();
+// Both attempts finish before the page fallback's 20s watchdog. A second import
+// can recover a stranded import promise even when its module is already loaded.
+const PAGE_IMPORT_TIMEOUT_MS = 8_000;
+
+class PageImportTimeout extends Error {
+  constructor(key: string) {
+    super(`Timed out loading page module: ${key}`);
+    this.name = "PageImportTimeout";
+  }
+}
+
+function loadPageModule(key: string, loader: () => Promise<any>): Promise<any> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new PageImportTimeout(key)), PAGE_IMPORT_TIMEOUT_MS);
+    // Capture synchronous loader errors too, and attach rejection handlers even
+    // if the timeout wins: abandoned import attempts must not reject unhandled.
+    Promise.resolve().then(loader).then(mod => {
+      clearTimeout(timer);
+      resolve(mod);
+    }, err => {
+      clearTimeout(timer);
+      reject(err);
+    });
+  });
+}
 
 function isChunkLoadError(err: any): boolean {
   if (!err) return false;
@@ -466,33 +483,75 @@ function isChunkLoadError(err: any): boolean {
   );
 }
 
-export function preloadAndCache(key: string): Promise<any> {
-  const existing = resolvedModules.get(key);
-  if (existing) return Promise.resolve(existing);
-  const loader = pageImports[key];
-  if (!loader) return Promise.reject(new Error(`Unknown page: ${key}`));
-  return loader().then(mod => {
-    resolvedModules.set(key, mod);
-    return mod;
-  }).catch(err => {
-    if (isChunkLoadError(err)) {
-      const reloadCount = parseInt(sessionStorage.getItem('__chunk_reload_count') || '0', 10) || 0;
-      const lastReloadAt = parseInt(sessionStorage.getItem('__chunk_reload_at') || '0', 10);
-      const effectiveCount = (Date.now() - lastReloadAt > 60_000) ? 0 : reloadCount;
-      if (effectiveCount < 1) {
-        sessionStorage.setItem('__chunk_reload_count', String(effectiveCount + 1));
-        sessionStorage.setItem('__chunk_reload_at', String(Date.now()));
-        window.location.reload();
-        return new Promise(() => {});
+/** Isolated loader state; speculative preload and route render share one import. */
+export function createPageLoader(loaders: Record<string, () => Promise<any>>) {
+  const preloadedChunks = new Set<string>();
+  const resolvedModules = new Map<string, any>();
+  const pendingModules = new Map<string, Promise<any>>();
+  const lazyPages = new Map<string, React.LazyExoticComponent<React.ComponentType<any>>>();
+
+  function preloadAndCache(key: string): Promise<any> {
+    const existing = resolvedModules.get(key);
+    if (existing) return Promise.resolve(existing);
+    const pending = pendingModules.get(key);
+    if (pending) return pending;
+    const loader = loaders[key];
+    if (!loader) return Promise.reject(new Error(`Unknown page: ${key}`));
+    const request = loadPageModule(key, loader).catch(err => {
+      if (err instanceof PageImportTimeout) return loadPageModule(key, loader);
+      throw err;
+    }).then(mod => {
+      resolvedModules.set(key, mod);
+      return mod;
+    }).catch(err => {
+      if (isChunkLoadError(err)) {
+        try {
+          const reloadCount = parseInt(sessionStorage.getItem('__chunk_reload_count') || '0', 10) || 0;
+          const lastReloadAt = parseInt(sessionStorage.getItem('__chunk_reload_at') || '0', 10);
+          const effectiveCount = (Date.now() - lastReloadAt > 60_000) ? 0 : reloadCount;
+          if (effectiveCount < 1) {
+            sessionStorage.setItem('__chunk_reload_count', String(effectiveCount + 1));
+            sessionStorage.setItem('__chunk_reload_at', String(Date.now()));
+            window.location.reload();
+          }
+        } catch {
+          // Storage/navigation can be unavailable. Preserve the original error.
+        }
+        // Requesting navigation is not a guarantee it will happen. Always settle
+        // this promise so React.lazy cannot be poisoned by a pending reload.
       }
-      // Loop guard hit — let the ErrorBoundary render the recovery UI
+      throw err;
+    }).finally(() => {
+      pendingModules.delete(key);
+    });
+    pendingModules.set(key, request);
+    return request;
+  }
+
+  function makeLazy(key: string) {
+    let page = lazyPages.get(key);
+    if (!page) {
+      page = React.lazy(() => preloadAndCache(key));
+      lazyPages.set(key, page);
     }
-    throw err;
-  });
+    return page;
+  }
+
+  function preloadPage(key: string) {
+    if (preloadedChunks.has(key) || !loaders[key]) return;
+    preloadedChunks.add(key);
+    void preloadAndCache(key).catch(err => {
+      // A failed speculative load must remain retryable on actual navigation.
+      preloadedChunks.delete(key);
+      console.warn(`[page-preload] Failed to load ${key}`, err);
+    });
+  }
+
+  return { preloadPage, preloadAndCache, makeLazy };
 }
 
-export function makeLazy(key: string) {
-  return React.lazy(() => preloadAndCache(key));
-}
+const pageLoader = createPageLoader(pageImports);
+export const preloadAndCache = pageLoader.preloadAndCache;
+export const makeLazy = pageLoader.makeLazy;
 
 import React from "react";

@@ -24,6 +24,7 @@ import type { SystemModule } from "@shared/schema";
 
 import NotFound from "@/pages/not-found";
 import LoginPage from "@/pages/login";
+import OperationsHRPage from "@/pages/operations-hr";
 import { makeLazy, startAggressivePreload, prefetchAdjacentPages } from "@/lib/pagePreloader";
 import { installAutoReconnectOnVisibility, ensurePrinterConnection, getSavedPrinter, isPrinterConnected } from "@/lib/thermal-printer";
 
@@ -206,7 +207,6 @@ const PublicGreetingPage = makeLazy("public-greeting");
 const InvitationPage = makeLazy("invitation");
 const FloorPlanPage = makeLazy("floor-plan");
 const HRHubPage = makeLazy("hr-hub");
-const OperationsHRPage = makeLazy("operations-hr");
 const MyPortalPage = makeLazy("my-portal");
 const OwnerPortalPage = makeLazy("owner-portal");
 const ShareholderPortalPage = makeLazy("shareholder-portal");

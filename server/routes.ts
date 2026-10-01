@@ -19,6 +19,7 @@ import {
 import { db, pool } from "./db";
 import { operationsPayrollReviews } from "@shared/schema";
 import { operationsHrManagerOnly, operationsPayrollCsv, registerOperationsHrRoutes } from "./operations-hr-routes";
+import { payrollAttendanceEvidence, payrollReadError, readPayrollSource } from "./operations-payroll-report";
 import { registerReverseLogisticsRoutes } from "./reverse-logistics-routes";
 import { registerKitchenWarehouseShippingRoutes } from "./kitchen-warehouse-shipping-routes";
 import { assertDeliveryDispatchReady, cancelDeliveryAssignmentForSource, DeliveryDispatchConflict } from "./delivery-dispatch-guard";
@@ -32461,13 +32462,13 @@ export async function registerRoutes(
     const lastDay = new Date(y, m, 0).getDate();
     const monthEnd = `${month}-${String(lastDay).padStart(2, "0")}`;
     const [employees, attendance, schedules, signedTimesheets, deductions, leaveRequestsData, attendanceAdjustments] = await Promise.all([
-      storage.getBranchEmployeesByBranch(branchId).catch(() => []),
-      storage.getAllAttendanceRecords({ branchId, startDate: monthStart, endDate: monthEnd }).catch(() => []),
-      storage.getEmployeeSchedulesByBranchAndDateRange(branchId, monthStart, monthEnd).catch(() => []),
-      storage.getFinalizedTimesheetEntriesByBranchAndDateRange(branchId, monthStart, monthEnd).catch(() => []),
-      storage.getSalaryDeductionsByBranchAndMonth(branchId, month).catch(() => []),
+      readPayrollSource("employees", () => storage.getBranchEmployeesByBranch(branchId)),
+      readPayrollSource("attendance", () => storage.getAllAttendanceRecords({ branchId, startDate: monthStart, endDate: monthEnd })),
+      readPayrollSource("schedules", () => storage.getEmployeeSchedulesByBranchAndDateRange(branchId, monthStart, monthEnd)),
+      readPayrollSource("signedTimesheets", () => storage.getFinalizedTimesheetEntriesByBranchAndDateRange(branchId, monthStart, monthEnd)),
+      readPayrollSource("deductions", () => storage.getSalaryDeductionsByBranchAndMonth(branchId, month)),
       // الإجازات المصرّح بها (المعتمدة) المتقاطعة مع الشهر
-      db
+      readPayrollSource("leaveRequests", () => db
         .select()
         .from(leaveRequests)
         .where(
@@ -32477,9 +32478,8 @@ export async function registerRoutes(
             lte(leaveRequests.startDate, monthEnd),
             gte(leaveRequests.endDate, monthStart),
           ),
-        )
-        .catch(() => [] as any[]),
-      storage.getAttendanceAdjustmentsByBranchAndMonth(branchId, month).catch(() => []),
+        )),
+      readPayrollSource("attendanceAdjustments", () => storage.getAttendanceAdjustmentsByBranchAndMonth(branchId, month)),
     ]);
     return { branchId, month, employees, attendance, schedules, signedTimesheets, deductions, leaveRequests: leaveRequestsData, attendanceAdjustments };
   };
@@ -32498,12 +32498,19 @@ export async function registerRoutes(
 
   // يبني معاينة فرع واحد: لقطة مقفلة محفوظة إن وُجدت، وإلا احتساب حيّ على الخادم
   const buildBranchPreview = async (branchId: string, month: string) => {
-    const existing = await storage.getSalaryClosureByBranchAndMonth(branchId, month);
+    const existing = await readPayrollSource("closure", () => storage.getSalaryClosureByBranchAndMonth(branchId, month));
     const isLocked = !!existing && existing.status === "closed";
     if (isLocked && existing) {
-      const savedLines = await storage.getSalaryClosureLines(existing.id);
+      const savedLines = await readPayrollSource("snapshotLines", () => storage.getSalaryClosureLines(existing.id));
       // إثراء الإدارة من سجل الموظف الحالي (اللقطة لا تخزّن الإدارة) — لتقرير الرواتب المستحقة حسب الإدارة
-      const deptEmps = await storage.getBranchEmployeesByBranch(branchId).catch(() => [] as any[]);
+      const enrichmentFailures: { source: string; message: string }[] = [];
+      let deptEmps: any[] = [];
+      try {
+        deptEmps = await storage.getBranchEmployeesByBranch(branchId);
+      } catch (error) {
+        console.error("Salary snapshot employee enrichment failed:", error);
+        enrichmentFailures.push({ source: "employees", message: "تعذر إثراء بيانات الموظفين الحالية؛ قيم لقطة الرواتب محفوظة دون تغيير" });
+      }
       const deptMap = new Map<number, string | null>(deptEmps.map((e: any) => [e.id, e.department ?? null]));
       // اللقطة لا تخزّن حالة الموظف — نشتقها من سجل الموظف الحالي لعرض ملاحظة "نشط / غير نشط"
       const statusMap = new Map<number, string>(deptEmps.map((e: any) => [e.id, e.status || "active"]));
@@ -32545,11 +32552,12 @@ export async function registerRoutes(
         warnings: ((existing.warnings as any) || []) as any[],
         closure: existing,
         isLocked: true,
+        enrichmentFailures,
       };
     }
     const raw = await fetchSalaryClosingRaw(branchId, month);
     const result = computeSalaryClosing(raw);
-    return { ...result, closure: existing || null, isLocked };
+    return { ...result, closure: existing || null, isLocked, enrichmentFailures: [] };
   };
 
   // Operations may inspect the same live calculation / immutable closed snapshot
@@ -32578,16 +32586,16 @@ export async function registerRoutes(
       if (!scope) return;
       const [report, reviews] = await Promise.all([
         buildBranchPreview(scope.branchId, scope.month),
-        db.select().from(operationsPayrollReviews).where(and(
+        readPayrollSource("reviews", () => db.select().from(operationsPayrollReviews).where(and(
           eq(operationsPayrollReviews.branchId, scope.branchId),
           eq(operationsPayrollReviews.month, scope.month),
-        )),
+        ))),
       ]);
       res.set("Cache-Control", "no-store");
       res.json({ ...report, reviews });
     } catch (error) {
       console.error("Operations payroll report error:", error);
-      res.status(500).json({ error: "تعذر تحميل تقرير الرواتب" });
+      res.status(500).json(payrollReadError(error, "تعذر تحميل تقرير الرواتب"));
     }
   });
   app.get("/api/operations-hr/payroll/export", isAuthenticated, operationsPayrollManagerOnly, requirePermission("operations_hr", "view"), requirePermission("operations_payroll", "export"), async (req, res) => {
@@ -32596,11 +32604,79 @@ export async function registerRoutes(
       if (!scope) return;
       const report = await buildBranchPreview(scope.branchId, scope.month);
       res.set("Cache-Control", "no-store");
+      if (report.enrichmentFailures.length) {
+        res.set("X-Payroll-Enrichment-Failures", report.enrichmentFailures.map(failure => failure.source).join(","));
+      }
       res.type("text/csv; charset=utf-8");
       res.attachment(`operations-payroll-${scope.month}.csv`).send(operationsPayrollCsv(report.lines));
     } catch (error) {
       console.error("Operations payroll export error:", error);
-      res.status(500).json({ error: "تعذر تصدير تقرير الرواتب" });
+      res.status(500).json(payrollReadError(error, "تعذر تصدير تقرير الرواتب"));
+    }
+  });
+  app.get("/api/operations-hr/payroll/attendance", isAuthenticated, operationsPayrollManagerOnly, requirePermission("operations_hr", "view"), requirePermission("operations_payroll", "view"), async (req, res) => {
+    try {
+      const scope = await operationsPayrollScope(req, res);
+      if (!scope) return;
+      const rawId = req.query.branchEmployeeId;
+      const employeeId = typeof rawId === "string" && /^\d+$/.test(rawId) ? Number(rawId) : NaN;
+      if (!Number.isSafeInteger(employeeId) || employeeId <= 0) {
+        return res.status(400).json({ error: "رقم الموظف غير صحيح" });
+      }
+      const closure = await readPayrollSource("closure", () => storage.getSalaryClosureByBranchAndMonth(scope.branchId, scope.month));
+      const isLocked = closure?.status === "closed";
+      const savedLines = isLocked && closure
+        ? await readPayrollSource("snapshotLines", () => storage.getSalaryClosureLines(closure.id)) : [];
+      // Line.id is a closure-line id, not an employee id.
+      const savedEmployee = savedLines.find(line => Number(line.branchEmployeeId) === employeeId);
+      const [currentEmployee, branchEmployees] = await Promise.all([
+        readPayrollSource("employees", () => storage.getBranchEmployee(employeeId)),
+        readPayrollSource("employees", () => storage.getBranchEmployeesByBranch(scope.branchId)),
+      ]);
+      if (!savedEmployee && !currentEmployee) return res.status(404).json({ error: "الموظف غير موجود" });
+      if (!savedEmployee && currentEmployee?.branchId !== scope.branchId) {
+        return res.status(403).json({ error: "الموظف خارج نطاق الفرع والشهر المحددين" });
+      }
+      // Historical membership is established by the locked snapshot, never the
+      // employee's current branch after a transfer. Only identity is enriched.
+      const employee = savedEmployee
+        ? { ...savedEmployee, id: employeeId, linkedUserId: currentEmployee?.linkedUserId ?? null }
+        : currentEmployee;
+      const candidates = [
+        ...branchEmployees,
+        ...savedLines.map(line => ({ ...line, id: line.branchEmployeeId })),
+      ];
+      const monthStart = `${scope.month}-01`;
+      const [year, monthNumber] = scope.month.split("-").map(Number);
+      const monthEnd = `${scope.month}-${String(new Date(year, monthNumber, 0).getDate()).padStart(2, "0")}`;
+      const [attendance, schedules, signedTimesheets] = await Promise.all([
+        readPayrollSource("attendance", () => storage.getAllAttendanceRecords({ branchId: scope.branchId, startDate: monthStart, endDate: monthEnd })),
+        readPayrollSource("schedules", () => storage.getEmployeeSchedulesByBranchAndDateRange(scope.branchId, monthStart, monthEnd)),
+        readPayrollSource("signedTimesheets", () => storage.getFinalizedTimesheetEntriesByBranchAndDateRange(scope.branchId, monthStart, monthEnd)),
+      ]);
+      res.set("Cache-Control", "no-store").json(payrollAttendanceEvidence({
+        ...scope, employee, candidates, isLocked, attendance, schedules, signedTimesheets,
+      }));
+    } catch (error) {
+      console.error("Operations payroll attendance detail error:", error);
+      res.status(500).json(payrollReadError(error, "تعذر تحميل تفاصيل الحضور"));
+    }
+  });
+  app.get("/api/operations-hr/payroll/payments", isAuthenticated, operationsPayrollManagerOnly, requirePermission("operations_hr", "view"), requirePermission("operations_payroll", "view"), async (req, res) => {
+    try {
+      const scope = await operationsPayrollScope(req, res);
+      if (!scope) return;
+      const rows = await readPayrollSource("payments", () => storage.getSalaryPaymentsByBranchAndMonth(scope.branchId, scope.month));
+      // Stored branch/month determines payment ownership, not current employee branch.
+      const payments = rows.filter(row => row.branchId === scope.branchId && row.month === scope.month).map(row => ({
+        id: row.id, branchEmployeeId: row.branchEmployeeId, branchId: row.branchId, month: row.month,
+        paymentMethod: row.paymentMethod, paidAt: row.paidAt,
+        amount: row.amount ?? null, notes: row.note ?? null,
+      }));
+      res.set("Cache-Control", "no-store").json({ ...scope, payments, source: "recorded_payments" });
+    } catch (error) {
+      console.error("Operations payroll payment detail error:", error);
+      res.status(500).json(payrollReadError(error, "تعذر تحميل تفاصيل صرف الرواتب"));
     }
   });
   app.post("/api/operations-hr/payroll/review", isAuthenticated, operationsPayrollManagerOnly, requirePermission("operations_hr", "view"), requirePermission("operations_payroll", "approve"), async (req, res) => {
@@ -32733,7 +32809,7 @@ export async function registerRoutes(
       res.json({ ...result, operationsReviews });
     } catch (error) {
       console.error("Error computing salary closing preview:", error);
-      res.status(500).json({ error: "فشل في حساب معاينة الإغلاق" });
+      res.status(500).json(payrollReadError(error, "فشل في حساب معاينة الإغلاق"));
     }
   });
 
@@ -32898,7 +32974,7 @@ export async function registerRoutes(
       if (String(error?.message || "").includes("duplicate") || error?.code === "23505") {
         return res.status(409).json({ error: "هذا الشهر مغلق بالفعل لهذا الفرع." });
       }
-      res.status(500).json({ error: "فشل في إغلاق الشهر" });
+      res.status(500).json(payrollReadError(error, "فشل في إغلاق الشهر"));
     }
   });
 

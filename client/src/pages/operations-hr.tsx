@@ -4,9 +4,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Layout } from "@/components/layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, shouldRetryQuery } from "@/lib/queryClient";
 import { usePermissions } from "@/hooks/usePermissions";
 import { createOperationsHrCommandGuard, operationsHrSelectionHref, operationsHrSelectionIntent, operationsPayrollReportReady, validOperationsPayrollMonth } from "@/lib/operations-hr-state";
+import { operationsReadState, type OperationsPayrollPayments, type OperationsPayrollReport } from "@/lib/operations-payroll-report";
+import { OperationsPayrollReportTable } from "@/components/operations-hr/payroll-report";
+import { OperationsQueryFeedback } from "@/components/operations-hr/query-feedback";
 
 type Branch = { id: string; name: string };
 type Employee = { id: number; employeeName: string; employeeNumber: string | null; jobTitle: string; status: string; branchId: string };
@@ -21,13 +24,6 @@ type Joining = {
   notification: { id: number; status: string; actualStartDate: string; signedAt: string | null;
     confirmedAt: string | null; confirmedBy: string | null; confirmedByName: string | null; confirmedNotes: string | null } | null;
 };
-type Payroll = {
-  lines: { branchEmployeeId?: number; employeeName: string; grossSalary?: number; netSalary?: number }[];
-  totals: { totalNet: number; employeeCount: number };
-  isLocked: boolean;
-  reviews: { id: number; reviewedBy: string; reviewedByName?: string; reviewedAt: string; note: string | null }[];
-};
-
 export default function OperationsHrPage() {
   const permissions = usePermissions();
   return <Layout><OperationsHrContent permissions={permissions} /></Layout>;
@@ -61,8 +57,9 @@ export function OperationsHrContent({ permissions }: {
   const [confirmNotes, setConfirmNotes] = useState("");
   const branches = useQuery<Branch[]>({
     queryKey: ["/api/operations-hr/branches"], queryFn: async () => (await apiRequest("GET", "/api/operations-hr/branches")).json(),
-    staleTime: 0, gcTime: 0,
+    staleTime: 0, gcTime: 0, placeholderData: undefined, retry: shouldRetryQuery, refetchOnMount: "always",
   });
+  const branchesState = operationsReadState(true, branches);
   const select = (change: Partial<typeof selection>) => {
     const next = { ...selection, ...change };
     navigate(operationsHrSelectionHref(pathname, search, next.branchId, next.month, next.tab,
@@ -73,7 +70,7 @@ export function OperationsHrContent({ permissions }: {
   const setActiveTab = (tab: "employees" | "payroll") => select({ tab });
   const branch = branchSelection ? branches.data?.find(b => b.id === branchSelection)
     : branches.data?.length === 1 ? branches.data[0] : undefined;
-  const authorizedBranch = !!branch && !branches.isError && !branches.isFetching;
+  const authorizedBranch = !!branch && branchesState === "ready";
   const validMonth = validOperationsPayrollMonth(month);
   const commands = useRef(createOperationsHrCommandGuard()).current;
   const commandScope = JSON.stringify([branchSelection, branch?.id, month, activeTab, authorizedBranch,
@@ -88,43 +85,64 @@ export function OperationsHrContent({ permissions }: {
     setEmployeeSelection(""); setDestination(""); setReason(""); setStartDates({});
   }, [commandScope]);
   useEffect(() => {
-    if (branches.isPending || branches.isFetching || branches.isError) return;
+    if (branchesState !== "ready") return;
     const next = operationsHrSelectionHref(pathname, search, branchSelection || branch?.id || "", month,
       activeTab, (branches.data ?? []).map(row => row.id));
     if (next !== `${pathname}${search ? `?${search}` : ""}`) navigate(next, { replace: true });
-  }, [pathname, search, branchSelection, branch?.id, month, activeTab, branches.data, branches.isPending, branches.isFetching, branches.isError, navigate]);
+  }, [pathname, search, branchSelection, branch?.id, month, activeTab, branches.data, branchesState, navigate]);
   const employees = useQuery<Employee[]>({
     queryKey: ["/api/operations-hr/employees", branch?.id],
     queryFn: async () => (await apiRequest("GET", `/api/operations-hr/employees?branchId=${encodeURIComponent(branch!.id)}`)).json(),
     enabled: authorizedBranch && activeTab === "employees", staleTime: 0, gcTime: 0,
+    placeholderData: undefined, retry: shouldRetryQuery, refetchOnMount: "always",
   });
-  const payroll = useQuery<Payroll>({
+  const payroll = useQuery<OperationsPayrollReport>({
     queryKey: ["/api/operations-hr/payroll", branch?.id, month],
     queryFn: async () => (await apiRequest("GET", `/api/operations-hr/payroll?${new URLSearchParams({ branchId: branch!.id, month })}`)).json(),
-    enabled: authorizedBranch && validMonth && canView("operations_payroll"), staleTime: 0, gcTime: 0,
+    enabled: authorizedBranch && validMonth && activeTab === "payroll" && canView("operations_payroll"), staleTime: 0, gcTime: 0,
+    placeholderData: undefined, retry: shouldRetryQuery, refetchOnMount: "always",
+  });
+  const payments = useQuery<OperationsPayrollPayments>({
+    queryKey: ["/api/operations-hr/payroll/payments", branch?.id, month],
+    queryFn: async () => {
+      const data = await (await apiRequest("GET", `/api/operations-hr/payroll/payments?${new URLSearchParams({ branchId: branch!.id, month })}`)).json() as OperationsPayrollPayments;
+      if (data.branchId !== branch!.id || data.month !== month ||
+          data.payments.some(payment => payment.branchId !== branch!.id || payment.month !== month))
+        throw new Error("سجلات الصرف لا تطابق الفرع والشهر المحددين.");
+      return data;
+    },
+    enabled: authorizedBranch && validMonth && activeTab === "payroll" && canView("operations_payroll"), staleTime: 0, gcTime: 0,
+    placeholderData: undefined, retry: shouldRetryQuery, refetchOnMount: "always",
   });
   const transfers = useQuery<Transfer[]>({
-    queryKey: ["/api/operations-hr/transfers"],
+    queryKey: ["/api/operations-hr/transfers", branch?.id],
     queryFn: async () => (await apiRequest("GET", "/api/operations-hr/transfers")).json(),
     enabled: authorizedBranch && activeTab === "employees" && canView("operations_employee_transfer"), staleTime: 0, gcTime: 0,
+    placeholderData: undefined, retry: shouldRetryQuery, refetchOnMount: "always",
   });
   const joining = useQuery<Joining[]>({
-    queryKey: ["/api/operations-hr/joining"],
+    queryKey: ["/api/operations-hr/joining", branch?.id],
     queryFn: async () => (await apiRequest("GET", "/api/operations-hr/joining")).json(),
     enabled: authorizedBranch && activeTab === "employees" && canView("operations_joining"), staleTime: 0, gcTime: 0,
+    placeholderData: undefined, retry: shouldRetryQuery, refetchOnMount: "always",
   });
+  const employeesReady = operationsReadState(authorizedBranch && activeTab === "employees", employees) === "ready";
+  const joiningState = operationsReadState(authorizedBranch && activeTab === "employees" && canView("operations_joining"), joining);
+  const transfersState = operationsReadState(authorizedBranch && activeTab === "employees" && canView("operations_employee_transfer"), transfers);
+  const payrollState = operationsReadState(authorizedBranch && validMonth && activeTab === "payroll" && canView("operations_payroll"), payroll);
+  const paymentsState = operationsReadState(authorizedBranch && validMonth && activeTab === "payroll" && canView("operations_payroll"), payments);
   const mutation = useMutation({
     mutationFn: async ({ url, body }: { url: string; body: unknown }) =>
       (await apiRequest("POST", url, body)).json(),
   });
   const reportReady = operationsPayrollReportReady({
     authorizedBranch, month, fetching: payroll.isFetching, error: payroll.isError, hasData: !!payroll.data,
-  }) && canView("operations_payroll");
+  }) && payrollState === "ready" && canView("operations_payroll");
   const commandError = (token: number, error: unknown) => {
     if (commands.isCurrent(token)) setMessage(error instanceof Error ? error.message : "تعذر إكمال العملية");
   };
   const transfer = async () => {
-    if (!authorizedBranch || !branch || employees.isFetching || employees.isError || !canCreate("operations_employee_transfer") || mutation.isPending) return;
+    if (!authorizedBranch || !branch || !employeesReady || !canCreate("operations_employee_transfer") || mutation.isPending) return;
     if (!employeeSelection || !destination || !reason.trim()) return setMessage("حدد الموظف والفرع الجديد وسبب النقل.");
     const token = commands.capture();
     setMessage("");
@@ -168,7 +186,7 @@ export function OperationsHrContent({ permissions }: {
     } catch (error) { commandError(token, error); }
   };
   const sendJoining = async (item: Joining) => {
-    if (!authorizedBranch || !branch || !canCreate("operations_joining") || mutation.isPending || item.branchId !== branch.id || joining.isFetching || joining.isError) return;
+    if (!authorizedBranch || !branch || !canCreate("operations_joining") || mutation.isPending || item.branchId !== branch.id || joiningState !== "ready") return;
     const token = commands.capture();
     setMessage(""); setLink("");
     try {
@@ -192,7 +210,7 @@ export function OperationsHrContent({ permissions }: {
   };
   const confirmJoining = async () => {
     const item = joining.data?.find(row => row.notification?.id === confirmJoiningId);
-    if (!authorizedBranch || !branch || !canApprove("operations_joining") || mutation.isPending || !item || item.branchId !== branch.id || item.notification?.status !== "signed" || joining.isFetching || joining.isError) return;
+    if (!authorizedBranch || !branch || !canApprove("operations_joining") || mutation.isPending || !item || item.branchId !== branch.id || item.notification?.status !== "signed" || joiningState !== "ready") return;
     const token = commands.capture();
     setMessage("");
     try {
@@ -214,10 +232,10 @@ export function OperationsHrContent({ permissions }: {
     </header>
     {message && <p role="status" className="rounded-lg border border-border bg-muted px-4 py-3 text-sm">{message}</p>}
     {link && <div className="rounded-lg border border-border bg-card p-3 text-sm"><p>رابط المباشرة (يصلح للاستخدام خلال مدة الإشعار):</p><a dir="ltr" href={link} target="_blank" rel="noopener noreferrer" className="break-all text-primary underline">{link}</a></div>}
-    {branches.isError && <p role="alert">تعذر تحميل الفروع المصرّح بها. أعد المحاولة.</p>}
-    {branches.data?.length === 0 && <p className="rounded-lg border border-border p-5">ليس لديك فروع مصرّح بها لإدارة موظفي التشغيل.</p>}
-    {!branches.isPending && !branches.isError && !!branchSelection && !branch && <p role="alert" className="text-destructive">الفرع المطلوب غير متاح ضمن صلاحياتك. اختر فرعًا مسموحًا؛ لم نعرض بيانات فرع آخر.</p>}
-    {!branches.isError && !!branches.data?.length && <>
+    <OperationsQueryFeedback state={branchesState} loading="جار التحقق من نطاق الفروع المصرّح به…" failure="تعذر تحميل الفروع المصرّح بها." error={branches.error} onRetry={() => branches.refetch()} />
+    {branchesState === "ready" && branches.data?.length === 0 && <p className="rounded-lg border border-border p-5">ليس لديك فروع مصرّح بها لإدارة موظفي التشغيل.</p>}
+    {branchesState === "ready" && !!branchSelection && !branch && <p role="alert" className="text-destructive">الفرع المطلوب غير متاح ضمن صلاحياتك. اختر فرعًا مسموحًا؛ لم نعرض بيانات فرع آخر.</p>}
+    {branchesState === "ready" && !!branches.data?.length && <>
       <label className="block max-w-sm text-sm font-semibold">الفرع
         <select value={branch?.id ?? ""} onChange={e => { setBranchSelection(e.target.value); setEmployeeSelection(""); setDestination(""); }} className="mt-2 min-h-11 w-full rounded-lg border border-input bg-background px-3">
           {!branch && <option value="">اختر فرعًا مسموحًا</option>}
@@ -231,10 +249,11 @@ export function OperationsHrContent({ permissions }: {
       </div>
       {activeTab === "employees" && <section className="rounded-xl border border-border bg-card p-4">
         <h2 className="text-lg font-bold">الموظفون في {branch?.name}</h2>
-        {employees.isError && <p role="alert">تعذر تحميل الموظفين.</p>}
-        <div className="mt-3 max-h-64 overflow-auto text-sm">{authorizedBranch && !employees.isError && employees.data?.map(e =>
+        <OperationsQueryFeedback state={operationsReadState(authorizedBranch, employees)} loading="جار تحميل موظفي الفرع المحدد…" failure="تعذر تحميل الموظفين." error={employees.error} onRetry={() => employees.refetch()} />
+        {!branch && <p className="mt-3 text-sm text-muted-foreground">اختر فرعًا مصرّحًا به لعرض الموظفين.</p>}
+        <div className="mt-3 max-h-64 overflow-auto text-sm">{employeesReady && employees.data?.map(e =>
           <div key={e.id} className="flex justify-between gap-4 border-b border-border py-2"><span>{e.employeeName} · {e.jobTitle}</span><span className="text-muted-foreground">{e.status}</span></div>
-        )}{authorizedBranch && !employees.isError && employees.data?.length === 0 && <p className="text-muted-foreground">لا يوجد موظفون في هذا الفرع.</p>}</div>
+        )}{employeesReady && employees.data?.length === 0 && <p className="text-muted-foreground">لا يوجد موظفون في هذا الفرع.</p>}</div>
       </section>}
       {activeTab === "payroll" && !canView("operations_payroll") && <p role="alert" className="rounded-xl border border-border p-4">لا تملك صلاحية عرض رواتب التشغيل. لم تُعرض قائمة الموظفين كبديل لتقرير الرواتب.</p>}
       {activeTab === "payroll" && canView("operations_payroll") && <section className="rounded-xl border border-border bg-card p-4">
@@ -245,12 +264,10 @@ export function OperationsHrContent({ permissions }: {
         </div>
         {!validMonth && <p role="alert" className="mt-3 text-sm text-destructive">اختر شهرًا صحيحًا بصيغة YYYY-MM قبل تحميل الرواتب أو اعتماد مراجعتها أو تصديرها.</p>}
         {!branch && validMonth && <p role="status" className="mt-3 text-sm">اختر فرعًا مصرّحًا به لعرض تقرير الرواتب.</p>}
-        {payroll.isPending && authorizedBranch && validMonth && <p role="status">جار تحميل رواتب الفرع والشهر المحددين…</p>}
-        {payroll.isError && authorizedBranch && validMonth && <p role="alert">تعذر تحميل تقرير الرواتب. <Button variant="outline" size="sm" onClick={() => payroll.refetch()}>إعادة المحاولة</Button></p>}
-        {!payroll.isError && authorizedBranch && validMonth && payroll.data && <><p className="mt-3 text-sm">عدد الموظفين: {payroll.data.totals.employeeCount} · الصافي: {payroll.data.totals.totalNet.toLocaleString("en-US")} · {payroll.data.isLocked ? "لقطة إغلاق محفوظة" : "معاينة حية قابلة للتغير"}</p>
-          <div className="mt-2 max-h-72 overflow-auto"><table className="w-full text-right text-sm"><thead><tr><th className="py-2">الموظف</th><th>الإجمالي</th><th>الصافي</th></tr></thead><tbody>{payroll.data.lines.map((line, i) =>
-            <tr key={`${line.branchEmployeeId ?? i}`} className="border-t border-border"><td className="py-2">{line.employeeName}</td><td>{Number(line.grossSalary ?? 0).toLocaleString("en-US")}</td><td>{Number(line.netSalary ?? 0).toLocaleString("en-US")}</td></tr>
-          )}</tbody></table></div>
+        <OperationsQueryFeedback state={payrollState} loading="جار تحميل رواتب الفرع والشهر المحددين…" failure="تعذر تحميل تقرير الرواتب." error={payroll.error} onRetry={() => payroll.refetch()} />
+        {reportReady && branch && payroll.data && <>
+          <OperationsQueryFeedback state={paymentsState} loading="جار تحميل حالة صرف رواتب الفرع والشهر المحددين…" failure="تعذر تحميل حالة الدفع؛ تقرير الرواتب ظاهر، لكن المصروف والمتبقي غير متاحين." error={payments.error} onRetry={() => payments.refetch()} />
+          <OperationsPayrollReportTable key={`${branch.id}:${month}`} report={payroll.data} branchId={branch.id} branchName={branch.name} month={month} payments={paymentsState === "ready" ? payments.data?.payments : undefined} />
           <p className="mt-2 text-xs text-muted-foreground">مراجعات مسجلة: {payroll.data.reviews.length} · لا تؤثر على إغلاق الرواتب أو صرفها.</p>
           <p className="mt-1 text-xs text-muted-foreground">اعتماد مراجعة التشغيل استشاري؛ لا يوقف شؤون الموظفين ولا يُعد اعتمادًا ماليًا.</p>
           {payroll.data.reviews.map(item => <p key={item.id} className="mt-2 rounded-lg bg-muted p-2 text-xs">
@@ -260,10 +277,9 @@ export function OperationsHrContent({ permissions }: {
       </section>}
       {activeTab === "employees" && canView("operations_joining") && <section className="rounded-xl border border-border bg-card p-4">
         <h2 className="text-lg font-bold">الموظفون الجدد وإشعارات المباشرة</h2><p className="text-xs text-muted-foreground">عروض العمل المقبولة في الفرع المختار: أرسل الرابط، ثم اعتمد المباشرة بعد توقيع الموظف لإشعار مدير شؤون الموظفين.</p>
-        {joining.isError && <p role="alert">تعذر تحميل إشعارات المباشرة.</p>}
-        {joining.isPending && authorizedBranch && <p role="status">جار تحميل عروض العمل المقبولة…</p>}
+        <OperationsQueryFeedback state={joiningState} loading="جار تحميل عروض العمل المقبولة…" failure="تعذر تحميل إشعارات المباشرة." error={joining.error} onRetry={() => joining.refetch()} />
         {!branch && !branches.isFetching && <p className="mt-3 text-sm text-muted-foreground">اختر فرعًا مصرّحًا به لعرض إشعارات المباشرة.</p>}
-        <div className="mt-3 space-y-2">{authorizedBranch && !joining.isError && joining.data?.filter(item => item.branchId === branch?.id).map(item =>
+        <div className="mt-3 space-y-2">{joiningState === "ready" && joining.data?.filter(item => item.branchId === branch?.id).map(item =>
           <div key={item.id} className="flex flex-wrap items-center gap-3 border-b border-border py-2 text-sm">
             <div className="min-w-0 flex-1"><span>{item.candidateName} · {item.position}</span>
               <p className="mt-1 text-xs text-muted-foreground">{item.notification ? joiningStatus[item.notification.status] || item.notification.status : "عرض مقبول؛ لم يُنشأ إشعار مباشرة"}</p>
@@ -281,25 +297,26 @@ export function OperationsHrContent({ permissions }: {
             </form>}
           </div>
         )}</div>
-        {authorizedBranch && !joining.isPending && !joining.isError && !joining.data?.some(item => item.branchId === branch?.id) && <p className="mt-3 text-sm text-muted-foreground">لا توجد عروض مقبولة بانتظار استكمال المباشرة في الفرع المختار.</p>}
+        {joiningState === "ready" && !joining.data?.some(item => item.branchId === branch?.id) && <p className="mt-3 text-sm text-muted-foreground">لا توجد عروض مقبولة بانتظار استكمال المباشرة في الفرع المختار.</p>}
       </section>}
       {activeTab === "employees" && canView("operations_employee_transfer") && <section className="rounded-xl border border-border bg-card p-4">
         <h2 className="text-lg font-bold">نقل الموظفين وسجل التحويلات</h2>
         {canCreate("operations_employee_transfer") && <div className="mt-3 grid gap-2 sm:grid-cols-2">
-          <select aria-label="الموظف المراد نقله" value={employeeSelection} onChange={e => setEmployeeSelection(e.target.value)} className="min-h-11 rounded-lg border border-input bg-background px-2"><option value="">اختر موظفاً في {branch?.name}</option>{authorizedBranch && !employees.isError && employees.data?.filter(e => e.status === "active").map(e => <option key={e.id} value={e.id}>{e.employeeName}</option>)}</select>
+          <select aria-label="الموظف المراد نقله" disabled={!employeesReady} value={employeeSelection} onChange={e => setEmployeeSelection(e.target.value)} className="min-h-11 rounded-lg border border-input bg-background px-2"><option value="">اختر موظفاً في {branch?.name}</option>{employeesReady && employees.data?.filter(e => e.status === "active").map(e => <option key={e.id} value={e.id}>{e.employeeName}</option>)}</select>
           <select aria-label="فرع الوجهة" value={destination} onChange={e => setDestination(e.target.value)} className="min-h-11 rounded-lg border border-input bg-background px-2"><option value="">اختر فرع الوجهة</option>{branches.data.filter(b => b.id !== branch?.id).map(b => <option key={b.id} value={b.id}>{b.name}</option>)}</select>
           <Input value={reason} onChange={e => setReason(e.target.value)} maxLength={500} placeholder="سبب النقل" aria-label="سبب النقل" />
-          <Button disabled={!authorizedBranch || employees.isFetching || employees.isError || mutation.isPending || !employeeSelection || !destination || !reason.trim()} onClick={transfer}>تنفيذ النقل وتسجيله</Button>
+          <Button disabled={!employeesReady || mutation.isPending || !employeeSelection || !destination || !reason.trim()} onClick={transfer}>تنفيذ النقل وتسجيله</Button>
         </div>}
-        {transfers.isError && <p role="alert">تعذر تحميل سجل النقل.</p>}
-        <div className="mt-3 max-h-80 space-y-2 overflow-auto text-sm">{authorizedBranch && !transfers.isError && transfers.data?.filter(t => t.sourceBranchId === branch?.id || t.destinationBranchId === branch?.id).map(t => <div key={t.id} className="border-b border-border py-2">
+        <OperationsQueryFeedback state={transfersState} loading="جار تحميل سجل النقل…" failure="تعذر تحميل سجل النقل." error={transfers.error} onRetry={() => transfers.refetch()} />
+        {!branch && <p className="mt-3 text-sm text-muted-foreground">اختر فرعًا مصرّحًا به لعرض سجل النقل.</p>}
+        <div className="mt-3 max-h-80 space-y-2 overflow-auto text-sm">{transfersState === "ready" && transfers.data?.filter(t => t.sourceBranchId === branch?.id || t.destinationBranchId === branch?.id).map(t => <div key={t.id} className="border-b border-border py-2">
           <strong>{t.employeeName}</strong> · من {branchName(t.sourceBranchId)} إلى {branchName(t.destinationBranchId)} · {t.reason}
           <p className="text-xs text-muted-foreground">طلب بواسطة: {t.requestedByName || t.requestedBy} · {dateTime(t.requestedAt)} · {t.status === "completed" ? "تم النقل" : t.status}</p>
           <ol className="mt-2 space-y-1 border-r-2 border-primary/20 pr-3">{t.history.map(event => <li key={event.id} className="text-xs">
             <strong>{event.eventType === "completed" ? "تنفيذ النقل" : event.eventType === "requested" ? "طلب النقل" : event.eventType}</strong> · {event.performedByName || event.performedBy || "المنفّذ غير مسجل"} · {dateTime(event.eventTimestamp)}
             {event.details?.reason && <p className="text-muted-foreground">السبب المسجل: {event.details.reason}</p>}
           </li>)}</ol>
-        </div>)}{authorizedBranch && !transfers.isError && transfers.data?.length === 0 && <p>لا يوجد سجل نقل ضمن الفروع المصرّح بها.</p>}</div>
+        </div>)}{transfersState === "ready" && !transfers.data?.some(t => t.sourceBranchId === branch?.id || t.destinationBranchId === branch?.id) && <p>لا يوجد سجل نقل في الفرع المختار.</p>}</div>
       </section>}
     </>}
   </main>;

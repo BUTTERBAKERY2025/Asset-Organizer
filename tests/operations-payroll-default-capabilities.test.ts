@@ -15,6 +15,7 @@ vi.mock("../server/shareholder-security", () => ({
 
 import { canAccessBranch, requirePermission } from "../server/auth";
 import { operationsPayrollCsv } from "../server/operations-hr-routes";
+import { payrollReadError, readPayrollSource } from "../server/operations-payroll-report";
 
 // Run the actual scope function and registered route handlers without booting
 // unrelated services in routes.ts. Persistence is mocked; grants and scope are not.
@@ -54,7 +55,7 @@ const scope = evaluate(expressionFor("operationsPayrollScope"), {
   canAccessBranch,
   isValidMonth: (month: unknown) => typeof month === "string" && /^\d{4}-(0[1-9]|1[0-2])$/.test(month),
 });
-const report = { lines: [{ employeeName: "Scoped employee", netSalary: 1000 }], totalNet: 1000, isLocked: true };
+const report = { lines: [{ employeeName: "Scoped employee", netSalary: 1000 }], totalNet: 1000, isLocked: true, enrichmentFailures: [] };
 const preview = vi.fn(async () => report);
 const saved: Record<string, unknown>[] = [];
 const db = {
@@ -75,6 +76,8 @@ const dependencies = {
   eq: (...args: unknown[]) => args,
   and: (...args: unknown[]) => args,
   operationsPayrollCsv,
+  payrollReadError,
+  readPayrollSource,
 };
 const cases = [
   { path: "/api/operations-hr/payroll", action: "view", method: "GET" },

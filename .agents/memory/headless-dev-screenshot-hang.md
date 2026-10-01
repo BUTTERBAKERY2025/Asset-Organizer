@@ -1,12 +1,12 @@
 ---
 name: Headless dev screenshots hang in Suspense
-description: Authenticated in-app screenshots via headless Chromium against the Vite dev server never leave the page-level Suspense skeleton; use a static harness instead.
+description: Protected routes can strand React.lazy despite healthy APIs; do not substitute fixture screenshots for authenticated verification.
 ---
-Rule: do not try to screenshot authenticated pages of this app with puppeteer/headless Chromium against the dev server. Every authenticated route (home, branch-operations) stays on App's `DelayedFallback` skeleton forever, then the 20s stuck-page watchdog reloads and shows "تعذّر تحميل الصفحة".
+Treat a protected-page skeleton/watchdog as a real unresolved failure, not an inherent headless-browser limitation.
 
-**Why (observed 2026-09-23):** all lazy page/layout imports resolve within ~2s, no console/page errors, no pending requests, i18n initialized, React Query queries built but never fetched (tree never commits). The final suspension is a non-lazy thenable inside the page children; root cause not found after ~2h. Also: the login endpoint rate-limits to HTTP 429 after a few attempts (restarting the workflow resets it), and the Screenshot tool cannot authenticate (login page only).
+**Why (updated 2026-10-01):** An authenticated real-login test proved the suspended fiber was the route's React.lazy payload, not the permission guard or a non-lazy hook. Direct imports and APIs succeeded; clearing service-worker/HTTP caches did not fix it. Bounded loader retries alone also failed. Eagerly loading the focused operations HR route preserved its authorization guard and allowed the actual report and attendance drawer to mount. The deeper generic lazy-import cause remains unproven.
 
-**How to apply:** for visual verification of a protected page, mount the REAL components: a throwaway `client/src/__harness.tsx` (createRoot + sample props, imports `./index.css`) loaded from a throwaway `client/public/__harness.html` via `<script type=module src="/src/__harness.tsx">`. The static HTML must include the React refresh preamble (`import RefreshRuntime from "/@react-refresh"; injectIntoGlobalHook(window); window.$RefreshReg$=()=>{}; window.$RefreshSig$=()=>t=>t; window.__vite_plugin_react_preamble_installed__=true`) and `/@vite/client`, or the page renders blank. Screenshot with the Screenshot tool, then delete both files. Container-query layouts can be checked at any width by fixing the shell's width; viewport-based `sm:` variants cannot.
+**How to apply:** Preserve eager loading for this route unless authenticated mounting is verified after changing it. For another blocked route, capture the actual suspended fiber and executed module rather than assuming healthy APIs imply a working page. Fixture harnesses remain useful for isolated visual checks only; never present them as proof of authenticated navigation. The screenshot tool alone sees login, and repeated local logins are rate-limited.
 
 Full real-page mounting can also work outside App when isolated fixture responses cover its auth/permission/query providers. This is still UI verification, not authenticated end-to-end proof.
 

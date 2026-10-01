@@ -20,3 +20,9 @@ Scoped payroll review/export, joining-link creation and signed-joining approval,
 **Why:** The user explicitly authorized these capabilities after screenshots showed the role could open the center but was denied its required workflows. Their requested authority is over all employees and accepted-offer recruits in explicitly permitted branches, not company-wide HR administration.
 
 **How to apply:** Keep existing branch grants unchanged (zero grants means zero branches), exclude HQ, and preserve HR's final financial and employee-conversion authority. Joining approval must notify authorized HR management and link to the exact record; a missing recipient must be explicit, not a silently lost notification.
+
+Operations payroll must expose the same substantive detailed report as HR salary closing, including attendance and check-in/check-out evidence, not a reduced gross/net summary.
+
+**Why:** The user rejected the summary as incomplete and explicitly requested the actual HR salary report within the manager's granted scope.
+
+**How to apply:** Reuse the authoritative calculation and closed snapshots, retain detailed financial and attendance visibility, but never infer HR editing or financial closing authority from report access.
