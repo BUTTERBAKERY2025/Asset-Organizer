@@ -200,6 +200,13 @@ export function kitchenDetailAccess(order: Pick<KitchenOrder, "allowedActions" |
     production: permissions.production && permissions.kitchenBranch,
   };
 }
+/** A source-supplier deep link may select either authorized endpoint. Branch
+ * managers remain destination-side readers; actions still use server flags. */
+export function kitchenDetailMatchesBranch(order: Pick<KitchenOrder, "requestBranchId" | "centralKitchenId">,
+  branchId: string | null, role?: string) {
+  return !!branchId && (order.requestBranchId === branchId
+    || (role !== "branch_manager" && order.centralKitchenId === branchId));
+}
 export const KITCHEN_DEFAULT_SORT = "newest" as const;
 export function kitchenOrderPreview(order: Pick<KitchenOrder, "items" | "requestBranchName" | "requestBranchId" | "centralKitchenName" | "centralKitchenId" | "status">) {
   return {
@@ -228,8 +235,9 @@ export default function CentralKitchenOrdersPage() {
   const { branches, userBranchId, canSelectBranch, isLoading: branchesLoading } = useBranches();
   const navigationBranch = useBranchNavigation(branches, branchesLoading, userBranchId);
   const linkedBranchId = new URLSearchParams(window.location.search).get("branchId");
-  const invalidLinkedBranch = user?.role === "branch_manager" && linkedBranchId !== null
-    && !branches.some(branch => branch.id === linkedBranchId);
+  const invalidLinkedBranch = linkedBranchId !== null
+    && (new URLSearchParams(window.location.search).getAll("branchId").length !== 1
+      || !branches.some(branch => branch.id === linkedBranchId));
   const { canView, canCreate, canEdit, canApprove, canExport, hasPermission } = usePermissions();
   const operationsView = isKitchenOperationsPresentation(user, canApprove("central_kitchen_orders"));
   const [desktop, setDesktop] = useState(() => typeof window !== "undefined" && window.matchMedia("(min-width: 1536px)").matches);
@@ -653,7 +661,7 @@ export default function CentralKitchenOrdersPage() {
   // A failed refresh can leave the last successful result in React Query. Never render it after denial.
   const detailDenied = invalidLinkedBranch || !canView("central_kitchen_orders") || detailQuery.isError
     || !!(navigationBranch.hasBranchParam && detailQuery.data
-      && detailQuery.data.requestBranchId !== navigationBranch.branchId);
+      && !kitchenDetailMatchesBranch(detailQuery.data, linkedBranchId, user?.role));
   const detailError = !canView("central_kitchen_orders") ? new Error("403: صلاحية عرض الطلب غير متاحة") : detailQuery.error;
   const selectedDetail = visibleKitchenDetail(detailQuery.data, detailId, detailDenied);
   const performDetailAction = (order: KitchenOrder, action: "approve" | "prepare" | "dispatch" | "receive" | "resolve-discrepancy", details?: Record<string, unknown>) => {

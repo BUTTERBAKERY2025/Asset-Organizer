@@ -108,8 +108,19 @@ describe("page filters and factual qualified counters", () => {
     expect(supplyPageFacts(records, "another-user", asOf).awaitingActor).toBe(0);
     expect(supplyPageFacts(records, undefined, asOf).awaitingActor).toBe(0);
     expect(supplyPageFacts(records, "me", "invalid").overdue).toBe(0);
+    expect(supplyPageFacts([{ ...delivery, status: "receipt_approved", dueAt: "2026-01-01T00:00:00Z" }], "me", asOf).overdue).toBe(0);
     expect(supplyPriorityLabel(kitchen)).toContain("غير مسجلة");
     expect(supplyPriorityLabel(transfer)).toBe("عاجلة");
+  });
+  it("does not present failed coverage or unknown urgency as confirmed zero", () => {
+    const missing = renderToStaticMarkup(React.createElement(SupplyCounters, { records: [], actorId: "me", data: response, filtered: false }));
+    expect(missing).toContain("غير متاح");
+    expect(missing).not.toContain("<dd>0</dd>");
+    const unknown = renderToStaticMarkup(React.createElement(SupplyCounters, {
+      records: [{ ...kitchen, priorityCoverage: "unavailable" }], actorId: "me", data: response, filtered: false,
+    }));
+    expect(unknown).toContain("لا يُستنتج منها عدم وجود حالات عاجلة");
+    expect(supplyPriorityLabel({ ...kitchen, priorityCoverage: "unavailable" })).toContain("غير متاحة");
   });
   it("labels partial results, null totals and loaded/filtered page counts instead of mixing source summary metrics", () => {
     expect(supplyCoverageText(response)).toContain("تغطية غير مكتملة");
@@ -173,9 +184,9 @@ describe("canonical source action and source authority", () => {
   });
   it("accepts only authorized canonical production return intent and never uses a workflow stage as identity", () => {
     expect(supplySelectionIntent("?workspace=production&supplyRecord=kitchen_order:7&supplyBranchId=a", ["a", "b"]))
-      .toEqual({ source: "kitchen", branchId: "a", record: "kitchen_order:7" });
+      .toEqual({ source: "kitchen", branchId: "a", record: "kitchen_order:7", offset: 0, valid: true });
     expect(supplySelectionIntent("?workspace=production&supplyRecord=delivery_assignment:35&supplyBranchId=a", ["a"]))
-      .toEqual({ source: "delivery", branchId: "a", record: "delivery_assignment:35" });
+      .toEqual({ source: "delivery", branchId: "a", record: "delivery_assignment:35", offset: 0, valid: true });
     for (const search of [
       "?workspace=production&supplyRecord=kitchen_order:7:approved&supplyBranchId=a",
       "?workspace=production&supplyRecord=kitchen_order:0&supplyBranchId=a",
@@ -207,6 +218,49 @@ describe("canonical source action and source authority", () => {
 });
 
 describe("production workspace presentation and responsive bounds", () => {
+  it("loads the original later page and filter population after source Return instead of narrowing to the clicked branch", () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const pageData = { ...response, scope: { ...response.scope, offset: 120 } };
+    client.setQueryData(["/api/operations-center/supply", "me", "a,b", "all", 120, 30], pageData);
+    vi.stubGlobal("window", { location: {
+      search: "?branchIds=a,b&workspace=production&supplyRecord=transfer:7&supplyBranchId=a&supplySource=all&supplyFilterBranchId=&supplyOffset=120",
+      origin: "https://bakery.example",
+    } });
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    try {
+      const html = renderToStaticMarkup(React.createElement(QueryClientProvider, { client },
+        React.createElement(OperationsSupplyWorkspace, { branches, actorId: "me", open: vi.fn() })));
+      expect(html).toContain("صفحة 5");
+      expect(html).toContain("تحويل دقيق");
+      expect(html).toContain('value="all" selected=""');
+      expect(html).toContain('data-detail="true"');
+      expect(fetchSpy).not.toHaveBeenCalled();
+    } finally {
+      fetchSpy.mockRestore(); vi.unstubAllGlobals(); client.clear();
+    }
+  });
+  it("blocks malformed or revoked page-return intent without exposing a cached all-branch list", () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    client.setQueryData(["/api/operations-center/supply", "me", "a,b", "all", 0, 30], response);
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    try {
+      for (const search of [
+        "?workspace=production&supplyRecord=transfer:7&supplyBranchId=a&supplySource=all&supplyFilterBranchId=&supplyOffset=-30",
+        "?workspace=production&supplyRecord=transfer:7&supplyBranchId=revoked&supplySource=all&supplyFilterBranchId=&supplyOffset=120",
+        "?workspace=production&supplyRecord=transfer:7&supplyBranchId=a&supplySource=all&supplyFilterBranchId=&supplyOffset=120&supplyOffset=120",
+      ]) {
+        vi.stubGlobal("window", { location: { search, origin: "https://bakery.example" } });
+        const html = renderToStaticMarkup(React.createElement(QueryClientProvider, { client },
+          React.createElement(OperationsSupplyWorkspace, { branches, actorId: "me", open: vi.fn() })));
+        expect(html).toContain("لم يُوسّع النطاق");
+        expect(html).not.toContain("تحويل دقيق");
+        expect(html).not.toContain("طلب خبز");
+        expect(fetchSpy).not.toHaveBeenCalled();
+      }
+    } finally {
+      fetchSpy.mockRestore(); vi.unstubAllGlobals(); client.clear();
+    }
+  });
   it("collapses source summaries outside cases and distinguishes accessible zero from unavailable null", () => {
     const html = renderToStaticMarkup(React.createElement(SupplySummaries, { data: response }));
     expect(html).toContain("<details");
@@ -235,7 +289,7 @@ describe("production workspace presentation and responsive bounds", () => {
     expect(html).toContain("التالي:");
     expect(html).toContain("#7");
     expect(html).toContain("العودة للحالات والمرشحات");
-    expect(html).toContain('aria-label="صفحات حالات الإنتاج والتوريد"');
+    expect(html).toContain('aria-label="صفحات حالات التوريد والنقل"');
     expect(html).toContain("اختصار ثانوي · المشتريات");
     expect(html).toContain("ليس حالة متابعة");
     expect(html).not.toContain("مشتريات #");

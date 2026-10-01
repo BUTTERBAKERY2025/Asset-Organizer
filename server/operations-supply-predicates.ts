@@ -7,7 +7,7 @@ export type SupplyActor = {
 export type SupplyGrants = {
   kitchenView: boolean; kitchenEdit: boolean; kitchenApprove: boolean;
   transferView: boolean; transferEdit: boolean; warehouseView: boolean; warehouseEdit: boolean;
-  productionView: boolean; productionEdit: boolean; deliveryView: boolean; deliveryApprove: boolean;
+  productionView: boolean; productionEdit: boolean; deliveryView: boolean; deliveryEdit: boolean; deliveryApprove: boolean;
   returnKinds: string[];
 };
 export type SupplySql = { from: string; where: string; select: string; order: string; values: unknown[] };
@@ -42,9 +42,9 @@ export function operationsSupplySql(source: OperationsSupplySource, selected: st
   const allowedSide = (b: string) => `($2::varchar[] IS NULL OR ${b}=ANY($2::varchar[]))`;
   if (source === "kitchen") {
     return {
-      values, from: "central_kitchen_orders k", order: "k.id DESC",
+      values, from: "central_kitchen_orders k LEFT JOIN central_kitchen_runtime kr ON kr.kitchen_id=k.central_kitchen_id", order: "k.id DESC",
       select: `k.id::text,k.status,k.central_kitchen_id AS source_branch_id,k.request_branch_id AS destination_branch_id,
-        k.inventory_mode,k.needed_date::text,k.needed_time,k.discrepancy_status`,
+        k.inventory_mode,k.needed_date::text,k.needed_time,k.discrepancy_status,kr.mode AS runtime_mode`,
       where: `${kitchenSupplyActiveSql} AND ${grants.kitchenView ? "true" : "false"} AND ${
         actor.role === "branch_manager"
           ? `k.request_branch_id=ANY($1::varchar[]) AND k.request_branch_id=ANY($2::varchar[])`
@@ -64,20 +64,27 @@ export function operationsSupplySql(source: OperationsSupplySource, selected: st
   }
   if (source === "reverse") {
     values.push(grants.returnKinds);
+    // Warehouse-to-warehouse movements have no branch endpoints. Only the
+    // explicitly selected main_warehouse DESK, never an inferred movement
+    // branch, can include them, and only for the source's global managers.
+    const warehouseDesk = globalWarehouse(actor) && selected.includes("main_warehouse");
+    const warehouseMovement = warehouseDesk ? "r.kind='warehouse_transfer'" : "false";
     // Null destination is main warehouse only for material_return, never every warehouse null.
     const destination = `CASE WHEN r.kind='material_return' AND r.destination_branch_id IS NULL
       AND r.destination_warehouse_id IS NULL THEN 'main_warehouse' ELSE r.destination_branch_id END`;
     const visibility = actor.role === "branch_manager"
       ? "r.source_branch_id=ANY($1::varchar[]) AND r.source_branch_id=ANY($2::varchar[])"
-      : `${selectedSide("r.source_branch_id", destination)} AND (${allowedSide("r.source_branch_id")}
-        OR ${allowedSide("r.destination_branch_id")} OR ${supplyMainWarehouseAuthority(actor) ? "r.kind='material_return'" : "false"})`;
+      : `(${selectedSide("r.source_branch_id", destination)} AND (${allowedSide("r.source_branch_id")}
+        OR ${allowedSide("r.destination_branch_id")} OR ${supplyMainWarehouseAuthority(actor) ? "r.kind='material_return'" : "false"}))`;
+    const scopedVisibility = actor.role === "branch_manager" ? visibility : `(${visibility} OR ${warehouseMovement})`;
     return { values, from: "reverse_movements r", order: "r.id DESC",
       select: `r.id::text,r.status,r.kind,r.source_branch_id,r.destination_branch_id,
         r.source_warehouse_id,r.destination_warehouse_id,r.damaged_quantity,r.written_off_quantity`,
-      where: `${reverseSupplyActiveSql} AND r.kind=ANY($3::text[]) AND (${visibility})
+      where: `${reverseSupplyActiveSql} AND r.kind=ANY($3::text[]) AND (${scopedVisibility})
         AND (${globalWarehouse(actor) ? "true" : "r.kind<>'warehouse_transfer'"})` };
   }
   const from = `(SELECT a.id,a.status,a.source_type,a.source_id,a.driver_id,a.scheduled_at,a.transport_mode,
+      a.handover_recorded_at,a.receipt_approved_by,a.exception_reason,
       a.proof_at IS NOT NULL AND a.signature_data IS NOT NULL AS proof_present,
       (SELECT count(DISTINCT ca.kind)=2 FROM delivery_carrier_attachments ca
         WHERE ca.assignment_id=a.id AND ca.kind IN ('shipment_photo','carrier_receipt')) AS evidence_ready,
@@ -130,6 +137,12 @@ export function operationsSupplySql(source: OperationsSupplySource, selected: st
   return { values, from, order: "d.id DESC",
     select: `d.id::text,d.status,d.source_type,d.source_id::text,d.source_branch_id,d.destination_branch_id,
       d.source_warehouse_id,d.destination_warehouse_id,d.kind,d.driver_id,d.scheduled_at,d.inventory_mode,
-      d.source_status,d.received_by,d.proof_present,d.evidence_ready,d.transport_mode,${receipt} AS can_receive`,
-    where: `d.source_status IS NOT NULL AND ${selectedSide("d.source_branch_id", "d.destination_branch_id")} AND (${manager} OR ${receipt})` };
+      d.source_status,d.received_by,d.proof_present,d.evidence_ready,d.transport_mode,
+      d.handover_recorded_at,d.receipt_approved_by,d.exception_reason,
+      ${receipt} AS can_receive,
+      ((${manager}) AND ${grants.deliveryEdit} AND ${moduleEdit} AND ${actor.role !== "branch_manager"}) AS can_manage`,
+    where: `d.source_status IS NOT NULL AND (${selectedSide("d.source_branch_id", "d.destination_branch_id")}
+      OR (d.source_type='reverse_movement' AND d.kind='warehouse_transfer'
+        AND ${globalWarehouse(actor) && selected.includes("main_warehouse")}))
+      AND (${manager} OR ${receipt})` };
 }

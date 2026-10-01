@@ -18,7 +18,7 @@ const fmt = (value: number) => new Intl.NumberFormat("en-US").format(value);
 const domains = [
   { id: "branches", label: "الفروع والتشغيل اليومي", hint: "حالة الفروع والإغلاقات", icon: MapPinned, types: ["daily_closure", "cashier_journal", "branch_complaint"], modules: ["daily_closures", "cashier_journal", "branch_complaints"] },
   { id: "people", label: "الموظفون", hint: "حالات العمل والخطوة التالية", icon: Users, types: ["attendance_record", "leave", "advance", "joining_offer", "joining_notification"], modules: ["attendance", "hr_leaves", "hr_advances", "operations_hr", "operations_joining"] },
-  { id: "production", label: "الإنتاج والتوريد", hint: "حالات التوريد والخطوة التالية", icon: Factory, types: ["kitchen_order", "transfer", "reverse_movement", "delivery_assignment"], modules: ["central_kitchen_orders", "warehouse", "branch_supply", "delivery_tasks", "production"] },
+  { id: "production", label: "التوريد والنقل والمرتجعات", hint: "حالات التوريد والخطوة التالية", icon: Factory, types: ["kitchen_order", "transfer", "reverse_movement", "delivery_assignment"], modules: ["central_kitchen_orders", "warehouse", "branch_supply", "delivery_tasks", "production"] },
   { id: "quality", label: "الجودة والصيانة", hint: "الفحوص والبلاغات", icon: Wrench, types: ["quality_check", "maintenance"], modules: ["quality_control", "maintenance"] },
   { id: "sales", label: "المبيعات والأداء", hint: "المبيعات ويوميات الكاشير", icon: ChartNoAxesCombined, types: ["cashier_journal", "daily_closure"], modules: ["sales_analytics", "cashier_journal", "daily_closures"] },
 ] as const;

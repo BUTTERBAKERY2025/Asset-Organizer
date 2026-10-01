@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import ts from "typescript";
-import { attachCenterContext, centerNoticeDestination, monthlyReturnIntent, monthlySourceIntent, navigateCenterSourceWithHistory, operationsCenterReturnHref, preserveMonthlyAllReturn, purgeOperationsCenterQueries, refreshOperationsCenterQueries, salaryBranchIntent, withMonthlyReturn } from "../client/src/lib/operations-center-navigation";
+import { attachCenterContext, centerNoticeDestination, monthlyReturnIntent, monthlySourceIntent, navigateCenterSourceWithHistory, operationsCenterReturnHref, preserveMonthlyAllReturn, purgeOperationsCenterQueries, refreshOperationsCenterQueries, salaryBranchIntent, supplyReturnIntent, supplySourceReturnIntent, withMonthlyReturn, withSupplyPageReturn } from "../client/src/lib/operations-center-navigation";
 import { createOperationsHrCommandGuard, operationsHrSelectionHref } from "../client/src/lib/operations-hr-state";
 
 describe("operations monthly sender/receiver navigation contract", () => {
@@ -212,6 +212,115 @@ describe("actual center monthly source branch revalidation", () => {
       await harness.go(base, "two");
       expect(harness.navigate).not.toHaveBeenCalled();
     }
+  });
+});
+
+describe("supply pagination and exact source return", () => {
+  const origin = "https://bakery.test";
+  const base = "/transfer-requests?branchId=branch&transferId=42&centerWorkspace=production&centerSupplyRecord=transfer:42&centerSupplyBranchId=branch";
+  const allowed = ["branch", "kitchen"];
+  const sourceFor = (offset = 120, source: "all" | "transfers" = "all", branchId = "") => {
+    const sourceUrl = new URL(withSupplyPageReturn(base, { offset, source, branchId }, origin), origin);
+    attachCenterContext(sourceUrl, "branch", allowed, 30);
+    return sourceUrl;
+  };
+  it.each([0, 30, 120])("preserves offset %i with the original all-source, all-selected-branches filters on Return and Browser Back", offset => {
+    const source = sourceFor(offset);
+    const returnHref = operationsCenterReturnHref(source.search, allowed, source.pathname);
+    expect(supplyReturnIntent(new URL(returnHref, origin).search, allowed)).toEqual({
+      source: "all", branchId: "", record: "transfer:42", offset, valid: true,
+    });
+    const history = ["/operations-center?branchIds=branch,kitchen&workspace=production"];
+    navigateCenterSourceWithHistory(source, allowed, (href, options) => {
+      if (options?.replace) history[history.length - 1] = href;
+      else history.push(href);
+    });
+    expect(history[0]).toBe(returnHref);
+    expect(history[1]).toBe(`${source.pathname}${source.search}${source.hash}`);
+    expect(new URL(history[0], origin).searchParams.get("branchIds")).toBe("branch,kitchen");
+  });
+  it("preserves an explicitly selected source and branch instead of inventing a page in another population", () => {
+    const source = sourceFor(60, "transfers", "branch");
+    const back = new URL(operationsCenterReturnHref(source.search, allowed, source.pathname), origin);
+    expect(supplyReturnIntent(back.search, allowed)).toEqual({
+      source: "transfers", branchId: "branch", record: "transfer:42", offset: 60, valid: true,
+    });
+    expect(() => withSupplyPageReturn(base, { source: "kitchen", branchId: "", offset: 60 }, origin)).toThrow();
+    expect(() => withSupplyPageReturn(base, { source: "all", branchId: "kitchen", offset: 60 }, origin)).toThrow();
+    expect(() => withSupplyPageReturn("https://attacker.test" + base, { source: "all", branchId: "", offset: 60 }, origin)).toThrow();
+  });
+  it("retains exact transferId after consumption for validated center links, including embedded delivery selection", () => {
+    const page = readFileSync("client/src/pages/transfer-requests.tsx", "utf8");
+    const begin = page.indexOf("const consumeIntent = () => {");
+    const end = page.indexOf("const showUnavailable", begin);
+    const body = ts.transpileModule(page.slice(begin, end), { compilerOptions: { module: ts.ModuleKind.None } }).outputText;
+    const consume = (source: URL) => {
+      const replaceState = vi.fn();
+      const window = { location: { search: source.search, pathname: source.pathname, hash: source.hash }, history: { state: {}, replaceState } };
+      new Function("window", "branches", "supplySourceReturnIntent", `${body}; consumeIntent();`)(window, allowed.map(id => ({ id })), supplySourceReturnIntent);
+      return new URL(replaceState.mock.calls[0][2], origin);
+    };
+    const source = sourceFor();
+    expect(consume(source).searchParams.get("transferId")).toBe("42");
+    source.searchParams.set("centerSupplyRecord", "delivery_assignment:7");
+    source.searchParams.set("centerSupplySource", "delivery");
+    source.searchParams.set("deliveryId", "7");
+    expect(consume(source).searchParams.get("transferId")).toBe("42");
+    const ordinary = new URL("/transfer-requests?branchId=branch&transferId=42", origin);
+    expect(consume(ordinary).searchParams.has("transferId")).toBe(false);
+    source.searchParams.set("centerSupplyBranchId", "kitchen");
+    expect(consume(source).searchParams.has("transferId")).toBe(false);
+  });
+  it.each(["-30", "1", "30.5", "030", "1e3", "9007199254740992", ""])("fails closed for malformed source offset %j", raw => {
+    const source = sourceFor();
+    source.searchParams.set("centerSupplyOffset", raw);
+    expect(supplySourceReturnIntent(source.search, allowed, source.pathname)).toBeNull();
+    const navigate = vi.fn();
+    navigateCenterSourceWithHistory(source, allowed, navigate);
+    expect(navigate).not.toHaveBeenCalled();
+    expect(supplyReturnIntent(new URL(operationsCenterReturnHref(source.search, allowed, source.pathname), origin).search, allowed).valid).toBe(false);
+    expect(() => attachCenterContext(source, "branch", allowed)).toThrow();
+  });
+  it("rejects duplicated fields, changed source identity, mismatched filters, and revoked outer scope without expanding it", () => {
+    for (const mutate of [
+      (url: URL) => url.searchParams.append("centerSupplyOffset", "120"),
+      (url: URL) => url.searchParams.append("centerSupplyFilterBranchId", ""),
+      (url: URL) => url.searchParams.append("centerSupplySource", "all"),
+      (url: URL) => url.searchParams.append("centerWorkspace", "production"),
+      (url: URL) => url.searchParams.set("transferId", "43"),
+      (url: URL) => url.searchParams.set("centerSupplySource", "kitchen"),
+      (url: URL) => url.searchParams.set("centerSupplyFilterBranchId", "kitchen"),
+      (url: URL) => url.searchParams.delete("centerSupplyOffset"),
+      (url: URL) => url.searchParams.set("centerBranchIds", "branch,branch"),
+    ]) {
+      const source = sourceFor();
+      mutate(source);
+      expect(supplySourceReturnIntent(source.search, allowed, source.pathname)).toBeNull();
+      const navigate = vi.fn();
+      navigateCenterSourceWithHistory(source, allowed, navigate);
+      expect(navigate).not.toHaveBeenCalled();
+    }
+    const source = sourceFor();
+    const back = new URL(operationsCenterReturnHref(source.search, ["kitchen"], source.pathname), origin);
+    expect(back.searchParams.get("branchIds")).toBe("kitchen");
+    expect(supplyReturnIntent(back.search, ["kitchen"]).valid).toBe(false);
+    expect(back.searchParams.has("supplyOffset")).toBe(false);
+    const sameSourceRevokedScope = new URL(operationsCenterReturnHref(source.search, ["branch"], source.pathname), origin);
+    expect(supplyReturnIntent(sameSourceRevokedScope.search, ["branch"]).valid).toBe(false);
+  });
+  it("rejects duplicate or malformed center page fields before any scoped read; legacy links remain first-page intents", () => {
+    const baseReturn = "?branchIds=branch,kitchen&workspace=production&supplyRecord=transfer:42&supplyBranchId=branch&supplySource=all&supplyFilterBranchId=&supplyOffset=120";
+    expect(supplyReturnIntent(baseReturn, allowed).valid).toBe(true);
+    for (const invalid of [
+      baseReturn + "&supplyOffset=120", baseReturn + "&supplySource=all", baseReturn + "&supplyFilterBranchId=",
+      baseReturn + "&workspace=production", baseReturn + "&supplyRecord=transfer:42",
+      baseReturn.replace("supplyOffset=120", "supplyOffset=-30"),
+      baseReturn.replace("branchIds=branch,kitchen", "branchIds=kitchen"),
+      baseReturn.replace("transfer:42", "transfer:9007199254740992"),
+    ]) expect(supplyReturnIntent(invalid, allowed).valid).toBe(false);
+    expect(supplyReturnIntent("?workspace=production&supplyRecord=transfer:42&supplyBranchId=branch", allowed)).toEqual({
+      source: "transfers", branchId: "branch", record: "transfer:42", offset: 0, valid: true,
+    });
   });
 });
 

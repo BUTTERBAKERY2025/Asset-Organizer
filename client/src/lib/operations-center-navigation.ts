@@ -51,6 +51,71 @@ function supplySelectionMatchesSource(params: URLSearchParams, selection: NonNul
   return !!embeddedRoutes[path] && exactRecordParam(params, embeddedRoutes[path]);
 }
 
+const supplySources = ["all", "kitchen", "transfers", "reverse", "delivery"] as const;
+type SupplyPageIntent = { source: typeof supplySources[number]; branchId: string; offset: number };
+const supplyRecordSources: Record<string, SupplyPageIntent["source"]> = {
+  kitchen_order: "kitchen", transfer: "transfers", reverse_movement: "reverse", delivery_assignment: "delivery",
+};
+function supplyPageIntent(params: URLSearchParams, prefix: "supply" | "centerSupply", selectedBranch: string, recordType: string): SupplyPageIntent | null | undefined {
+  const keys = [`${prefix}Source`, `${prefix}FilterBranchId`, `${prefix}Offset`];
+  if (!keys.some(key => params.has(key))) return undefined; // Legacy links start at their source's first page.
+  if (keys.some(key => params.getAll(key).length !== 1)) return null;
+  const source = params.get(keys[0]) as SupplyPageIntent["source"];
+  const branchId = params.get(keys[1])!;
+  const rawOffset = params.get(keys[2])!;
+  const offset = Number(rawOffset);
+  if (!supplySources.includes(source) || (source !== "all" && source !== supplyRecordSources[recordType])
+    || (branchId !== "" && branchId !== selectedBranch) || !/^(0|[1-9]\d*)$/.test(rawOffset)
+    || !Number.isSafeInteger(offset) || offset < 0 || offset % 30 !== 0) return null;
+  return { source, branchId, offset };
+}
+
+/** Supply page position is navigation-only and is bound to the exact source,
+ * selected record and still-authorized outer scope. It never grants access. */
+export function supplySourceReturnIntent(search: string, allowedIds: readonly string[], sourcePath?: string) {
+  const params = new URLSearchParams(search);
+  const selection = supplyRecordIntent(exactParam(params, "centerSupplyRecord"));
+  const branchId = exactParam(params, "centerSupplyBranchId");
+  const scope = strictPeopleScope(params, "centerBranchIds", allowedIds);
+  if (exactParam(params, "centerWorkspace") !== "production" || !selection || !branchId || !scope
+    || !allowedIds.includes(branchId) || (scope.length > 0 && !scope.includes(branchId))
+    || exactParam(params, "branchId") !== branchId
+    || (params.has("from") && exactParam(params, "from") !== "operations-center")
+    || !supplySelectionMatchesSource(params, selection, sourcePath)) return null;
+  const page = supplyPageIntent(params, "centerSupply", branchId, selection.type);
+  return page === null ? null : { selection, branchId, scope, page };
+}
+
+export function supplyReturnIntent(search: string, allowedIds: readonly string[]) {
+  const params = new URLSearchParams(search);
+  const empty = { source: "all" as SupplyPageIntent["source"], branchId: "", record: null as string | null, offset: 0, valid: true };
+  const scope = strictPeopleScope(params, "branchIds", allowedIds);
+  const requested = ["supplyRecord", "supplyBranchId", "supplySource", "supplyFilterBranchId", "supplyOffset"].some(key => params.has(key));
+  if (!scope || params.getAll("workspace").length > 1) return { ...empty, valid: false };
+  if (!requested) return empty;
+  const selection = supplyRecordIntent(exactParam(params, "supplyRecord"));
+  const branchId = exactParam(params, "supplyBranchId");
+  if (exactParam(params, "workspace") !== "production" || !selection || !branchId || !allowedIds.includes(branchId)
+    || (scope.length > 0 && !scope.includes(branchId))) return { ...empty, valid: false };
+  const page = supplyPageIntent(params, "supply", branchId, selection.type);
+  if (page === null) return { ...empty, valid: false };
+  return { source: page?.source ?? supplyRecordSources[selection.type], branchId: page?.branchId ?? branchId,
+    record: selection.record, offset: page?.offset ?? 0, valid: true };
+}
+
+export function withSupplyPageReturn(href: string, page: SupplyPageIntent, origin: string) {
+  const source = new URL(href, origin);
+  const selection = supplyRecordIntent(exactParam(source.searchParams, "centerSupplyRecord"));
+  const branchId = exactParam(source.searchParams, "centerSupplyBranchId");
+  if (source.origin !== origin || !selection || !branchId || !supplySelectionMatchesSource(source.searchParams, selection, source.pathname))
+    throw new Error("Invalid supply source selection");
+  source.searchParams.set("centerSupplySource", page.source);
+  source.searchParams.set("centerSupplyFilterBranchId", page.branchId);
+  source.searchParams.set("centerSupplyOffset", String(page.offset));
+  if (!supplyPageIntent(source.searchParams, "centerSupply", branchId, selection.type)) throw new Error("Invalid supply page position");
+  return `${source.pathname}${source.search}${source.hash}`;
+}
+
 export function performanceDaysIntent(search: string, key = "performanceDays"): 7 | 30 | null {
   const values = new URLSearchParams(search).getAll(key);
   if (values.length !== 1) return null;
@@ -266,7 +331,8 @@ export function attachCenterContext(url: URL, branchId: string, scope: readonly 
       || url.searchParams.getAll("centerSupplyRecord").length !== 1 || !selection
       || url.searchParams.getAll("centerSupplyBranchId").length !== 1 || url.searchParams.get("centerSupplyBranchId") !== branchId
       || (scope.length > 0 && !scope.includes(branchId))
-      || !supplySelectionMatchesSource(url.searchParams, selection, url.pathname)) throw new Error("Invalid supply return selection");
+      || !supplySelectionMatchesSource(url.searchParams, selection, url.pathname)
+      || supplyPageIntent(url.searchParams, "centerSupply", branchId, selection.type) === null) throw new Error("Invalid supply return selection");
   }
   if (url.pathname === "/salary-closing") {
     const intent = salaryBranchIntent(url.search);
@@ -374,20 +440,18 @@ export function operationsCenterReturnHref(search: string, allowedIds: readonly 
     params.set("workspace", "analysis");
   } else if (input.get("centerWorkspace") === "production") {
     params.set("workspace", "production");
-    const selection = supplyRecordIntent(input.get("centerSupplyRecord"));
-    const selectedBranch = input.get("centerSupplyBranchId") || "";
-    const explicitReturnScope = !!input.get("centerBranchIds");
-    const rawScope = (input.get("centerBranchIds") || "").split(",");
-    const wellFormedScope = !explicitReturnScope || (rawScope.every(id => !!id && id !== "all")
-      && new Set(rawScope).size === rawScope.length);
-    if (input.getAll("centerWorkspace").length === 1 && input.getAll("centerSupplyRecord").length === 1 && selection
-      && input.getAll("centerSupplyBranchId").length === 1 && allowedIds.includes(selectedBranch)
-      && input.getAll("centerBranchIds").length <= 1 && wellFormedScope
-      && (!explicitReturnScope || ids.includes(selectedBranch))
-      && input.getAll("branchId").length === 1 && input.get("branchId") === selectedBranch
-      && supplySelectionMatchesSource(input, selection)) {
-      params.set("supplyRecord", selection.record);
-      params.set("supplyBranchId", selectedBranch);
+    const path = sourcePath ?? (typeof window !== "undefined" ? window.location.pathname : undefined);
+    const supply = supplySourceReturnIntent(search, allowedIds, path);
+    if (supply && validReturnScope) {
+      params.set("supplyRecord", supply.selection.record);
+      params.set("supplyBranchId", supply.branchId);
+      if (supply.page) {
+        params.set("supplySource", supply.page.source);
+        params.set("supplyFilterBranchId", supply.page.branchId);
+        params.set("supplyOffset", String(supply.page.offset));
+      }
+    } else if (["centerSupplySource", "centerSupplyFilterBranchId", "centerSupplyOffset"].some(key => input.has(key))) {
+      params.set("supplyBranchId", "__invalid_scope__");
     }
   }
   return `/operations-center${params.size ? `?${params}` : ""}`;
@@ -412,6 +476,9 @@ export function navigateCenterSourceWithHistory(
   const people = peopleSourceIntent(source, allowedIds);
   if (peopleRequested && (!people || restored.get("workspace") !== "people"
     || restored.get("peopleBranchId") !== people.branchId)) return;
+  const supplyRequested = ["centerSupplySource", "centerSupplyFilterBranchId", "centerSupplyOffset"]
+    .some(key => source.searchParams.has(key));
+  if (supplyRequested && !supplySourceReturnIntent(source.search, allowedIds, source.pathname)) return;
   if (people) {
     navigate(returnHref, { replace: true });
   } else if (monthly && restored.get("workspace") === "monthly"

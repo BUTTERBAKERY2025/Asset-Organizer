@@ -13,6 +13,8 @@ export type OperationsSupplyRecord = OperationsQueueItem & {
   inventoryMode: "real" | "shadow" | "unknown";
   deadlineLabel: string | null;
   priority: string | null;
+  /** No mapped source priority; null is not proof that there are zero urgent cases. */
+  priorityCoverage?: "complete" | "unavailable";
   /** Persisted underlying movement of a delivery assignment, not another movement count. */
   relatedSource?: { sourceType: string; sourceId: string };
   capabilityCoverage?: "complete" | "unavailable";
@@ -33,6 +35,8 @@ export type OperationsSupplyResponse = {
   summaries: OperationsSupplySummary[];
   coverage: {
     sources: Record<OperationsSupplySource, { state: SupplyCoverage; reason: string | null }>;
+    /** Urgency is not projected from source priorities, independent of pagination coverage. */
+    priorityCoverage?: "complete" | "unavailable";
     /** Pagination cardinality only. Never a KPI summing mixed movement and assignment sources. */
     total: number | null;
     nextOffset: number | null;

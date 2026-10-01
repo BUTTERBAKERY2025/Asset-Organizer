@@ -12,20 +12,23 @@ import {
   operationsSupplySql, supplyDestinationAuthority, supplyMainWarehouseAuthority, supplyTransferSourceAuthority,
   type SupplyActor, type SupplyGrants,
 } from "./operations-supply-predicates";
+import { deliveryTransitionAllowed } from "@shared/delivery";
 
 export type SupplyRow = {
   id: string; status: string; source_branch_id: string | null; destination_branch_id: string | null;
-  inventory_mode?: string | null; needed_date?: string | null; needed_time?: string | null; discrepancy_status?: string;
+  inventory_mode?: string | null; runtime_mode?: string | null;
+  needed_date?: string | null; needed_time?: string | null; discrepancy_status?: string;
   kind?: string; source_warehouse_id?: number | null; destination_warehouse_id?: number | null;
   damaged_quantity?: number | string; written_off_quantity?: number | string;
   driver_id?: string | null; scheduled_at?: Date | string | null;
   source_type?: DeliverySourceType; source_id?: string; source_status?: string; received_by?: string | null;
-  proof_present?: boolean; evidence_ready?: boolean; transport_mode?: string; can_receive?: boolean;
+  proof_present?: boolean; evidence_ready?: boolean; transport_mode?: string; can_receive?: boolean; can_manage?: boolean;
+  handover_recorded_at?: Date | string | null; receipt_approved_by?: string | null; exception_reason?: string | null;
 };
 const descriptions: Record<OperationsSupplySource, { label: string; definition: string }> = {
   kitchen: { label: "طلبات المطبخ المفتوحة", definition: "طلبات فريدة للجهة الطالبة أو الموردة ضمن النطاق المسموح؛ مراحل requested/approved/prepared/dispatched أو received بفروق استلام مفتوحة؛ ليست كمية مخزون." },
   transfers: { label: "تحويلات مواد مفتوحة", definition: "تحويلات مواد فريدة pending/approved/in_transit ضمن الأطراف المسموح بها؛ التحويل بين فرعين مختارين يُحسب مرة واحدة؛ لا يشمل فروقاً بلا دورة تسوية." },
-  reverse: { label: "مرتجعات تحتاج متابعة", definition: "حركات فريدة draft/requested/dispatched/received، أو inspected بكمية تالفة أكبر من المشطوبة؛ المستلم بانتظار الفحص مشمول، وتسوية كامل التلف مستبعدة." },
+  reverse: { label: "مرتجعات ونقل مستودعات تحتاج متابعة", definition: "حركات فريدة draft/requested/dispatched/received، أو inspected بكمية تالفة أكبر من المشطوبة؛ نقل المستودعات يظهر ضمن نطاق مكتب المستودع الرئيسي المحدد صراحة لصاحب الصلاحية العامة، لا بوصفه حركة مرتبطة بفرع." },
   delivery: { label: "مهام نقل غير مكتملة", definition: "تكليفات توصيل فريدة assigned/in_transit/awaiting_receipt/receipt_approved/failed مرتبطة بمصدر قائم ومصرح؛ تكليف التوصيل ليس حركة مخزون إضافية ولا يُجمع مع أعداد الطلبات." },
 };
 
@@ -37,15 +40,23 @@ export function kitchenSupplyDeadline(row: Pick<SupplyRow, "needed_date" | "need
   return Number.isFinite(instant.getTime()) ? instant.toISOString() : null;
 }
 
+/** An absolute, source-recorded delivery instant only; never localize a timezone-free string. */
+export function supplyDeliveryDeadline(value: SupplyRow["scheduled_at"]): string | null {
+  if (value == null || typeof value !== "string" && !(value instanceof Date)) return null;
+  if (typeof value === "string" && !/(?:Z|[+-]\d{2}(?::?\d{2})?)$/i.test(value)) return null;
+  const date = new Date(value);
+  return Number.isFinite(date.getTime()) ? date.toISOString() : null;
+}
+
 export async function supplyGrants(req: Request, exportMode = false): Promise<SupplyGrants> {
   const has = (module: string, action = "view") => hasEffectiveViewPermission(req, module, action);
   const branch = req.currentUser?.role === "branch_manager";
   const [kitchenView, kitchenEdit, kitchenApprove, transferView, transferEdit, warehouseView, warehouseEdit,
-    productionView, productionEdit, deliveryView, deliveryApprove] = await Promise.all([
+    productionView, productionEdit, deliveryView, deliveryEdit, deliveryApprove] = await Promise.all([
     has("central_kitchen_orders"), has("central_kitchen_orders", "edit"), has("central_kitchen_orders", "approve"),
     has(branch ? "branch_supply" : "warehouse"), has(branch ? "branch_supply" : "warehouse", "edit"),
     has("warehouse"), has("warehouse", "edit"), has("production"), has("production", "edit"),
-    has("delivery_tasks"), has("delivery_tasks", "approve"),
+    has("delivery_tasks"), has("delivery_tasks", "edit"), has("delivery_tasks", "approve"),
   ]);
   // Reverse branchGrant checks authPermissions, not an inferred kitchen intrinsic grant.
   const current = (req as any).authPermissions as { module: string; actions: string[] }[] | undefined;
@@ -54,7 +65,7 @@ export async function supplyGrants(req: Request, exportMode = false): Promise<Su
     ? [...(branchGrant("branch_supply") ? ["material_return"] : []), ...(branchGrant("central_kitchen_orders") ? ["product_return"] : [])]
     : warehouseView ? ["material_return", "product_return", "warehouse_transfer"] : [];
   const result = { kitchenView, kitchenEdit, kitchenApprove, transferView, transferEdit, warehouseView, warehouseEdit,
-    productionView, productionEdit, deliveryView, deliveryApprove, returnKinds };
+    productionView, productionEdit, deliveryView, deliveryEdit, deliveryApprove, returnKinds };
   if (exportMode) {
     const [kitchen, transfer, warehouse, production, delivery] = await Promise.all([
       has("central_kitchen_orders", "export"), has(branch ? "branch_supply" : "warehouse", "export"),
@@ -64,7 +75,7 @@ export async function supplyGrants(req: Request, exportMode = false): Promise<Su
     result.transferView &&= transfer; result.transferEdit &&= transfer;
     result.warehouseView &&= warehouse; result.warehouseEdit &&= warehouse;
     result.productionView &&= production; result.productionEdit &&= production;
-    result.deliveryView &&= delivery; result.deliveryApprove &&= delivery;
+    result.deliveryView &&= delivery; result.deliveryEdit &&= delivery; result.deliveryApprove &&= delivery;
     result.returnKinds = branch ? result.returnKinds.filter(kind => kind === "material_return" ? transfer : kitchen)
       : warehouse ? result.returnKinds : [];
   }
@@ -148,17 +159,22 @@ export async function projectOperationsSupply(req: Request, requested: string[],
       source: domain, ...descriptions[domain], coverage: coverage[domain].state,
       value: coverage[domain].state === "complete" ? counts.find(item => item.source === domain)!.count : null,
     })),
-    coverage: { sources: coverage, total: selected.every(domain => coverage[domain].state === "complete") ? knownTotal : null,
+    coverage: { sources: coverage, priorityCoverage: "unavailable",
+      total: selected.every(domain => coverage[domain].state === "complete") ? knownTotal : null,
       nextOffset: knownTotal > offset + limit ? offset + limit : null },
   };
 }
 
 export async function projectSupplyRecord(domain: OperationsSupplySource, row: SupplyRow, selected: string[], actor: SupplyActor,
   grants: SupplyGrants, kitchenCan: (row: SupplyRow, action: string) => Promise<boolean>): Promise<OperationsSupplyRecord> {
+  const warehouseDesk = row.kind === "warehouse_transfer"
+    && (domain === "reverse" || domain === "delivery" && row.source_type === "reverse_movement")
+    && ["admin", "operations_manager"].includes(actor.role) && actor.allowed === null
+    && selected.includes("main_warehouse");
   const sourceBranch = row.source_branch_id;
   const destination = domain === "reverse" && row.kind === "material_return"
     && row.destination_branch_id === null && row.destination_warehouse_id == null ? "main_warehouse" : row.destination_branch_id;
-  const visibleEndpoints = actor.role === "branch_manager" && domain !== "delivery"
+  const visibleEndpoints = warehouseDesk ? ["main_warehouse"] : actor.role === "branch_manager" && domain !== "delivery"
     ? domain === "reverse" ? [sourceBranch] : [destination] : [sourceBranch, destination];
   const branchIds = Array.from(new Set(visibleEndpoints.filter((id): id is string => !!id && selected.includes(id))));
   if (!branchIds.length) throw new Error("Supply source has no selected endpoint");
@@ -175,7 +191,8 @@ export async function projectSupplyRecord(domain: OperationsSupplySource, row: S
     : domain === "transfers" ? row.status === "in_transit" ? "مستلم الوجهة المخول" : "مسؤول مصدر التحويل"
     : domain === "reverse" ? row.status === "inspected" ? "مدير التشغيل المخول بالشطب" : row.status === "received" ? "مسؤول جهة الاستلام والفحص"
       : row.status === "dispatched" ? "مسؤول جهة الاستلام" : "مسؤول جهة الإرجاع"
-    : row.status === "awaiting_receipt" ? "المستلم الذي أكد استلام المصدر" : row.status === "receipt_approved" ? "مسؤول إغلاق النقل"
+    : row.status === "awaiting_receipt" ? "المستلم الذي أكد استلام المصدر" : row.status === "receipt_approved" ?
+      row.transport_mode === "external" ? "مسؤول المصدر المخول بإغلاق نقل الناقل الخارجي" : "السائق المسند للمهمة"
       : row.status === "failed" ? "مسؤول المصدر لمعالجة التعثر" : row.status === "assigned" ? "مسؤول المصدر والسائق" : "السائق أو الناقل";
   const stepLabels: Record<string, string> = {
     requested: domain === "kitchen" ? "مراجعة طلب المطبخ لاعتماده" : "متابعة تجهيز وإرسال المرتجع",
@@ -189,7 +206,8 @@ export async function projectSupplyRecord(domain: OperationsSupplySource, row: S
   };
   let path = domain === "kitchen" ? `/central-kitchen-orders?stage=${row.status}`
     : domain === "transfers" ? `/transfer-requests?status=${row.status}` : "/reverse-logistics";
-  const dueAt = domain === "kitchen" ? kitchenSupplyDeadline(row) : null;
+  const dueAt = domain === "kitchen" ? kitchenSupplyDeadline(row)
+    : domain === "delivery" ? supplyDeliveryDeadline(row.scheduled_at) : null;
   const mode = domain === "kitchen" || domain === "delivery" && row.source_type === "kitchen"
     ? row.inventory_mode === "real" || row.inventory_mode === "shadow" ? row.inventory_mode : "unknown"
     : domain !== "delivery" || ["material_transfer", "reverse_movement"].includes(row.source_type || "") ? "real" : "unknown";
@@ -236,14 +254,20 @@ export async function projectSupplyRecord(domain: OperationsSupplySource, row: S
   const record: OperationsSupplyRecord = {
     ...item, id: `${sourceType}:${row.id}`, branchIds, domain, stage, responsibleRole: role,
     nextStep: { label: stepLabels[stage] || "مراجعة حالة المصدر", href: item.href || null },
-    inventoryMode: mode, deadlineLabel: dueAt ? "وقت الاحتياج المسجل؛ ليس موعد وصول مؤكداً" : null, priority: null,
+    inventoryMode: mode, deadlineLabel: dueAt
+      ? domain === "delivery" ? "موعد التوصيل المجدول في المصدر" : "وقت الاحتياج المسجل؛ ليس موعد وصول مؤكداً" : null,
+    priority: null, priorityCoverage: "unavailable",
     capabilityCoverage: "complete",
     reason: domain === "reverse" && row.status === "inspected"
       ? `التلف المسجل ${row.damaged_quantity} والمشطوب ${row.written_off_quantity}؛ المتبقي يحتاج مراجعة المخول، وليس مخزوناً صالحاً`
-      : domain === "delivery" ? `تكليف نقل مرتبط بمصدر ${row.source_type} #${row.source_id}؛ لا يمثل حركة مخزون جديدة`
+      : domain === "delivery" ? `تكليف نقل مرتبط بمصدر ${row.source_type} #${row.source_id}؛ لا يمثل حركة مخزون جديدة${
+          warehouseDesk ? "؛ ضمن مكتب المستودعات المصرح به لا فرع حركة" : ""}`
+        : warehouseDesk ? `نقل بين مستودعات ضمن مكتب المستودعات المصرح به؛ لا يرتبط بفرع؛ مرحلة المصدر: ${stage}`
         : `مرحلة المصدر المسجلة: ${stage}${mode === "unknown" ? "؛ وضع المخزون غير معروف" : mode === "shadow" ? "؛ وضع تجريبي لا يثبت حركة مخزون فعلية" : ""}`,
     ...(domain === "delivery" ? { relatedSource: { sourceType: row.source_type!, sourceId: String(row.source_id) } } : {}),
   };
+  if (warehouseDesk && domain === "reverse" && row.status === "inspected")
+    record.reason += "؛ نقل المستودعات لا يرتبط بفرع حركة؛ يظهر بموجب صلاحية مكتب المستودعات العامة";
   let canAct = false, action = "edit";
   if (domain === "kitchen") {
     const operation = { requested: "approve", approved: "prepare", prepared: "dispatch", dispatched: "receive", received: "resolve_discrepancy" }[row.status];
@@ -254,9 +278,13 @@ export async function projectSupplyRecord(domain: OperationsSupplySource, row: S
       // Preparation/dispatch readiness involves stock, reservations and transport
       // evidence. This read adapter does not invent those capabilities from edit.
       const decisionStage = ["requested", "dispatched", "received"].includes(row.status);
-      canAct = decisionStage && operatingScope && !!operation
+      const paused = row.inventory_mode === "real" && row.runtime_mode === "paused";
+      canAct = !paused && decisionStage && operatingScope && !!operation
         && (action === "approve" ? grants.kitchenApprove : grants.kitchenEdit) && await kitchenCan(row, operation!);
-      if (!decisionStage) record.capabilityCoverage = "unavailable";
+      if (paused) {
+        record.capabilityCoverage = "unavailable";
+        record.reason += "؛ عمليات المخزون الفعلي لهذا المطبخ متوقفة مؤقتًا ولا يُعلن إجراء متاحًا";
+      } else if (!decisionStage) record.capabilityCoverage = "unavailable";
     } catch {
       record.capabilityCoverage = "unavailable";
       record.reason += "؛ تعذر التحقق من صلاحية هذه الخطوة";
@@ -273,15 +301,22 @@ export async function projectSupplyRecord(domain: OperationsSupplySource, row: S
     const target = receiver ? destination : sourceBranch;
     const mainAllowed = row.kind !== "material_return" || !receiver || supplyMainWarehouseAuthority(actor);
     const targetAllowed = target === null || actor.allowed === null || actor.allowed.includes(target);
-    const warehouseAllowed = row.kind !== "warehouse_transfer" || actor.role === "admin" && actor.allowed === null;
+    const warehouseAllowed = row.kind !== "warehouse_transfer" || warehouseDesk;
     canAct = receiver && actor.role !== "branch_manager" && grants.warehouseEdit && mainAllowed && targetAllowed && warehouseAllowed
       && (row.status !== "inspected" || ["admin", "operations_manager"].includes(actor.role));
     if (!receiver) record.capabilityCoverage = "unavailable";
   } else {
-    action = "approve";
+    action = row.status === "receipt_approved" ? "edit" : "approve";
+    const external = row.transport_mode === "external";
+    const handover = !!row.handover_recorded_at && !Number.isNaN(new Date(row.handover_recorded_at).getTime());
+    const approvedReceipt = !!row.receipt_approved_by && receiptMatchesSource(
+      row.source_type!, row.source_status!, row.received_by || null, row.receipt_approved_by);
     canAct = row.status === "awaiting_receipt" && row.can_receive === true && !!item.href
       && receiptMatchesSource(row.source_type!, row.source_status!, row.received_by || null, actor.id)
-      && (row.transport_mode === "external" ? row.evidence_ready === true : row.proof_present === true);
+      && (external ? handover && row.evidence_ready === true : row.proof_present === true)
+      || row.status === "receipt_approved" && external && row.can_manage === true && !!item.href
+        && handover && row.evidence_ready === true && !row.exception_reason && approvedReceipt
+        && deliveryTransitionAllowed(row.status, "complete");
   }
   if (record.capabilityCoverage === "unavailable")
     record.reason += "؛ جاهزية تنفيذ الخطوة غير مؤكدة في هذه اللقطة؛ تحقق منها في المصدر، ولا تعد قراراً على المستخدم";

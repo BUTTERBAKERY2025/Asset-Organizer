@@ -31,6 +31,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useBranchNavigation } from "@/hooks/use-branch-navigation";
 import { useBranchDeskIntent } from "@/hooks/use-branch-desk-intent";
 import { BranchSupplySources } from "@/components/branch-supply/sources";
+import { supplySourceReturnIntent } from "@/lib/operations-center-navigation";
 import { WarehouseItemEntry } from "@/components/warehouse-entry/warehouse-item-entry";
 import { isValidWarehouseDraftItem, warehouseCategoryLabel } from "@/components/warehouse-entry/warehouse-item-entry-helpers";
 import { generateTransferPdf, generateQuickTransferPdf } from "@/lib/pdf-utils";
@@ -428,7 +429,10 @@ export default function TransferRequestsPage() {
 
     const consumeIntent = () => {
       const next = new URLSearchParams(window.location.search);
-      next.delete("transferId");
+      // Keep the exact source identity for the center Return action (including
+      // embedded delivery selection); the ref above already prevents reopening.
+      if (!supplySourceReturnIntent(next.toString(), branches.map(branch => branch.id), window.location.pathname))
+        next.delete("transferId");
       const query = next.toString();
       window.history.replaceState(
         window.history.state,

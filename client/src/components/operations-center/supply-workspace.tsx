@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ArrowUpLeft, ChevronLeft, ChevronRight, RefreshCw, Search } from "lucide-react";
 import type { OperationsQueueItem, OperationsSupplyRecord, OperationsSupplyResponse } from "@shared/operations-center";
 import { Button } from "@/components/ui/button";
+import { withSupplyPageReturn } from "@/lib/operations-center-navigation";
 import { time } from "./record-sheet";
 import {
   filterSupplyRecords, supplyCoverageText, supplyPageFacts, supplyPriorityLabel, supplyRecordKey,
@@ -28,7 +29,7 @@ export function useOperationsSupplyQuery(request: SupplyRequest, actorId?: strin
       });
       if (!response.ok) {
         const body = await response.json().catch(() => null);
-        throw new Error(body?.error || body?.message || `تعذر تحميل متابعة الإنتاج والتوريد (${response.status}).`);
+        throw new Error(body?.error || body?.message || `تعذر تحميل متابعة التوريد والنقل (${response.status}).`);
       }
       const data: OperationsSupplyResponse = await response.json();
       if (!supplyScopeMatches(data, request)) throw new Error("بيانات متابعة التوريد لا تطابق نطاق الفروع أو صفحة المصدر المطلوبة.");
@@ -43,12 +44,14 @@ export function OperationsSupplyWorkspace({ branches, actorId, open, canOpenPurc
   const [intent] = useState(() => supplySelectionIntent(typeof window !== "undefined" ? window.location.search : "", branches.map(branch => branch.id)));
   const [branchId, setBranchId] = useState(intent.branchId);
   const [source, setSource] = useState<SupplySource>(intent.source);
-  const [offset, setOffset] = useState(0);
+  const [offset, setOffset] = useState(intent.offset);
   const [stage, setStage] = useState("all");
   const [search, setSearch] = useState("");
   const [selection, setSelection] = useState<string | null>(intent.record);
   const [mobileDetail, setMobileDetail] = useState(!!intent.record);
-  const scopedBranches = branches.filter(branch => !branchId || branch.id === branchId);
+  const intentValid = intent.valid && supplySelectionIntent(typeof window !== "undefined" ? window.location.search : "", branches.map(branch => branch.id)).valid
+    && (!branchId || branches.some(branch => branch.id === branchId));
+  const scopedBranches = intentValid ? branches.filter(branch => !branchId || branch.id === branchId) : [];
   const request: SupplyRequest = { branchIds: scopedBranches.map(branch => branch.id), source, offset, limit: pageSize };
   const query = useOperationsSupplyQuery(request, actorId);
   const data = !query.isError && query.data && supplyScopeMatches(query.data, request) ? query.data : null;
@@ -57,6 +60,12 @@ export function OperationsSupplyWorkspace({ branches, actorId, open, canOpenPurc
   const stages = [...new Set(data?.records.map(item => item.stage) || [])];
   const reset = () => { setOffset(0); setStage("all"); setSearch(""); setSelection(null); setMobileDetail(false); };
   const paginate = (value: number) => { setOffset(value); setStage("all"); setSearch(""); setSelection(null); setMobileDetail(false); };
+  const openWithPage: OpenSource = (href, selectedBranch, item) => {
+    if (!intentValid || !item || !data || query.isFetching || !records.some(record => supplyRecordKey(record) === supplyRecordKey(item))) return;
+    open(withSupplyPageReturn(href, { source, branchId, offset }, window.location.origin), selectedBranch, item);
+  };
+
+  if (!intentValid) return <p role="alert" className="oc-panel p-4 text-sm text-destructive">نطاق العودة إلى حالات التوريد أو صفحة المصدر غير صالح أو لم يعد مصرحًا به. لم تُحمّل بيانات ولم يُوسّع النطاق إلى كل الفروع. أغلق النافذة واختر نطاقًا مصرحًا من المركز.</p>;
 
   return <div className="oc-workspace-grid oc-supply-workspace" data-detail={mobileDetail} data-testid="operations-supply-workspace">
     <div className="oc-workspace-list space-y-3">
@@ -73,7 +82,7 @@ export function OperationsSupplyWorkspace({ branches, actorId, open, canOpenPurc
         </label>
         <label>المصدر
           <select aria-label="مصدر متابعة التوريد" value={source} onChange={event => { setSource(event.target.value as SupplySource); reset(); }}>
-            <option value="all">كل مصادر الإنتاج والتوريد</option>
+            <option value="all">كل مصادر التوريد والنقل والمرتجعات</option>
             {supplySources.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}
           </select>
         </label>
@@ -90,8 +99,10 @@ export function OperationsSupplyWorkspace({ branches, actorId, open, canOpenPurc
           </span>
         </label>
       </div>
-      <p className="text-[11px] leading-5 text-muted-foreground">الفرع والمصدر يرشحان كامل نطاق الخادم قبل ترقيم الصفحات. المرحلة والبحث يرشحان الصفحة المحمّلة فقط؛ استخدم التالية لمتابعة السجلات الأقدم.</p>
-      {query.isPending && <p role="status" className="text-sm">جار تحميل حالات الإنتاج والتوريد…</p>}
+      <p className="text-[11px] leading-5 text-muted-foreground">الفرع والمصدر يرشحان كامل نطاق الخادم قبل ترقيم الصفحات. المرحلة والبحث يرشحان الصفحة المحمّلة فقط؛ الترتيب حسب المصدر ثم الأحدث داخله، وليس حسب الأولوية.</p>
+      <p className="text-[11px] leading-5 text-muted-foreground">النطاق: طلبات المطبخ والتحويلات والمرتجعات والتوصيل؛ لا يشمل خطط الإنتاج أو دفعاته الفعلية كمصادر مستقلة.</p>
+      {scopedBranches.some(branch => branch.id === "main_warehouse") && <p className="text-[11px] leading-5 text-muted-foreground">المستودع الرئيسي نطاق عرض؛ ولصاحب صلاحية المستودعات العامة يشمل النقل بين المستودعات، ولا يعني أن المستودع الرئيسي طرف في كل حركة.</p>}
+      {query.isPending && <p role="status" className="text-sm">جار تحميل حالات التوريد والنقل…</p>}
       {query.isError && <div role="alert" className="oc-panel space-y-2 p-3 text-sm text-destructive"><p>{query.error.message}</p><Button type="button" variant="outline" size="sm" onClick={() => query.refetch()}>إعادة المحاولة</Button></div>}
       {data && <>
         <SupplySummaries data={data} />
@@ -110,7 +121,7 @@ export function OperationsSupplyWorkspace({ branches, actorId, open, canOpenPurc
           <span className="mt-1 block text-[11px] text-muted-foreground">الأولوية: {supplyPriorityLabel(item)}</span>
         </button>)}
         {!records.length && <p role="status" className="rounded-xl border border-dashed border-violet-200 p-4 text-sm text-muted-foreground">{stage !== "all" || search.trim() ? "لا نتائج تطابق المرحلة والبحث في هذه الصفحة." : "لا حالات ظاهرة لهذا المصدر في هذه الصفحة؛ الغياب لا يثبت اكتمال العمل."} تبقى المصادر ذات العدد صفر متاحة من مرشح المصدر.</p>}
-        <nav aria-label="صفحات حالات الإنتاج والتوريد" className="flex flex-wrap items-center gap-2 pt-2">
+        <nav aria-label="صفحات حالات التوريد والنقل" className="flex flex-wrap items-center gap-2 pt-2">
           <Button type="button" variant="outline" size="sm" disabled={offset === 0 || query.isFetching} onClick={() => paginate(Math.max(0, offset - pageSize))}><ChevronRight className="size-4" />السابقة</Button>
           <span className="text-xs text-muted-foreground">صفحة {Math.floor(offset / pageSize) + 1}</span>
           <Button type="button" variant="outline" size="sm" disabled={data.coverage.nextOffset === null || query.isFetching} onClick={() => { if (data.coverage.nextOffset !== null) paginate(data.coverage.nextOffset); }}>التالية<ChevronLeft className="size-4" /></Button>
@@ -128,7 +139,7 @@ export function OperationsSupplyWorkspace({ branches, actorId, open, canOpenPurc
       <button type="button" className="inline-flex min-h-11 items-center gap-1 text-sm font-bold text-violet-700 md:hidden" onClick={() => setMobileDetail(false)}><ChevronRight className="size-4" />العودة للحالات والمرشحات</button>
       {query.isError ? <p role="alert" className="text-sm text-destructive">تعذر التحقق من حالات المصدر؛ أخفيت التفاصيل والإجراء السابق. أعد تحميل الحالات.</p>
         : query.isPending ? <p role="status" className="text-sm text-muted-foreground">جار التحقق من حالات المصدر ضمن النطاق المختار…</p>
-        : record && data ? <SupplyRecordDetail record={record} branches={branches} actorId={actorId} open={open} refreshing={query.isFetching} />
+        : record && data ? <SupplyRecordDetail record={record} branches={branches} actorId={actorId} open={openWithPage} refreshing={query.isFetching} />
         : selection && data ? <p role="status" className="oc-panel p-4 text-sm leading-7">السجل المحدد لم يعد ضمن نتائج هذه الصفحة بعد التحديث أو الترشيح. قد تكون مرحلته أو نطاقه أو موقعه في الصفحات قد تغير؛ هذا ليس تأكيدًا لإكماله. اختر سجلًا ظاهرًا أو راجع المصدر.</p>
         : <div className="py-12 text-center"><h3 className="text-base font-bold">ما الخطوة التالية لكل حالة؟</h3><p className="mt-2 text-sm leading-7 text-muted-foreground">اختر حالة لعرض المسؤول والموعد والأولوية والإجراء المصرح به في مصدرها. ملخصات المصادر منفصلة عن الحالات، ولا تُجمع أعدادها كرصيد أو إنتاج منجز.</p></div>}
     </div>
@@ -152,12 +163,17 @@ export function SupplyCounters({ records, actorId, data, filtered }: {
   records: OperationsSupplyRecord[]; actorId?: string; data: OperationsSupplyResponse; filtered: boolean;
 }) {
   const facts = supplyPageFacts(records, actorId, data.generatedAt);
+  const missing = data.coverage.total === null || Object.entries(data.coverage.sources)
+    .some(([id, source]) => (data.scope.source === "all" || data.scope.source === id) && source.state !== "complete");
+  const unknownPriority = data.coverage.priorityCoverage === "unavailable" || records.some(record => record.priorityCoverage === "unavailable");
+  const unavailable = missing && facts.count === 0;
   return <div aria-label="حقائق الحالات المعروضة" className="space-y-2">
     <p role="status" className="text-[11px] leading-5 text-muted-foreground">{supplyCoverageText(data)}</p>
     <dl className="oc-supply-counters">{[
-      ["حالات ظاهرة", facts.count], ["بانتظار قرارك", facts.awaitingActor],
-      ["عاجلة من المصدر", facts.urgent], ["تجاوزت موعدها المسجل", facts.overdue],
-    ].map(([label, value]) => <div key={String(label)}><dt>{label}</dt><dd>{Number(value).toLocaleString("en-US")}</dd></div>)}</dl>
+      ["حالات ظاهرة", unavailable ? null : facts.count], ["بانتظار قرارك", unavailable ? null : facts.awaitingActor],
+      ["عاجلة من المصدر", unavailable || unknownPriority ? null : facts.urgent], ["تجاوزت موعدها المسجل", unavailable ? null : facts.overdue],
+    ].map(([label, value]) => <div key={String(label)}><dt>{label}</dt><dd>{value === null ? "غير متاح" : Number(value).toLocaleString("en-US")}</dd></div>)}</dl>
+    {unknownPriority && <p className="text-[11px] text-muted-foreground">بيانات الأولوية غير متاحة لبعض الحالات؛ لا يُستنتج منها عدم وجود حالات عاجلة.</p>}
     <p className="text-[10px] leading-5 text-muted-foreground">العدادات {filtered ? "للنتائج المرشحة في" : "في"} هذه الصفحة فقط؛ قد تتداخل ولا تُجمع. التأخر يعتمد على موعد مسجل، ولا يعني أولوية عاجلة أو إسنادًا شخصيًا.</p>
   </div>;
 }

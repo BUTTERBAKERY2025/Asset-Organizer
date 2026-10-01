@@ -17,13 +17,13 @@ vi.mock("../server/branch-operations", () => ({
     req.grants?.includes(`${module}:${action}`) === true,
 }));
 vi.mock("../server/central-kitchen-routing", () => ({ kitchenActionAllowed: async () => false }));
-import { kitchenSupplyDeadline, projectOperationsSupply, projectSupplyRecord } from "../server/operations-supply";
+import { kitchenSupplyDeadline, supplyDeliveryDeadline, projectOperationsSupply, projectSupplyRecord } from "../server/operations-supply";
 
 const actor: SupplyActor = { id: "operator", role: "operations_manager", branchId: "ungranted", allowed: ["a", "b"] };
 const grants: SupplyGrants = {
   kitchenView: true, kitchenEdit: true, kitchenApprove: true,
   transferView: true, transferEdit: true, warehouseView: true, warehouseEdit: true,
-  productionView: true, productionEdit: true, deliveryView: true, deliveryApprove: true,
+  productionView: true, productionEdit: true, deliveryView: true, deliveryEdit: true, deliveryApprove: true,
   returnKinds: ["material_return", "product_return", "warehouse_transfer"],
 };
 const allPermissions = ["central_kitchen_orders", "warehouse", "production", "delivery_tasks", "branch_supply"]
@@ -84,6 +84,7 @@ describe("explicit supply scope and full source pagination", () => {
     query.mockReset().mockResolvedValueOnce({ rows: [{ id: "a", name: "A" }] }).mockResolvedValueOnce({ rows: [{ total: "0" }] });
     const empty = await projectOperationsSupply(req(), ["a"], "transfers");
     expect(empty.summaries[0]).toMatchObject({ value: 0, coverage: "complete" });
+    expect(empty.coverage.priorityCoverage).toBe("unavailable");
   });
 });
 
@@ -127,6 +128,25 @@ describe("authoritative source predicates, not role-expanded grants", () => {
     expect(branch.where).toContain("r.source_branch_id=ANY($2");
     expect(branch.where).not.toContain("destination_branch_id=ANY");
   });
+  it("includes warehouse-to-warehouse movements only in an explicit global warehouse desk", async () => {
+    const global = { ...actor, allowed: null };
+    expect(operationsSupplySql("reverse", ["main_warehouse"], global, grants).where)
+      .toContain("OR r.kind='warehouse_transfer'");
+    expect(operationsSupplySql("reverse", ["a"], global, grants).where).toContain("OR false");
+    expect(operationsSupplySql("reverse", ["main_warehouse"], actor, grants).where)
+      .toContain("r.kind<>'warehouse_transfer'");
+    expect(operationsSupplySql("delivery", ["main_warehouse"], global, grants).where)
+      .toContain("d.kind='warehouse_transfer'");
+    expect(operationsSupplySql("delivery", ["a"], global, grants).where).toContain("AND false))");
+    const movement = await projectSupplyRecord("reverse", {
+      id: "8", kind: "warehouse_transfer", status: "received",
+      source_branch_id: null, destination_branch_id: null,
+      source_warehouse_id: 4, destination_warehouse_id: 6,
+    }, ["main_warehouse"], global, grants, async () => false);
+    expect(movement).toMatchObject({ branchId: "main_warehouse", branchIds: ["main_warehouse"],
+      decision: { permission: { module: "warehouse", action: "edit" } } });
+    expect(movement.reason).toContain("لا يرتبط بفرع");
+  });
   it("delivery recipient read requires destination edit plus delivery approve, not merely view", () => {
     const sql = operationsSupplySql("delivery", ["b"], actor,
       { ...grants, deliveryApprove: false, kitchenEdit: false, transferEdit: false, warehouseEdit: false, productionEdit: false });
@@ -158,7 +178,20 @@ describe("practical source records", () => {
       ["b"], actor, grants, async () => false);
     expect(record).toMatchObject({ dueAt: null, priority: null, inventoryMode: "shadow", ownerId: null });
     expect(record.priorityReason).toBeUndefined();
+    expect(record.priorityCoverage).toBe("unavailable");
     expect(record.decision).toBeUndefined();
+  });
+  it("records only absolute source deadlines for delivery, not guessed local time or urgency", async () => {
+    expect(supplyDeliveryDeadline(new Date("2026-06-18T07:00:00.000Z"))).toBe("2026-06-18T07:00:00.000Z");
+    expect(supplyDeliveryDeadline("2026-06-18T10:00:00+03:00")).toBe("2026-06-18T07:00:00.000Z");
+    expect(supplyDeliveryDeadline("2026-06-18T10:00:00")).toBeNull();
+    expect(supplyDeliveryDeadline("invalidZ")).toBeNull();
+    const delivery = await projectSupplyRecord("delivery", {
+      id: "14", status: "assigned", source_branch_id: "a", destination_branch_id: "b",
+      source_type: "kitchen", source_id: "44", scheduled_at: new Date("2026-06-18T07:00:00.000Z"),
+    }, ["a"], actor, grants, async () => false);
+    expect(delivery.dueAt).toBe("2026-06-18T07:00:00.000Z");
+    expect(delivery.deadlineLabel).toContain("التوصيل المجدول");
   });
   it("stage plus permission is insufficient when current kitchen routing declines the actor", async () => {
     const base = { id: "41", status: "requested", source_branch_id: "a", destination_branch_id: "b" };
@@ -171,6 +204,44 @@ describe("practical source records", () => {
     const unknown = await projectSupplyRecord("kitchen", base, ["a"], actor, grants, async () => { throw new Error("Routing unavailable"); });
     expect(unknown.capabilityCoverage).toBe("unavailable");
     expect(unknown.decision).toBeUndefined();
+  });
+  it("never advertises a decision while a real-inventory kitchen is paused", async () => {
+    const base = { id: "41", status: "requested", source_branch_id: "a", destination_branch_id: "b",
+      inventory_mode: "real", runtime_mode: "paused" };
+    let routingChecked = false;
+    const paused = await projectSupplyRecord("kitchen", base, ["a"], actor, grants, async () => {
+      routingChecked = true; return true;
+    });
+    expect(routingChecked).toBe(false);
+    expect(paused.decision).toBeUndefined();
+    expect(paused.capabilityCoverage).toBe("unavailable");
+    expect(paused.reason).toContain("متوقفة مؤقتًا");
+    const active = await projectSupplyRecord("kitchen", { ...base, runtime_mode: "real" },
+      ["a"], actor, grants, async () => true);
+    expect(active.decision?.awaitingActor).toBe(true);
+  });
+  it("requires documented carrier handover to approve receipt and true source-manager authority to close", async () => {
+    const base = {
+      id: "91", status: "awaiting_receipt", source_branch_id: "a", destination_branch_id: "b",
+      source_type: "kitchen" as const, source_id: "41", source_status: "received", received_by: actor.id,
+      can_receive: true, transport_mode: "external", evidence_ready: true, can_manage: true,
+    };
+    const row = { ...base, handover_recorded_at: new Date("2026-06-18T05:00:00.000Z") };
+    expect((await projectSupplyRecord("delivery", base, ["b"], actor, grants, async () => false)).decision).toBeUndefined();
+    expect((await projectSupplyRecord("delivery", row, ["b"], actor, grants, async () => false)).decision)
+      .toMatchObject({ permission: { module: "delivery_tasks", action: "approve" } });
+    const completion = { ...row, status: "receipt_approved", receipt_approved_by: actor.id };
+    expect((await projectSupplyRecord("delivery", completion, ["a"], actor, grants, async () => false)).decision)
+      .toMatchObject({ permission: { module: "delivery_tasks", action: "edit" } });
+    for (const denied of [
+      { ...completion, can_manage: false }, { ...completion, handover_recorded_at: null },
+      { ...completion, evidence_ready: false }, { ...completion, exception_reason: "unresolved" },
+      { ...completion, receipt_approved_by: "other" }, { ...completion, source_status: "dispatched" },
+    ]) expect((await projectSupplyRecord("delivery", denied, ["a"], actor, grants, async () => false)).decision).toBeUndefined();
+    const internal = await projectSupplyRecord("delivery",
+      { ...completion, transport_mode: "internal" }, ["a"], actor, grants, async () => false);
+    expect(internal.decision).toBeUndefined();
+    expect(internal.responsibleRole).toContain("السائق");
   });
   it("delivery navigates through the legal source instead of forbidden standalone desk", async () => {
     const record = await projectSupplyRecord("delivery", {

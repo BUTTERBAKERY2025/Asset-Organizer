@@ -10,7 +10,8 @@ const helpers = page.slice(page.indexOf("export function kitchenDetailAccess("),
 const compiled = transpileModule(helpers.replaceAll("export function", "function").replaceAll("export const", "const"), {
   compilerOptions: { module: ModuleKind.None },
 }).outputText;
-const { kitchenDetailAccess, visibleKitchenDetail, kitchenProductionScoped, kitchenActionHeading, kitchenOrderPreview, KITCHEN_DEFAULT_SORT } = new Function(`const STATUS = { approved: { label: "معتمد" } }; const normalized = (value) => value.toLowerCase(); ${compiled}; return { kitchenDetailAccess, visibleKitchenDetail, kitchenProductionScoped, kitchenActionHeading, kitchenOrderPreview, KITCHEN_DEFAULT_SORT };`)() as {
+const { kitchenDetailAccess, kitchenDetailMatchesBranch, visibleKitchenDetail, kitchenProductionScoped, kitchenActionHeading, kitchenOrderPreview, KITCHEN_DEFAULT_SORT } = new Function(`const STATUS = { approved: { label: "معتمد" } }; const normalized = (value) => value.toLowerCase(); ${compiled}; return { kitchenDetailAccess, kitchenDetailMatchesBranch, visibleKitchenDetail, kitchenProductionScoped, kitchenActionHeading, kitchenOrderPreview, KITCHEN_DEFAULT_SORT };`)() as {
+  kitchenDetailMatchesBranch: (order: { requestBranchId: string; centralKitchenId: string }, branchId: string | null, role?: string) => boolean;
   kitchenDetailAccess: (order: { centralKitchenId: string; allowedActions?: Record<string, boolean> }, permissions: {
     approve: boolean; edit: boolean; production: boolean; kitchenBranch: boolean; sourceBranch: boolean;
   }) => Record<string, boolean>;
@@ -31,6 +32,19 @@ const order = {
 };
 
 describe("central kitchen detail permission intersection", () => {
+  it("accepts supplier and requester deep links for authorized operators, but keeps branch managers destination-only", () => {
+    const detail = { requestBranchId: "requester", centralKitchenId: "supplier" };
+    for (const role of ["admin", "operations_manager", "production_development_manager"]) {
+      expect(kitchenDetailMatchesBranch(detail, "supplier", role)).toBe(true);
+      expect(kitchenDetailMatchesBranch(detail, "requester", role)).toBe(true);
+      expect(kitchenDetailMatchesBranch(detail, "unrelated", role)).toBe(false);
+      expect(kitchenDetailMatchesBranch(detail, null, role)).toBe(false);
+    }
+    expect(kitchenDetailMatchesBranch(detail, "supplier", "branch_manager")).toBe(false);
+    expect(kitchenDetailMatchesBranch(detail, "requester", "branch_manager")).toBe(true);
+    expect(page).toContain("!kitchenDetailMatchesBranch(detailQuery.data, linkedBranchId, user?.role)");
+    expect(page).toContain('new URLSearchParams(window.location.search).getAll("branchId").length !== 1');
+  });
   it.each([
     ["viewer", { approve: false, edit: false, production: false, kitchenBranch: false, sourceBranch: false }, {}, []],
     ["requester", { approve: false, edit: true, production: false, kitchenBranch: false, sourceBranch: true }, { receive: true, edit: true }, ["receive", "change"]],

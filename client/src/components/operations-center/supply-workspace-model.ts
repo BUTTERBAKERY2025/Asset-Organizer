@@ -1,4 +1,5 @@
 import type { OperationsSupplyRecord, OperationsSupplyResponse } from "@shared/operations-center";
+import { supplyReturnIntent } from "@/lib/operations-center-navigation";
 
 export const supplySources = [
   { id: "kitchen", label: "طلبات المطبخ" },
@@ -32,6 +33,7 @@ export function supplySourceLabel(source: string): string {
 }
 
 export function supplyPriorityLabel(record: OperationsSupplyRecord): string {
+  if (record.priorityCoverage === "unavailable") return "بيانات الأولوية غير متاحة";
   const priority = record.priority || record.priorityReason;
   if (!priority) return "غير مسجلة في المصدر";
   const labels: Record<string, string> = {
@@ -47,19 +49,9 @@ export function supplyRecordKey(record: Pick<OperationsSupplyRecord, "sourceType
 
 /** A return selection is navigation intent only; it must reappear in the scoped GET results. */
 export function supplySelectionIntent(search: string, allowedIds: readonly string[]): {
-  source: SupplySource; branchId: string; record: string | null;
+  source: SupplySource; branchId: string; record: string | null; offset: number; valid: boolean;
 } {
-  const params = new URLSearchParams(search);
-  const empty = { source: "all" as const, branchId: "", record: null };
-  if (params.get("workspace") !== "production" || params.getAll("supplyRecord").length !== 1 ||
-    params.getAll("supplyBranchId").length !== 1) return empty;
-  const branchId = params.get("supplyBranchId") || "";
-  const record = params.get("supplyRecord") || "";
-  const match = /^(kitchen_order|transfer|reverse_movement|delivery_assignment):([1-9]\d*)$/.exec(record);
-  const source: Record<string, SupplySource> = {
-    kitchen_order: "kitchen", transfer: "transfers", reverse_movement: "reverse", delivery_assignment: "delivery",
-  };
-  return match && allowedIds.includes(branchId) ? { source: source[match[1]], branchId, record } : empty;
+  return supplyReturnIntent(search, allowedIds);
 }
 
 export function supplyRequestParams(request: SupplyRequest): URLSearchParams {
@@ -112,7 +104,7 @@ export function supplyPageFacts(records: readonly OperationsSupplyRecord[], acto
     awaitingActor: unique.filter(record => !!actorId && record.decision?.awaitingActor && record.decision.actorId === actorId).length,
     urgent: unique.filter(record => record.priorityReason === "urgent" || record.priorityReason === "critical" ||
       record.priority === "urgent" || record.priority === "critical").length,
-    overdue: unique.filter(record => record.dueAt && Number.isFinite(time) &&
+    overdue: unique.filter(record => !(record.domain === "delivery" && record.status === "receipt_approved") && record.dueAt && Number.isFinite(time) &&
       Number.isFinite(Date.parse(record.dueAt)) && Date.parse(record.dueAt) < time).length,
   };
 }
