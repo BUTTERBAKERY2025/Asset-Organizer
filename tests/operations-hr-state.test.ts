@@ -74,7 +74,7 @@ describe("operations HR selection and fresh-command boundaries", () => {
     guard.invalidate();
     expect(guard.isCurrent(fourth)).toBe(false);
   });
-  it("wires URL sync and freshness guards into the actual page, without another breadcrumb", () => {
+  it("wires URL sync and freshness guards into the actual page, with a monthly return affordance", () => {
     const source = readFileSync("client/src/pages/operations-hr.tsx", "utf8");
     expect(source).toContain("operationsHrSelectionHref(pathname, search");
     expect(source).toContain("operationsHrSelectionIntent(search, defaultMonth)");
@@ -83,6 +83,8 @@ describe("operations HR selection and fresh-command boundaries", () => {
     expect(source).toContain('if (!branch || !reportReady || !canApprove("operations_payroll")');
     expect(source).toContain('if (!branch || !reportReady || !canExport("operations_payroll")');
     expect(source).toContain("enabled: authorizedBranch && validMonth");
-    expect(source).not.toContain("operationsCenterReturnHref(");
+    expect(source).toContain("peopleSourceIntent(sourceUrl, authorizedIds)");
+    expect(source).toContain("preserveMonthlyAllReturn(");
+    expect(source).not.toContain('data-testid="return-to-month-workspace"');
   });
 });

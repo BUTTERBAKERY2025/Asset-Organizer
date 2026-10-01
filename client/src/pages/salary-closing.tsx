@@ -1,7 +1,8 @@
 import { useState, useMemo, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { Layout } from "@/components/layout";
-import { salaryBranchIntent } from "@/lib/operations-center-navigation";
+import { operationsCenterReturnHref, salaryBranchIntent } from "@/lib/operations-center-navigation";
+import { useSearch } from "wouter";
 import { PageHeader } from "@/components/dashboard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -927,6 +928,8 @@ export default function SalaryClosingPage() {
   const canManageDeductions = isAdmin || isHrManager || canEditModule("branch_employees");
 
   const { branches, userBranchId } = useBranches();
+  const linkedSearch = useSearch();
+  const fromCenter = new URLSearchParams(linkedSearch).get("from") === "operations-center";
 
   // قراءة الفرع والشهر من رابط الصفحة إن وُجدا (قادمة من صفحة التقارير الشاملة)
   const urlParams = useMemo(() => {
@@ -2342,7 +2345,7 @@ export default function SalaryClosingPage() {
           tone="executive"
           title="إغلاق الرواتب الشهرية"
           description="تقرير شهري شامل للرواتب يتضمن الحضور والغياب وساعات العمل، مع بحث وفلترة متقدمة"
-          backHref="/employee-reports"
+          backHref={fromCenter ? operationsCenterReturnHref(linkedSearch, branches.map(row => row.id)) : "/employee-reports"}
         />
         {urlParams.explicit && !branchActive && !isAllBranches && <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">{urlParams.conflict && !branch ? "رابط الرواتب يحتوي فرعين مختلفين. اختر الفرع صراحةً؛ لم نستخدم فرعًا افتراضيًا." : "الفرع المطلوب غير متاح ضمن صلاحياتك. اختر فرعًا مسموحًا؛ لم نعرض بيانات فرع آخر."}</p>}
         {branch !== "all" && salaryClosingPreview?.operationsReviews?.length ? (

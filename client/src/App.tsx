@@ -145,7 +145,7 @@ const FinishedGoodsInventoryPage = makeLazy("finished-goods-inventory");
 const KitchenWarehouseShippingPage = makeLazy("kitchen-warehouse-shipping");
 const WarehouseDashboardPage = makeLazy("warehouse-dashboard");
 const ReverseLogisticsPage = makeLazy("reverse-logistics");
-const TransferRequestsPage = makeLazy("transfer-requests");
+import TransferRequestsPage from "@/pages/transfer-requests";
 const WarehouseInventoryPage = makeLazy("warehouse-inventory");
 const WarehouseMovementLogsPage = makeLazy("warehouse-movement-logs");
 const BranchStockPage = makeLazy("branch-stock");

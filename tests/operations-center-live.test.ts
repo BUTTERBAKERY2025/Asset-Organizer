@@ -18,7 +18,10 @@ vi.mock("../server/auth", () => ({
     permission ? next() : res.status(403).json({ error: "denied" }),
 }));
 vi.mock("../server/db", () => ({
-  db: { select: () => ({ from: () => ({ where: () => Promise.resolve([{ id: "a" }]) }) }) },
+  db: { select: () => ({ from: () => ({
+    where: () => Promise.resolve([{ id: "a" }]),
+    innerJoin: () => ({ where: () => ({ limit: () => Promise.resolve([{ branchId: "a" }]) }) }),
+  }) }) },
 }));
 vi.mock("../server/storage", () => ({
   storage: {
@@ -89,6 +92,15 @@ describe("Operations Center SSE input and mutation filters", () => {
       ["POST", "/api/maintenance-tickets/1/transition"],
       ["POST", "/api/hr/leaves/1/review"],
       ["PATCH", "/api/hr/advances/1"],
+      ["POST", "/api/hr/advance-requests/1/review"],
+      ["POST", "/api/hr/advance-requests/1/send-for-signature"],
+      ["POST", "/api/hr/advance-requests/1/disburse"],
+      ["POST", "/api/my/advance-requests/1/sign"],
+      ["POST", "/api/operations-hr/joining/1/confirm"],
+      ["POST", "/api/operations-hr/joining/1/send"],
+      ["POST", "/api/operations-hr/transfers"],
+      ["POST", "/api/hr/onboarding/1/convert"],
+      ["POST", "/api/public/onboarding/opaque-token/sign"],
       ["POST", "/api/hr/documents"],
       ["POST", "/api/quality-checks"],
       ["PATCH", "/api/attendance/1"],
@@ -126,6 +138,10 @@ describe("Operations Center SSE input and mutation filters", () => {
       "/api/maintenance-tickets-export",
       "/api/hr/leaves-export",
       "/api/hr/advances-extra",
+      "/api/hr/advance-requests-export",
+      "/api/operations-hr-extra",
+      "/api/hr/onboarding-export",
+      "/api/public/onboarding/opaque-token/export",
       "/api/hr/documents-export",
       "/api/quality-checks-v2",
       "/api/attendance-log",
@@ -229,5 +245,28 @@ describe("Operations Center stream lifecycle", () => {
     expect(viewer.res.writableEnded).toBe(true);
     expect(viewer.res.chunks.join("")).not.toContain("event: invalidate");
     actor.res.end();
+  });
+  it("refreshes people after a committed public joining signature using persisted branch scope, never body scope or row data", async () => {
+    vi.useFakeTimers();
+    const viewer = makeFixture();
+    await viewer.route(viewer.req, viewer.res);
+    const signature = (status: number) => {
+      const res = new FakeResponse();
+      res.statusCode = status;
+      viewer.writeMiddleware({
+        method: "POST", path: "/api/public/onboarding/opaque-token/sign",
+        body: { branchId: "unrelated" },
+      }, res, () => {});
+      res.emit("finish");
+    };
+    signature(403);
+    await vi.advanceTimersByTimeAsync(1_001);
+    expect(viewer.res.chunks.join("")).not.toContain("event: invalidate");
+    signature(200);
+    await vi.advanceTimersByTimeAsync(1_001);
+    const hints = viewer.res.chunks.filter(chunk => chunk.includes("event: invalidate"));
+    expect(hints).toHaveLength(1);
+    expect(hints[0]).not.toMatch(/opaque-token|branchId|notificationId|candidate|signature/);
+    viewer.res.end();
   });
 });

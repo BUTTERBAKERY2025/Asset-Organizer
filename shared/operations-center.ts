@@ -1,4 +1,5 @@
 import type { BranchOperationsCard } from "./branch-operations";
+export type { OperationsSupplySource, OperationsSupplyRecord, OperationsSupplySummary, OperationsSupplyResponse } from "./operations-supply";
 
 export type OperationsMetric = {
   key: string;

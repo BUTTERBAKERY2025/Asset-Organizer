@@ -18,8 +18,10 @@ import {
 } from "./manual-production-operations";
 import { db, pool } from "./db";
 import { operationsPayrollReviews } from "@shared/schema";
-import { completeHrEmployeeTransfer, employeeTransferSchemaNotReady, EMPLOYEE_TRANSFER_SCHEMA_ERROR, operationsHrManagerOnly, operationsPayrollCsv, registerOperationsHrRoutes } from "./operations-hr-routes";
+import { completeHrEmployeeTransfer, employeeTransferSchemaNotReady, EMPLOYEE_TRANSFER_SCHEMA_ERROR, operationsHrManagerOnly, registerOperationsHrRoutes } from "./operations-hr-routes";
 import { payrollAttendanceEvidence, payrollReadError, readPayrollSource } from "./operations-payroll-report";
+import { buildOperationsPayrollExport } from "./operations-payroll-export";
+import { operationsPayrollFullCsv } from "@shared/operations-payroll-export";
 import { registerReverseLogisticsRoutes } from "./reverse-logistics-routes";
 import { registerKitchenWarehouseShippingRoutes } from "./kitchen-warehouse-shipping-routes";
 import { assertDeliveryDispatchReady, cancelDeliveryAssignmentForSource, DeliveryDispatchConflict } from "./delivery-dispatch-guard";
@@ -32598,17 +32600,37 @@ export async function registerRoutes(
       res.status(500).json(payrollReadError(error, "تعذر تحميل تقرير الرواتب"));
     }
   });
-  app.get("/api/operations-hr/payroll/export", isAuthenticated, operationsPayrollManagerOnly, requirePermission("operations_hr", "view"), requirePermission("operations_payroll", "export"), async (req, res) => {
+  app.get("/api/operations-hr/payroll/export", isAuthenticated, operationsPayrollManagerOnly, requirePermission("operations_hr", "view"), requirePermission("operations_payroll", "view"), requirePermission("operations_payroll", "export"), async (req, res) => {
+    res.set("Cache-Control", "no-store");
     try {
       const scope = await operationsPayrollScope(req, res);
       if (!scope) return;
-      const report = await buildBranchPreview(scope.branchId, scope.month);
-      res.set("Cache-Control", "no-store");
+      const format = req.query.format ?? "csv";
+      if (typeof format !== "string" || !["csv", "pdf", "xlsx", "gate"].includes(format))
+        return res.status(400).json({ error: "صيغة التصدير غير مدعومة؛ اختر PDF أو Excel أو CSV" });
+      // A final fresh authorization probe before the browser releases a prepared file.
+      if (format === "gate") return res.json({ ...scope, authorized: true });
+      const [report, branch, rows] = await Promise.all([
+        buildBranchPreview(scope.branchId, scope.month),
+        readPayrollSource("branch", () => storage.getBranch(scope.branchId)),
+        readPayrollSource("payments", () => storage.getSalaryPaymentsByBranchAndMonth(scope.branchId, scope.month)),
+      ]);
+      if (!branch) return res.status(404).json({ error: "الفرع غير موجود؛ لم يُنشأ ملف التصدير" });
+      const data = buildOperationsPayrollExport({
+        ...scope, branchName: branch.name, report,
+        payments: rows.map(row => ({
+          id: row.id, branchEmployeeId: row.branchEmployeeId, branchId: row.branchId, month: row.month,
+          paymentMethod: row.paymentMethod, paidAt: typeof row.paidAt === "string" ? row.paidAt : row.paidAt.toISOString(),
+          amount: row.amount ?? null, notes: row.note ?? null,
+        })),
+      });
       if (report.enrichmentFailures.length) {
         res.set("X-Payroll-Enrichment-Failures", report.enrichmentFailures.map(failure => failure.source).join(","));
       }
+      // Never use the view-only response for browser PDF/Excel generation.
+      if (format !== "csv") return res.json(data);
       res.type("text/csv; charset=utf-8");
-      res.attachment(`operations-payroll-${scope.month}.csv`).send(operationsPayrollCsv(report.lines));
+      res.attachment(`operations-payroll-review-${scope.branchId.replace(/[^a-zA-Z0-9_-]/g, "_")}-${scope.month}.csv`).send(operationsPayrollFullCsv(data));
     } catch (error) {
       console.error("Operations payroll export error:", error);
       res.status(500).json(payrollReadError(error, "تعذر تصدير تقرير الرواتب"));

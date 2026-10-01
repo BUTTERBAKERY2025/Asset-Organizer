@@ -14,6 +14,7 @@ const state = vi.hoisted(() => ({
   rows: [] as { branchId: string; date: string; status: string; totalSales: number; netSales?: number }[],
   failed: false,
   queries: [] as { table: string; sql: string; params: unknown[]; selection: string[] }[],
+  poolQuery: vi.fn(),
 }));
 vi.mock("../server/auth", () => ({
   getAllowedBranchIds: () => state.allowed,
@@ -30,7 +31,7 @@ vi.mock("../server/branch-operations", () => ({
 // Any accidental provider call is a test failure; these tests never inspect/set keys.
 vi.mock("openai", () => ({ default: class { constructor() { throw new Error("External AI must not be called by this test"); } } }));
 vi.mock("../server/db", () => ({
-  pool: {},
+  pool: { query: state.poolQuery },
   db: { select: (selection: Record<string, unknown>) => ({
     from: (table: unknown) => {
       let condition: any;
@@ -102,6 +103,16 @@ beforeEach(() => {
   state.rows = [];
   state.failed = false;
   state.queries = [];
+  state.poolQuery.mockReset().mockImplementation(async (sql: string, params: unknown[]) => {
+    // The supply source now validates authorized branches through pool.query,
+    // even when all its source permissions are forbidden. Model the real
+    // branch lookup without replacing supply coverage or insights logic.
+    if (sql === "SELECT id,name FROM branches WHERE id=ANY($1::varchar[]) ORDER BY id") {
+      const requested = params[0] as string[];
+      return { rows: state.allowed.filter(id => requested.includes(id)).map(id => ({ id, name: `Branch ${id}` })) };
+    }
+    throw new Error("Unexpected supply SQL query without a corresponding source grant");
+  });
 });
 afterEach(() => vi.useRealTimers());
 
@@ -264,6 +275,8 @@ describe("deterministic observations and safe AI evidence", () => {
     expect(empty.data).toMatchObject({ kind: "ai", status: "no_evidence", insights: [],
       period: { days: 30, from: "2026-09-02", to: "2026-10-01" }, scope: { branchIds: ["a"] } });
     expect(empty.data.evidenceRevision).toBeTruthy();
+    expect(state.poolQuery).toHaveBeenCalledWith(
+      "SELECT id,name FROM branches WHERE id=ANY($1::varchar[]) ORDER BY id", [["a"]]);
     const cooldown = await invoke("POST /api/operations-center/insights", {}, { branchIds: ["a"], performanceDays: 30 }, "same-actor");
     expect(cooldown.statusCode).toBe(429);
     expect(cooldown.data).toMatchObject({ kind: "ai", status: "cooldown", retryAfterSeconds: 60, insights: [] });

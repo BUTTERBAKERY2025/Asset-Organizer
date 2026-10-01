@@ -10,6 +10,7 @@ import {
   type OperationsPayrollReport, type PayrollFilters,
 } from "@/lib/operations-payroll-report";
 import { OperationsPayrollAttendanceDetails } from "./payroll-attendance";
+import { OperationsPayrollBranchSummary, OperationsPayrollFilteredSummary } from "./payroll-summary";
 
 function DetailPopover({ label, value, children, tone = "" }: {
   label: string; value: ReactNode; children: ReactNode; tone?: string;
@@ -75,28 +76,13 @@ export function OperationsPayrollReportTable({ report, branchId, branchName, mon
   const setFilter = (key: keyof PayrollFilters, value: string) => setFilters(previous => ({ ...previous, [key]: value }));
   const lines = filterOperationsPayroll(report.lines, filters, payments);
   const distinct = (key: "jobTitle" | "nationality") => Array.from(new Set(report.lines.map(line => line[key]).filter(Boolean))).sort();
-  const totals = report.totals;
-  const settlements = payments ? report.lines.map(line => payrollSettlement(line, payments)) : undefined;
-  const unknownAmounts = settlements?.filter(row => row.paid === null).length ?? 0;
+  const hasActiveFilters = Object.entries(filters).some(([key, value]) => key === "search" ? value.trim() !== "" : value !== "all");
   const columns = ["#", "رقم الموظف", "الاسم / حالة الموظف", "الوظيفة", "الإدارة", "الجنسية", "الإقامة / الهوية", "مصدر البيانات",
     "البنك / الآيبان", "أيام العمل", "الحضور", "الغياب", "الراحات الأسبوعية", "الإجازات", "إجازات مدفوعة", "إجازات بدون راتب",
     "أيام مخصومة", "أيام التأخير", "ساعات الجدول", "الساعات الفعلية", "الراتب الأساسي", "بدل السكن", "البدلات", "إجمالي الراتب",
     "قيمة اليوم", "خصم الغياب", "خصم المرضية", "التأمينات (GOSI)", "سُلف / خصومات", "الصافي", "حالة الدفع", "المصروف المسجل", "المتبقي"];
-  return <div className="mt-4 space-y-4" data-testid="operations-full-payroll-report">
-    <div className="rounded-lg border border-border p-3 text-sm">
-      <p className="font-semibold">{branchName} · {month} · عدد الموظفين: {payrollNumber(totals.employeeCount)} · {report.isLocked ? "لقطة إغلاق محفوظة" : "معاينة حية قابلة للتغير"}</p>
-      <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1">
-        <span>الأساسي: {payrollNumber(totals.totalBase)}</span><span>البدلات: {payrollNumber(totals.totalAllowances)}</span><span>الإجمالي: {payrollNumber(totals.totalGross)}</span>
-        <span>خصم الغياب: {payrollNumber(totals.totalAbsenceDeduction)}</span><span>خصم المرضية: {payrollNumber(totals.totalSickLeaveDeduction)}</span>
-        <span>التأمينات: {payrollNumber(totals.totalSocialInsurance)}</span><span>سُلف / خصومات: {payrollNumber(totals.totalManualDeductions)}</span>
-        <strong>الصافي: {payrollNumber(totals.totalNet)} ر.س</strong>
-      </div>
-      {settlements && <div className="mt-2 border-t border-border pt-2">
-        <p>المصروف ذو المبلغ المسجل: {payrollNumber(settlements.reduce((sum, row) => sum + (row.paid ?? 0), 0))} · المتبقي معلوم المبلغ: {payrollNumber(settlements.reduce((sum, row) => sum + (row.remaining ?? 0), 0))} ر.س</p>
-        {unknownAmounts > 0 && <p className="text-amber-700">المصروف والمتبقي غير معلومين لـ {unknownAmounts} موظف بسبب مؤشر صرف دون مبلغ أو عدم وجود معرّف موظف مرتبط.</p>}
-      </div>}
-      <p className="mt-2 text-xs text-muted-foreground">القيم من احتساب شؤون الموظفين على الخادم، دون إعادة احتساب الراتب في المتصفح. جميع التفاصيل للقراءة فقط؛ مراجعة التشغيل لا تغلق الرواتب أو تصرفها.</p>
-    </div>
+  return <div className="mt-4 min-w-0 space-y-4" data-testid="operations-full-payroll-report">
+    <OperationsPayrollBranchSummary report={report} branchName={branchName} month={month} payments={payments} />
     {report.enrichmentFailures?.map((failure, index) => <p key={`${failure.source}-${index}`} role="alert" className="text-sm text-destructive">{failure.message} · القيم المالية محفوظة؛ البيانات الحالية للموظف غير مكتملة.</p>)}
     {report.warnings.length > 0 && <details className="rounded-lg border border-border p-3 text-xs">
       <summary className="cursor-pointer font-semibold">تنبيهات تقرير شؤون الموظفين ({report.warnings.length})</summary>
@@ -116,7 +102,8 @@ export function OperationsPayrollReportTable({ report, branchId, branchName, mon
         <PayrollFilter label="طريقة الدفع" value={filters.paymentMethod} onChange={value => setFilter("paymentMethod", value)} values={Object.entries(SALARY_PAYMENT_METHOD_LABELS)} />
       </>}
     </div>
-    <p className="text-xs text-muted-foreground">المعروض: {lines.length} من {report.lines.length} · المبالغ بالريال السعودي · اضغط أعداد الأيام والخصومات لعرض التفاصيل. مرّر أفقيًا لعرض جميع الأعمدة. التصدير يشمل تقرير الفرع الكامل ولا يتأثر بفلاتر العرض.</p>
+    {hasActiveFilters && <OperationsPayrollFilteredSummary lines={lines} fullCount={report.totals.employeeCount} payments={payments} />}
+    <p className="text-sm text-muted-foreground">المعروض في الكشف: <bdi dir="ltr" className="tabular-nums">{payrollNumber(lines.length)}</bdi> من <bdi dir="ltr" className="tabular-nums">{payrollNumber(report.totals.employeeCount)}</bdi> موظف في كشف الفرع · المبالغ بالريال السعودي · اضغط أعداد الأيام والخصومات لعرض التفاصيل. مرّر أفقيًا لعرض جميع الأعمدة. التصدير يشمل تقرير الفرع الكامل ولا يتأثر بفلاتر العرض.</p>
     {report.lines.length === 0 ? <p className="rounded-lg border border-border p-4 text-sm">لا يوجد موظفون في تقرير الرواتب لهذا الفرع والشهر.</p> : lines.length === 0 ? <p className="rounded-lg border border-border p-4 text-sm">{!payments && (filters.payment !== "all" || filters.paymentMethod !== "all") ? "انتظر تحميل حالة الدفع أو أزل فلتر الدفع؛ لا يمكن تحديد المدفوع والمتبقي حاليًا." : "لا يوجد موظفون يطابقون البحث والفلاتر."}</p> :
       <div role="region" aria-label="تقرير الرواتب التفصيلي، قابل للتمرير أفقيًا وعموديًا" tabIndex={0} className="max-h-[65vh] max-w-full overflow-auto rounded-lg border border-border">
         <table className="w-full min-w-max border-separate border-spacing-0 text-center text-xs [&_td]:border-b [&_td]:border-border [&_td]:px-3 [&_td]:py-3 [&_td]:align-top">

@@ -263,15 +263,24 @@ async function deliverPush(n: SystemNotification): Promise<void> {
   const pendingSubs = subs.filter((sub) => !deliveredIds.has(sub.id));
   if (!pendingSubs.length) return;
 
+  // Reuse the existing delivery receipt/outbox. Different recipients may have
+  // different legal source workspaces; no second push or new notice is created.
+  const { projectSourceNotificationForRecipient } = await import("./source-notification-projection");
+  const projected = new Map<string, SystemNotification | null>();
+  await Promise.all([...new Set(pendingSubs.map(s => s.userId))].map(async id => {
+    projected.set(id, await projectSourceNotificationForRecipient(n, id));
+  }));
   const results = await Promise.allSettled(
     pendingSubs.map(async (s) => {
+      const notice = projected.get(s.userId);
+      if (!notice) return; // permission/custody revoked since target resolution
       try {
         await webpush.sendNotification(
           { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
           JSON.stringify({
-            title: n.title || "إشعار جديد",
-            body: (n.content || "").slice(0, 300),
-            url: n.buttonAction || "/",
+            title: notice.title || "إشعار جديد",
+            body: (notice.content || "").slice(0, 300),
+            url: notice.buttonAction || "/",
             tag: `sysnotif-${n.id}`,
             userId: s.userId,
           }),

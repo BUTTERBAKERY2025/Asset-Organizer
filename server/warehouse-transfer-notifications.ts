@@ -4,6 +4,8 @@ import {
   systemNotifications,
   userBranchAccess,
   userPermissions,
+  userPermissionOverrides,
+  permissions,
   users,
   ROLE_PERMISSION_TEMPLATES,
   type MaterialTransfer,
@@ -97,7 +99,14 @@ async function authorizedPeople(executor: Executor, action: "view" | "edit"): Pr
   for (const row of accessRows) {
     branchIds.set(row.userId, [...(branchIds.get(row.userId) || []), row.branchId]);
   }
-  return rows.filter((row: any) => hasWarehouseAction(
+  const overrides = await executor.select({
+    userId: userPermissionOverrides.userId, action: permissions.action,
+    allow: userPermissionOverrides.allow, expiresAt: userPermissionOverrides.expiresAt,
+  }).from(userPermissionOverrides).innerJoin(permissions, eq(userPermissionOverrides.permissionId, permissions.id))
+    .where(eq(permissions.module, "warehouse"));
+  const denied = new Set(overrides.filter((row: any) => row.allow === false && row.action === action
+    && (!row.expiresAt || new Date(row.expiresAt).getTime() > Date.now())).map((row: any) => row.userId));
+  return rows.filter((row: any) => !denied.has(row.id) && hasWarehouseAction(
     row.role,
     Array.isArray(row.actions) ? row.actions : null,
     action,
@@ -166,13 +175,14 @@ export async function filterAuthorizedWarehouseTransferNotificationUsers(
   candidateUserIds: string[],
 ): Promise<string[]> {
   if (notification.accessModule !== "warehouse") return candidateUserIds;
-  const transferId = Number(notification.buttonAction?.match(/transferId=(\d+)/)?.[1]);
+  const transferId = Number(notification.dedupeKey?.match(/^warehouse-transfer:([1-9]\d*):/)?.[1]);
+  const linkedId = notification.buttonAction?.match(/[?&]transferId=(\d+)(?:&|$)/)?.[1];
   const event = notification.dedupeKey?.split(":")[2] as WarehouseTransferNotificationEvent;
-  if (!transferId || !EVENT_COPY[event]) return [];
+  if (!transferId || (linkedId && Number(linkedId) !== transferId) || !EVENT_COPY[event]) return [];
   const [transfer] = await executor.select().from(materialTransfers).where(eq(materialTransfers.id, transferId));
   if (!transfer) return [];
   const current = await routedWarehouseTransferRecipients(executor, transfer, event);
-  return candidateUserIds.filter(id => current.includes(id));
+  return candidateUserIds.filter(id => notification.targetUserIds?.includes(id) && current.includes(id));
 }
 
 export async function insertWarehouseTransferNotification(

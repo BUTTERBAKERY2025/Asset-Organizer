@@ -4,7 +4,12 @@ import { createHash } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { pnlMonthlyInputs } from "@shared/schema";
 import { monthlyEvidence, monthCalendar, payrollBalance, type OperationsMonthWorkflow,
-  type OperationsMonthCommit, type OperationsMonthCommandResult } from "@shared/operations-month-workflow";
+  type OperationsMonthCommit, type OperationsMonthCommandResult, type OperationsMonthSource,
+  type OperationsMonthFailure, type OperationsMonthAllWorkflow, type OperationsMonthBranch } from "@shared/operations-month-workflow";
+import { REGISTERED_SALES_SOURCE, REGISTERED_SALES_DEFINITION, operationsMonthPeriod,
+  registeredSalesHref, projectRegisteredSales } from "@shared/operations-performance";
+import { loadOperationsRegisteredSales } from "./operations-performance";
+import { summarizeOperationsMonth } from "./operations-month-summary";
 import { db, pool } from "./db";
 import { storage } from "./storage";
 import { getAllowedBranchIds, isAuthenticated, requirePermission } from "./auth";
@@ -23,21 +28,48 @@ const fingerprint = (rows: unknown, declarations: unknown) =>
 async function hasEffectiveViewPermission(req: Request, module: string, action = "view"): Promise<boolean> {
   let denied = false;
   let allowed = false;
-  const response = { status: () => response, json: () => { denied = true; return response; } };
-  await requirePermission(module, action)(req, response as any, () => { allowed = true; });
+  let responseStatus = 200;
+  let failure: unknown;
+  const response = { status: (status: number) => { responseStatus = status; return response; },
+    json: () => { denied = true; return response; } };
+  try {
+    await requirePermission(module, action)(req, response as any, (cause?: unknown) => {
+      if (cause) failure = cause; else allowed = true;
+    });
+  } catch (cause) { failure = cause; }
+  if (failure || responseStatus >= 500) throw error(503, "تعذر التحقق من صلاحية المصدر؛ لم نعرض بيانات غير مؤكدة");
   return allowed && !denied;
 }
 
-async function scope(req: Request) {
+async function scope(req: Request): Promise<{ branchId: string; month: string; branches?: { id: string; name: string }[] }> {
   const input = req.method === "GET" ? req.query : req.body;
   const branchId = input?.branchId;
   const month = input?.month;
-  if (typeof branchId !== "string" || !branchId || branchId === "all" || branchId.length > 100 ||
+  if (typeof branchId !== "string" || !branchId || branchId.length > 100 ||
       typeof month !== "string") throw error(400, "اختر فرعاً واحداً وشهراً صحيحاً");
   try { monthCalendar(month); } catch { throw error(400, "صيغة الشهر غير صحيحة"); }
+  if (branchId === "all" && req.method !== "GET") throw error(400, "عرض كل الفروع للقراءة فقط؛ اختر فرعاً واحداً لحفظ إجراء");
   const allowed = getAllowedBranchIds(req);
+  if (branchId === "all") {
+    if (allowed !== null && !allowed.length) throw error(403, "لا توجد فروع مسموحة لحسابك");
+    let branches: { id: string; name: string }[];
+    try {
+      branches = (await pool.query(
+        `SELECT id,name FROM branches WHERE id NOT IN ('hq','main_warehouse')
+         AND ($1::text[] IS NULL OR id=ANY($1::text[])) ORDER BY id`, [allowed])).rows;
+    } catch {
+      throw error(503, "تعذر التحقق من نطاق الفروع المسموح؛ لم نعرض بيانات غير مؤكدة");
+    }
+    // Defense in depth; never use the client's current board selection as scope.
+    branches = branches.filter(branch => !["hq", "main_warehouse"].includes(branch.id) &&
+      (allowed === null || allowed.includes(branch.id)));
+    if (!branches.length) throw error(403, "لا توجد فروع تشغيل مسموحة لحسابك");
+    return { branchId, month, branches };
+  }
   if (allowed !== null && !allowed.includes(branchId)) throw error(403, "الفرع خارج صلاحياتك");
-  const branch = await pool.query("SELECT id FROM branches WHERE id=$1", [branchId]);
+  let branch;
+  try { branch = await pool.query("SELECT id FROM branches WHERE id=$1", [branchId]); }
+  catch { throw error(503, "تعذر التحقق من وجود الفرع؛ لم نعرض بيانات غير مؤكدة"); }
   if (!branch.rowCount) throw error(404, "الفرع غير موجود");
   // Keep operations-manager employee/financial scope consistent with operations HR.
   if (req.currentUser?.role === "operations_manager" && ["hq", "main_warehouse"].includes(branchId))
@@ -77,52 +109,104 @@ function sourceUnavailable(source: string, sourceError: unknown, message: string
     : message;
 }
 
+function failureDetail(source: OperationsMonthSource, sourceError: unknown, message: string): OperationsMonthFailure {
+  const failure = sourceError as { code?: string; cause?: { code?: string } };
+  const code = failure?.code || failure?.cause?.code;
+  return { source, state: "unavailable", kind: code === "42P01" || code === "42703" ? "schema_not_ready" : "query_failed", message };
+}
+
+function recordFailure(output: OperationsMonthWorkflow, source: OperationsMonthSource, cause: unknown, message: string) {
+  output.sourceFailures.push(source);
+  output.sourceStates![source] = "unavailable";
+  output.sourceFailureDetails!.push(failureDetail(source, cause, message));
+}
+
+function finiteAmount(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") return null;
+  const amount = Number(value);
+  return Number.isFinite(amount) ? amount : null;
+}
+
 async function load(req: Request, branchId: string, month: string): Promise<OperationsMonthWorkflow> {
-  const canDaily = await hasEffectiveViewPermission(req, "daily_closures");
+  const permissionErrors = new Map<OperationsMonthSource, unknown>();
+  const sourcePermission = async (source: OperationsMonthSource, module: string) => {
+    try { return await hasEffectiveViewPermission(req, module); }
+    catch (cause) { permissionErrors.set(source, cause); return false; }
+  };
+  const canDaily = await sourcePermission("daily", "daily_closures");
+  if (permissionErrors.has("daily")) permissionErrors.set("review", permissionErrors.get("daily"));
   const canEdit = await hasEffectiveViewPermission(req, "operations", "edit");
   const isOperationsManager = req.currentUser?.role === "operations_manager";
   const canPayroll = isOperationsManager
-    ? await hasEffectiveViewPermission(req, "operations_payroll") && await hasEffectiveViewPermission(req, "operations_hr")
-    : await hasEffectiveViewPermission(req, "salary_closing");
-  const canSalaryView = !isOperationsManager && await hasEffectiveViewPermission(req, "salary_closing");
+    ? await sourcePermission("payroll", "operations_payroll") && await sourcePermission("payroll", "operations_hr")
+    : await sourcePermission("payroll", "salary_closing");
+  const canSalaryView = !isOperationsManager && canPayroll;
   const canSalaryEdit = canSalaryView && await hasEffectiveViewPermission(req, "salary_closing", "edit");
-  const canCosts = await hasEffectiveViewPermission(req, "pnl_dashboard") && await hasEffectiveViewPermission(req, "pnl");
-  const canSales = await hasEffectiveViewPermission(req, "sales_analytics");
+  const canCosts = await sourcePermission("expenses", "pnl_dashboard") && await sourcePermission("expenses", "pnl");
+  const canSales = await sourcePermission("sales", "sales_analytics");
   const unavailable = "لا تملك صلاحية عرض المصدر؛ لم نمنح صلاحيات إضافية";
   const output: OperationsMonthWorkflow = {
-    branchId, month, generatedAt: new Date().toISOString(), sourceFailures: [],
+    mode: "single", branchId, month, generatedAt: new Date().toISOString(), sourceFailures: [],
+    sourceStates: { payroll: "forbidden", expenses: "forbidden", daily: "forbidden", review: "forbidden", sales: "forbidden" },
+    sourceFailureDetails: [],
+    provenance: { financialMetrics: "live_source_metrics", review: "operational_daily_review_snapshot", financialApproval: false },
     payroll: { available: false, reason: unavailable, status: "unavailable", due: null, paid: null, remaining: null,
       overpaid: null, recordedPaid: null, settlementStatus: "unavailable", unreconciledPaymentCount: null, unreconciledPaymentAmount: null,
-      unknownPaymentAmounts: null, sourceHref: null, canManage: false, employees: [], payments: [] },
+      unknownPaymentAmounts: null, snapshotMismatch: null, snapshotHeaderDue: null, snapshotLinesDue: null,
+      sourceHref: null, canManage: false, employees: [], payments: [] },
     expenses: { available: false, reason: unavailable, recorded: null, paid: null, items: [], sourceHref: null, canManage: false },
     closing: { available: false, reason: unavailable, status: "unavailable", ended: month < today().slice(0, 7),
       drifted: null, dailyEvidenceAvailable: false, reviewEvidenceAvailable: false,
       canClose: false, canReopen: false, canDeclare: false, revision: null,
       closedAt: null, closedBy: null, dailyRecords: [], missingDates: [], declarations: [], blockers: [],
-      sourceHref: href("/branch-daily-closures", branchId, month), history: [] },
+      snapshotRecords: null, sourceHref: href("/branch-daily-closures", branchId, month), history: [] },
     sales: { available: false, reason: unavailable, confirmed: null, closedDays: null,
-      sourceHref: canSales ? href("/sales-analytics", branchId, month) : null },
+      state: "forbidden", recordedCount: null, recordedBranchDays: null, lastRecordedDate: null,
+      source: REGISTERED_SALES_SOURCE, definition: REGISTERED_SALES_DEFINITION, coverage: "unavailable", isNet: false,
+      daily: projectRegisteredSales([branchId], monthCalendar(month), [], "forbidden", []).daily,
+      sourceHref: canSales ? `${registeredSalesHref(branchId, operationsMonthPeriod(month).from, operationsMonthPeriod(month).to)}&month=${month}` : null },
   };
+  const permitted: Record<OperationsMonthSource, boolean> = {
+    payroll: canPayroll, expenses: canCosts, daily: canDaily, review: canDaily, sales: canSales,
+  };
+  for (const source of Object.keys(permitted) as OperationsMonthSource[]) {
+    if (permissionErrors.has(source)) {
+      const reason = "تعذر التحقق من صلاحية المصدر؛ البيانات غير متاحة مؤقتاً، وليس رفض صلاحية أو مبلغاً صفرياً";
+      recordFailure(output, source, permissionErrors.get(source), reason);
+      if (source === "daily" || source === "review") output.closing.reason = reason;
+      else output[source].reason = reason;
+      if (source === "sales") output.sales.state = "unavailable";
+    } else if (!permitted[source]) {
+      output.sourceFailureDetails!.push({ source, state: "forbidden", kind: "forbidden", message: unavailable });
+    }
+  }
   if (canPayroll) {
     try {
       const closures = await pool.query("SELECT id,status,total_net FROM salary_closures WHERE branch_id=$1 AND month=$2", [branchId, month]);
       const closure = closures.rows[0];
       const lines = closure?.status === "closed" ? (await pool.query(
         `SELECT branch_employee_id AS "employeeId", employee_name AS name, net_salary AS due
-         FROM salary_closure_lines WHERE closure_id=$1 ORDER BY branch_employee_id`, [closure.id])).rows : [];
+         FROM salary_closure_lines WHERE closure_id=$1 ORDER BY branch_employee_id`, [closure.id])).rows.map(row => {
+          const due = finiteAmount(row.due);
+          if (due === null) throw new Error("Invalid salary snapshot amount");
+          return { ...row, due };
+        }) : [];
       const payments = (await pool.query(
         `SELECT id,branch_employee_id AS "employeeId",amount,payment_method AS method,paid_at AS "paidAt",
          created_by_name AS actor,note FROM salary_payments WHERE branch_id=$1 AND month=$2 ORDER BY paid_at,id`,
-        [branchId, month])).rows.map(row => ({ ...row, paidAt: iso(row.paidAt) }));
+         [branchId, month])).rows.map(row => ({ ...row, amount: finiteAmount(row.amount), paidAt: iso(row.paidAt) }));
       const balance = payrollBalance(lines, payments);
       const snapshotAvailable = closure?.status === "closed";
-      const remaining = snapshotAvailable ? balance.remaining : null;
-      const overpaid = snapshotAvailable ? balance.overpaid : null;
+      const headerDue = snapshotAvailable ? finiteAmount(closure.total_net) : null;
+      const mismatch = snapshotAvailable && (headerDue === null || Math.round(headerDue * 100) !== Math.round(balance.due * 100));
+      const remaining = snapshotAvailable && !mismatch ? balance.remaining : null;
+      const overpaid = snapshotAvailable && !mismatch ? balance.overpaid : null;
       const membership = new Set(lines.map(line => line.employeeId));
       output.payroll = { available: true, status: closure?.status || "not_closed", ...balance,
-        due: snapshotAvailable ? Number(closure.total_net) : null,
-        paid: snapshotAvailable ? balance.paid : null, remaining, overpaid,
-        settlementStatus: !snapshotAvailable ? "not_closed" : balance.unreconciledPaymentCount ? "unreconciled"
+        due: headerDue, snapshotHeaderDue: headerDue, snapshotLinesDue: snapshotAvailable ? balance.due : null,
+        snapshotMismatch: snapshotAvailable ? mismatch : null,
+        paid: snapshotAvailable && !mismatch ? balance.paid : null, remaining, overpaid,
+        settlementStatus: !snapshotAvailable ? "not_closed" : mismatch || balance.unreconciledPaymentCount ? "unreconciled"
           : balance.unknownPaymentAmounts ? "unknown_amount" : overpaid! > 0 ? "overpaid"
           : remaining === 0 ? "paid" : balance.paid === 0 ? "unpaid" : "partial",
         sourceHref: isOperationsManager
@@ -131,18 +215,24 @@ async function load(req: Request, branchId: string, month: string): Promise<Oper
         employees: lines.map(line => { const sum = payrollBalance([line], payments.filter(p => p.employeeId === line.employeeId));
           return { ...line, paid: sum.paid, remaining: sum.remaining, overpaid: sum.overpaid }; }),
         payments: payments.map(payment => ({ ...payment, reconciled: snapshotAvailable && membership.has(payment.employeeId) })) };
-      if (balance.unreconciledPaymentCount && snapshotAvailable) output.payroll.reason = "توجد دفعات لا تطابق موظفي لقطة الإغلاق المحفوظة؛ يلزم تسويتها قبل إثبات المتبقي";
+      output.sourceStates!.payroll = "available";
+      if (mismatch) output.payroll.reason = "إجمالي رأس إغلاق الرواتب لا يطابق مجموع سطور الموظفين؛ اللقطة غير متطابقة ولا تثبت تسوية الرواتب";
+      else if (balance.unreconciledPaymentCount && snapshotAvailable) output.payroll.reason = "توجد دفعات لا تطابق موظفي لقطة الإغلاق المحفوظة؛ يلزم تسويتها قبل إثبات المتبقي";
       else if (balance.unknownPaymentAmounts) output.payroll.reason = "توجد سجلات صرف بلا مبلغ؛ لا يمكن إثبات مجموع المصروف أو المتبقي";
       else if (closure?.status !== "closed") output.payroll.reason = "لم تُعتمد لقطة رواتب مغلقة؛ لا نعرض راتباً مستحقاً تقديرياً";
     } catch (sourceError) {
-      output.sourceFailures.push("payroll");
       output.payroll.reason = sourceUnavailable("Payroll", sourceError,
         "تعذر تحميل أدلة الرواتب والصرف؛ المستحق والمصروف والمتبقي غير متاحين، وليست صفراً.");
+      recordFailure(output, "payroll", sourceError, output.payroll.reason);
     }
   }
   if (canCosts) {
     try {
       const [year, number] = month.split("-").map(Number);
+      // These storage readers intentionally tolerate missing legacy tables.
+      // Validate readiness first so their []/missing fallback cannot become a complete monthly total.
+      await pool.query(`SELECT branch_id,monthly_amount,effective_from,effective_to,is_active FROM pnl_recurring_expenses WHERE false`);
+      await pool.query(`SELECT branch_id,monthly_amount,effective_from,effective_to FROM pnl_rent_history WHERE false`);
       const [inputs, rent, recurring] = await Promise.all([
         db.select().from(pnlMonthlyInputs).where(and(eq(pnlMonthlyInputs.branchId, branchId), eq(pnlMonthlyInputs.year, year), eq(pnlMonthlyInputs.month, number))),
         storage.getRentEvidenceForPeriod(branchId, year, number), storage.getRecurringExpensesForPeriod(branchId, year, number),
@@ -152,47 +242,58 @@ async function load(req: Request, branchId: string, month: string): Promise<Oper
         bankFees: "رسوم بنكية", fuelCost: "وقود", maintenanceCost: "صيانة", marketingCost: "تسويق", suppliesCost: "مستلزمات", otherCosts: "تكاليف أخرى" };
       const input = inputs[0];
       const items = Object.entries(labels).filter(([key]) => input && (input as any)[key] !== null)
-        .map(([key, label]) => ({ label, amount: Number((input as any)[key] || 0) }));
-      if (rent.found) items.push({ label: "إيجار", amount: Number(rent.amount) });
-      for (const row of recurring) items.push({ label: "عقد متكرر مسجل", amount: Number(row.monthlyAmount || 0) });
-      output.expenses = { available: true, recorded: input || rent.found || recurring.length ? Math.round(items.reduce((s, i) => s + i.amount, 0) * 100) / 100 : null,
-        paid: null, items, sourceHref: href("/pnl-dashboard", branchId, month),
+        .map(([key, label]) => ({ label, amount: finiteAmount((input as any)[key]) }));
+      if (rent.found) items.push({ label: "إيجار", amount: finiteAmount(rent.amount) });
+      for (const row of recurring) items.push({ label: "عقد متكرر مسجل", amount: finiteAmount(row.monthlyAmount) });
+      if (items.some(item => item.amount === null)) throw new Error("Invalid recorded expense amount");
+      const knownItems = items as { label: string; amount: number }[];
+      output.expenses = { available: true, recorded: input || rent.found || recurring.length ? Math.round(knownItems.reduce((s, i) => s + i.amount, 0) * 100) / 100 : null,
+        paid: null, items: knownItems, sourceHref: href("/pnl-dashboard", branchId, month),
         canManage: await hasEffectiveViewPermission(req, "pnl", "edit"), reason: "تكاليف مسجلة؛ المصدر لا يثبت الدفع النقدي. لا تشمل الرواتب أو تكلفة البضاعة." };
+      output.sourceStates!.expenses = "available";
     } catch (sourceError) {
       // A missing optional financial source must not break payroll or the
       // operational workflow, nor turn an incomplete total into a real zero.
-      output.sourceFailures.push("expenses");
       output.expenses.reason = sourceUnavailable("Expense", sourceError,
         "تعذر تحميل مصادر المصروفات؛ لم نعرض إجمالياً ناقصاً أو بيانات قديمة.");
+      recordFailure(output, "expenses", sourceError, output.expenses.reason);
     }
   }
-  if (canDaily || canSales) {
-    // Financial results need daily records, not the review table. A failed
-    // review read must not hide daily evidence or invent an empty month.
+  if (canSales) {
+    try {
+      const period = operationsMonthPeriod(month);
+      const registered = await loadOperationsRegisteredSales([branchId], period.from, period.to);
+      output.sales = { ...output.sales, available: true, reason: undefined, state: registered.state,
+        confirmed: registered.total, recordedCount: registered.recordedCount,
+        recordedBranchDays: registered.recordedBranchDays, lastRecordedDate: registered.lastRecordedDate,
+        source: registered.source, definition: registered.definition, coverage: registered.coverage, daily: registered.daily };
+      output.sourceStates!.sales = "available";
+    } catch (sourceError) {
+      output.sales.state = "unavailable";
+      output.sales.reason = sourceUnavailable("Registered sales", sourceError,
+        "تعذر تحميل المبيعات المسجلة في اليوميات المرحلة والمعتمدة؛ المبلغ غير متاح وليس صفراً.");
+      recordFailure(output, "sales", sourceError, output.sales.reason);
+    }
+  }
+  if (canDaily) {
+    // Operational daily review evidence is independent of live journal sales.
     const [daily, review] = await Promise.allSettled([
       dailyEvidence(pool, branchId, month),
-      canDaily ? reviewEvidence(pool, branchId, month) : Promise.resolve(undefined),
+      reviewEvidence(pool, branchId, month),
     ]);
     const records = daily.status === "fulfilled" ? daily.value : null;
     const state = review.status === "fulfilled" ? review.value : undefined;
     const dailyReason = daily.status === "rejected" ? sourceUnavailable("Daily", daily.reason,
-      "تعذر تحميل أدلة الأيام؛ المبيعات واكتمال الأيام غير مؤكدين، ولا يمكن إغلاق الشهر.") : undefined;
+      "تعذر تحميل أدلة الأيام؛ اكتمال الأيام غير مؤكد ولا يمكن إغلاق المراجعة التشغيلية.") : undefined;
     const reviewReason = review.status === "rejected" ? sourceUnavailable("Review", review.reason,
       "تعذر تحميل ملف المراجعة الشهرية وإصداره؛ لا يمكن إثبات حالة الشهر أو حفظ إجراء عليه.") : undefined;
-    if (dailyReason) output.sourceFailures.push("daily");
-    if (reviewReason) output.sourceFailures.push("review");
-    if (canSales && records) {
-      const closed = records.filter(r => r.status === "closed");
-      output.sales.available = true;
-      output.sales.reason = undefined;
-      output.sales.confirmed = closed.length ? Math.round(closed.reduce((s, r) => s + Number(r.sales), 0) * 100) / 100 : null;
-      output.sales.closedDays = new Set(closed.map(r => r.date)).size;
-    } else if (canSales) {
-      output.sales.reason = dailyReason;
-    }
+    if (dailyReason && daily.status === "rejected") recordFailure(output, "daily", daily.reason, dailyReason);
+    else output.sourceStates!.daily = "available";
+    if (reviewReason && review.status === "rejected") recordFailure(output, "review", review.reason, reviewReason);
+    else output.sourceStates!.review = "available";
     if (canDaily) {
       const declarations = review.status === "fulfilled" ? state?.declarations || [] : [];
-      const checks = records && review.status === "fulfilled" ? monthlyEvidence(month, records, declarations) : null;
+      const checks = records && review.status === "fulfilled" ? monthlyEvidence(month, records, declarations, today()) : null;
       const blockers = [
         ...(dailyReason ? [dailyReason] : []), ...(reviewReason ? [reviewReason] : []),
         ...(checks?.openRecords.map(r => `السجل اليومي ${r.date} غير مغلق`) || []),
@@ -208,15 +309,38 @@ async function load(req: Request, branchId: string, month: string): Promise<Oper
         status: review.status === "fulfilled" ? state?.status || "open" : "unavailable",
         revision: review.status === "fulfilled" ? state?.revision || 0 : null,
         closedAt: state?.closed_at ? iso(state.closed_at) : null, closedBy: state?.closed_by_name || state?.closed_by || null,
+        snapshotRecords: state?.snapshot?.map((r: any) => ({ id: r.id, date: r.date, status: r.status, sales: finiteAmount(r.sales) })) || null,
         drifted: drifted === null ? null : !!drifted, declarations, missingDates: checks?.missingDates || [], blockers,
         canClose: canEdit && !!checks && state?.status !== "closed" && !blockers.length,
         canReopen: canEdit && !!checks && state?.status === "closed",
         canDeclare: canEdit && !!checks && state?.status !== "closed" && output.closing.ended,
-        dailyRecords: (records || []).map(r => ({ id: r.id, date: r.date, status: r.status, sales: Number(r.sales),
+        dailyRecords: (records || []).map(r => ({ id: r.id, date: r.date, status: r.status, sales: finiteAmount(r.sales),
           href: `/branch-daily-closures/${r.id}?branchId=${encodeURIComponent(branchId)}` })), history: state?.history || [] };
     }
   }
   return output;
+}
+
+async function loadAll(req: Request, month: string, branches: { id: string; name: string }[]): Promise<OperationsMonthAllWorkflow> {
+  const projections: OperationsMonthBranch[] = new Array(branches.length);
+  let cursor = 0;
+  // No branch scan cap: resolve the entire authorized scope, but never fan out
+  // an unbounded number of payroll/financial/evidence queries.
+  await Promise.all(Array.from({ length: Math.min(3, branches.length) }, async () => {
+    while (cursor < branches.length) {
+      const index = cursor++;
+      const branch = branches[index];
+      const workflow = await load(req, branch.id, month);
+      workflow.payroll.canManage = false;
+      workflow.expenses.canManage = false;
+      workflow.closing.canClose = false;
+      workflow.closing.canReopen = false;
+      workflow.closing.canDeclare = false;
+      workflow.closing.revision = null;
+      projections[index] = { branchId: branch.id, branchName: branch.name, workflow };
+    }
+  }));
+  return summarizeOperationsMonth(month, projections);
 }
 
 const savedRefreshUnavailable = "تم حفظ الإجراء؛ تعذر تحديث ملف الشهر الآن. لا تُعد إرسال الإجراء، وحدّث الملف للتحقق من الحالة المحفوظة.";
@@ -240,7 +364,11 @@ export async function refreshCommittedMonth(
 
 export function registerOperationsMonthWorkflow(app: Express) {
   app.get("/api/operations-center/month-workflow", isAuthenticated, requirePermission("operations", "view"), async (req, res, next) => {
-    try { const { branchId, month } = await scope(req); res.setHeader("Cache-Control", "no-store"); res.json(await load(req, branchId, month)); }
+    try {
+      const { branchId, month, branches } = await scope(req);
+      res.setHeader("Cache-Control", "no-store");
+      res.json(branchId === "all" ? await loadAll(req, month, branches!) : await load(req, branchId, month));
+    }
     catch (e) { next(e); }
   });
   for (const action of ["close", "reopen", "declare", "remove-declaration"] as const) {

@@ -85,7 +85,9 @@ describe("existing center breadcrumb is reused rather than duplicated", () => {
     expect(back.searchParams.get("monthBranchId")).toBe("one");
     expect(back.searchParams.get("month")).toBe("2026-09");
     expect(back.searchParams.get("monthFile")).toBe("payroll");
-    expect(operationsCenterReturnHref(destination.search, [])).toBe("/operations-center");
+    // An entirely revoked explicit center selection must stay denied rather
+    // than silently becoming the new full authorized scope on return.
+    expect(operationsCenterReturnHref(destination.search, [])).toBe("/operations-center?branchIds=one%2Ctwo");
   });
 
   it("confirms Layout already renders the authorized source-page breadcrumb", () => {

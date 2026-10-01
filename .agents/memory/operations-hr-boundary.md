@@ -15,6 +15,12 @@ Payroll review by the operations manager is advisory and must never block HR app
 
 **How to apply:** Keep review permission distinct from closing authority; describe review records as advisory, not as final payroll approval or proof that later-changing live amounts were approved.
 
+Printed/exported operations payroll reports must identify Operations as their issuer and distinguish review copies from HR's final payroll approval, including when their data comes from a closed snapshot.
+
+**Why:** The user explicitly requires this distinction so an operations-exported paper cannot be mistaken for the final HR payroll document.
+
+**How to apply:** Repeat a discreet Operations review-only watermark and disclaimer on every PDF page; identify the full branch/month scope and source state in every export format.
+
 Scoped payroll review/export, joining-link creation and signed-joining approval, and employee transfer are baseline operations-manager capabilities, not optional hidden tools.
 
 **Why:** The user explicitly authorized these capabilities after screenshots showed the role could open the center but was denied its required workflows. Their requested authority is over all employees and accepted-offer recruits in explicitly permitted branches, not company-wide HR administration.

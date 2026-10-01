@@ -16,6 +16,8 @@ vi.mock("../server/shareholder-security", () => ({
 import { canAccessBranch, requirePermission } from "../server/auth";
 import { operationsPayrollCsv } from "../server/operations-hr-routes";
 import { payrollReadError, readPayrollSource } from "../server/operations-payroll-report";
+import { buildOperationsPayrollExport } from "../server/operations-payroll-export";
+import { operationsPayrollFullCsv } from "../shared/operations-payroll-export";
 
 // Run the actual scope function and registered route handlers without booting
 // unrelated services in routes.ts. Persistence is mocked; grants and scope are not.
@@ -55,7 +57,11 @@ const scope = evaluate(expressionFor("operationsPayrollScope"), {
   canAccessBranch,
   isValidMonth: (month: unknown) => typeof month === "string" && /^\d{4}-(0[1-9]|1[0-2])$/.test(month),
 });
-const report = { lines: [{ employeeName: "Scoped employee", netSalary: 1000 }], totalNet: 1000, isLocked: true, enrichmentFailures: [] };
+const report = {
+  lines: [{ branchEmployeeId: 18, employeeName: "Scoped employee", netSalary: 1000 }],
+  totals: { totalNet: 1000, employeeCount: 1 }, isLocked: true, enrichmentFailures: [], warnings: [],
+  unlinkedSummary: { totalRecords: 0, presentRecords: 0, totalHours: 0 },
+};
 const preview = vi.fn(async () => report);
 const saved: Record<string, unknown>[] = [];
 const db = {
@@ -78,6 +84,8 @@ const dependencies = {
   operationsPayrollCsv,
   payrollReadError,
   readPayrollSource,
+  buildOperationsPayrollExport, operationsPayrollFullCsv,
+  storage: { getBranch: async () => ({ id: "branch-a", name: "الفرع" }), getSalaryPaymentsByBranchAndMonth: async () => [] },
 };
 const cases = [
   { path: "/api/operations-hr/payroll", action: "view", method: "GET" },
@@ -99,7 +107,7 @@ async function invoke(test: typeof cases[number], branchId = "branch-a", role = 
   const registration = route.getText(source);
   expect(registration).toContain('requirePermission("operations_hr", "view")');
   expect(registration).toContain(`requirePermission("operations_payroll", "${test.action}")`);
-  for (const [module, action] of [["operations_hr", "view"], ["operations_payroll", test.action]]) {
+  for (const [module, action] of [["operations_hr", "view"], ["operations_payroll", "view"], ["operations_payroll", test.action]]) {
     let allowed = false;
     await requirePermission(module, action)(req, res, () => { allowed = true; });
     if (!allowed) return res;

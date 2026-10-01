@@ -237,13 +237,22 @@ export default function TransferRequestsPage() {
   const setDestinationBranch = useCallback((branchId: string) => {
     const branch = branches.find(entry => entry.id === branchId);
     if (!branch) return false;
-    setNewTransfer(prev => ({
-      ...prev,
-      sourceBranchId: "main_warehouse",
-      sourceBranchName: isRTL ? "المستودع الرئيسي" : "Main Warehouse",
-      destinationBranchId: branch.id,
-      destinationBranchName: branch.name,
-    }));
+    const sourceBranchName = isRTL ? "المستودع الرئيسي" : "Main Warehouse";
+    // useBranches returns fresh authorized rows on each render. Reapplying an
+    // unchanged URL scope must not allocate a new draft and trigger another
+    // render (and another branch-resolution effect).
+    setNewTransfer(prev => prev.sourceBranchId === "main_warehouse"
+      && prev.sourceBranchName === sourceBranchName
+      && prev.destinationBranchId === branch.id
+      && prev.destinationBranchName === branch.name
+      ? prev
+      : {
+        ...prev,
+        sourceBranchId: "main_warehouse",
+        sourceBranchName,
+        destinationBranchId: branch.id,
+        destinationBranchName: branch.name,
+      });
     return true;
   }, [branches, isRTL]);
 
@@ -332,22 +341,27 @@ export default function TransferRequestsPage() {
   // Initialize transfer form: source = warehouse, destination = user's branch
   // This models the correct flow: branch requests items FROM warehouse
   useEffect(() => {
+    const sourceBranchName = isRTL ? "المستودع الرئيسي" : "Main Warehouse";
     if (userBranchId && userBranch && !canSelectBranch && !isKeeper) {
       // Non-admin: source = warehouse, destination = their branch
-      setNewTransfer(prev => ({
-        ...prev,
-        sourceBranchId: "main_warehouse",
-        sourceBranchName: isRTL ? "المستودع الرئيسي" : "Main Warehouse",
-        destinationBranchId: userBranchId,
-        destinationBranchName: userBranch.name,
-      }));
+      setNewTransfer(prev => prev.sourceBranchId === "main_warehouse"
+        && prev.sourceBranchName === sourceBranchName
+        && prev.destinationBranchId === userBranchId
+        && prev.destinationBranchName === userBranch.name
+        ? prev
+        : {
+          ...prev,
+          sourceBranchId: "main_warehouse",
+          sourceBranchName,
+          destinationBranchId: userBranchId,
+          destinationBranchName: userBranch.name,
+        });
     } else if (canSelectBranch) {
       // Admin - default source to warehouse, can select destination
-      setNewTransfer(prev => ({
-        ...prev,
-        sourceBranchId: "main_warehouse",
-        sourceBranchName: isRTL ? "المستودع الرئيسي" : "Main Warehouse",
-      }));
+      setNewTransfer(prev => prev.sourceBranchId === "main_warehouse"
+        && prev.sourceBranchName === sourceBranchName
+        ? prev
+        : { ...prev, sourceBranchId: "main_warehouse", sourceBranchName });
     }
   }, [userBranchId, userBranch, canSelectBranch, isRTL, isKeeper]);
 

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useSearch } from "wouter";
 import { ClipboardCopy, PenLine } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,7 +9,7 @@ import { createOperationsHrCommandGuard } from "@/lib/operations-hr-state";
 import { operationsQueryError, operationsReadState } from "@/lib/operations-payroll-report";
 import {
   createOperationsEmployeeFlight, joiningStatusLabels, operationsEmployeeDateTime, operationsJoiningAction,
-  operationsJoiningSendFeedback, operationsJoiningState, orderedOperationsJoining, sendOperationsJoining,
+  operationsJoiningFocus, operationsJoiningSendFeedback, operationsJoiningState, orderedOperationsJoining, sendOperationsJoining,
   type OperationsBranch, type OperationsJoining, type OperationsJoiningSendResult,
 } from "@/lib/operations-employees";
 import { OperationsQueryFeedback } from "./query-feedback";
@@ -18,6 +19,8 @@ export function OperationsJoiningWorkspace({ branch, canCreate, canApprove }: {
   branch: OperationsBranch; canCreate: boolean; canApprove: boolean;
 }) {
   const client = useQueryClient();
+  const search = useSearch();
+  const focusedArticle = useRef<HTMLElement | null>(null);
   const joining = useQuery<OperationsJoining[]>({
     queryKey: ["/api/operations-hr/joining", branch.id],
     queryFn: async () => {
@@ -36,7 +39,7 @@ export function OperationsJoiningWorkspace({ branch, canCreate, canApprove }: {
   const [busyId, setBusyId] = useState<number | null>(null);
   const flight = useRef(createOperationsEmployeeFlight()).current;
   const guard = useRef(createOperationsHrCommandGuard()).current;
-  guard.update(JSON.stringify([branch.id, canCreate, canApprove]));
+  guard.update(JSON.stringify([branch.id, canCreate, canApprove, search]));
   useEffect(() => () => guard.invalidate(), [guard]);
   const refresh = () => client.invalidateQueries({ queryKey: ["/api/operations-hr/joining", branch.id] });
   const updateFeedback = (id: number, value: CandidateFeedback) => setFeedback(previous => ({ ...previous, [id]: value }));
@@ -87,23 +90,32 @@ export function OperationsJoiningWorkspace({ branch, canCreate, canApprove }: {
       if (guard.isCurrent(token)) updateFeedback(item.id, { sent, error: true, message: "تعذر النسخ التلقائي؛ حدد الرابط أدناه وانسخه يدويًا." });
     }
   };
-  const rows = state === "ready" ? orderedOperationsJoining(joining.data ?? []) : [];
-  const signedCount = rows.filter(row => operationsJoiningState(row) === "signed").length;
+  const authorizedRows = state === "ready" ? orderedOperationsJoining(joining.data ?? []) : [];
+  const focus = operationsJoiningFocus(search, authorizedRows, branch.id);
+  const rows = focus.requested ? focus.row ? [focus.row] : [] : authorizedRows;
+  const signedCount = rows.filter(row => operationsJoiningAction(row, canCreate, canApprove) === "confirm").length;
+  useEffect(() => {
+    if (state === "ready" && focus.requested && focus.row) {
+      focusedArticle.current?.focus();
+      focusedArticle.current?.scrollIntoView?.({ block: "nearest" });
+    }
+  }, [state, search, focus.row?.id, focus.row?.notification?.id]);
   return <div className="space-y-4">
     <p className="text-sm leading-7 text-muted-foreground">المباشرات الموقّعة أولًا لاتخاذ القرار، ثم تجهيز الروابط ومتابعة التوقيع. اعتماد التشغيل لا يُنشئ ملف موظف تلقائيًا.</p>
-    {!!signedCount && <div className="flex items-center gap-2 rounded-lg bg-primary/10 p-3 text-sm font-medium text-primary"><PenLine className="size-4" />{signedCount} مباشرة موقّعة تحتاج اعتماد التشغيل</div>}
+    {!!signedCount && <div className="flex items-center gap-2 rounded-lg bg-primary/10 p-3 text-sm font-medium text-primary"><PenLine className="size-4" />{signedCount} مباشرة موقّعة بانتظار قرارك</div>}
     <OperationsQueryFeedback state={state} loading="جار تحميل مباشرات الفرع…" failure={getHttpStatus(joining.error) === 403 ? "لم تعد مباشرات الفرع متاحة ضمن صلاحياتك." : "تعذر تحميل المباشرات."} error={joining.error} onRetry={() => joining.refetch()} />
-    {state === "ready" && !rows.length && <p className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">لا توجد عروض مباشرة في الفرع المختار.</p>}
+    {state === "ready" && focus.requested && !focus.row && <p role="alert" className="rounded-xl border border-destructive p-4 text-sm text-destructive">تعذر فتح المرشح المحدد؛ الرابط غير صالح أو لا يطابق العرض وإشعار المباشرة في الفرع المسموح. لم يُفتح مرشح آخر كبديل.</p>}
+    {state === "ready" && !focus.requested && !rows.length && <p className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">لا توجد عروض مباشرة في الفرع المختار.</p>}
     {rows.map(item => {
       const status = operationsJoiningState(item);
       const action = operationsJoiningAction(item, canCreate, canApprove);
       const notice = item.notification;
       const local = feedback[item.id];
       const usableLink = local?.sent && !item.blockedExisting && ["pending", "sent"].includes(status) ? local.sent : undefined;
-      return <article key={item.id} className={`space-y-3 rounded-xl border bg-card p-4 ${status === "signed" ? "border-primary/40" : "border-border"}`}>
+      return <article key={item.id} ref={focus.requested ? focusedArticle : undefined} tabIndex={focus.requested ? -1 : undefined} data-offer-id={item.id} data-notification-id={notice?.id} className={`space-y-3 rounded-xl border bg-card p-4 ${action === "confirm" ? "border-primary/40" : "border-border"}`}>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div><h3 className="font-bold">{item.candidateName}</h3><p className="mt-1 text-sm text-muted-foreground">{item.position}</p></div>
-          <span className={`rounded-full px-3 py-1 text-xs ${status === "signed" ? "bg-primary/10 font-semibold text-primary" : "bg-muted text-muted-foreground"}`}>{item.blockedExisting ? "يتطلب تنسيق شؤون الموظفين" : joiningStatusLabels[status] || "حالة غير معروفة"}</span>
+          <span className={`rounded-full px-3 py-1 text-xs ${action === "confirm" ? "bg-primary/10 font-semibold text-primary" : "bg-muted text-muted-foreground"}`}>{item.blockedExisting ? "يتطلب تنسيق شؤون الموظفين" : action === "confirm" ? "وقّع المرشح؛ بانتظار قرارك" : joiningStatusLabels[status] || "حالة غير معروفة"}</span>
         </div>
         {notice ? <div className="grid gap-1 text-xs leading-6 text-muted-foreground sm:grid-cols-2">
           <p>رقم الإشعار: <bdi>{notice.notificationNumber || "غير مسجل"}</bdi></p>

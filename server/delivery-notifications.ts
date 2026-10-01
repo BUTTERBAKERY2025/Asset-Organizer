@@ -3,6 +3,8 @@ import { db, pool } from "./db";
 import { routingPeople, routingPersonEligible } from "./central-kitchen-routing";
 import { routedWarehouseTransferRecipients } from "./warehouse-transfer-notifications";
 import type { SystemNotification } from "@shared/schema";
+import { canAccessDeliveryWorkspace, branchDeliveryScope } from "@shared/delivery-workspace-access";
+import type { SourceNoticeAccess } from "./source-notification-access";
 
 export type DeliveryNoticeEvent = "failed" | "cancelled" | "awaiting_receipt" | "receipt_approved" | "assigned" | "reassigned";
 type NoticeType = DeliveryNoticeEvent | "overdue" | "escalated";
@@ -51,26 +53,26 @@ const driverMatches = (a: Assignment, job: NoticeJob) =>
 
 async function activeDriver(id: string): Promise<boolean> {
   const { rowCount } = await pool.query(`SELECT 1 FROM users WHERE id=$1 AND is_active='active'
-    AND job_title='delivery'`, [id]);
+    AND role='employee' AND job_title='delivery'`, [id]);
   return !!rowCount;
 }
 type Source = { source: string | null; destination: string | null; warehouseId?: number;
-  sourceWarehouseId?: number; destinationWarehouseId?: number };
+  sourceWarehouseId?: number; destinationWarehouseId?: number; kind?: string; status?: string };
 
 async function sourceFor(a: Assignment): Promise<Source | null> {
   const queries: Record<string, string> = {
-    kitchen: `SELECT central_kitchen_id source,request_branch_id destination FROM central_kitchen_orders WHERE id=$1`,
+    kitchen: `SELECT central_kitchen_id source,request_branch_id destination,status FROM central_kitchen_orders WHERE id=$1`,
     material_transfer: `SELECT coalesce(source_branch_id,'main_warehouse') source,
-      destination_branch_id destination FROM material_transfers WHERE id=$1`,
-    finished_goods_transfer: `SELECT source_branch_id source,destination_branch_id destination
+      destination_branch_id destination,status FROM material_transfers WHERE id=$1`,
+    finished_goods_transfer: `SELECT source_branch_id source,destination_branch_id destination,status
       FROM finished_goods_transfers WHERE id=$1 AND destination_type='branch'`,
-    kitchen_warehouse_shipment: `SELECT source_branch_id source,NULL::text destination,destination_warehouse_id "warehouseId"
+    kitchen_warehouse_shipment: `SELECT source_branch_id source,NULL::text destination,destination_warehouse_id "warehouseId",status
       FROM kitchen_warehouse_shipments WHERE id=$1`,
     reverse_movement: `SELECT coalesce(source_branch_id,
         CASE WHEN source_warehouse_id IS NULL THEN 'main_warehouse' END) source,
         coalesce(destination_branch_id,
         CASE WHEN destination_warehouse_id IS NULL THEN 'main_warehouse' END) destination,
-        source_warehouse_id "sourceWarehouseId",destination_warehouse_id "destinationWarehouseId"
+         source_warehouse_id "sourceWarehouseId",destination_warehouse_id "destinationWarehouseId",kind,status
         FROM reverse_movements WHERE id=$1`,
   };
   const query = queries[a.source_type];
@@ -131,7 +133,7 @@ async function recipients(a: Assignment, s: Source, kind: NoticeType): Promise<s
   if (assignmentEvent(kind)) return a.driver_id && await activeDriver(a.driver_id) ? [a.driver_id] : [];
   if (kind === "cancelled") {
     const { rows } = await pool.query(`SELECT id FROM users WHERE id=$1 AND is_active='active'
-      AND job_title='delivery'`, [a.driver_id]);
+      AND role='employee' AND job_title='delivery'`, [a.driver_id]);
     ids.push(...rows.map(r => r.id));
   }
   if (a.source_type === "kitchen") {
@@ -192,6 +194,72 @@ export async function filterAuthorizedDeliveryNoticeUsers(
   const permitted = new Set(active.map(r => r.id));
   return candidates.filter(id => notification.targetUserIds?.includes(id)
     && permitted.has(id) && current.includes(id));
+}
+
+/** Read-only interpretation of an existing outbox row; never enqueue/send here. */
+export async function deliveryNoticeContext(notification: Pick<SystemNotification, "dedupeKey">) {
+  const id = Number(notification.dedupeKey?.match(/^delivery:(\d+):/)?.[1]);
+  if (!Number.isSafeInteger(id) || id <= 0 || notification.dedupeKey?.endsWith(":removed")) return null;
+  const { rows } = await pool.query(`SELECT a.*,o.event_type,o.revision,o.event_id,e.detail
+    FROM delivery_notification_outbox o JOIN delivery_assignments a ON a.id=o.assignment_id
+    LEFT JOIN delivery_assignment_events e ON e.id=o.event_id WHERE o.id=$1`, [id]);
+  const assignment = rows[0] as (Assignment & NoticeJob) | undefined;
+  if (!assignment) return null;
+  const source = await sourceFor(assignment);
+  return source ? { assignment, source, event: assignment.event_type } : null;
+}
+
+export function deliveryNoticeIsCurrent(a: Pick<Assignment, "status"> & Partial<Assignment & NoticeJob>, event: NoticeType) {
+  if (event === "awaiting_receipt") return a.status === "awaiting_receipt";
+  if (event === "failed") return a.status === "failed";
+  if (event === "overdue" || event === "escalated") return !["completed", "cancelled", "receipt_approved"].includes(a.status)
+    && !!a.scheduled_at && a.scheduled_at.getTime() + (event === "escalated" ? DELIVERY_ESCALATION_MINUTES * 60_000 : 0) <= Date.now()
+    && a.revision === `deadline:${Math.floor(a.scheduled_at.getTime() / 1000)}:${a.driver_id ?? "carrier"}`;
+  return true;
+}
+
+/** A recipient's legal existing workspace, with source/resource checks. This
+ * selects navigation only and does not broaden recipients or action authority. */
+export async function deliveryNoticeDestination(
+  a: Assignment, s: Source, event: NoticeType, access: SourceNoticeAccess,
+): Promise<{ href: string; branchId: string | null } | null> {
+  const receiving = event === "awaiting_receipt";
+  const relevant = receiving ? s.destination ?? s.source : s.source;
+  const sourceDescriptor = { sourceType: a.source_type, sourceBranchId: s.source,
+    destinationBranchId: s.destination, destinationWarehouseId: s.warehouseId ?? s.destinationWarehouseId ?? null };
+  const standaloneScope = access.user.role === "admin"
+    || (access.user.role === "employee" && access.user.jobTitle === "delivery" && access.user.id === a.driver_id)
+    || (access.user.role === "warehouse_keeper" && a.source_type === "material_transfer" && s.source === "main_warehouse")
+    || (access.user.role === "branch_manager" && branchDeliveryScope(access.user.branchId, access.allowed, sourceDescriptor).view);
+  if (canAccessDeliveryWorkspace(access.user) && standaloneScope && await access.view("delivery_tasks"))
+    return { href: `/driver-deliveries?deliveryId=${encodeURIComponent(a.id)}`, branchId: relevant };
+  if (!access.branch(relevant)) return null;
+  const branch = encodeURIComponent(relevant!);
+  const id = encodeURIComponent(String(a.source_id));
+  const delivery = encodeURIComponent(a.id);
+  if (a.source_type === "kitchen" && await access.view("central_kitchen_orders"))
+    return { href: `/central-kitchen-orders?branchId=${branch}&orderId=${id}&deliveryId=${delivery}`, branchId: relevant };
+  if (a.source_type === "material_transfer" && await access.view(access.user.role === "branch_manager" ? "branch_supply" : "warehouse"))
+    return { href: `/transfer-requests?branchId=${branch}&transferId=${id}&deliveryId=${delivery}`, branchId: relevant };
+  // The finished-goods selection receiver is a branch receipt page, not a
+  // dispatch detail route. Do not invent a source-side transfer CTA.
+  if (a.source_type === "finished_goods_transfer" && relevant === s.destination && await access.view("production"))
+    return { href: `/finished-goods-inventory?branchId=${branch}&transferId=${id}&deliveryId=${delivery}`, branchId: relevant };
+  if (a.source_type === "reverse_movement") {
+    const role = access.user.role;
+    const globalWarehouse = ["admin", "operations_manager"].includes(role) && access.allowed === null;
+    if (s.kind === "warehouse_transfer" && !globalWarehouse) return null;
+    if (role === "branch_manager" && (!access.branch(s.source) || !await access.view(s.kind === "material_return" ? "branch_supply" : "central_kitchen_orders"))) return null;
+    if (role !== "branch_manager" && !await access.view("warehouse")) return null;
+    return { href: `/reverse-logistics?branchId=${branch}&movementId=${id}&deliveryId=${delivery}`, branchId: relevant };
+  }
+  if (a.source_type === "kitchen_warehouse_shipment") {
+    const globalWarehouse = ["admin", "operations_manager"].includes(access.user.role) && access.allowed === null;
+    if (!globalWarehouse && !access.branch(s.source)) return null;
+    if (!await access.view(globalWarehouse ? "warehouse" : "production")) return null;
+    return { href: `/kitchen-warehouse-shipping?branchId=${branch}&kitchenId=${branch}&shipmentId=${id}&deliveryId=${delivery}`, branchId: relevant };
+  }
+  return null;
 }
 
 const copy: Record<NoticeType, { title: string; content: string }> = {
@@ -259,16 +327,23 @@ async function publish(job: NonNullable<Awaited<ReturnType<typeof claim>>>): Pro
   const s = staleAssignment ? null : await sourceFor(a);
   if (!staleAssignment && !s) throw new Error(`Delivery source ${a.source_type}/${a.source_id} missing`);
   const targets = staleAssignment ? [] : await recipients(a, s!, job.event_type);
+  const { sourceNoticeAccess } = await import("./source-notification-access");
+  const destinations = new Map<string, Awaited<ReturnType<typeof deliveryNoticeDestination>>>();
+  for (const id of targets) {
+    const access = await sourceNoticeAccess(id);
+    destinations.set(id, access ? await deliveryNoticeDestination(a, s!, job.event_type, access) : null);
+  }
   const c = await pool.connect();
   try {
     await c.query("BEGIN");
     for (const id of targets) {
-      const branch = job.event_type === "awaiting_receipt" ? s!.destination : s!.source;
+      const branch = job.event_type === "awaiting_receipt" ? s!.destination ?? s!.source : s!.source;
+      const destination = destinations.get(id);
       await c.query(`INSERT INTO system_notifications
         (title,content,message_type,display_style,priority,target_all_branches,target_branch_ids,
          target_user_ids,button_text,button_action,show_once,auto_generated,auto_source,access_module,access_branch_ids,
          dedupe_key,created_by)
-        VALUES ($1,$2,'delivery_task','banner',3,false,$3,$4,'فتح مهمة التوصيل',$5,true,true,
+        VALUES ($1,$2,'delivery_task','banner',3,false,$3,$4,$8,$5,true,true,
           'delivery_task','delivery_tasks',$3,$6,$7)
         ON CONFLICT (dedupe_key) DO NOTHING`, [
           a.transport_mode === "external" && job.event_type === "awaiting_receipt"
@@ -279,8 +354,8 @@ async function publish(job: NonNullable<Awaited<ReturnType<typeof claim>>>): Pro
               ? "سجل المصدر خروج الشحنة مع الناقل الخارجي. أكّد الاستلام في المصدر قبل اعتماد الإيصال."
               : copy[job.event_type].content,
         branch ? [branch] : [], [id],
-        `/driver-deliveries?deliveryId=${encodeURIComponent(a.id)}`,
-        `delivery:${job.id}:${id}`, a.created_by,
+        destination?.href ?? null,
+        `delivery:${job.id}:${id}`, a.created_by, destination ? "فتح المصدر" : null,
       ]);
     }
     if (previousDriver) {

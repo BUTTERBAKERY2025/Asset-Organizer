@@ -1,15 +1,49 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { createHash } from "node:crypto";
+import { PgDialect } from "drizzle-orm/pg-core";
 import { monthlyEvidence, monthCalendar, payrollBalance } from "../shared/operations-month-workflow";
+import { cashierSalesJournals, pnlMonthlyInputs } from "../shared/schema";
 
 const mocks = vi.hoisted(() => ({
   query: vi.fn(), connect: vi.fn(), release: vi.fn(),
   monthlyInputs: vi.fn(), rent: vi.fn(), recurring: vi.fn(),
+  journals: [] as { branchId: string; date: string; status: string; sales: number }[],
+  journalQueries: [] as { sql: string; params: unknown[] }[],
   grants: new Set(["operations:view", "operations:edit", "daily_closures:view"]), permissionRead: vi.fn(),
 }));
 vi.mock("../server/db", () => ({
   pool: { query: mocks.query, connect: mocks.connect },
-  db: { select: () => ({ from: () => ({ where: mocks.monthlyInputs }) }) },
+  // Exercise the real journal loader and compile its actual predicates, rather
+  // than mocking registered sales or sourcing its totals from daily closures.
+  db: { select: (selection?: Record<string, unknown>) => ({
+    from: (table: unknown) => {
+      if (table === pnlMonthlyInputs) return { where: mocks.monthlyInputs };
+      if (table !== cashierSalesJournals) throw new Error("Unexpected financial source");
+      let condition: any;
+      const result = async () => {
+        const query = new PgDialect().sqlToQuery(condition);
+        mocks.journalQueries.push(query);
+        const dates = query.params.filter((value): value is string => typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value));
+        const rows = mocks.journals.filter(row => query.params.includes(row.branchId) && query.params.includes(row.status) &&
+          row.date <= dates[0] && (!dates[1] || row.date >= dates[1]));
+        if (!("sales" in selection!)) return [...new Set(rows.map(row => row.branchId))].map(branchId => ({
+          branchId, date: rows.filter(row => row.branchId === branchId).map(row => row.date).sort().at(-1),
+        }));
+        const groups = new Map<string, { branchId: string; date: string; sales: number; recordedCount: number }>();
+        for (const row of rows) {
+          const key = `${row.branchId}:${row.date}`;
+          const aggregate = groups.get(key) ?? { branchId: row.branchId, date: row.date, sales: 0, recordedCount: 0 };
+          aggregate.sales += row.sales;
+          aggregate.recordedCount++;
+          groups.set(key, aggregate);
+        }
+        return [...groups.values()];
+      };
+      const builder: any = { where: (value: any) => { condition = value; return builder; }, groupBy: () => builder,
+        then: (resolve: any, reject: any) => result().then(resolve, reject) };
+      return builder;
+    },
+  }) },
 }));
 vi.mock("../server/storage", () => ({ storage: {
   getRentEvidenceForPeriod: mocks.rent,
@@ -114,6 +148,15 @@ describe("monthly review endpoint authorization and transaction guards", () => {
     mocks.rent.mockResolvedValue({ amount: 0, found: false });
     mocks.recurring.mockResolvedValue([]);
     mocks.grants = new Set(["operations:view", "operations:edit", "daily_closures:view"]);
+    mocks.journalQueries = [];
+    // Deliberately different from closure snapshots (2800). Unapproved,
+    // out-of-month and out-of-scope records must not enter registered sales.
+    mocks.journals = [
+      ...monthCalendar("2025-02").map((date, i) => ({ branchId: "b1", date, status: i % 2 ? "approved" : "posted", sales: 120 })),
+      { branchId: "b1", date: "2025-02-28", status: "draft", sales: 999 },
+      { branchId: "b1", date: "2025-03-01", status: "posted", sales: 999 },
+      { branchId: "hidden", date: "2025-02-28", status: "approved", sales: 999 },
+    ];
     state = { status: "open", revision: 0, declarations: [], history: [] };
     records = monthCalendar("2025-02").map((date, i) => ({ id: i + 1, date, status: "closed", sales: 100, updated: "2025-03-01" }));
     mocks.query.mockImplementation(async (sql: string) => {
@@ -326,12 +369,14 @@ describe("monthly review endpoint authorization and transaction guards", () => {
         expect(response.result.payroll.reason).toContain("تعذر تحميل");
         expect(response.result.sourceFailures).toEqual(["payroll"]);
         expect(response.result.expenses).toMatchObject({ available: true, recorded: 50 });
-        expect(response.result.sales).toMatchObject({ available: true, confirmed: 2800, closedDays: 28 });
+        expect(response.result.sales).toMatchObject({ available: true, state: "recorded", confirmed: 3360,
+          closedDays: null, recordedCount: 28, recordedBranchDays: 28, lastRecordedDate: "2025-02-28",
+          source: "cashier_sales_journals.total_sales", isNet: false });
         expect(response.result.closing).toMatchObject({ available: true, canClose: true, dailyEvidenceAvailable: true, reviewEvidenceAvailable: true });
       } finally { log.mockRestore(); }
     },
   );
-  it("a failed review read leaves daily records and confirmed sales usable, without a fake open revision", async () => {
+  it("a failed review read leaves daily records and registered journal sales usable, without a fake open revision", async () => {
     mocks.grants.add("sales_analytics:view");
     const prior = mocks.query.getMockImplementation()!;
     mocks.query.mockImplementation(async (sql: string, ...args: any[]) => {
@@ -342,7 +387,7 @@ describe("monthly review endpoint authorization and transaction guards", () => {
     try {
       const response = await call("", { branchId: "b1", month: "2025-02" });
       expect(response.failure).toBeUndefined();
-      expect(response.result.sales).toMatchObject({ available: true, confirmed: 2800, closedDays: 28 });
+      expect(response.result.sales).toMatchObject({ available: true, state: "recorded", confirmed: 3360, closedDays: null, recordedCount: 28 });
       expect(response.result.closing).toMatchObject({ available: true, status: "unavailable", revision: null,
         drifted: null, canClose: false, canReopen: false, canDeclare: false,
         dailyEvidenceAvailable: true, reviewEvidenceAvailable: false, missingDates: [] });
@@ -351,7 +396,7 @@ describe("monthly review endpoint authorization and transaction guards", () => {
       expect(response.result.sourceFailures).toEqual(["review"]);
     } finally { log.mockRestore(); }
   });
-  it("a failed daily read retains the saved review and independent files but cannot prove sales or close", async () => {
+  it("a failed daily read retains the saved review and independent journal sales but cannot close", async () => {
     for (const grant of ["sales_analytics:view", "salary_closing:view", "pnl:view", "pnl_dashboard:view"]) mocks.grants.add(grant);
     state = { ...state, status: "closed", revision: 3, closed_at: "2025-03-01",
       history: [{ action: "close", actor: "actor", at: "2025-03-01", note: "reviewed" }] };
@@ -364,8 +409,9 @@ describe("monthly review endpoint authorization and transaction guards", () => {
     try {
       const response = await call("", { branchId: "b1", month: "2025-02" });
       expect(response.failure).toBeUndefined();
-      expect(response.result.sales).toMatchObject({ available: false, confirmed: null, closedDays: null });
-      expect(response.result.sales.reason).toContain("تعذر تحميل أدلة الأيام");
+      expect(response.result.sales).toMatchObject({ available: true, state: "recorded", confirmed: 3360,
+        closedDays: null, recordedCount: 28 });
+      expect(response.result.sales.reason).toBeUndefined();
       expect(response.result.closing).toMatchObject({ available: true, status: "closed", revision: 3,
         drifted: null, dailyEvidenceAvailable: false, reviewEvidenceAvailable: true,
         canClose: false, canReopen: false, canDeclare: false, missingDates: [], dailyRecords: [] });
@@ -378,9 +424,11 @@ describe("monthly review endpoint authorization and transaction guards", () => {
   it("sales-only access neither reads nor depends on the monthly review source", async () => {
     mocks.grants.delete("daily_closures:view"); mocks.grants.add("sales_analytics:view");
     const response = await call("", { branchId: "b1", month: "2025-02" });
-    expect(response.result.sales).toMatchObject({ available: true, confirmed: 2800 });
+    expect(response.result.sales).toMatchObject({ available: true, state: "recorded", confirmed: 3360, recordedCount: 28 });
     expect(response.result.closing).toMatchObject({ available: false, revision: null, status: "unavailable" });
     expect(mocks.query.mock.calls.some(call => call[0].includes("operations_month_reviews"))).toBe(false);
+    expect(mocks.query.mock.calls.some(call => call[0].includes("branch_daily_closures"))).toBe(false);
+    expect(mocks.journalQueries[0].params).toEqual(["b1", "posted", "approved", "2025-02-28", "2025-02-01"]);
   });
   it("both evidence sources can fail without discarding independently loaded financial files", async () => {
     for (const grant of ["salary_closing:view", "sales_analytics:view", "pnl:view", "pnl_dashboard:view"]) mocks.grants.add(grant);
@@ -396,7 +444,8 @@ describe("monthly review endpoint authorization and transaction guards", () => {
       expect(response.failure).toBeUndefined();
       expect(response.result.payroll.available).toBe(true);
       expect(response.result.expenses.available).toBe(true);
-      expect(response.result.sales).toMatchObject({ available: false, confirmed: null, closedDays: null });
+      expect(response.result.sales).toMatchObject({ available: true, state: "recorded", confirmed: 3360,
+        recordedCount: 28, closedDays: null });
       expect(response.result.closing).toMatchObject({ available: false, status: "unavailable", revision: null,
         dailyEvidenceAvailable: false, reviewEvidenceAvailable: false, canClose: false, canDeclare: false, canReopen: false });
       expect(response.result.closing.reason).toContain("تعذر تحميل");

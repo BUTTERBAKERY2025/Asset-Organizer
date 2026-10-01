@@ -13,7 +13,10 @@ const state = vi.hoisted(() => ({
 vi.mock("../server/auth", () => ({
   getAllowedBranchIds: () => null,
   isAuthenticated: () => {},
-  requirePermission: () => () => {},
+  requirePermission: (module: string, action: string) => async (req: any, res: any, next: () => void) => {
+    return await storage.hasPermission(req.currentUser.id, module, action)
+      ? next() : res.status(403).json({});
+  },
 }));
 vi.mock("../server/storage", () => ({
   storage: { hasPermission: vi.fn(async (_user: string, module: string, action: string) => {
@@ -43,6 +46,31 @@ vi.mock("../server/db", () => ({
 vi.mock("../server/branch-operations", async (original) => ({
   ...await original<typeof import("../server/branch-operations")>(),
   branchOperationsDefinitions: state.definitions,
+}));
+// The source adapter's SQL, scope, and full pagination are exercised separately
+// in operations-supply.test.ts. Here retain controlled source promises so the
+// overview's bounded fanout and evidence-revision guarantees remain isolated.
+vi.mock("../server/operations-supply", () => ({
+  projectOperationsSupply: async () => {
+    const coverage: any = Object.fromEntries(["kitchen", "transfers", "reverse", "delivery"]
+      .map(source => [source, { state: "forbidden", reason: "Not granted" }]));
+    if (!state.definitions.some(definition => definition.module === "central_kitchen_orders"))
+      return { records: [], summaries: [], coverage: { sources: coverage, nextOffset: null } };
+    state.queries.push("kitchen");
+    const rows = await (state.queueLoads.kitchen?.() ?? Promise.resolve([]));
+    coverage.kitchen = { state: "complete", reason: null };
+    return {
+      records: rows.map(row => ({
+        id: `kitchen_order:${row.id}`, canonicalId: `kitchen_order:${row.id}`,
+        sourceType: "kitchen_order", sourceId: String(row.id), branchId: row.branchId,
+        status: row.status, step: row.status, module: "central_kitchen_orders",
+        title: "طلب مطبخ", owner: "المطبخ المورد", ownerId: null, dueAt: null,
+        href: `/central-kitchen-orders?branchId=${row.branchId}&orderId=${row.id}`, actions: [],
+      })),
+      summaries: [{ source: "kitchen", value: rows.length, coverage: "complete" }],
+      coverage: { sources: coverage, nextOffset: null },
+    };
+  },
 }));
 
 import { hasEffectiveViewPermission } from "../server/branch-operations";

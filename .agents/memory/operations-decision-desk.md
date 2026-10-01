@@ -44,3 +44,21 @@ Verify receiving-page permission and URL contracts, not just the sender or a sta
 **Why:** The isolated workspace worked while the real operations payroll link was absent or landed on employees, and the salary page used a different permission from its API. Mocked storage also hid missing expense-source tables.
 
 **How to apply:** Check actual destination pages, current source guards, branch/month return context, and real development-schema reads. Report unauthenticated verification limits rather than claiming an end-to-end account test.
+
+Production/supply must be a case-first operational workspace, not a repeated per-branch source-card catalogue. Source summaries are secondary; their metrics have different populations and cannot be summed as total supply.
+
+**Why:** The user could not determine what to do from warehouse zeros and repeated cards. Inbound raw-material transfers do not include every kitchen shipment or delivery; a delivery assignment is not another stock movement.
+
+**How to apply:** Preserve source-specific definitions, actual actor capability and relevant sender/recipient side. Paginate active domain records independently of the global center queue. Keep received-but-unresolved discrepancies and returns awaiting inspection visible; never equate notification dismissal or driver proof with stock receipt or resolution. Browser Back as well as source return must restore the workspace and selected canonical case.
+
+Monthly “all branches” means all currently authorized operational branches, not just the outer center's selected subset. It is strictly comparative/read-only; monthly commands require one explicit branch.
+
+**Why:** The user specifically requested comprehensive monthly comparison without losing the branch-specific operational review lifecycle. Broadening the outer scope to make a drilldown work changes unrelated daily work unexpectedly.
+
+**How to apply:** Resolve all scope from fresh server grants, exclude nonoperating HQ/warehouse contexts, qualify subtotals by known/unknown branches, and authorize source drilldowns independently while preserving outer scope and monthly return intent. Never offset one branch's excess salary payments against another branch's unpaid employees.
+
+The People workspace is a case-first follow-up desk, not a second employee directory or HR approval system. Keep zero-case branch tools available through the existing scoped HR workspace.
+
+**Why:** The user found a branch catalogue with a generic employee button insufficient for organizing actual work. Recreating HR commands inside the center would introduce competing workflow authority.
+
+**How to apply:** Distinguish actual actor decisions, employee-signature waits, HR waits and attendance evidence. A pending attendance status alone proves neither absence nor an outstanding approval. Completed employee transfers remain history, and operations payroll review remains advisory. Preserve canonical source selection and outer scope on return.

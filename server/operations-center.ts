@@ -1,7 +1,7 @@
 import type { Express, Request } from "express";
-import { and, desc, eq, gte, inArray, lte, or, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
 import {
-  branches, maintenanceTickets, centralKitchenOrders, materialTransfers, reverseMovements,
+  branches, maintenanceTickets,
   leaveRequests, advanceRequests, qualityChecks, branchDailyClosures, cashierSalesJournals,
   branchShifts, timesheetReports, salaryClosures, salaryPayments, operationsPayrollReviews, pnlMonthlyInputs,
   attendanceRecords, maintenanceTicketEvents, branchComplaints,
@@ -12,14 +12,16 @@ import { canonicalOperationsInsights, loadOperationsRegisteredSales, operationsE
 import { noticeInSelectedScope, publicCenterNotice } from "@shared/operations-center-notifications";
 import type { OperationsCenterResponse, OperationsMetric, OperationsQueueItem, OperationsEvidenceDay, OperationsMonthSection, OperationsInsightsResponse } from "@shared/operations-center";
 import { db } from "./db";
-import { pool } from "./db";
 import { storage } from "./storage";
-import { activeDeliveryStatuses } from "@shared/delivery";
-import { canAccessDeliveryWorkspace } from "@shared/delivery-workspace-access";
 import { getAllowedBranchIds, isAuthenticated, requirePermission, HR_SPECIALIST_PERMISSIONS } from "./auth";
-import { branchOperationsDefinitions, hasEffectiveViewPermission, loadAuthorizedBranchOperationsCard } from "./branch-operations";
+import { branchOperationsDefinitions, branchOperationsModule, hasEffectiveViewPermission, loadAuthorizedBranchOperationsCard } from "./branch-operations";
 import { resolveReviewerJobTitle, reviewerMatchesStep } from "./leave-helpers";
 import { registerOperationsMonthWorkflow } from "./operations-month-workflow";
+import { projectOperationsSupply, supplyGrants } from "./operations-supply";
+import { parseOperationsSupplyQuery, operationsSupplySources } from "@shared/operations-supply";
+import { projectSourceNotificationForRecipient } from "./source-notification-projection";
+import { projectOperationsPeople } from "./operations-people";
+import { parseOperationsPeopleQuery } from "@shared/operations-people";
 
 const MAX_BRANCHES = 30;
 const SOURCE_LIMIT = 101;
@@ -70,8 +72,10 @@ async function selectedNotifications(req: Request) {
   const notifications = await storage.getActiveNotificationsForUserInBranches(userId, ids);
   const visible = new Map<number, NonNullable<ReturnType<typeof noticeInSelectedScope>> & { notification: (typeof notifications)[number] }>();
   for (const notification of notifications) {
-    const scope = noticeInSelectedScope(notification, ids);
-    if (scope) visible.set(notification.id, { ...scope, notification });
+    const projected = await projectSourceNotificationForRecipient(notification, userId);
+    if (!projected) continue;
+    const scope = noticeInSelectedScope(projected, ids);
+    if (scope) visible.set(projected.id, { ...scope, notification: projected });
   }
   return Array.from(visible.values()).sort((a, b) =>
     b.notification.priority - a.notification.priority ||
@@ -108,21 +112,21 @@ export async function projectOperationsCenter(req: Request, requested: string[] 
   const permitted = async (module: string) => await hasEffectiveViewPermission(req, module)
     && (!exportMode || await hasEffectiveViewPermission(req, module, "export"));
   const grants = new Map<string, boolean>();
-  const modules = [...new Set([...branchOperationsDefinitions.map(d => d.module), "branch_complaints", "sales_analytics", "quality_control", "hr_leaves", "hr_advances", "warehouse", "shifts", "cashier_journal", "delivery_tasks", "attendance"])];
+  const modules = [...new Set([...branchOperationsDefinitions.map(d => branchOperationsModule(d, req)), "branch_complaints", "sales_analytics", "quality_control", "hr_leaves", "hr_advances", "warehouse", "branch_supply", "shifts", "cashier_journal", "delivery_tasks", "attendance"])];
   const permissions = await mapOperationsBounded(modules, PERMISSION_CONCURRENCY, permitted);
   modules.forEach((module, index) => grants.set(module, permissions[index]));
   const enabled = (module: string) => grants.get(module) === true;
   const cardTasks = branchIds.flatMap(branchId => branchOperationsDefinitions.map(definition => ({ branchId, definition })))
-    .filter(({ definition }) => enabled(definition.module));
+    .filter(({ definition }) => enabled(branchOperationsModule(definition, req)));
   const cards = (await mapOperationsBounded(cardTasks, CARD_CONCURRENCY, async ({ branchId, definition }) => {
-    if (!enabled(definition.module)) return null;
+    if (!enabled(branchOperationsModule(definition, req))) return null;
     const card = await loadAuthorizedBranchOperationsCard(definition, branchId, businessDate, req);
     if (!card) return null;
     return {
-      ...card, branchId, module: definition.module, error: card.state === "error" ? "Source unavailable" : undefined,
+      ...card, branchId, module: branchOperationsModule(definition, req), error: card.state === "error" ? "Source unavailable" : undefined,
       metrics: card.metrics.map((metric, index): OperationsMetric => ({
         key: `${definition.id}.${index}`, label: metric.label, value: metric.value,
-        unit: metric.unit, source: definition.module, definition: card.description || metric.label,
+        unit: metric.unit, source: branchOperationsModule(definition, req), definition: card.description || metric.label,
         period: definition.id === "attendance" || definition.id === "sales" || definition.id === "waste" ? businessDate : "current",
         scope: [branchId], asOf: generatedAt, coverage: "complete",
       })),
@@ -131,7 +135,7 @@ export async function projectOperationsCenter(req: Request, requested: string[] 
   const queue: OperationsQueueItem[] = [];
   const coverage: Record<string, "complete" | "unavailable"> = {};
   let truncated = false;
-  const sources: { name: string; load: () => Promise<OperationsQueueItem[]> }[] = [];
+  const sources: { name: string; load: () => Promise<OperationsQueueItem[] | null> }[] = [];
   function source(name: string, module: string, load: () => Promise<OperationsQueueItem[]>) {
     if (!enabled(module)) return;
     sources.push({ name, load });
@@ -139,7 +143,7 @@ export async function projectOperationsCenter(req: Request, requested: string[] 
   async function loadSource({ name, load }: (typeof sources)[number]) {
     try {
       const rows = await load();
-      return { name, rows };
+      return { name, rows: rows || [], skipped: rows === null };
     } catch (error) {
       console.error(`Operations center source ${name} unavailable`, error);
       return { name, rows: [] as OperationsQueueItem[], failed: true };
@@ -192,60 +196,30 @@ export async function projectOperationsCenter(req: Request, requested: string[] 
       };
     });
   });
-  source("kitchen", "central_kitchen_orders", async () => {
-    const rows = await db.select({ id: centralKitchenOrders.id, branchId: centralKitchenOrders.requestBranchId,
-      status: centralKitchenOrders.status }).from(centralKitchenOrders)
-      .where(and(inArray(centralKitchenOrders.requestBranchId, branchIds),
-        inArray(centralKitchenOrders.status, ["requested", "approved", "prepared", "dispatched"])))
-      .orderBy(desc(centralKitchenOrders.createdAt)).limit(SOURCE_LIMIT);
-    return rows.map(r => queueItem("kitchen_order", r.id, r.status, r.branchId, "central_kitchen_orders", "طلب مطبخ",
-      r.status, link(`/central-kitchen-orders?stage=${r.status}`, r.branchId), r.status === "dispatched" ? "الفرع المستلم" : "المطبخ المورد"));
-  });
-  source("transfers", "warehouse", async () => {
-    const rows = await db.select({ id: materialTransfers.id, source: materialTransfers.sourceBranchId,
-      destination: materialTransfers.destinationBranchId, status: materialTransfers.status }).from(materialTransfers)
-      .where(and(or(inArray(materialTransfers.sourceBranchId, branchIds), inArray(materialTransfers.destinationBranchId, branchIds)),
-        inArray(materialTransfers.status, ["pending", "approved", "in_transit"])))
-      .orderBy(desc(materialTransfers.id)).limit(SOURCE_LIMIT);
-    return rows.flatMap(r => [r.source, r.destination].filter((id): id is string => !!id && branchIds.includes(id))
-      .map(id => queueItem("transfer", r.id, r.status, id, "warehouse", "تحويل مواد", r.status,
-        link(`/transfer-requests?status=${r.status}`, id), r.status === "in_transit" ? "الفرع المستلم" : "جهة التوريد")));
-  });
-  source("reverse", "warehouse", async () => {
-    const rows = await db.select({ id: reverseMovements.id, source: reverseMovements.sourceBranchId,
-      destination: reverseMovements.destinationBranchId, status: reverseMovements.status }).from(reverseMovements)
-      .where(or(inArray(reverseMovements.sourceBranchId, branchIds), inArray(reverseMovements.destinationBranchId, branchIds)))
-      .orderBy(desc(reverseMovements.id)).limit(SOURCE_LIMIT);
-    return rows.filter(r => !["cancelled", "closed", "received", "completed"].includes(r.status))
-      .flatMap(r => [r.source, r.destination].filter((id): id is string => !!id && branchIds.includes(id))
-        .map(id => queueItem("reverse_movement", r.id, r.status, id, "warehouse", "حركة مرتجعات", r.status, link("/reverse-logistics", id))));
-  });
-  source("delivery", "delivery_tasks", async () => {
-    if (!canAccessDeliveryWorkspace(req.currentUser)) {
-      coverage.delivery = "unavailable";
-      return [];
+  // Supply uses the same live source adapters as the full daily workspace:
+  // SQL active predicates before limits, unique persisted movements, and source/destination gates.
+  // The overview remains a bounded snapshot; older supply rows are reachable in /supply.
+  sources.push({ name: "supply", load: async () => {
+    let supply;
+    try { supply = await projectOperationsSupply(req, branchIds, "all", 0, PAGE_LIMIT, exportMode); }
+    catch (error) {
+      // A branch-validation failure in an adapter with no permitted sources
+      // must not invent unavailable financial/operational evidence.
+      const grants = await supplyGrants(req, exportMode);
+      const deliveryEnabled = grants.deliveryView &&
+        (grants.kitchenView || grants.transferView || grants.warehouseView || grants.productionView) ||
+        grants.deliveryApprove && (grants.kitchenEdit || grants.transferEdit || grants.warehouseEdit || grants.productionEdit);
+      if (!grants.kitchenView && !grants.transferView && !grants.returnKinds.length && !deliveryEnabled) return null;
+      throw error;
     }
-    // Only sources with their own view (and export for exports) are included.
-    const types = [
-      ...(enabled("central_kitchen_orders") ? ["kitchen"] : []),
-      ...(enabled("warehouse") ? ["material_transfer", "reverse_movement"] : []),
-    ];
-    if (!types.length) return [];
-    const result = await pool.query<{
-      id: number; source_type: string; status: string; driver_id: string | null;
-      branch_id: string;
-    }>(`SELECT a.id, a.source_type, a.status, a.driver_id,
-      COALESCE(k.request_branch_id,mt.destination_branch_id,rm.destination_branch_id) AS branch_id
-      FROM delivery_assignments a
-      LEFT JOIN central_kitchen_orders k ON a.source_type='kitchen' AND a.source_id=k.id
-      LEFT JOIN material_transfers mt ON a.source_type='material_transfer' AND a.source_id=mt.id
-      LEFT JOIN reverse_movements rm ON a.source_type='reverse_movement' AND a.source_id=rm.id
-      WHERE a.source_type = ANY($1::text[]) AND a.status = ANY($2::text[])
-        AND COALESCE(k.request_branch_id,mt.destination_branch_id,rm.destination_branch_id) = ANY($3::varchar[])
-      ORDER BY a.id DESC LIMIT $4`, [types, activeDeliveryStatuses, branchIds, SOURCE_LIMIT]);
-    return result.rows.map(r => queueItem("delivery_assignment", r.id, r.status, r.branch_id, "delivery_tasks",
-      "مهمة توصيل", r.status, link("/driver-deliveries", r.branch_id), r.driver_id || "غير محدد", null, r.driver_id));
-  });
+    if (!supply.summaries.some(summary => summary.coverage !== "forbidden")) return null;
+    for (const domain of operationsSupplySources) {
+      if (supply.coverage.sources[domain].state !== "forbidden")
+        coverage[domain] = supply.coverage.sources[domain].state;
+    }
+    if (supply.coverage.nextOffset !== null) truncated = true;
+    return supply.records;
+  } });
   source("leaves", "hr_leaves", async () => {
     const rows = await db.select({ id: leaveRequests.id, branchId: leaveRequests.branchId, status: leaveRequests.status,
       level: leaveRequests.currentLevel, chain: leaveRequests.approvalChain }).from(leaveRequests)
@@ -332,10 +306,12 @@ export async function projectOperationsCenter(req: Request, requested: string[] 
   });
   for (const result of await mapOperationsBounded(sources, SOURCE_CONCURRENCY, loadSource)) {
     if (result.failed) { coverage[result.name] = "unavailable"; continue; }
+    if (result.skipped) continue;
     if (result.rows.length >= SOURCE_LIMIT) truncated = true;
     queue.push(...result.rows.slice(0, SOURCE_LIMIT - 1));
-    // The delivery loader can mark itself unavailable despite a module grant.
-    if (coverage[result.name] !== "unavailable") coverage[result.name] = "complete";
+    // Supply reports only its permitted domains, never a synthetic aggregate
+    // that turns forbidden sources into complete or unavailable evidence.
+    if (result.name !== "supply" && coverage[result.name] !== "unavailable") coverage[result.name] = "complete";
   }
   // Daily evidence is queried at its historical date, never inferred from today's counters.
   const daily: OperationsEvidenceDay[] = [];
@@ -460,6 +436,30 @@ export async function projectOperationsCenter(req: Request, requested: string[] 
 export function registerOperationsCenterRoutes(app: Express): void {
   registerOperationsMonthWorkflow(app);
   const auth = [isAuthenticated, requirePermission("operations", "view")] as const;
+  app.get("/api/operations-center/people", ...auth, async (req, res, next) => {
+    res.set("Cache-Control", "no-store");
+    try {
+      let query: ReturnType<typeof parseOperationsPeopleQuery>;
+      try { query = parseOperationsPeopleQuery(req.query); }
+      catch (error: any) { return res.status(400).json({ message: error.message }); }
+      return res.json(await projectOperationsPeople(req, query.branchIds, query.source, query.offset, query.limit));
+    } catch (error: any) {
+      if (error?.status === 400 || error?.status === 403) return res.status(error.status).json({ message: error.message });
+      return next(error);
+    }
+  });
+  app.get("/api/operations-center/supply", ...auth, async (req, res, next) => {
+    res.set("Cache-Control", "no-store");
+    try {
+      let query: ReturnType<typeof parseOperationsSupplyQuery>;
+      try { query = parseOperationsSupplyQuery(req.query); }
+      catch (error: any) { return res.status(400).json({ message: error.message }); }
+      return res.json(await projectOperationsSupply(req, query.branchIds, query.source, query.offset, query.limit));
+    } catch (error: any) {
+      if (error?.status === 400 || error?.status === 403) return res.status(error.status).json({ message: error.message });
+      return next(error);
+    }
+  });
   app.get("/api/operations-center/notifications", ...auth, async (req, res, next) => {
     res.set("Cache-Control", "no-store");
     try {

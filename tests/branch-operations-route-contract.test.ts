@@ -17,6 +17,7 @@ const fakes = vi.hoisted(() => ({
   predicates: [] as any[],
   selections: [] as any[],
   joins: [] as any[],
+  rawQueries: [] as { sql: string; values: unknown[] }[],
 }));
 
 function queryBuilder() {
@@ -44,6 +45,19 @@ vi.mock("../server/db", () => ({
       return queryBuilder();
     },
   },
+  pool: {
+    query: async (sql: string, values: unknown[]) => {
+      fakes.selectCalls += 1;
+      fakes.rawQueries.push({ sql, values });
+      const next = fakes.rows.shift() ?? [];
+      if (next instanceof Error) throw next;
+      // Kitchen grouped projections now identify the requester separately from
+      // the supplier, preventing supplier-side rows becoming receipt actions.
+      const rows = sql.includes("k.request_branch_id AS requester")
+        ? (next as any[]).map(row => ({ requester: "branch-a", ...row })) : next;
+      return { rows };
+    },
+  },
 }));
 
 vi.mock("../server/storage", () => ({
@@ -68,6 +82,17 @@ vi.mock("../server/employee-documents-read", () => ({
 vi.mock("../server/auth", () => ({
   isAuthenticated: (req: any, _res: any, next: () => void) => next(),
   canAccessBranch: vi.fn(async () => fakes.branchAllowed),
+  getAllowedBranchIds: () => ["branch-a"],
+  requirePermission: (module: string, action: string) => async (req: any, res: any, next: () => void) => {
+    if (req.currentUser.role === "admin") return next();
+    if (req.currentUser.role === "attendance_clerk") return res.status(403).json({});
+    if (req.currentUser.role === "viewer" && action !== "view") return res.status(403).json({});
+    fakes.permissionCalls.push(module);
+    const allowed = action === "approve" ? fakes.approveModules.includes(module)
+      : action === "create" ? fakes.createAllowed : action !== "view" ? fakes.editAllowed
+      : fakes.modules.includes(module);
+    return allowed ? next() : res.status(403).json({});
+  },
   HR_MANAGER_MODULES: new Set(["branch_employees", "hr_documents", "hr_advances"]),
   HR_SPECIALIST_PERMISSIONS: {},
   PRODUCTION_DEVELOPMENT_MANAGER_PERMISSIONS: {},
@@ -136,6 +161,7 @@ describe("registered branch operations summary handler", () => {
     fakes.predicates = [];
     fakes.selections = [];
     fakes.joins = [];
+    fakes.rawQueries = [];
   });
 
   it("rejects all-branch requests before any database or permission query", async () => {
@@ -160,7 +186,7 @@ describe("registered branch operations summary handler", () => {
     const response = await request({ id: "employee", role: "employee" });
     expect(response.statusCode).toBe(200);
     expect(response.body.cards.map((card: any) => card.id)).toEqual(["maintenance"]);
-    expect(fakes.permissionCalls).toHaveLength(14);
+    expect(fakes.permissionCalls).toHaveLength(13);
     expect(fakes.selectCalls).toBe(3);
   });
 
@@ -325,10 +351,10 @@ describe("registered branch operations summary handler", () => {
       href: "/transfer-requests?status=in_transit&direction=incoming&branchId=branch-a",
       kind: "receive",
     });
-    const scope = new PgDialect().sqlToQuery(fakes.predicates[2]);
-    expect(scope.sql).toContain('"material_transfers"."source_branch_id"');
-    expect(scope.sql).toContain('"material_transfers"."destination_branch_id"');
-    expect(scope.params.slice(0, 2)).toEqual(["branch-a", "branch-a"]);
+    const scope = fakes.rawQueries[0];
+    expect(scope.sql).toContain("t.source_branch_id=ANY($1");
+    expect(scope.sql).toContain("t.destination_branch_id=ANY($1");
+    expect(scope.values.slice(0, 2)).toEqual([["branch-a"], ["branch-a"]]);
   });
 
   it("does not infer warehouse creation from edit or receipt from create", async () => {

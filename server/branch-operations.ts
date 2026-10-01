@@ -23,10 +23,11 @@ import type {
   BranchOperationsCard,
   BranchOperationsSummaryResponse,
 } from "@shared/branch-operations";
-import { db } from "./db";
+import { db, pool } from "./db";
 import { storage } from "./storage";
 import { readEmployeeDocumentMetadata } from "./employee-documents-read";
 import { kitchenActionAllowed } from "./central-kitchen-routing";
+import { operationsSupplySql } from "./operations-supply-predicates";
 import { summarizeBranchAttendance } from "./branch-attendance-summary";
 import {
   BRANCH_MANAGER_INTRINSIC_PERMISSIONS,
@@ -36,7 +37,9 @@ import {
   OPERATIONS_MANAGER_PERMISSIONS,
   PRODUCTION_DEVELOPMENT_MANAGER_PERMISSIONS,
   canAccessBranch,
+  getAllowedBranchIds,
   isAuthenticated,
+  requirePermission,
 } from "./auth";
 
 type CardId = BranchOperationsCard["id"];
@@ -190,22 +193,21 @@ export const branchOperationsDefinitions: readonly CardDefinition[] = [
   {
     id: "kitchen", title: "طلبيات الفرع", group: "operations", module: "central_kitchen_orders", href: "/central-kitchen-orders",
     load: async (branchId, _businessDate, req) => {
-      const rows = await db.select({ status: centralKitchenOrders.status, value: count(),
-        oldestNeededDate: sql<string | null>`min(${centralKitchenOrders.neededDate})`,
-        oldestDue: sql<string | Date | null>`min(case
-          when ${centralKitchenOrders.neededDate} is not null
-            and ${centralKitchenOrders.neededTime} ~ '^([01][0-9]|2[0-3]):[0-5][0-9](:[0-5][0-9])?$'
-          then (${centralKitchenOrders.neededDate}::text || ' ' || ${centralKitchenOrders.neededTime})::timestamp at time zone 'Asia/Riyadh'
-          end)` })
-        .from(centralKitchenOrders)
-        .where(and(
-          eq(centralKitchenOrders.requestBranchId, branchId),
-          inArray(centralKitchenOrders.status, ["requested", "approved", "prepared", "dispatched"]),
-        ))
-        .groupBy(centralKitchenOrders.status);
-      const counts = new Map(rows.map((row) => [row.status, Number(row.value)]));
-      const incoming = counts.get("dispatched") || 0;
-      const dispatched = rows.find(row => row.status === "dispatched");
+      const { supplyGrants } = await import("./operations-supply");
+      const query = operationsSupplySql("kitchen", [branchId], {
+        id: req.currentUser!.id, role: req.currentUser!.role, branchId: req.currentUser!.branchId,
+        allowed: getAllowedBranchIds(req),
+      }, await supplyGrants(req));
+      const rows = (await pool.query<{ status: string; requester: string; value: number; oldestNeededDate: string | null; oldestDue: Date | string | null }>(
+        `SELECT k.status,k.request_branch_id AS requester,count(*)::int AS value,min(k.needed_date)::text AS "oldestNeededDate",
+          min(CASE WHEN k.needed_date IS NOT NULL AND k.needed_time ~ '^([01][0-9]|2[0-3]):[0-5][0-9](:[0-5][0-9])?$'
+            THEN (k.needed_date::text || ' ' || k.needed_time)::timestamp AT TIME ZONE 'Asia/Riyadh' END) AS "oldestDue"
+          FROM ${query.from} WHERE ${query.where} GROUP BY k.status,k.request_branch_id`, query.values)).rows;
+      const counts = new Map<string, number>();
+      for (const row of rows) counts.set(row.status, (counts.get(row.status) || 0) + Number(row.value));
+      const incoming = rows.filter(row => row.requester === branchId && row.status === "dispatched")
+        .reduce((sum, row) => sum + Number(row.value), 0);
+      const dispatched = rows.find(row => row.requester === branchId && row.status === "dispatched");
       const canReceive = incoming > 0 && await hasEffectiveViewPermission(req, "central_kitchen_orders", "edit")
         && await kitchenActionAllowed(db, req.currentUser!.id, { requestBranchId: branchId }, "receive");
       // Destination reads status as a stage, but stage is the canonical list filter.
@@ -213,7 +215,7 @@ export const branchOperationsDefinitions: readonly CardDefinition[] = [
       return {
         metrics: ["requested", "approved", "prepared", "dispatched"].map((status, index) => ({
           label: ["مطلوبة", "معتمدة", "مجهزة", "مرسلة للفرع"][index], value: counts.get(status) || 0,
-        })),
+        })).concat([{ label: "فروق استلام مفتوحة", value: counts.get("received") || 0 }]),
         alerts: [...(incoming ? [{ label: canReceive ? "طلبات يمكنك استلامها" : "طلبات مرسلة بانتظار مستلم مخول", count: incoming, href, priority: "normal" as const, actionLabel: canReceive ? "تأكيد الاستلام" : "عرض المتابعة",
           dueAt: dispatched?.oldestDue ? new Date(dispatched.oldestDue).toISOString() : undefined,
           description: dispatched?.oldestDue
@@ -228,7 +230,7 @@ export const branchOperationsDefinitions: readonly CardDefinition[] = [
               priority: "low" as const, actionLabel: "عرض المتابعة",
               description: "المتابعة لدى المطبخ المورد؛ ليست طلبات جاهزة لتأكيد استلام الفرع." }] : [];
           })],
-        description: "مراحل طلبات الفرع؛ يظهر إجراء الاستلام للمستلم المخول فقط.",
+        description: "طلبات فريدة مرتبطة بالفرع كطالب أو مورد حسب صلاحيات المصدر، مع فروق الاستلام المفتوحة؛ يظهر إجراء الاستلام للمستلم المخول فقط.",
         quickActions: [
           ...(await hasEffectiveViewPermission(req, "central_kitchen_orders", "create")
             ? [{ label: "طلب جديد", href: branchHref("/central-kitchen-orders?intent=create&from=branch-operations", branchId), kind: "create" as const }] : []),
@@ -322,11 +324,14 @@ export const branchOperationsDefinitions: readonly CardDefinition[] = [
     } },
   { id: "warehouse", title: "تحويلات المستودع", group: "operations", module: "warehouse", href: "/transfer-requests",
     load: async (branchId, _businessDate, req) => {
-      const rows = await db.select({ source: materialTransfers.sourceBranchId, destination: materialTransfers.destinationBranchId,
-        status: materialTransfers.status, value: count() }).from(materialTransfers)
-        .where(and(or(eq(materialTransfers.sourceBranchId, branchId), eq(materialTransfers.destinationBranchId, branchId)),
-          inArray(materialTransfers.status, ["pending", "approved", "in_transit"])))
-        .groupBy(materialTransfers.sourceBranchId, materialTransfers.destinationBranchId, materialTransfers.status);
+      const { supplyGrants } = await import("./operations-supply");
+      const query = operationsSupplySql("transfers", [branchId], {
+        id: req.currentUser!.id, role: req.currentUser!.role, branchId: req.currentUser!.branchId,
+        allowed: getAllowedBranchIds(req),
+      }, await supplyGrants(req));
+      const rows = (await pool.query<{ source: string | null; destination: string; status: string; value: number }>(
+        `SELECT t.source_branch_id AS source,t.destination_branch_id AS destination,t.status,count(*)::int AS value
+          FROM ${query.from} WHERE ${query.where} GROUP BY t.source_branch_id,t.destination_branch_id,t.status`, query.values)).rows;
       const incoming = rows.filter(r => r.destination === branchId && r.status === "in_transit").reduce((sum, r) => sum + Number(r.value), 0);
       const outgoing = rows.filter(r => r.source === branchId).reduce((sum, r) => sum + Number(r.value), 0);
       const awaitingSupplier = ["pending", "approved"].map(status => ({
@@ -334,7 +339,8 @@ export const branchOperationsDefinitions: readonly CardDefinition[] = [
       }));
       // Warehouse receipt uses warehouse/edit and destination scope, not kitchen routing.
       // This summary's branch is already authorized by canAccessBranch above.
-      const canReceive = incoming > 0 && await hasEffectiveViewPermission(req, "warehouse", "edit");
+      const canReceive = incoming > 0 && req.currentUser?.role !== "warehouse_keeper"
+        && await hasEffectiveViewPermission(req, req.currentUser?.role === "branch_manager" ? "branch_supply" : "warehouse", "edit");
       return { metrics: [{ label: "واردة بانتظار الاستلام", value: incoming }, { label: "تحويلات صادرة مفتوحة", value: outgoing }],
         alerts: [...(incoming ? [{ label: canReceive ? "تحويلات يمكنك استلامها" : "تحويلات واردة بانتظار مستلم مخول", count: incoming, href: branchHref("/transfer-requests?status=in_transit&direction=incoming", branchId),
           priority: "normal" as const, actionLabel: canReceive ? "تأكيد الاستلام" : "عرض المتابعة",
@@ -347,7 +353,7 @@ export const branchOperationsDefinitions: readonly CardDefinition[] = [
           }))],
         description: "سجل تحويلات المواد مستقل عن طلبات المطبخ؛ الاستلام للفرع الوجهة فقط.",
         quickActions: [
-          ...(await hasEffectiveViewPermission(req, "warehouse", "create")
+          ...(await hasEffectiveViewPermission(req, req.currentUser?.role === "branch_manager" ? "branch_supply" : "warehouse", "create")
             ? [{ label: "طلب تحويل جديد", href: branchHref("/transfer-requests?intent=create&from=branch-operations", branchId), kind: "create" as const }] : []),
           ...(canReceive ? [{ label: "استلام تحويلات واردة", href: branchHref("/transfer-requests?status=in_transit&direction=incoming", branchId), kind: "receive" as const }] : []),
         ] };
@@ -449,6 +455,17 @@ export const branchOperationsDefinitions: readonly CardDefinition[] = [
 // request must recheck grants (including after revocation).
 const permissionChecks = new WeakMap<Request, Map<string, Promise<boolean>>>();
 
+export const branchOperationsModule = (definition: CardDefinition, req: Request) =>
+  definition.id === "warehouse" && req.currentUser?.role === "branch_manager" ? "branch_supply" : definition.module;
+
+/** Run the source route's real middleware, including hard role boundaries and request-live grants. */
+export function hasAuthoritativePermission(req: Request, module: string, action = "view"): Promise<boolean> {
+  return new Promise((resolve, reject) => {
+    const response: any = { status: () => response, json: () => resolve(false) };
+    Promise.resolve(requirePermission(module, action)(req, response, error => error ? reject(error) : resolve(true))).catch(reject);
+  });
+}
+
 export function hasEffectiveViewPermission(req: Request, module: string, action = "view"): Promise<boolean> {
   let checks = permissionChecks.get(req);
   if (!checks) {
@@ -465,6 +482,8 @@ export function hasEffectiveViewPermission(req: Request, module: string, action 
 }
 
 async function evaluateEffectivePermission(req: Request, module: string, action: string): Promise<boolean> {
+  if (["warehouse", "branch_supply", "central_kitchen_orders", "delivery_tasks", "production"].includes(module))
+    return hasAuthoritativePermission(req, module, action);
   const user = req.currentUser;
   if (!user) return false;
   if (user.role === "admin") return true;
@@ -492,7 +511,7 @@ async function evaluateEffectivePermission(req: Request, module: string, action:
 export async function loadAuthorizedBranchOperationsCard(
   definition: CardDefinition, branchId: string, businessDate: string, req: Request,
 ): Promise<BranchOperationsCard | null> {
-  if (!await hasEffectiveViewPermission(req, definition.module)) return null;
+  if (!await hasEffectiveViewPermission(req, branchOperationsModule(definition, req))) return null;
   const href = branchHref(definition.href, branchId);
   try {
     return { id: definition.id, title: definition.title, group: definition.group, href,
@@ -525,7 +544,7 @@ export function registerBranchOperationsRoute(app: Express): void {
     // failures therefore fail closed and cannot accidentally expose a card.
     const definitions = branchOperationsDefinitions;
     const allowed = await Promise.all(definitions.map((definition) =>
-      hasEffectiveViewPermission(req, definition.module)));
+      hasEffectiveViewPermission(req, branchOperationsModule(definition, req))));
     const visible = definitions.filter((_, index) => allowed[index]);
     if (!visible.length) return res.status(403).json({ message: "لا توجد وحدات مسموحة" });
 

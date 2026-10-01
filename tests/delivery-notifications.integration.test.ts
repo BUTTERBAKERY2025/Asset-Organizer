@@ -67,10 +67,9 @@ describe("delivery notice outbox (local PostgreSQL only)", () => {
     if (!connection) return;
     try {
       await connection.query(`DELETE FROM system_notifications
-        WHERE dedupe_key IN (SELECT 'delivery:' || id || ':' || $2 || ':removed'
-          FROM delivery_notification_outbox WHERE assignment_id=$1)
-          OR (auto_source='delivery_task' AND button_action=$3)`,
-        [taskId, driver, `/driver-deliveries?deliveryId=${taskId}`]);
+        WHERE auto_source='delivery_task' AND dedupe_key LIKE ANY(
+          SELECT 'delivery:' || id || ':%' FROM delivery_notification_outbox WHERE assignment_id=$1)`,
+        [taskId]);
       await connection.query("DELETE FROM delivery_notification_outbox WHERE assignment_id=$1", [taskId]);
       await connection.query("DELETE FROM delivery_assignment_events WHERE assignment_id=$1", [taskId]);
       await connection.query("DELETE FROM delivery_assignments WHERE id=$1", [taskId]);
@@ -212,13 +211,14 @@ describe("delivery notice outbox (local PostgreSQL only)", () => {
       await c.query("COMMIT");
     } finally { c.release(); }
     await sweepDeliveryNotices();
-    const { rows } = await connection.query(`SELECT n.target_user_ids,n.dedupe_key FROM system_notifications n
-      WHERE n.auto_source='delivery_task' AND n.button_action=$1
-        AND n.title='استلام يحتاج إلى إجراء'`, [`/driver-deliveries?deliveryId=${taskId}`]);
+    const { rows } = await connection.query(`SELECT n.* FROM system_notifications n
+      JOIN delivery_notification_outbox o ON n.dedupe_key LIKE 'delivery:'||o.id||':%'
+      WHERE o.assignment_id=$1 AND o.event_id=$2 AND o.event_type='awaiting_receipt'`, [taskId, e.rows[0].id]);
     expect(rows.some(r => r.target_user_ids[0] === receiver)).toBe(true);
     expect(rows.flatMap(r => r.target_user_ids)).not.toContain(manager);
     expect(rows.flatMap(r => r.target_user_ids)).not.toContain(driver);
     const receiverNotice = rows.find(r => r.target_user_ids[0] === receiver);
+    expect(receiverNotice.button_action).toBe(`/transfer-requests?branchId=${encodeURIComponent(destination)}&transferId=${transferId}&deliveryId=${taskId}`);
     expect(await filterAuthorizedDeliveryNoticeUsers({
       dedupeKey: receiverNotice.dedupe_key, targetUserIds: receiverNotice.target_user_ids,
     } as any, [manager, driver, receiver])).toEqual([receiver]);

@@ -9,6 +9,12 @@ The performance center's registered sales measure uses approved/posted cashier j
 
 **How to apply:** Keep closure evidence separate for monthly operating review. Preserve exact date range and branch scope across chart, detail, assistant and source navigation. A recorded zero differs from no eligible records; missing days remain unknown. Current follow-up counts are a bounded as-of snapshot, not a sales-period trend.
 
+Verify the mounted monthly workspace when changing monthly sales semantics, not merely another monthly reporting endpoint.
+
+**Why:** The older monthly report and the interactive closing workspace used independent projections; correcting the report left the visible workspace on closed-day sales.
+
+**How to apply:** Trace the actual component request and its source-link validator. Share the registered-sales authority while keeping operational daily-review snapshots distinct from live financial evidence.
+
 Assistant evidence identity must depend on underlying authorized evidence, not visible queue pagination or refresh timestamps.
 
 **Why:** The assistant reads the first page while the user may be on another page; including next-page flags rejected valid responses despite unchanged evidence.

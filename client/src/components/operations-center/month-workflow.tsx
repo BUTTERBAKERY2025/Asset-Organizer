@@ -1,21 +1,20 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowUpLeft, ChevronRight, RefreshCw } from "lucide-react";
-import type { OperationsMonthCommand, OperationsMonthWorkflow } from "@shared/operations-month-workflow";
+import type { OperationsMonthAllWorkflow, OperationsMonthCommand, OperationsMonthWorkflow } from "@shared/operations-month-workflow";
 import { apiRequest, getHttpStatus } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { time } from "./record-sheet";
-import { lastCompletedOperationsMonth, monthMoney, validMonthSource } from "./month-workflow-presentation";
+import { lastCompletedOperationsMonth, monthFileLabels, monthFileState, monthMoney, monthNextStep, monthWorkspaceKey, validMonthSource } from "./month-workflow-presentation";
 import { monthlyReturnIntent, withMonthlyReturn } from "@/lib/operations-center-navigation";
 import { dailyClosureHref } from "@/lib/daily-closure-navigation";
 import { readMonthCommandResult } from "./month-workflow-command";
+import { MonthSourceState, MonthWorkflowComparison } from "./month-workflow-comparison";
+import { MonthSalesLedger } from "./month-sales-ledger";
 
 type FileId = "payroll" | "expenses" | "closing" | "sales";
 type Command = "close" | "reopen" | "declare" | "remove-declaration";
-const files: { id: FileId; label: string }[] = [
-  { id: "payroll", label: "الرواتب والصرف" }, { id: "expenses", label: "المصروفات" },
-  { id: "closing", label: "الإغلاقات التشغيلية" }, { id: "sales", label: "المبيعات والنتائج" },
-];
+const files = (Object.keys(monthFileLabels) as FileId[]).map(id => ({ id, label: monthFileLabels[id] }));
 const statusLabel = { closed: "مغلق", open: "مفتوح", reopened: "أعيد فتحه", not_closed: "لم تُغلق الرواتب", unavailable: "غير متاح" };
 const actionLabel: Record<Command, string> = { close: "إغلاق المراجعة التشغيلية للشهر", reopen: "إعادة فتح الشهر", declare: "توثيق يوم غير تشغيلي", "remove-declaration": "إلغاء توثيق اليوم" };
 const outstandingAmount = (remaining: number | null) => remaining === null ? null : Math.max(0, remaining);
@@ -26,27 +25,36 @@ const settlementLabel: Record<OperationsMonthWorkflow["payroll"]["settlementStat
   paid: "الاستحقاق مطابق للصرف المسجل", overpaid: "زيادة صرف تحتاج مطابقة",
 };
 
-export function OperationsMonthWorkspace({ branches, actorId, open }: {
+export function OperationsMonthWorkspace({ branches, actorId, open, ready = true, liveManaged = false }: {
   branches: { id: string; name: string }[]; actorId?: string;
+  ready?: boolean; liveManaged?: boolean;
   open: (href: string, branchId: string) => void;
 }) {
-  const [intent] = useState(() => monthlyReturnIntent(window.location.search, branches.map(branch => branch.id)));
-  const [branchId, setBranchId] = useState(intent.branchId || (branches.length === 1 ? branches[0].id : ""));
-  const [month, setMonth] = useState(intent.month || lastCompletedOperationsMonth());
-  const [file, setFile] = useState<FileId | null>(intent.file);
+  const operationalBranches = branches.filter(branch => !["hq", "main_warehouse"].includes(branch.id));
+  const [initialParams] = useState(() => new URLSearchParams(window.location.search));
+  const [intent] = useState(() => monthlyReturnIntent(window.location.search, operationalBranches.map(branch => branch.id)));
+  const [branchId, setBranchId] = useState(initialParams.has("monthBranchId") ? intent.branchId : "all");
+  const [month, setMonth] = useState(initialParams.has("month") ? intent.month : lastCompletedOperationsMonth());
+  const [file, setFile] = useState<FileId | null>(initialParams.has("monthFile") ? intent.file : "payroll");
   const [detail, setDetail] = useState(!!intent.file && !!intent.branchId);
+  const [intentProblem, setIntentProblem] = useState(() =>
+    (initialParams.has("monthBranchId") && !intent.branchId) || (initialParams.has("month") && !intent.month) || (initialParams.has("monthFile") && !intent.file)
+      ? "اختيار العودة للشهر غير صالح أو لم يعد مصرحًا به؛ لم نحمّل فرعًا أو شهرًا بديلًا. اختر النطاق والشهر والملف بنفسك." : "");
   const [command, setCommand] = useState<Command | null>(null);
   const [note, setNote] = useState("");
   const [date, setDate] = useState("");
   const [error, setError] = useState<{ scope: string; message: string } | null>(null);
   const [saved, setSaved] = useState<{ scope: string; message: string; needsRefresh: boolean } | null>(null);
   const client = useQueryClient();
-  const validScope = branches.some(branch => branch.id === branchId) && /^20\d{2}-(0[1-9]|1[0-2])$/.test(month);
-  const scope = `${actorId}:${branchId}:${month}`;
-  const key = ["/api/operations-center/month-workflow", actorId, branchId, month];
-  const query = useQuery<OperationsMonthWorkflow>({
+  const allMode = branchId === "all";
+  const authorizedIds = operationalBranches.map(branch => branch.id);
+  const validScope = ready && (allMode || authorizedIds.includes(branchId)) && /^20\d{2}-(0[1-9]|1[0-2])$/.test(month);
+  const key = monthWorkspaceKey(actorId, branchId, month, authorizedIds);
+  const scope = JSON.stringify(key);
+  const query = useQuery<OperationsMonthWorkflow | OperationsMonthAllWorkflow>({
     queryKey: key, enabled: validScope, retry: false, staleTime: 0,
-    refetchOnWindowFocus: true, refetchInterval: 60_000,
+    refetchOnWindowFocus: true, refetchInterval: liveManaged ? false : 60_000,
+    placeholderData: undefined,
     queryFn: async ({ signal }) => {
       const response = await fetch(`/api/operations-center/month-workflow?${new URLSearchParams({ branchId, month })}`, {
         credentials: "include", cache: "no-store", signal,
@@ -58,7 +66,9 @@ export function OperationsMonthWorkspace({ branches, actorId, open }: {
       return response.json();
     },
   });
-  const data = validScope && !query.isError && query.data?.branchId === branchId && query.data.month === month ? query.data : null;
+  const response = validScope && !query.isError && query.data?.branchId === branchId && query.data.month === month ? query.data : null;
+  const allData = allMode && response?.mode === "all" ? response : null;
+  const data = !allMode && response && response.mode !== "all" ? response : null;
   const mutation = useMutation({
     retry: false,
     onMutate: async (request: { action: Command; body: OperationsMonthCommand; scope: string; key: typeof key }) => {
@@ -92,50 +102,65 @@ export function OperationsMonthWorkspace({ branches, actorId, open }: {
       void client.resetQueries({ queryKey: request.key, exact: true });
     },
   });
-  const reset = () => { setFile(null); setDetail(false); setCommand(null); setNote(""); setDate(""); setError(null); setSaved(null); };
-  const canAct = !!data && !query.isFetching && !mutation.isPending;
+  const reset = () => { setFile(null); setDetail(false); setCommand(null); setNote(""); setDate(""); setError(null); setSaved(null); setIntentProblem(""); };
+  const canAct = ready && !!data && !query.isFetching && !mutation.isPending;
+  const canRead = ready && !!response && !query.isFetching && !mutation.isPending;
   const permitted = !!data && (command === "close" ? data.closing.canClose : command === "reopen" ? data.closing.canReopen : data.closing.canDeclare);
   const submit = () => {
     if (!command || !data || data.closing.revision === null || !canAct || !permitted || note.trim().length < 3) return;
     if ((command === "declare" || command === "remove-declaration") && !date.startsWith(`${month}-`)) return;
     mutation.mutate({ action: command, scope, key, body: { branchId, month, revision: data.closing.revision, note: note.trim(), ...(date ? { date } : {}) } });
   };
-  const openMonthlySource = (href: string) => open(withMonthlyReturn(href, branchId, month, file, window.location.origin), branchId);
-  const source = (href: string | null, label: string) => href && validMonthSource(href, branchId, month, window.location.origin)
-    ? <Button type="button" variant="outline" size="sm" disabled={!canAct} onClick={() => openMonthlySource(href)}>{label}<ArrowUpLeft className="mr-1 size-4" /></Button> : null;
+  const openMonthlySource = (href: string, sourceBranchId = branchId) => {
+    if (!canRead || sourceBranchId === "all" || !authorizedIds.includes(sourceBranchId)) return;
+    open(withMonthlyReturn(href, branchId, month, file, window.location.origin), sourceBranchId);
+  };
+  const source = (href: string | null, label: string) => !href ? null : validMonthSource(href, branchId, month, window.location.origin)
+    ? <Button type="button" variant="outline" size="sm" disabled={!canAct} onClick={() => openMonthlySource(href)}>{label}<ArrowUpLeft className="mr-1 size-4" /></Button>
+    : <p role="alert" className="text-xs text-destructive">رابط المصدر لا يطابق الفرع والشهر والفترة؛ لم نتيح فتحه.</p>;
   const begin = (action: Command, selectedDate = "") => { setCommand(action); setDate(selectedDate); setNote(""); setError(null); };
-  const branch = branches.find(item => item.id === branchId);
-  const caption = (id: FileId) => !data ? "اختر فرعًا لتحميل الملف" : id === "payroll"
+  const branch = operationalBranches.find(item => item.id === branchId);
+  const caption = (id: FileId) => allData
+    ? `${allData.totals[id].coverage.availableCount} مصادر متاحة من ${allData.scope.branchCount} فروع · مقارنة للقراءة فقط`
+    : !data ? "بانتظار التحقق من النطاق والمصادر" : id === "payroll"
     ? data.payroll.available ? `${statusLabel[data.payroll.status]} · المتبقي ${monthMoney(outstandingAmount(data.payroll.remaining))}${(excessAmount(data.payroll) || 0) > 0 ? " · زيادة صرف تحتاج مطابقة" : ""}` : data.payroll.reason || "لا تتوفر صلاحية الرواتب"
     : id === "expenses" ? data.expenses.available ? `مصروفات مسجلة ${monthMoney(data.expenses.recorded)}` : data.expenses.reason || "لا تتوفر صلاحية المصروفات"
     : id === "closing" ? data.closing.available ? `${statusLabel[data.closing.status]}${data.closing.drifted ? " · تغيرت أدلة الإغلاق" : ""} · ${data.closing.blockers.length} عوائق` : data.closing.reason || "المصدر غير متاح"
-    : data.sales.available ? `مبيعات مؤكدة ${monthMoney(data.sales.confirmed)}` : data.sales.reason || "لا تتوفر صلاحية المبيعات";
+    : data.sales.available ? `مبيعات مسجلة ${monthMoney(data.sales.confirmed)} · تغطية جزئية` : data.sales.reason || "لا تتوفر صلاحية المبيعات";
 
-  return <div className="oc-workspace-grid" data-detail={detail} data-testid="operations-month-workspace">
+  return <div className="oc-workspace-grid oc-month-grid" data-detail={detail} data-testid="operations-month-workspace">
     <div className="oc-workspace-list space-y-3">
       <label className="block text-xs font-bold">الشهر
         <input aria-label="شهر الإغلاق" type="month" value={month} disabled={mutation.isPending} onChange={event => { setMonth(event.target.value); reset(); }} className="mt-1 block min-h-10 w-full rounded-lg border border-violet-200 bg-[#fdfbff] px-3 text-sm" />
       </label>
       <label className="block text-xs font-bold">الفرع
-        <select aria-label="فرع إغلاق الشهر" value={validScope ? branchId : ""} disabled={mutation.isPending} onChange={event => { setBranchId(event.target.value); reset(); }} className="mt-1 block min-h-10 w-full rounded-lg border border-violet-200 bg-[#fdfbff] px-3 text-sm">
-          <option value="">اختر فرعًا — لا يوجد إجراء على كل الفروع</option>
-          {branches.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
+        <select aria-label="فرع إغلاق الشهر" value={branchId} disabled={mutation.isPending || !ready} onChange={event => { setBranchId(event.target.value); reset(); }} className="mt-1 block min-h-10 w-full rounded-lg border border-violet-200 bg-[#fdfbff] px-3 text-sm">
+          {!branchId && <option value="" disabled>اختر نطاقًا مصرحًا به</option>}
+          <option value="all">كل الفروع المصرح بها</option>
+          {operationalBranches.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
         </select>
       </label>
-      <p className="text-xs text-muted-foreground">الشهر الافتراضي هو آخر شهر مكتمل. الإجراءات تخص فرعًا واحدًا وشهرًا واحدًا.</p>
+      <p className="text-xs leading-6 text-muted-foreground">الشهر الافتراضي آخر شهر مكتمل بتوقيت السعودية. {allMode ? "كل الفروع: مقارنة للقراءة فقط. افتح فرعًا واحدًا لمراجعته واتخاذ إجراء مصرح به." : "الإجراءات التشغيلية لهذا الفرع والشهر فقط؛ الإجراءات المالية في مصادرها."}</p>
+      {intentProblem && <p role="alert" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs leading-6 text-amber-900">{intentProblem}</p>}
+      {!ready && <p role="status" className="text-sm">جار التحقق من الفروع والصلاحيات الحالية؛ التفاصيل السابقة مخفية.</p>}
       {query.isLoading && <p role="status" className="text-sm">جار تحميل ملف الشهر…</p>}
       {query.isError && <div role="alert" className="space-y-2 text-sm text-destructive"><p>{query.error.message}</p><Button variant="outline" size="sm" onClick={() => query.refetch()}>إعادة المحاولة</Button></div>}
       {saved?.scope === scope && <div role="status" className="oc-panel space-y-2 border-emerald-200 p-3 text-sm text-emerald-900"><p>{saved.message}</p>{saved.needsRefresh && <Button type="button" variant="outline" size="sm" disabled={query.isFetching || mutation.isPending} onClick={() => query.refetch()}>تحديث الملف المحفوظ</Button>}</div>}
       {error?.scope === scope && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error.message}</p>}
-      {files.map(item => <button type="button" key={item.id} className="oc-list-item" data-active={file === item.id} disabled={!data || mutation.isPending} onClick={() => { setFile(item.id); setDetail(true); setCommand(null); }}>
-        <strong className="block text-sm">{item.label}</strong><span className="mt-1 block text-xs text-muted-foreground">{caption(item.id)}</span>
+      {files.map(item => <button type="button" key={item.id} className="oc-list-item" data-active={file === item.id} disabled={!response || mutation.isPending} onClick={() => { setFile(item.id); setDetail(true); setCommand(null); }}>
+        <strong className="block text-sm">{item.label}</strong><span className="mt-1 block text-xs leading-6 text-muted-foreground">{caption(item.id)}</span>{data && <span className="mt-2 block"><MonthSourceState workflow={data} file={item.id} /></span>}
       </button>)}
-      {data && <p className="text-[11px] text-muted-foreground">آخر تحقق: {time(data.generatedAt)} <button type="button" aria-label="تحديث ملف الشهر" disabled={query.isFetching || mutation.isPending} onClick={() => query.refetch()}><RefreshCw className={`inline size-3.5 ${query.isFetching ? "animate-spin" : ""}`} /></button></p>}
+      {response && <p className="text-[11px] text-muted-foreground">آخر تحقق: {time(response.generatedAt)} <button type="button" aria-label="تحديث ملف الشهر" disabled={query.isFetching || mutation.isPending || !ready} onClick={() => query.refetch()}><RefreshCw className={`inline size-3.5 ${query.isFetching ? "animate-spin" : ""}`} /></button></p>}
     </div>
     <div className="oc-workspace-detail space-y-4">
       <button type="button" className="inline-flex items-center gap-1 text-sm font-bold text-violet-700 md:hidden" onClick={() => setDetail(false)}><ChevronRight className="size-4" />العودة للملفات والفرع</button>
-      {!data || !file ? <p className="py-12 text-center text-sm text-muted-foreground">{!validScope ? "اختر الفرع والشهر، ثم افتح أحد الملفات الأربعة." : query.isError ? "تعذر التحقق من ملف الشهر؛ لا توجد إجراءات متاحة." : "اختر ملفًا لعرض تفاصيله والإجراء التالي."}</p> : <>
-        <header><p className="text-xs font-bold text-violet-700">{branch?.name} · {month}</p><h3 className="mt-1 text-xl font-bold">{files.find(item => item.id === file)?.label}</h3></header>
+      {allData && file ? <MonthWorkflowComparison data={allData} file={file} busy={!canRead} origin={window.location.origin} selectBranch={id => {
+        if (!canRead || !allData.scope.branchIds.includes(id) || !authorizedIds.includes(id)) return;
+        setBranchId(id); setCommand(null); setNote(""); setDate(""); setError(null); setSaved(null); setDetail(true);
+      }} openSource={openMonthlySource} /> : !data || !file ? <p className="py-12 text-center text-sm text-muted-foreground">{!validScope ? "اختر نطاقًا مصرحًا وشهرًا صحيحًا، ثم افتح أحد الملفات الأربعة." : query.isError ? "تعذر التحقق من ملف الشهر؛ لا توجد إجراءات متاحة." : query.isLoading ? "جار تحميل أدلة الشهر…" : "اختر ملفًا لعرض تفاصيله والإجراء التالي."}</p> : <>
+        <header><p className="text-xs font-bold text-violet-700">{branch?.name} · {month}</p><h3 className="mt-1 text-xl font-bold">{files.find(item => item.id === file)?.label}</h3><div className="mt-2"><MonthSourceState workflow={data} file={file} /></div></header>
+        <p className="oc-month-next"><strong>الخطوة التالية: </strong>{monthNextStep(data, file)}</p>
+        {data.sourceFailures.length > 0 && <p role="status" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs leading-6 text-amber-900">بعض المصادر تعذر تحميلها. الملفات السليمة ما زالت متاحة؛ المصدر المتعطل لا يُحسب صفرًا ولا يثبت اكتمال الشهر.</p>}
         {file === "payroll" && (data.payroll.available ? <>
           <div className="grid gap-2 sm:grid-cols-3">{[["مستحق الرواتب المغلقة", data.payroll.due], ["الصرف المسجل فعليًا", data.payroll.recordedPaid], ["المتبقي المؤكد", outstandingAmount(data.payroll.remaining)]].map(([label, value]) => <div key={String(label)} className="oc-panel p-3"><span className="text-xs text-muted-foreground">{label}</span><strong className="mt-1 block text-lg">{monthMoney(value as number | null)}</strong></div>)}</div>
           <p className="text-sm">حالة إغلاق الرواتب: <strong>{statusLabel[data.payroll.status]}</strong></p>
@@ -144,7 +169,9 @@ export function OperationsMonthWorkspace({ branches, actorId, open }: {
           {data.payroll.unknownPaymentAmounts !== null && data.payroll.unknownPaymentAmounts > 0 && <p role="status" className="text-sm text-amber-800">توجد {data.payroll.unknownPaymentAmounts} دفعات غير محددة المبلغ؛ الصرف والمتبقي غير مؤكدين.</p>}
           {(excessAmount(data.payroll) || 0) > 0 && <p role="status" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900"><strong>زيادة صرف تحتاج مطابقة: {monthMoney(excessAmount(data.payroll))}</strong><span className="mt-1 block text-xs">هذه الزيادة ليست متبقيًا سالبًا ولا دليل تسوية؛ راجع بنود الاستحقاق وسجل الدفعات.</span></p>}
           {data.payroll.unreconciledPaymentCount !== null && data.payroll.unreconciledPaymentCount > 0 && <p role="status" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">توجد {data.payroll.unreconciledPaymentCount} دفعات بمبلغ {monthMoney(data.payroll.unreconciledPaymentAmount)} بلا بند موظف مطابق في لقطة الرواتب المعروضة. يجب مطابقتها؛ وجودها ليس دليل سداد استحقاقات هذه اللقطة.</p>}
-          {source(data.payroll.sourceHref, data.payroll.canManage ? "فتح إغلاق الرواتب وتسجيل الصرف" : "فتح مصدر الرواتب")}
+          {data.payroll.snapshotMismatch && <p role="alert" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">إجمالي لقطة الرواتب ({monthMoney(data.payroll.snapshotHeaderDue)}) لا يطابق بنود الموظفين ({monthMoney(data.payroll.snapshotLinesDue)}). راجع المصدر؛ الاستحقاق والتسوية غير مؤكدين.</p>}
+          {data.payroll.reason && <p className="text-xs leading-6 text-muted-foreground">{data.payroll.reason}</p>}
+          {source(data.payroll.sourceHref, data.payroll.canManage ? data.payroll.status !== "closed" ? "مراجعة وإغلاق استحقاق الرواتب" : "مراجعة الاستحقاقات وسجل الصرف" : "فتح مصدر الرواتب")}
           {!data.payroll.canManage && <p className="text-xs text-muted-foreground">ليس لديك إجراء مالي هنا. إغلاق الرواتب وتسجيل الصرف يخضعان لصلاحيات المصدر.</p>}
           <h4 className="font-bold">استحقاق الموظفين والصرف</h4>
           {!data.payroll.employees.length && <p className="text-sm text-muted-foreground">لا توجد بنود استحقاق محفوظة لهذا الشهر.</p>}
@@ -152,19 +179,24 @@ export function OperationsMonthWorkspace({ branches, actorId, open }: {
           <h4 className="font-bold">سجل الصرف</h4>
           {!data.payroll.payments.length && <p className="text-sm text-muted-foreground">لا توجد دفعات مسجلة لهذا الشهر.</p>}
           {data.payroll.payments.map(payment => <article key={payment.id} className="oc-panel p-3 text-sm"><strong>{data.payroll.employees.find(item => item.employeeId === payment.employeeId)?.name || `موظف #${payment.employeeId}`} · {monthMoney(payment.amount)}</strong><p className="mt-1 text-xs">{time(payment.paidAt)} · {payment.method} · سجّلها: {payment.actor || "غير معروف من المصدر"}</p>{!payment.reconciled && <p className="mt-1 text-xs font-bold text-amber-900">هذه الدفعة تحتاج مطابقة مع لقطة الاستحقاق.</p>}{payment.note && <p className="mt-1 text-xs">{payment.note}</p>}</article>)}
-        </> : <Unavailable reason={data.payroll.reason} />)}
+        </> : <Unavailable reason={data.payroll.reason} state={monthFileState(data, "payroll")} />)}
         {file === "expenses" && (data.expenses.available ? <>
-          <div className="oc-panel p-4"><span className="text-xs">إجمالي المصروفات المسجلة</span><strong className="mt-1 block text-xl">{monthMoney(data.expenses.recorded)}</strong><p className="mt-2 text-xs text-muted-foreground">هذه قيود مصروفات وليست إثبات دفع نقدي. حالة الصرف غير متاحة من هذا المصدر.</p></div>
+          <div className="oc-month-metrics"><div className="oc-panel p-4"><span className="text-xs">إجمالي المصروفات المسجلة</span><strong className="mt-1 block text-xl">{monthMoney(data.expenses.recorded)}</strong></div><div className="oc-panel p-4"><span className="text-xs">المدفوع نقديًا</span><strong className="mt-1 block text-xl">غير متاح</strong></div></div>
+          <p className="text-xs leading-6 text-muted-foreground">هذه قيود تكلفة وليست إثبات دفع نقدي. حالة الصرف غير متاحة من هذا المصدر. لا تشمل الرواتب أو تكلفة البضاعة.</p>
+          {data.expenses.reason && <p className="text-xs leading-6 text-muted-foreground">{data.expenses.reason}</p>}
+          {!data.expenses.items.length && <p role="status" className="text-sm text-muted-foreground">لا توجد بنود مصروفات متاحة لهذا الشهر؛ غياب القيد ليس إثبات أن التكلفة صفر.</p>}
           {data.expenses.items.map((item, index) => <div key={`${item.label}:${index}`} className="oc-panel flex justify-between gap-3 p-3 text-sm"><span>{item.label}</span><strong>{monthMoney(item.amount)}</strong></div>)}
           {source(data.expenses.sourceHref, data.expenses.canManage ? "فتح مصروفات الشهر ومراجعتها" : "فتح سجل المصروفات")}
           {!data.expenses.canManage && <p className="text-xs text-muted-foreground">عرض فقط؛ تسجيل أو تعديل المصروفات يتطلب صلاحية المصدر.</p>}
-        </> : <Unavailable reason={data.expenses.reason} />)}
+        </> : <Unavailable reason={data.expenses.reason} state={monthFileState(data, "expenses")} />)}
         {file === "sales" && (data.sales.available ? <>
-          <div className="oc-panel p-4"><span className="text-xs">مبيعات الأيام المغلقة فقط</span><strong className="mt-1 block text-xl">{monthMoney(data.sales.confirmed)}</strong><p className="mt-2 text-xs">عدد الأيام المغلقة: {data.sales.closedDays}. ليست إجمالي الشهر إذا كانت الإغلاقات ناقصة.</p></div>
-          {source(data.sales.sourceHref, "فتح نتائج الشهر")}
-        </> : <Unavailable reason={data.sales.reason} />)}
+          <MonthSalesLedger sales={data.sales} month={month} />
+          {source(data.sales.sourceHref, "فتح يوميات المبيعات لنفس الفرع والشهر")}
+        </> : <Unavailable reason={data.sales.reason} state={monthFileState(data, "sales")} />)}
         {file === "closing" && (data.closing.available ? <>
           <div className="oc-panel p-4"><strong>حالة الشهر: {statusLabel[data.closing.status]}</strong><p className="mt-2 text-sm">إغلاق مراجعة تشغيلية محفوظ؛ لا يعتمد الرواتب أو الصرف ولا يقفل السجلات المالية.</p>{data.closing.closedAt && <p className="mt-2 text-xs">أغلقه: {data.closing.closedBy || "غير معروف"} · {time(data.closing.closedAt)}</p>}</div>
+          {data.closing.reason && <p role="status" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">{data.closing.reason}</p>}
+          <div className="oc-month-metrics"><div className="oc-panel p-3 text-xs">أدلة الأيام الحالية<strong className="mt-1 block text-base">{data.closing.dailyEvidenceAvailable ? `${data.closing.dailyRecords.length} سجلات` : "تعذر التحقق"}</strong></div><div className="oc-panel p-3 text-xs">أيام بلا دليل<strong className="mt-1 block text-base">{data.closing.dailyEvidenceAvailable && data.closing.reviewEvidenceAvailable ? data.closing.missingDates.length : "غير معروف"}</strong></div><div className="oc-panel p-3 text-xs">ملف المراجعة المحفوظ<strong className="mt-1 block text-base">{data.closing.reviewEvidenceAvailable ? statusLabel[data.closing.status] : "تعذر التحقق"}</strong></div></div>
           {data.closing.drifted && <p role="alert" className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">تغيرت أدلة التشغيل بعد الإغلاق. يجب إعادة الفتح والمراجعة؛ الإغلاق السابق لا يثبت اكتمال البيانات الحالية.</p>}
           {!!data.closing.blockers.length && <div className="oc-panel p-4"><h4 className="font-bold">ما يمنع إغلاق الشهر</h4><ul className="mt-2 list-inside list-disc text-sm">{data.closing.blockers.map((blocker, index) => <li key={index}>{blocker}</li>)}</ul></div>}
           <div className="flex flex-wrap gap-2">
@@ -178,21 +210,24 @@ export function OperationsMonthWorkspace({ branches, actorId, open }: {
           {command && <form onSubmit={event => { event.preventDefault(); submit(); }} className="oc-panel space-y-3 border-violet-300 p-4" aria-label="تأكيد إجراء الشهر"><strong className="block text-sm">{actionLabel[command]}{date ? ` · ${date}` : ""}</strong><p className="text-xs">سيُحفظ الإجراء باسم حسابك مع التاريخ والسبب. لا ينفذ صرفًا أو اعتمادًا ماليًا.</p><label className="block text-xs font-bold">السبب / ملاحظة المراجعة<textarea aria-label="سبب إجراء الشهر" value={note} onChange={event => setNote(event.target.value)} minLength={3} maxLength={1000} required className="mt-1 min-h-20 w-full rounded-lg border border-violet-200 bg-white p-2 text-sm" /></label><div className="flex gap-2"><Button type="submit" disabled={!canAct || !permitted || note.trim().length < 3}>{mutation.isPending ? "جار الحفظ…" : "تأكيد وحفظ"}</Button><Button type="button" variant="outline" disabled={mutation.isPending} onClick={() => setCommand(null)}>إلغاء</Button></div></form>}
           {!!data.closing.declarations.length && <div className="space-y-2"><h4 className="font-bold">أيام غير تشغيلية موثقة</h4>{data.closing.declarations.map(item => <article key={item.date} className="oc-panel p-3 text-sm"><strong>{item.date}</strong><p>{item.note}</p><p className="mt-1 text-xs text-muted-foreground">{item.actor} · {time(item.at)}</p>{data.closing.canDeclare && <Button size="sm" variant="outline" className="mt-2" disabled={!canAct} onClick={() => begin("remove-declaration", item.date)}>إلغاء التوثيق</Button>}</article>)}</div>}
           <h4 className="font-bold">الإغلاقات اليومية المسجلة</h4>
-          {data.closing.dailyRecords.map(item => <article key={item.id} className="oc-panel flex flex-wrap items-center justify-between gap-2 p-3 text-sm"><div><strong>{item.date}</strong><p className="text-xs">الحالة: {item.status} · المبيعات المسجلة: {monthMoney(item.sales)}</p></div><Button variant="outline" size="sm" disabled={!canAct} onClick={() => {
+          {!data.closing.dailyEvidenceAvailable ? <p role="status" className="text-sm text-amber-900">تعذر تحميل سجلات الأيام. لا يمكن إثبات اكتمال الأيام من حالة المراجعة المحفوظة.</p> : !data.closing.dailyRecords.length && <p className="text-sm text-muted-foreground">لا توجد سجلات إغلاق يومية متاحة لهذا الشهر.</p>}
+          {data.closing.dailyRecords.map(item => <article key={item.id} className="oc-panel flex flex-wrap items-center justify-between gap-2 p-3 text-sm"><div><strong>{item.date} · سجل #{item.id}</strong><p className="text-xs">الحالة: {item.status === "closed" ? "مغلق" : item.status === "open" ? "مفتوح" : item.status} · مبيعات سجل الإغلاق (ليست يوميات المبيعات): {monthMoney(item.sales)}</p></div><Button variant="outline" size="sm" disabled={!canAct} onClick={() => {
             try {
               const url = new URL(item.href, window.location.origin);
-              if (url.origin === window.location.origin && url.pathname === `/branch-daily-closures/${item.id}` && item.date.startsWith(`${month}-`) && url.searchParams.get("branchId") === branchId) openMonthlySource(dailyClosureHref(item.status === "open" ? "list" : item.id, "", branchId, item.date, month));
+              if (url.origin === window.location.origin && url.pathname === `/branch-daily-closures/${item.id}` && item.date.startsWith(`${month}-`) && url.searchParams.getAll("branchId").length === 1 && url.searchParams.get("branchId") === branchId) openMonthlySource(dailyClosureHref(item.status === "open" ? "list" : item.id, "", branchId, item.date, month));
+              else setError({ scope, message: "رابط الإغلاق اليومي لا يطابق سجل هذا الفرع والشهر." });
             } catch { setError({ scope, message: "رابط الإغلاق اليومي غير صالح." }); }
           }}>{item.status === "open" ? "مراجعة واعتماد الإغلاق اليومي" : "فتح الإغلاق اليومي"}</Button></article>)}
+          {data.closing.snapshotRecords && <details className="oc-panel p-3"><summary className="cursor-pointer text-sm font-bold text-violet-700">أدلة لقطة الإغلاق المحفوظة ({data.closing.snapshotRecords.length})</summary><p className="mt-2 text-xs text-muted-foreground">هذه لقطة المراجعة وقت الإغلاق، وليست السجلات اليومية الحالية أو الأرقام المالية الحية.</p><div className="mt-2 space-y-2">{data.closing.snapshotRecords.map(item => <p key={item.id} className="text-xs">{item.date} · سجل #{item.id} · {item.status} · {monthMoney(item.sales)}</p>)}</div></details>}
           <h4 className="font-bold">سجل إجراءات الشهر</h4>
           {!data.closing.history.length && <p className="text-xs text-muted-foreground">لم تُسجّل إجراءات شهرية بعد.</p>}
           {data.closing.history.map((item, index) => <article key={`${item.at}:${index}`} className="oc-panel p-3 text-sm"><strong>{actionLabel[item.action === "remove_declaration" ? "remove-declaration" : item.action]}</strong><p className="mt-1 text-xs">{item.actor} · {time(item.at)}</p><p className="mt-1 text-xs">{item.note}</p></article>)}
-        </> : <Unavailable reason={data.closing.reason} />)}
+        </> : <Unavailable reason={data.closing.reason} state={monthFileState(data, "closing")} />)}
       </>}
     </div>
   </div>;
 }
 
-function Unavailable({ reason }: { reason?: string }) {
-  return <div role="status" className="oc-panel p-4 text-sm"><strong>الملف غير متاح</strong><p className="mt-2">{reason || "لا تتوفر صلاحية المصدر أو تعذر تحميله. لا نعرض بيانات ناقصة كصفر ولا نعتبر الملف مكتملًا."}</p></div>;
+function Unavailable({ reason, state }: { reason?: string; state?: string }) {
+  return <div role="status" className="oc-panel p-4 text-sm"><strong>{state === "denied" ? "لا توجد صلاحية لهذا المصدر" : state === "failed" ? "تعذر تحميل المصدر" : "الملف غير متاح"}</strong><p className="mt-2">{reason || "لا تتوفر صلاحية المصدر أو تعذر تحميله. لا نعرض بيانات ناقصة كصفر ولا نعتبر الملف مكتملًا."}</p></div>;
 }

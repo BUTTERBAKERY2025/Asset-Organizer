@@ -3,10 +3,29 @@ import {
   buildCentralKitchenNotificationPayload,
   canReceiveCentralKitchenNotification,
   dispatchAfterCommitSafely,
+  centralKitchenNoticeContext,
   type CentralKitchenNotificationEvent,
 } from "../server/central-kitchen-notifications";
 
 describe("central kitchen lifecycle notifications", () => {
+  it("rechecks immutable source identity even after an obsolete CTA is removed", async () => {
+    let call = 0;
+    const executor = {
+      select: () => ({ from: () => ({ where: async () => call++ === 0
+        ? [{ id: 91, orderId: 42, eventType: "created" }]
+        : [{ id: 42, status: "approved" }] }) }),
+    } as any;
+    expect(await centralKitchenNoticeContext(executor, {
+      dedupeKey: "central-kitchen-event:91:created", buttonAction: null,
+    })).toMatchObject({ order: { id: 42 }, event: "created" });
+    call = 0;
+    expect(await centralKitchenNoticeContext(executor, {
+      dedupeKey: "central-kitchen-event:91:created",
+      buttonAction: "/central-kitchen-orders?orderId=99",
+    })).toBeNull();
+    expect(call).toBe(1);
+  });
+
   it("requires current view permission while retaining the branch-manager grant", () => {
     expect(canReceiveCentralKitchenNotification("employee", ["view"])).toBe(true);
     expect(canReceiveCentralKitchenNotification("employee", ["edit"])).toBe(false);

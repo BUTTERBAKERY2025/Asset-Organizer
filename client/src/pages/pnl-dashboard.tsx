@@ -1,6 +1,7 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
+import { operationsCenterReturnHref } from "@/lib/operations-center-navigation";
 import { useBranchNavigation } from "@/hooks/use-branch-navigation";
 import { useBranches } from "@/hooks/useBranches";
 import { useAuth } from "@/hooks/useAuth";
@@ -1839,6 +1840,8 @@ function ModernOverview({ metrics, totals, branches, selectedYear, selectedMonth
 
 export default function PnLDashboard() {
   const [, navigate] = useLocation();
+  const linkedSearch = useSearch();
+  const fromCenter = new URLSearchParams(linkedSearch).get("from") === "operations-center";
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const currentYear = new Date().getFullYear();
@@ -2595,7 +2598,7 @@ export default function PnLDashboard() {
           tone="money"
           title="لوحة الأرباح والخسائر (P&L)"
           description="تحليل الأداء المالي للفروع"
-          backHref="/attendance-dashboard"
+          backHref={fromCenter ? operationsCenterReturnHref(linkedSearch, branches.map(row => row.id)) : "/attendance-dashboard"}
           actions={selectedPeriodId ? (
               <div className="flex flex-wrap items-center gap-2">
                 {/* 1) Primary action — bold, stands alone */}

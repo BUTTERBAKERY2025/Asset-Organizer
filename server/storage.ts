@@ -18558,8 +18558,11 @@ export class DatabaseStorage implements IStorage {
           .filterAuthorizedWarehouseTransferNotificationUsers(db, notification, [userId]);
       if (authorized.includes(userId)) allowedIds.add(notification.id);
     }));
-    return visible.filter(n =>
+    const authorized = visible.filter(n =>
       !scopedIds.has(n.id) || allowedIds.has(n.id));
+    const { projectSourceNotificationForRecipient } = await import("./source-notification-projection");
+    const projected = await Promise.all(authorized.map(n => projectSourceNotificationForRecipient(n, userId)));
+    return projected.filter((n): n is SystemNotification => n !== null);
   }
 
   async markNotificationRead(notificationId: number, userId: string): Promise<NotificationRead> {

@@ -54,12 +54,20 @@ export const operationsEmployeeSections = [
   { id: "transfers", label: "سجل النقل" },
 ] as const;
 export function operationsEmployeeSection(search: string): OperationsEmployeeSection {
-  const section = new URLSearchParams(search).get("section");
+  const params = new URLSearchParams(search);
+  // An exact joining deep link must never silently render the directory.
+  if (params.has("offerId") || params.has("notificationId")) return "joining";
+  const section = params.get("section");
   return section === "joining" || section === "transfers" ? section : "directory";
 }
 export function operationsEmployeeSectionHref(path: string, search: string, section: OperationsEmployeeSection) {
   const params = new URLSearchParams(search);
   params.set("section", section);
+  if (section !== "joining") {
+    params.delete("offerId");
+    params.delete("notificationId");
+    params.delete("centerPeopleRecord");
+  }
   return `${path}?${params}`;
 }
 
@@ -100,7 +108,7 @@ export function operationsEmployeeCanTransfer(employee: OperationsEmployee, bran
 }
 export const joiningStatusLabels: Record<string, string> = {
   pending: "لم يُجهّز رابط المباشرة", sent: "رابط المباشرة جاهز؛ بانتظار التوقيع",
-  signed: "وقّع المرشح؛ يحتاج اعتماد التشغيل", confirmed: "تم اعتماد المباشرة",
+  signed: "وقّع المرشح", confirmed: "تم اعتماد المباشرة",
   cancelled: "أُلغيت المباشرة", expired: "انتهت صلاحية المباشرة", converted: "استُكمل التحويل إلى موظف",
 };
 export function operationsJoiningState(item: OperationsJoining) {
@@ -109,9 +117,30 @@ export function operationsJoiningState(item: OperationsJoining) {
 export function operationsJoiningAction(item: OperationsJoining, canCreate: boolean, canApprove: boolean) {
   if (item.blockedExisting) return "blocked";
   const state = operationsJoiningState(item);
-  if (state === "signed") return canApprove ? "confirm" : "approval-denied";
+  if (state === "signed") return ["accepted", "signed"].includes(item.status) && !!item.notification
+    && item.notification.branchId === item.branchId ? canApprove ? "confirm" : "approval-denied" : "blocked";
   if (["pending", "sent"].includes(state)) return canCreate ? "send" : "send-denied";
   return "terminal";
+}
+
+/** Resolve one candidate exclusively from the fresh, authorized branch response.
+ * Optional offer/notification IDs must refer to the same persisted candidate. */
+export function operationsJoiningFocus(search: string, rows: readonly OperationsJoining[], branchId: string) {
+  const params = new URLSearchParams(search);
+  const requested = params.has("offerId") || params.has("notificationId");
+  const id = (key: string) => {
+    const values = params.getAll(key);
+    return values.length === 1 && /^[1-9]\d*$/.test(values[0]) && Number.isSafeInteger(Number(values[0]))
+      ? Number(values[0]) : null;
+  };
+  const offerId = id("offerId"), notificationId = id("notificationId");
+  const valid = (!params.has("offerId") || offerId !== null) && (!params.has("notificationId") || notificationId !== null)
+    && (!params.has("branchId") || (params.getAll("branchId").length === 1 && params.get("branchId") === branchId));
+  const matches = requested && valid ? rows.filter(row => row.branchId === branchId
+    && (!row.notification || row.notification.branchId === branchId)
+    && (offerId === null || row.id === offerId)
+    && (notificationId === null || row.notification?.id === notificationId)) : [];
+  return { requested, valid, row: matches.length === 1 ? matches[0] : null };
 }
 export function orderedOperationsJoining(items: readonly OperationsJoining[]) {
   const order: Record<string, number> = { signed: 0, pending: 1, sent: 2, confirmed: 3 };

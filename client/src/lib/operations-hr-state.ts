@@ -5,7 +5,10 @@ export const validOperationsPayrollMonth = (month: string) =>
 export function operationsHrSelectionIntent(search: string, defaultMonth: string) {
   const params = new URLSearchParams(search);
   return {
-    branchId: params.get("branchId") || "",
+    branchId: params.getAll("branchId").length > 1
+      || (params.has("branchId") && (!/^[\w-]{1,80}$/.test(params.get("branchId") || "") || params.get("branchId")?.toLowerCase() === "all"))
+      || (params.get("from") === "operations-center" && !params.has("branchId"))
+      ? "__invalid_scope__" : params.get("branchId") || "",
     month: params.has("month") ? params.get("month")! : defaultMonth,
     tab: params.get("tab") === "payroll" ? "payroll" as const : "employees" as const,
   };
@@ -32,6 +35,19 @@ export function operationsHrSelectionHref(
     } else {
       params.delete("centerMonthBranchId");
       params.delete("centerMonth");
+    }
+  }
+  if (params.get("centerWorkspace") === "people" && params.getAll("centerWorkspace").length === 1) {
+    if (branchId !== params.get("branchId") || branchId !== params.get("centerPeopleBranchId")) {
+      params.delete("offerId");
+      params.delete("notificationId");
+      params.delete("centerPeopleRecord");
+    }
+    params.set("centerPeopleBranchId", branchId);
+    if (tab === "payroll") {
+      params.delete("offerId");
+      params.delete("notificationId");
+      params.delete("centerPeopleRecord");
     }
   }
   return `${pathname}${params.size ? `?${params}` : ""}`;

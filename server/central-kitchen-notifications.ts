@@ -103,24 +103,31 @@ export async function filterAuthorizedCentralKitchenNotificationUsers(
   candidateUserIds: string[],
 ): Promise<string[]> {
   if (notification.accessModule !== "central_kitchen_orders") return candidateUserIds;
+  const context = await centralKitchenNoticeContext(executor, notification);
+  if (!context) return [];
+  const recipients = await routedRecipients(executor, context.order, context.event);
+  return candidateUserIds.filter(id => notification.targetUserIds?.includes(id) && recipients.includes(id));
+}
+
+/** Source identity survives removal of an obsolete CTA, and is validated
+ * against the immutable event instead of accepting a forged record query. */
+export async function centralKitchenNoticeContext(executor: DatabaseExecutor, notification: Partial<SystemNotification>) {
   let event = notification.dedupeKey?.split(":").at(-1) as CentralKitchenNotificationEvent;
-  const orderId = Number(notification.buttonAction?.match(/orderId=(\d+)/)?.[1]);
-  if (orderId && !EVENT_COPY[event]) {
-    const eventId = Number(notification.dedupeKey?.match(/^central-kitchen-event:(\d+)$/)?.[1]);
-    if (eventId) {
-      const [row] = await executor.select().from(centralKitchenOrderEvents)
-        .where(and(eq(centralKitchenOrderEvents.id, eventId), eq(centralKitchenOrderEvents.orderId, orderId)));
-      event = row?.eventType as CentralKitchenNotificationEvent;
-    }
+  let orderId: number;
+  const overdue = notification.dedupeKey?.match(/^central-kitchen-overdue:([1-9]\d*):overdue$/);
+  if (overdue) orderId = Number(overdue[1]);
+  else {
+    const eventId = Number(notification.dedupeKey?.match(/^central-kitchen-event:([1-9]\d*)(?::[a-z_]+)?$/)?.[1]);
+    if (!eventId) return null;
+    const [row] = await executor.select().from(centralKitchenOrderEvents).where(eq(centralKitchenOrderEvents.id, eventId));
+    if (!row) return null;
+    orderId = row.orderId;
+    if (!EVENT_COPY[event]) event = row.eventType as CentralKitchenNotificationEvent;
   }
-  if (orderId && EVENT_COPY[event]) {
-    const [order] = await executor.select().from(centralKitchenOrders).where(eq(centralKitchenOrders.id, orderId));
-    if (!order) return [];
-    const recipients = await routedRecipients(executor, order, event);
-    return candidateUserIds.filter(id => recipients.includes(id));
-  }
-  // Unrecognized legacy rows cannot safely prove a current assignment.
-  return [];
+  const linkedId = notification.buttonAction?.match(/[?&]orderId=(\d+)(?:&|$)/)?.[1];
+  if (!EVENT_COPY[event] || (linkedId && Number(linkedId) !== orderId)) return null;
+  const [order] = await executor.select().from(centralKitchenOrders).where(eq(centralKitchenOrders.id, orderId));
+  return order ? { order, event } : null;
 }
 
 export async function canUserAccessCentralKitchenNotification(

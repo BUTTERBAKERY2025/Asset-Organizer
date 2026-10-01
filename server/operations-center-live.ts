@@ -1,6 +1,6 @@
 import type { Express, Request, Response } from "express";
-import { inArray } from "drizzle-orm";
-import { branches } from "@shared/schema";
+import { eq, inArray } from "drizzle-orm";
+import { branches, onboardingNotifications, onboardingTokens } from "@shared/schema";
 import { db } from "./db";
 import { getAllowedBranchIds, isAuthenticated, requirePermission } from "./auth";
 import { storage } from "./storage";
@@ -42,6 +42,11 @@ const WRITE_ROUTES = [
   /^\/api\/timesheet-reports(?:\/|$)/,
   /^\/api\/hr\/leaves(?:\/|$)/,
   /^\/api\/hr\/advances(?:\/|$)/,
+  /^\/api\/hr\/advance-requests(?:\/|$)/,
+  /^\/api\/my\/advance-requests(?:\/|$)/,
+  /^\/api\/operations-hr(?:\/|$)/,
+  /^\/api\/hr\/onboarding(?:\/|$)/,
+  /^\/api\/public\/onboarding\/[^/]+\/sign$/,
   /^\/api\/hr\/documents(?:\/|$)/,
   /^\/api\/reverse-logistics(?:\/|$)/,
   /^\/api\/deliveries(?:\/|$)/,
@@ -126,11 +131,27 @@ export function registerOperationsCenterLive(app: Express): void {
       res.once("finish", () => {
         if (res.statusCode < 200 || res.statusCode >= 300) return;
         const actorId = req.currentUser?.id;
-        if (!actorId) return;
+        const signedToken = req.method === "POST" ? req.path.match(/^\/api\/public\/onboarding\/([^/]+)\/sign$/)?.[1] : undefined;
+        if (!actorId && !signedToken) return;
         void (async () => {
+          if (signedToken) {
+            // Public candidate signatures have no authenticated actor. Resolve
+            // scope only from the successfully written persisted notification;
+            // never route a hint by body/query branch or expose the token.
+            const [source] = await db.select({ branchId: onboardingNotifications.branchId })
+              .from(onboardingTokens)
+              .innerJoin(onboardingNotifications, eq(onboardingTokens.notificationId, onboardingNotifications.id))
+              .where(eq(onboardingTokens.token, decodeURIComponent(signedToken))).limit(1);
+            if (source?.branchId) {
+              for (const stream of streams) {
+                if (stream.selected.includes(source.branchId)) stream.queueHint();
+              }
+            }
+            return;
+          }
           const [actor, grants] = await Promise.all([
-            storage.getUser(actorId),
-            storage.getUserBranchAccess(actorId),
+            storage.getUser(actorId!),
+            storage.getUserBranchAccess(actorId!),
           ]);
           if (!actor || actor.isActive === "inactive") return;
           const actorScope = getAllowedBranchIds({ currentUser: actor, userBranchAccess: grants });

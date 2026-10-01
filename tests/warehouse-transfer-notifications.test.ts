@@ -5,14 +5,16 @@ import {
   routedWarehouseTransferRecipients,
 } from "../server/warehouse-transfer-notifications";
 
-function executorWith(users: any[], access: any[]) {
+function executorWith(users: any[], access: any[], overrides: any[] = []) {
   let selectCall = 0;
   return {
     select: () => {
-      const rows = selectCall++ === 0 ? users : access;
+      const call = selectCall++;
+      const rows = call === 0 ? users : call === 1 ? access : overrides;
       const chain: any = {
         from: () => chain,
         leftJoin: () => chain,
+        innerJoin: () => chain,
         where: () => chain,
         then: (resolve: (value: any[]) => unknown) => Promise.resolve(rows).then(resolve),
       };
@@ -82,6 +84,19 @@ describe("warehouse transfer lifecycle notifications", () => {
       destinationBranchId: "destination",
       createdBy: "requester",
     }, "in_transit")).toEqual(["destination-editor"]);
+  });
+
+  it("does not resurrect a denied action through an operations role template", async () => {
+    const executor = executorWith([
+      { id: "revoked", role: "operations_manager", primaryBranchId: "source", actions: null },
+      { id: "expired", role: "operations_manager", primaryBranchId: "source", actions: null },
+    ], [{ userId: "revoked", branchId: "destination" }, { userId: "expired", branchId: "destination" }], [
+      { userId: "revoked", action: "edit", allow: false, expiresAt: null },
+      { userId: "expired", action: "edit", allow: false, expiresAt: new Date(Date.now() - 1000) },
+    ]);
+    expect(await routedWarehouseTransferRecipients(executor, {
+      sourceBranchId: "source", destinationBranchId: "destination", createdBy: "requester",
+    }, "in_transit")).toEqual(["expired"]);
   });
 
   it.each([

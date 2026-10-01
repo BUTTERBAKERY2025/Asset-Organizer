@@ -5,6 +5,8 @@ import { canAccessBranch, getAllowedBranchIds, requirePermission } from "../serv
 import { operationsHrManagerOnly, operationsPayrollCsv } from "../server/operations-hr-routes";
 import { computeSalaryClosing } from "../server/salary-closing-calc";
 import { payrollAttendanceEvidence, payrollReadError, readPayrollSource } from "../server/operations-payroll-report";
+import { buildOperationsPayrollExport } from "../server/operations-payroll-export";
+import { operationsPayrollFullCsv } from "../shared/operations-payroll-export";
 import { storage as authStorage } from "../server/storage";
 
 afterEach(() => {
@@ -33,6 +35,7 @@ function fixture() {
     workingHours: 8.16, lateMinutes: 10,
   };
   const mockStorage: any = {
+    getBranch: vi.fn(async () => ({ id: "a", name: "فرع الاختبار" })),
     getSalaryClosureByBranchAndMonth: vi.fn(async () => null),
     getSalaryClosureLines: vi.fn(async () => []),
     getBranchEmployeesByBranch: vi.fn(async () => [employee]),
@@ -73,7 +76,7 @@ function fixture() {
     app, storage: mockStorage, db, leaveRequests, operationsPayrollReviews: reviews,
     users: { firstName: "firstName", lastName: "lastName", username: "username", id: "id" },
     readPayrollSource, payrollReadError, payrollAttendanceEvidence, operationsHrManagerOnly,
-    operationsPayrollCsv, computeSalaryClosing: vi.fn(computeSalaryClosing),
+    operationsPayrollCsv, operationsPayrollFullCsv, buildOperationsPayrollExport, computeSalaryClosing: vi.fn(computeSalaryClosing),
     canAccessBranch, getAllowedBranchIds,
     requirePermission: (module: string, action: string) => Object.assign(requirePermission(module, action), { module, action }),
     isAuthenticated, HQ_BRANCH_ID: "main_warehouse",
@@ -129,6 +132,76 @@ describe("operations payroll authoritative report and read routes", () => {
     expect(ops.body.lines[0].absentDatesMissing).toHaveLength(28);
     expect(ops.body.enrichmentFailures).toEqual([]);
     expect(ops.headers["Cache-Control"]).toBe("no-store");
+    expect(f.db.insert).not.toHaveBeenCalled();
+  });
+
+  it.each(["pdf", "xlsx", "csv"])("exports the complete authoritative branch-month report as %s, ignoring table filters/pagination", async format => {
+    const f = fixture();
+    f.mockStorage.getSalaryPaymentsByBranchAndMonth.mockResolvedValue([
+      { id: 1, branchEmployeeId: 18, branchId: "a", month: "2026-06", amount: 20.25, paymentMethod: "cash", paidAt: "2026-07-01", note: "صرف جزئي" },
+      { id: 2, branchEmployeeId: 18, branchId: "other", month: "2026-06", amount: 900, paymentMethod: "cash", paidAt: "2026-07-01" },
+      { id: 3, branchEmployeeId: 18, branchId: "a", month: "2026-05", amount: 800, paymentMethod: "cash", paidAt: "2026-07-01" },
+    ]);
+    const report = await f.invoke("/api/operations-hr/payroll");
+    const exported = await f.invoke("/api/operations-hr/payroll/export", { format, search: "not-a-name", status: "terminated", page: "999", limit: "1" });
+    expect(exported.statusCode).toBe(200);
+    expect(exported.headers["Cache-Control"]).toBe("no-store");
+    if (format === "csv") {
+      expect(exported.body).toContain("كامل الفرع والشهر");
+      expect(exported.body).toContain("أحمد علي");
+      expect(exported.body).toContain('"20.25"');
+      expect(exported.body).not.toContain('"900"');
+    } else {
+      expect(exported.body).toMatchObject({
+        version: 1, branchId: "a", month: "2026-06", branchName: "فرع الاختبار",
+        source: "live_calculation", scope: "entire_branch_month",
+        lines: report.body.lines, totals: report.body.totals,
+        paymentTotals: { paid: 20.25, recordedPaid: 20.25 },
+      });
+      expect(exported.body.payments).toHaveLength(1);
+      expect(exported.body.disclaimer).toContain("ليست اعتماداً نهائياً");
+    }
+    expect(f.mockStorage.getSalaryPaymentsByBranchAndMonth).toHaveBeenCalledWith("a", "2026-06");
+    expect(f.db.insert).not.toHaveBeenCalled();
+  });
+
+  it("requires BOTH payroll view and export, fresh explicit scope, and rejects nonmanagers before export reads", async () => {
+    const f = fixture();
+    const handlers = f.registered.get("/api/operations-hr/payroll/export")!;
+    expect(handlers[0]).toBe(f.isAuthenticated);
+    expect(handlers[1]).toBe(operationsHrManagerOnly);
+    expect(handlers.slice(2, -1).map((handler: any) => [handler.module, handler.action])).toEqual([
+      ["operations_hr", "view"], ["operations_payroll", "view"], ["operations_payroll", "export"],
+    ]);
+    for (const format of ["csv", "pdf", "xlsx", "gate"]) {
+      for (const branchId of ["outside", "main_warehouse", ""]) {
+        expect((await f.invoke("/api/operations-hr/payroll/export", { format, branchId })).statusCode).toBe(403);
+      }
+      expect((await f.invoke("/api/operations-hr/payroll/export", { format, branchId: "all" })).statusCode).toBe(400);
+      expect((await f.invoke("/api/operations-hr/payroll/export", { format }, { authenticated: false })).statusCode).toBe(401);
+      expect((await f.invoke("/api/operations-hr/payroll/export", { format }, { currentUser: { role: "hr_manager" } })).statusCode).toBe(403);
+    }
+    expect(f.mockStorage.getBranch).not.toHaveBeenCalled();
+    expect(f.mockStorage.getSalaryClosureByBranchAndMonth).not.toHaveBeenCalled();
+    expect(f.mockStorage.getSalaryPaymentsByBranchAndMonth).not.toHaveBeenCalled();
+    vi.mocked(authStorage.getUserBranchAccess).mockResolvedValue([]);
+    expect((await f.invoke("/api/operations-hr/payroll/export", { format: "gate" })).statusCode).toBe(403);
+  });
+
+  it("fresh final gate has no financial reads/writes, rejects unsupported formats, and never conceals missing payments", async () => {
+    const f = fixture();
+    expect((await f.invoke("/api/operations-hr/payroll/export", { format: "gate" })).body).toEqual({ branchId: "a", month: "2026-06", authorized: true });
+    expect(f.mockStorage.getSalaryClosureByBranchAndMonth).not.toHaveBeenCalled();
+    expect(f.mockStorage.getSalaryPaymentsByBranchAndMonth).not.toHaveBeenCalled();
+    for (const format of ["html", ["pdf"]]) expect((await f.invoke("/api/operations-hr/payroll/export", { format })).statusCode).toBe(400);
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    f.mockStorage.getSalaryPaymentsByBranchAndMonth.mockRejectedValue(new Error("private database"));
+    for (const format of ["pdf", "xlsx", "csv"]) {
+      const failed = await f.invoke("/api/operations-hr/payroll/export", { format });
+      expect(failed.statusCode).toBe(500);
+      expect(failed.body).toMatchObject({ source: "payments", code: "PAYROLL_SOURCE_UNAVAILABLE" });
+      expect(JSON.stringify(failed.body)).not.toContain("private database");
+    }
     expect(f.db.insert).not.toHaveBeenCalled();
   });
 
