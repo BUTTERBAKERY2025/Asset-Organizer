@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useSearch } from "wouter";
 import { AlertTriangle, Download, RefreshCw, ChevronDown, Bell, Check, X } from "lucide-react";
 import type { OperationsCenterResponse, OperationsQueueItem } from "@shared/operations-center";
+import type { OperationsSalesRecord, OperationsSalesResponse } from "@shared/operations-sales";
 import { Layout } from "@/components/layout";
 import { time } from "@/components/operations-center/workspace";
 import { OperationsDecisionBoard } from "@/components/operations-center/decision-board";
@@ -10,6 +11,8 @@ import { performanceDataForRange, type PerformanceDays } from "@/components/oper
 import { OperationsCenterScreen } from "@/components/operations-center/operations-screen";
 import { attachCenterContext, centerNoticeDestination, monthlySourceIntent, navigateCenterSourceWithHistory, peopleRecordFromSource, peopleSourceIntent, performanceDaysIntent, purgeOperationsCenterQueries, refreshOperationsCenterQueries, validatePeopleSourceNavigation, withPeopleReturn } from "@/lib/operations-center-navigation";
 import { createOperationsHrCommandGuard } from "@/lib/operations-hr-state";
+import { salesSourceReturnIntent } from "@/lib/operations-center-navigation";
+import { salesNavigationMatches, salesRecordKey, salesRequestParams, salesScopeMatches, type SalesRequest } from "@/components/operations-center/sales-workspace-model";
 import { operationsJoiningFocus, type OperationsJoining } from "@/lib/operations-employees";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -275,6 +278,49 @@ export default function OperationsCenterPage() {
         ["/hr/leaves", "/hr/advances", "/employee-attendance-report", "/hr-hub"].includes(url.pathname)
         || url.searchParams.getAll("centerWorkspace").includes("people") || url.searchParams.has("centerPeopleRecord")
         || url.searchParams.has("centerPeopleBranchId"));
+      const salesRequested = url.searchParams.getAll("centerWorkspace").includes("sales")
+        || url.searchParams.has("centerSalesRecord");
+      if (salesRequested) {
+        if (!data?.scope.branchIds.includes(branchId) || !scopeChecked || !allowed || invalidSelection || !item) throw new Error();
+        attachCenterContext(url, branchId, effectiveIds, performanceDays);
+        const intent = salesSourceReturnIntent(url.search, data.scope.branchIds, url.pathname);
+        if (!intent || intent.selection.record !== `${item.sourceType}:${item.sourceId}` || item.branchId !== branchId
+          || url.pathname !== `${item.sourceType === "cashier_journal" ? "/cashier-journals" : "/branch-daily-closures"}/${item.sourceId}`) throw new Error();
+        const clicked = item as OperationsSalesRecord;
+        const request: SalesRequest = {
+          ...intent.page, branchIds: intent.page.branchId ? [intent.page.branchId] : data.scope.branchIds, limit: 30,
+        };
+        const token = sourceCommands.capture();
+        const responses = await Promise.all([
+          fetch("/api/branches", { credentials: "include", cache: "no-store" }),
+          fetch("/api/my-permissions", { credentials: "include", cache: "no-store" }),
+          fetch(`/api/operations-center/sales?${salesRequestParams(request)}`, { credentials: "include", cache: "no-store" }),
+        ]);
+        if (!responses.every(response => response.ok)) throw new Error();
+        const [freshBranches, permissions, fresh] = await Promise.all(responses.map(response => response.json())) as [
+          { id: string }[], { module: string; actions: string[] }[], OperationsSalesResponse,
+        ];
+        if (!sourceCommands.isCurrent(token) || !isIntentCurrent() || !sourceAccess.current.allowed
+          || !Array.isArray(freshBranches) || !freshBranches.every(row => row && typeof row.id === "string")
+          || !Array.isArray(permissions)) throw new Error();
+        const freshIds = freshBranches.map(row => row.id);
+        if (data.scope.branchIds.some(id => !freshIds.includes(id))) {
+          sourceCommands.invalidate();
+          client.setQueryData(["/api/branches"], freshBranches);
+          purgeCenter();
+          throw new Error();
+        }
+        const module = clicked.domain === "journals" ? "cashier_journal" : clicked.domain === "closures" ? "daily_closures" : "";
+        const has = (key: string, action = "view") => permissions.some(permission => permission.module === key && permission.actions.includes(action));
+        const privileged = ["admin", "super_admin"].includes(user?.role || "");
+        const current = salesScopeMatches(fresh, request) && fresh.records.find(row => salesRecordKey(row) === intent.selection.record);
+        if (!module || !freshIds.includes(branchId) || (!privileged && (!has("operations") || !has(module)))
+          || !current || !salesNavigationMatches(current, clicked, user?.id)
+          || (clicked.decision?.awaitingActor && clicked.decision.actorId === user?.id
+            && !privileged && !has(clicked.decision.permission.module, clicked.decision.permission.action))) throw new Error();
+        navigateCenterSourceWithHistory(url, freshIds, navigate);
+        return;
+      }
       if (peopleRequested) {
         if (!data?.scope.branchIds.includes(branchId) || !scopeChecked || !allowed || invalidSelection) throw new Error();
         const record = peopleRecordFromSource(url);

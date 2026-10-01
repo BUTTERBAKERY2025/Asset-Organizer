@@ -22,6 +22,8 @@ import { parseOperationsSupplyQuery, operationsSupplySources } from "@shared/ope
 import { projectSourceNotificationForRecipient } from "./source-notification-projection";
 import { projectOperationsPeople } from "./operations-people";
 import { parseOperationsPeopleQuery } from "@shared/operations-people";
+import { projectOperationsSales, projectSalesRecord, salesCanViewAllCashiers } from "./operations-sales";
+import { parseOperationsSalesQuery } from "@shared/operations-sales";
 
 const MAX_BRANCHES = 30;
 const SOURCE_LIMIT = 101;
@@ -112,7 +114,7 @@ export async function projectOperationsCenter(req: Request, requested: string[] 
   const permitted = async (module: string) => await hasEffectiveViewPermission(req, module)
     && (!exportMode || await hasEffectiveViewPermission(req, module, "export"));
   const grants = new Map<string, boolean>();
-  const modules = [...new Set([...branchOperationsDefinitions.map(d => branchOperationsModule(d, req)), "branch_complaints", "sales_analytics", "quality_control", "hr_leaves", "hr_advances", "warehouse", "branch_supply", "shifts", "cashier_journal", "delivery_tasks", "attendance"])];
+  const modules = [...new Set([...branchOperationsDefinitions.map(d => branchOperationsModule(d, req)), "branch_complaints", "sales_analytics", "quality_control", "hr_leaves", "hr_advances", "warehouse", "branch_supply", "shifts", "branch_closure", "cashier_journal", "delivery_tasks", "attendance"])];
   const permissions = await mapOperationsBounded(modules, PERMISSION_CONCURRENCY, permitted);
   modules.forEach((module, index) => grants.set(module, permissions[index]));
   const enabled = (module: string) => grants.get(module) === true;
@@ -278,31 +280,41 @@ export async function projectOperationsCenter(req: Request, requested: string[] 
   });
   source("journals", "cashier_journal", async () => {
     const user = req.currentUser!;
-    const allCashiers = ["admin", "manager"].includes(user.role)
-      || await storage.hasPermission(user.id, "cashier_performance", "approve")
-      || await storage.hasPermission(user.id, "cashier_journal", "approve");
+    const allCashiers = await salesCanViewAllCashiers(req);
     const actor = allCashiers ? undefined : eq(cashierSalesJournals.cashierId, user.id);
     const rows = await db.select({ id: cashierSalesJournals.id, branchId: cashierSalesJournals.branchId,
-      status: cashierSalesJournals.status, cashier: cashierSalesJournals.cashierId }).from(cashierSalesJournals)
+      status: cashierSalesJournals.status, cashier: cashierSalesJournals.cashierId,
+      cashierName: cashierSalesJournals.cashierName, date: cashierSalesJournals.journalDate,
+      createdBy: cashierSalesJournals.createdBy, totalSales: cashierSalesJournals.totalSales,
+      cashDiscrepancy: cashierSalesJournals.discrepancyAmount, bankDiscrepancy: cashierSalesJournals.bankDiscrepancyTotal }).from(cashierSalesJournals)
       .where(and(inArray(cashierSalesJournals.branchId, branchIds), lte(cashierSalesJournals.journalDate, businessDate),
         inArray(cashierSalesJournals.status, ["draft", "submitted", "rejected"]), actor))
       .orderBy(desc(cashierSalesJournals.id)).limit(SOURCE_LIMIT);
     const canApprove = await hasEffectiveViewPermission(req, "cashier_journal", "approve");
-    return rows.map(r => {
-      const item = queueItem("cashier_journal", r.id, r.status, r.branchId, "cashier_journal", "يومية كاشير",
-        r.status, link(`/cashier-journals?status=${r.status}`, r.branchId), r.status === "submitted" ? "المراجع المخول" : r.cashier,
-        null, r.status === "submitted" ? null : r.cashier);
-      return { ...item, decision: operationsDecisionMetadata(item, user.id, canApprove, r.status === "submitted",
-        { module: "cashier_journal", action: "approve" }, "مراجعة واعتماد اليومية") };
-    });
+    return rows.map(r => projectSalesRecord("journals", {
+      id: r.id, branch_id: r.branchId, status: r.status, business_date: r.date,
+      created_by: r.createdBy, cashier_id: r.cashier, cashier_name: r.cashierName,
+      total_sales: r.totalSales, cash_discrepancy: r.cashDiscrepancy, bank_discrepancy: r.bankDiscrepancy,
+    }, { id: user.id, role: user.role }, {
+      journalsView: true, journalsApprove: canApprove, closuresView: false, closuresApprove: false, allCashiers,
+    }));
   });
   source("closing", "daily_closures", async () => {
     const rows = await db.select({ id: branchDailyClosures.id, branchId: branchDailyClosures.branchId,
-      status: branchDailyClosures.status, date: branchDailyClosures.closureDate }).from(branchDailyClosures)
+      status: branchDailyClosures.status, date: branchDailyClosures.closureDate,
+      createdBy: branchDailyClosures.createdBy, totalSales: branchDailyClosures.totalSales,
+      cashDiscrepancy: branchDailyClosures.totalCashDiscrepancy, bankDiscrepancy: branchDailyClosures.totalBankDiscrepancy,
+      journalsCount: branchDailyClosures.journalsCount }).from(branchDailyClosures)
       .where(and(inArray(branchDailyClosures.branchId, branchIds), lte(branchDailyClosures.closureDate, businessDate),
         eq(branchDailyClosures.status, "open"))).orderBy(desc(branchDailyClosures.id)).limit(SOURCE_LIMIT);
-    return rows.map(r => queueItem("daily_closure", r.id, "open", r.branchId, "daily_closures", "إغلاق يومي غير مكتمل",
-      r.status, link(`/branch-daily-closing?date=${encodeURIComponent(r.date)}&from=branch-operations`, r.branchId)));
+    const canApprove = await hasEffectiveViewPermission(req, "daily_closures", "approve");
+    return rows.map(r => projectSalesRecord("closures", {
+      id: r.id, branch_id: r.branchId, status: r.status, business_date: r.date,
+      created_by: r.createdBy, total_sales: r.totalSales, cash_discrepancy: r.cashDiscrepancy,
+      bank_discrepancy: r.bankDiscrepancy, journals_count: r.journalsCount,
+    }, { id: req.currentUser!.id, role: req.currentUser!.role }, {
+      journalsView: false, journalsApprove: false, closuresView: true, closuresApprove: canApprove, allCashiers: false,
+    }));
   });
   for (const result of await mapOperationsBounded(sources, SOURCE_CONCURRENCY, loadSource)) {
     if (result.failed) { coverage[result.name] = "unavailable"; continue; }
@@ -319,7 +331,7 @@ export async function projectOperationsCenter(req: Request, requested: string[] 
     for (const date of dates) daily.push({ date, branchId, opening: "unavailable",
       closing: enabled("daily_closures") ? "not_recorded" : "unavailable", journalCount: null, source: [] });
   }
-  if (enabled("shifts")) {
+  if (enabled("branch_closure")) {
     try {
       const rows = await db.select({ branchId: branchShifts.branchId, date: branchShifts.shiftDate,
         opened: branchShifts.openingCompleted }).from(branchShifts)
@@ -347,9 +359,7 @@ export async function projectOperationsCenter(req: Request, requested: string[] 
   if (enabled("cashier_journal")) {
     try {
       const user = req.currentUser!;
-      const allCashiers = ["admin", "manager"].includes(user.role)
-        || await storage.hasPermission(user.id, "cashier_performance", "approve")
-        || await storage.hasPermission(user.id, "cashier_journal", "approve");
+      const allCashiers = await salesCanViewAllCashiers(req);
       const rows = await db.select({ branchId: cashierSalesJournals.branchId, date: cashierSalesJournals.journalDate,
         id: cashierSalesJournals.id }).from(cashierSalesJournals)
         .where(and(inArray(cashierSalesJournals.branchId, branchIds), gte(cashierSalesJournals.journalDate, dates[0]),
@@ -436,6 +446,18 @@ export async function projectOperationsCenter(req: Request, requested: string[] 
 export function registerOperationsCenterRoutes(app: Express): void {
   registerOperationsMonthWorkflow(app);
   const auth = [isAuthenticated, requirePermission("operations", "view")] as const;
+  app.get("/api/operations-center/sales", ...auth, async (req, res, next) => {
+    res.set("Cache-Control", "no-store");
+    try {
+      let query: ReturnType<typeof parseOperationsSalesQuery>;
+      try { query = parseOperationsSalesQuery(req.query); }
+      catch (error: any) { return res.status(400).json({ message: error.message }); }
+      return res.json(await projectOperationsSales(req, query.branchIds, query.source, query.offset, query.limit));
+    } catch (error: any) {
+      if (error?.status === 400 || error?.status === 403) return res.status(error.status).json({ message: error.message });
+      return next(error);
+    }
+  });
   app.get("/api/operations-center/people", ...auth, async (req, res, next) => {
     res.set("Cache-Control", "no-store");
     try {

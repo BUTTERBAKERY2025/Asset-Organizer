@@ -478,7 +478,7 @@ describe("supply notice source navigation", () => {
 });
 
 describe("center supply/board/notices/monthly cache boundary", () => {
-  const roots = ["/api/operations-center", "/api/operations-center/supply", "/api/operations-center/people", "/api/operations-center/notifications", "/api/operations-center/month-workflow", "/api/operations-center/monthly"];
+  const roots = ["/api/operations-center", "/api/operations-center/supply", "/api/operations-center/people", "/api/operations-center/sales", "/api/operations-center/notifications", "/api/operations-center/month-workflow", "/api/operations-center/monthly"];
   it.each([true, false])("invalidates all canonical cache roots once with cancelRefetch=%s", cancelRefetch => {
     const client = { invalidateQueries: vi.fn(async () => undefined) };
     refreshOperationsCenterQueries(client as any, cancelRefetch);

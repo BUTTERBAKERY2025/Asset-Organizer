@@ -15,7 +15,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation, useSearch } from "wouter";
 import { branchDeskDate } from "@/lib/branch-operation-navigation";
-import { dailyClosureHref, dailyClosureIntent, dailyClosureScopeReady } from "@/lib/daily-closure-navigation";
+import { dailyClosureCenterLabel, dailyClosureHref, dailyClosureIntent, dailyClosureScopeReady, dailyClosureToday } from "@/lib/daily-closure-navigation";
 import { operationsCenterReturnHref } from "@/lib/operations-center-navigation";
 import { Link } from "wouter";
 import { 
@@ -98,6 +98,7 @@ const PAYMENT_METHOD_LABELS: Record<string, string> = {
 };
 
 type JournalPreviewResponse = {
+  businessDate?: string;
   scopeKey: string;
   existingClosure: any | null;
   journals: CashierSalesJournal[];
@@ -131,7 +132,7 @@ export default function BranchDailyClosingPage() {
   const linkedSearch = useSearch();
   const intent = dailyClosureIntent(linkedSearch);
   const [appliedSearch, setAppliedSearch] = useState(linkedSearch);
-  const [selectedDate, setSelectedDate] = useState(() => intent.invalidDate ? "" : intent.date || (intent.month ? `${intent.month}-01` : format(new Date(), "yyyy-MM-dd")));
+  const [selectedDate, setSelectedDate] = useState(() => intent.invalidDate ? "" : intent.date || (intent.month ? `${intent.month}-01` : dailyClosureToday()));
   const [selectedBranch, setSelectedBranch] = useState<string>("");
   const [selectedJournals, setSelectedJournals] = useState<number[]>([]);
   const [notes, setNotes] = useState("");
@@ -192,6 +193,14 @@ export default function BranchDailyClosingPage() {
   const journalPreview = scopeReady && !previewFailed && previewData?.scopeKey === scopeKey ? previewData : undefined;
 
   useEffect(() => {
+    // Explicit historical navigation stays intact; the server owns today's default.
+    if (!intent.date && !intent.month && !intent.invalidDate && previewData?.businessDate
+      && branchDeskDate(previewData.businessDate) && previewData.businessDate !== selectedDate) {
+      setSelectedDate(previewData.businessDate);
+    }
+  }, [intent.date, intent.month, intent.invalidDate, previewData?.businessDate, selectedDate]);
+
+  useEffect(() => {
     if (journalPreview?.journals) {
       setSelectedJournals(journalPreview.journals.map((j: any) => j.id));
       setSelectionScope(scopeKey);
@@ -212,6 +221,7 @@ export default function BranchDailyClosingPage() {
       if (data?.id) queryClient.invalidateQueries({ queryKey: [`/api/branch-daily-closures/${data.id}`], exact: true });
       queryClient.invalidateQueries({ queryKey: ["/api/operations-center/month-workflow"] });
       queryClient.invalidateQueries({ queryKey: ["/api/operations-center"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/operations-center/sales"] });
       toast({ title: "تم إنشاء الإغلاق اليومي بنجاح" });
       navigate(dailyClosureHref("list", linkedSearch, request.branchId, request.closureDate, request.closureDate.slice(0, 7)));
     },
@@ -226,6 +236,7 @@ export default function BranchDailyClosingPage() {
 
   const canCreateClosure: boolean = permissionsReady && permissions.canCreate("daily_closures") && scopeReady
     && !isFetchingPreview && !createClosureMutation.isPending && !!journalPreview
+    && selectedDate <= (journalPreview.businessDate || dailyClosureToday())
     && !journalPreview.existingClosure && selectionScope === scopeKey && selectedJournals.length > 0
     && selectedJournals.every(id => journalPreview.journals.some(journal => journal.id === id));
   const listHref = dailyClosureHref("list", linkedSearch, selectedBranch,
@@ -378,11 +389,22 @@ export default function BranchDailyClosingPage() {
           </Link>
         </div>
 
-        {new URLSearchParams(linkedSearch).get("from") === "operations-center" && <Link href={operationsCenterReturnHref(linkedSearch, allowedIds)}><Button variant="outline" size="sm">العودة إلى ملف الشهر التشغيلي</Button></Link>}
+        {new URLSearchParams(linkedSearch).get("from") === "operations-center" && <Link href={operationsCenterReturnHref(linkedSearch, allowedIds)}><Button variant="outline" size="sm">العودة إلى {dailyClosureCenterLabel(linkedSearch)}</Button></Link>}
+        {new URLSearchParams(linkedSearch).get("correction") === "1" && journalPreview && !journalPreview.existingClosure && <Card className="border-amber-300 bg-amber-50">
+          <CardContent className="space-y-3 pt-4">
+            <p className="text-sm leading-7">قبل إعادة بناء الإغلاق: صحح اليوميات في مصادرها أولًا، ثم ارجع إلى هذه الصفحة وحدّث المعاينة وأنشئ الإغلاق من جديد. إلغاء اللقطة المفتوحة لا يحذف اليوميات، ولا يغير صلاحيات تعديلها أو حالات اعتمادها.</p>
+            {permissionsReady && permissions.canView("cashier_journal") && journalPreview?.journals.filter(journal => journal.status === "draft").map(journal =>
+              <Link key={journal.id} href={`/cashier-journals/${journal.id}?branchId=${encodeURIComponent(selectedBranch)}`}>
+                <Button variant="outline" size="sm" className="ml-2">فتح اليومية المسودة #{journal.id} للتصحيح</Button>
+              </Link>)}
+            <Button variant="outline" size="sm" disabled={isFetchingPreview} onClick={() => queryClient.invalidateQueries({ queryKey: ["/api/branch-daily-closures/journals-preview"] })}>تحديث المعاينة بعد التصحيح</Button>
+          </CardContent>
+        </Card>}
         {branchesFailed && <div role="alert" className="space-y-2 text-destructive"><p>{branchError?.message || "تعذر التحقق من الفروع المسموحة."}</p><Button variant="outline" onClick={() => refetchBranches()}>إعادة التحقق من الفروع</Button></div>}
         {!branchesLoading && requestedBranch !== null && !allowedIds.includes(requestedBranch) && <p role="alert" className="text-sm text-destructive">الفرع في الرابط غير مسموح. اختر فرعًا متاحًا قبل إنشاء الإغلاق.</p>}
         {intent.invalidDate && <p role="alert" className="text-sm text-destructive">تاريخ الإغلاق في الرابط غير صالح أو لا يطابق الشهر المختار. اختر تاريخًا صالحًا قبل المتابعة.</p>}
         {previewFailed && <div role="alert" className="space-y-2 text-destructive"><p>{previewError.message}</p><Button variant="outline" onClick={() => refetchPreview()}>إعادة المحاولة</Button></div>}
+        {selectedDate > (journalPreview?.businessDate || dailyClosureToday()) && <p role="alert" className="text-sm text-destructive">لا يمكن إنشاء إغلاق لتاريخ مستقبلي حسب تاريخ العمل في السعودية.</p>}
         {permissionsReady && !permissions.canCreate("daily_closures") && <p role="status" className="text-sm text-muted-foreground">عرض فقط؛ لا تتوفر صلاحية إنشاء إغلاق يومي.</p>}
 
         <Card>
@@ -413,6 +435,7 @@ export default function BranchDailyClosingPage() {
               <Input 
                 type="date" 
                 value={selectedDate} 
+                max={journalPreview?.businessDate || dailyClosureToday()}
                 onChange={(e) => changeScope(selectedBranch, e.target.value)}
                 disabled={createClosureMutation.isPending}
                 className="w-full h-11 sm:h-10 text-xs sm:text-sm"
@@ -429,14 +452,15 @@ export default function BranchDailyClosingPage() {
                 يوجد إغلاق سابق لهذا التاريخ
               </CardTitle>
               <CardDescription className="text-amber-600">
-                تم إنشاء إغلاق يومي لهذا الفرع في هذا التاريخ بالفعل. يمكنك مراجعته من صفحة الإغلاقات اليومية.
+                تم إنشاء إغلاق يومي لهذا الفرع في هذا التاريخ بالفعل. اليوميات المرتبطة محمية من التعديل كي لا تتغير اللقطة.
+                {journalPreview.existingClosure.status === "open" ? " للتصحيح، يلغى الإغلاق المفتوح أولًا بواسطة المدير العام، ثم تصحح اليوميات وتُنشأ لقطة جديدة. لا تتغير صلاحيات تعديل اليوميات." : " الإغلاق المعتمد ثابت ولا يمكن فكه أو حذفه من هذا المسار."}
               </CardDescription>
             </CardHeader>
             <CardFooter>
-              <Link href={listHref}>
+              <Link href={dailyClosureHref(journalPreview.existingClosure.id, linkedSearch, selectedBranch, selectedDate, selectedDate.slice(0, 7))}>
                 <Button variant="outline" className="gap-2">
                   <Eye className="h-4 w-4" />
-                  {journalPreview.existingClosure.status === "open" ? "مراجعة واعتماد الإغلاق الموجود" : "عرض الإغلاق الموجود"}
+                  {journalPreview.existingClosure.status === "open" ? "مراجعة الإغلاق المفتوح ومسار التصحيح" : "عرض الإغلاق الموجود"}
                 </Button>
               </Link>
             </CardFooter>
@@ -855,9 +879,10 @@ export default function BranchDailyClosingPage() {
                     </AlertDialogTrigger>
                     <AlertDialogContent dir="rtl">
                       <AlertDialogHeader>
-                        <AlertDialogTitle>تأكيد الإغلاق اليومي</AlertDialogTitle>
+                        <AlertDialogTitle>تأكيد إنشاء لقطة إغلاق مفتوحة</AlertDialogTitle>
                         <AlertDialogDescription>
                           سيتم إنشاء إغلاق يومي لفرع {branchName} بتاريخ {format(new Date(selectedDate), "d MMMM yyyy", { locale: ar })} يتضمن {selectedTotals.journalsCount} يومية بإجمالي {formatCurrency(selectedTotals.totalSales)} ريال.
+                          {" "}تُحفظ المجاميع كلقطة، ولا يمكن تعديل اليوميات المرتبطة حتى إلغاء اللقطة المفتوحة بواسطة المدير العام. الإنشاء ليس اعتمادًا لليوميات أو إثباتًا للمطابقة المالية؛ راجع البيانات المختارة قبل المتابعة.
                         </AlertDialogDescription>
                       </AlertDialogHeader>
                       <AlertDialogFooter className="flex-row-reverse gap-2">

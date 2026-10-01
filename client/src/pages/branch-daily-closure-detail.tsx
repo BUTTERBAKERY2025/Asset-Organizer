@@ -1,13 +1,18 @@
+import { useRef } from "react";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { useBranches } from "@/hooks/useBranches";
 import { useBranchNavigation } from "@/hooks/use-branch-navigation";
-import { useRoute, Link, useSearch } from "wouter";
-import { dailyClosureHref, dailyClosureIntent } from "@/lib/daily-closure-navigation";
+import { usePermissions } from "@/hooks/usePermissions";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
+import { useRoute, Link, useSearch, useLocation } from "wouter";
+import { dailyClosureCenterLabel, dailyClosureHref, dailyClosureIntent } from "@/lib/daily-closure-navigation";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { operationsCenterReturnHref } from "@/lib/operations-center-navigation";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { format } from "date-fns";
@@ -95,6 +100,11 @@ export default function BranchDailyClosureDetailPage() {
   const [, params] = useRoute("/branch-daily-closures/:id");
   const closureId = params?.id;
   const { user } = useAuth();
+  const permissions = usePermissions();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const [, navigate] = useLocation();
+  const permissionState = useQuery({ queryKey: ["/api/my-permissions"], enabled: false });
   const linkedSearch = useSearch();
   const intent = dailyClosureIntent(linkedSearch);
   const { branches, isLoading: branchesLoading, userBranchId, isError: branchesFailed, error: branchError, refetch: refetchBranches } = useBranches();
@@ -104,7 +114,7 @@ export default function BranchDailyClosureDetailPage() {
   const scopeReady = !branchesLoading && !navigationBranch.isResolving && allowedIds.length > 0
     && !intent.invalidDate && (!navigationBranch.hasBranchParam || allowedIds.includes(requestedBranch || ""));
 
-  const { data: closureData, isLoading, isError, error, refetch } = useQuery<any>({
+  const { data: closureData, isLoading, isError, isFetching, error, refetch } = useQuery<any>({
     queryKey: [`/api/branch-daily-closures/${closureId}`],
     queryFn: async ({ signal }) => {
       const response = await fetch(`/api/branch-daily-closures/${closureId}`, { credentials: "include", signal, cache: "no-store" });
@@ -123,6 +133,38 @@ export default function BranchDailyClosureDetailPage() {
     && (!intent.date || closureData.closureDate === intent.date) ? closureData : undefined;
   const listHref = dailyClosureHref("list", linkedSearch, requestedBranch && allowedIds.includes(requestedBranch)
     ? requestedBranch : closure?.branchId || "", intent.date, intent.month);
+  const correctionIntent = `${user?.id}:${closureId}:${linkedSearch}`;
+  const latestCorrectionIntent = useRef(correctionIntent);
+  latestCorrectionIntent.current = correctionIntent;
+  const correctionAllowed = user?.role === "admin" && !permissions.isLoading
+    && permissionState.isSuccess && !permissionState.isFetching && !permissionState.isError
+    && permissions.canDelete("daily_closures") && scopeReady && !isFetching && closure?.status === "open";
+  const removeOpenSnapshot = useMutation({
+    mutationFn: async () => {
+      if (!correctionAllowed || !closure) throw new Error("لم يعد فك الإغلاق المفتوح متاحًا؛ حدّث السجل والصلاحيات.");
+      const captured = { id: closure.id, branchId: closure.branchId, closureDate: closure.closureDate, intent: correctionIntent, search: linkedSearch };
+      const response = await apiRequest("DELETE", `/api/branch-daily-closures/${captured.id}`);
+      await response.json();
+      return captured;
+    },
+    onSuccess: captured => {
+      for (const root of ["/api/branch-daily-closures", "/api/branch-daily-closures/journals-preview",
+        "/api/cashier-journals", "/api/operations-center", "/api/operations-center/sales", "/api/operations-center/month-workflow"]) {
+        queryClient.invalidateQueries({ queryKey: [root] });
+      }
+      queryClient.removeQueries({ queryKey: [`/api/branch-daily-closures/${captured.id}`], exact: true });
+      if (captured.intent !== latestCorrectionIntent.current) return;
+      toast({ title: "أُلغيت اللقطة المفتوحة فقط", description: "اليوميات باقية. صححها حسب صلاحيات المصدر ثم أنشئ الإغلاق من جديد." });
+      const rebuild = new URL(dailyClosureHref("create", captured.search, captured.branchId, captured.closureDate, captured.closureDate.slice(0, 7)), window.location.origin);
+      rebuild.searchParams.set("correction", "1");
+      navigate(`${rebuild.pathname}${rebuild.search}`);
+    },
+    onError: (cause: Error) => {
+      queryClient.invalidateQueries({ queryKey: [`/api/branch-daily-closures/${closureId}`], exact: true });
+      queryClient.invalidateQueries({ queryKey: ["/api/my-permissions"] });
+      toast({ title: "لم يتم فك الإغلاق", description: cause.message, variant: "destructive" });
+    },
+  });
 
   const branchName = branches?.find((b: any) => b.id === closure?.branchId)?.name || closure?.branchId;
 
@@ -561,7 +603,7 @@ export default function BranchDailyClosureDetailPage() {
           </div>
           <div className="flex items-center gap-2">
             {closure.status === "open" && <Link href={dailyClosureHref("list", linkedSearch, closure.branchId, closure.closureDate, intent.month || closure.closureDate.slice(0, 7))}><Button variant="outline" size="sm" data-testid="button-review-closure">مراجعة واعتماد الإغلاق في قائمة اليوم</Button></Link>}
-            {new URLSearchParams(linkedSearch).get("from") === "operations-center" && <Link href={operationsCenterReturnHref(linkedSearch, allowedIds)}><Button variant="outline" size="sm">ملف الشهر التشغيلي</Button></Link>}
+            {new URLSearchParams(linkedSearch).get("from") === "operations-center" && <Link href={operationsCenterReturnHref(linkedSearch, allowedIds)}><Button variant="outline" size="sm">{dailyClosureCenterLabel(linkedSearch)}</Button></Link>}
             <Button variant="outline" size="sm" className="gap-1" onClick={exportClosurePdf} data-testid="button-export-pdf">
               <Download className="w-4 h-4" />
               تصدير PDF
@@ -572,6 +614,23 @@ export default function BranchDailyClosureDetailPage() {
             </Badge>
           </div>
         </div>
+
+        {closure.status === "open" && <Card className="border-amber-300 bg-amber-50">
+          <CardContent className="space-y-3 pt-4">
+            <p className="text-sm leading-7">هذه لقطة مفتوحة تحفظ مجموع اليوميات المختارة، وتمنع تعديلها أثناء ارتباطها بها. لتصحيح يومية، يجب إلغاء اللقطة المفتوحة بالكامل ثم تعديل اليومية في مصدرها وإعادة إنشاء الإغلاق؛ لا نفك يومية منفردة ونترك المجاميع القديمة.</p>
+            {correctionAllowed ? <AlertDialog key={correctionIntent}>
+              <AlertDialogTrigger asChild><Button variant="outline" disabled={removeOpenSnapshot.isPending} data-testid="button-remove-open-snapshot"><Unlock className="ml-2 size-4" />إلغاء اللقطة المفتوحة للتصحيح</Button></AlertDialogTrigger>
+              <AlertDialogContent dir="rtl">
+                <AlertDialogHeader><AlertDialogTitle>إلغاء الإغلاق المفتوح قبل التصحيح؟</AlertDialogTitle>
+                  <AlertDialogDescription>تُحذف لقطة إغلاق {branchName} بتاريخ {formatDate(closure.closureDate)} وربطها ومجاميع الدفع المحفوظة فقط. لا تُحذف يوميات الكاشير ولا تُغيّر حالتها أو المبالغ فيها. بعد التصحيح أنشئ لقطة جديدة. لا يمكن تنفيذ ذلك على إغلاق معتمد، وتبقى العملية للمدير العام بصلاحية الحذف الحالية.</AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter><AlertDialogCancel>رجوع</AlertDialogCancel>
+                  <AlertDialogAction disabled={!correctionAllowed || removeOpenSnapshot.isPending} onClick={() => { if (correctionAllowed) removeOpenSnapshot.mutate(); }}>إلغاء اللقطة والمتابعة للتصحيح</AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog> : <p className="text-xs text-muted-foreground">إلغاء اللقطة المفتوحة متاح للمدير العام بصلاحية الحذف فقط. عرضها أو إنشاؤها لا يمنح صلاحية حذفها أو تعديل يوميات الآخرين.</p>}
+          </CardContent>
+        </Card>}
 
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
           <Card data-testid="kpi-total-sales">

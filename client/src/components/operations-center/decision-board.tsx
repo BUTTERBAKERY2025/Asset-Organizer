@@ -13,6 +13,7 @@ import { PerformanceDetail, PerformancePanel, PerformancePeriod, PerformanceRang
 import { AnalyticsAssistant, useOperationsAssistant } from "./analytics-assistant";
 import { OperationsSupplyWorkspace } from "./supply-workspace";
 import { OperationsPeopleWorkspace } from "./people-workspace";
+import { OperationsSalesWorkspace } from "./sales-workspace";
 
 const fmt = (value: number) => new Intl.NumberFormat("en-US").format(value);
 const domains = [
@@ -20,7 +21,7 @@ const domains = [
   { id: "people", label: "الموظفون", hint: "حالات العمل والخطوة التالية", icon: Users, types: ["attendance_record", "leave", "advance", "joining_offer", "joining_notification"], modules: ["attendance", "hr_leaves", "hr_advances", "operations_hr", "operations_joining"] },
   { id: "production", label: "التوريد والنقل والمرتجعات", hint: "حالات التوريد والخطوة التالية", icon: Factory, types: ["kitchen_order", "transfer", "reverse_movement", "delivery_assignment"], modules: ["central_kitchen_orders", "warehouse", "branch_supply", "delivery_tasks", "production"] },
   { id: "quality", label: "الجودة والصيانة", hint: "الفحوص والبلاغات", icon: Wrench, types: ["quality_check", "maintenance"], modules: ["quality_control", "maintenance"] },
-  { id: "sales", label: "المبيعات والأداء", hint: "المبيعات ويوميات الكاشير", icon: ChartNoAxesCombined, types: ["cashier_journal", "daily_closure"], modules: ["sales_analytics", "cashier_journal", "daily_closures"] },
+  { id: "sales", label: "متابعة اليوميات والإغلاق اليومي", hint: "مراجعة السجلات والخطوة التالية", icon: ChartNoAxesCombined, types: ["cashier_journal", "daily_closure"], modules: ["cashier_journal", "daily_closures"] },
 ] as const;
 type Workspace = "urgent" | "followup" | "decision" | "today" | "monthly" | "branches" | "people" | "production" | "quality" | "sales" | "analysis" | null;
 type Selected = { kind: "record"; id: string } | { kind: "card"; id: string; branchId: string } | { kind: "branch"; id: string } | null;
@@ -35,7 +36,7 @@ export function OperationsDecisionBoard({ data, actorId, offset, onOffset, open,
   open: OpenSource;
   openBranch: (id: string) => void; retry: () => void;
 }) {
-   const [view, setView] = useState<Workspace>(() => monthlyReturnIntent(window.location.search, (monthlyBranches || data.branches).map(branch => branch.id)).monthly ? "monthly" : new URLSearchParams(window.location.search).get("workspace") === "analysis" ? "analysis" : new URLSearchParams(window.location.search).get("workspace") === "production" ? "production" : new URLSearchParams(window.location.search).get("workspace") === "people" ? "people" : null);
+   const [view, setView] = useState<Workspace>(() => monthlyReturnIntent(window.location.search, (monthlyBranches || data.branches).map(branch => branch.id)).monthly ? "monthly" : new URLSearchParams(window.location.search).get("workspace") === "analysis" ? "analysis" : new URLSearchParams(window.location.search).get("workspace") === "production" ? "production" : new URLSearchParams(window.location.search).get("workspace") === "people" ? "people" : new URLSearchParams(window.location.search).get("workspace") === "sales" ? "sales" : null);
   const [selected, setSelected] = useState<Selected>(null);
   const [search, setSearch] = useState("");
   const [mobileDetail, setMobileDetail] = useState(() => new URLSearchParams(window.location.search).get("workspace") === "analysis");
@@ -130,7 +131,7 @@ export function OperationsDecisionBoard({ data, actorId, offset, onOffset, open,
            <DialogDescription className="text-right text-xs">{view === "monthly" ? "كل الفروع المصرح بها للمقارنة فقط · الإجراءات التشغيلية لفرع واحد وشهر واحد" : view === "production" ? "متابعة يومية للإنتاج والتوريد · الإجراء النهائي والصلاحية في المصدر المختص" : view === "people" ? "حالات موظفين مفتوحة حاليًا · الإجراء النهائي في المصدر · ليست كلها مهام اليوم" : "نطاق الفروع المختار · عرض السجل لا يغيّر حالته"}</DialogDescription>
           {view === "analysis" && onPerformanceDays && <PerformanceRange days={performanceDays} onChange={onPerformanceDays} />}
         </DialogHeader>
-         {view === "monthly" ? <OperationsMonthWorkspace key={`${actorId}:${(monthlyBranches || data.branches).map(branch => branch.id).sort().join(",")}`} branches={monthlyBranches || data.branches} actorId={actorId} ready={monthlyReady} liveManaged={monthlyLiveManaged} open={open} /> : view === "production" ? <OperationsSupplyWorkspace key={`${actorId}:${scopeKey}`} branches={data.branches.filter(branch => ids.includes(branch.id))} actorId={actorId} open={open} canOpenPurchasing={data.modules.includes("warehouse")} /> : view === "people" ? <OperationsPeopleWorkspace key={`${actorId}:${scopeKey}`} branches={data.branches.filter(branch => ids.includes(branch.id))} actorId={actorId} open={open} /> : <div className="oc-workspace-grid" data-detail={mobileDetail}>
+         {view === "monthly" ? <OperationsMonthWorkspace key={`${actorId}:${(monthlyBranches || data.branches).map(branch => branch.id).sort().join(",")}`} branches={monthlyBranches || data.branches} actorId={actorId} ready={monthlyReady} liveManaged={monthlyLiveManaged} open={open} /> : view === "production" ? <OperationsSupplyWorkspace key={`${actorId}:${scopeKey}`} branches={data.branches.filter(branch => ids.includes(branch.id))} actorId={actorId} open={open} canOpenPurchasing={data.modules.includes("warehouse")} /> : view === "people" ? <OperationsPeopleWorkspace key={`${actorId}:${scopeKey}`} branches={data.branches.filter(branch => ids.includes(branch.id))} actorId={actorId} open={open} /> : view === "sales" ? <OperationsSalesWorkspace key={`${actorId}:${scopeKey}`} branches={data.branches.filter(branch => ids.includes(branch.id))} actorId={actorId} open={open} /> : <div className="oc-workspace-grid" data-detail={mobileDetail}>
           <div className="oc-workspace-list space-y-2">
             {view === "analysis" ? <div className="space-y-3 text-sm">
               <strong>الأدلة ومصدر التحليل</strong>

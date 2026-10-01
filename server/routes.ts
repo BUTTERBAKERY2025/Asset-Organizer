@@ -17,6 +17,7 @@ import {
   ManualProductionOperationError,
 } from "./manual-production-operations";
 import { db, pool } from "./db";
+import { riyadhBusinessDate } from "@shared/operations-performance";
 import { operationsPayrollReviews } from "@shared/schema";
 import { completeHrEmployeeTransfer, employeeTransferSchemaNotReady, EMPLOYEE_TRANSFER_SCHEMA_ERROR, operationsHrManagerOnly, registerOperationsHrRoutes } from "./operations-hr-routes";
 import { payrollAttendanceEvidence, payrollReadError, readPayrollSource } from "./operations-payroll-report";
@@ -11096,7 +11097,7 @@ export async function registerRoutes(
       }
       if (typeof error?.message === 'string' && error.message.startsWith("__JOURNAL_IN_CLOSURE__")) {
         const cid = error.message.replace("__JOURNAL_IN_CLOSURE__", "");
-        return res.status(409).json({ error: `لا يمكن تعديل اليومية لأنها مُضمَّنة في إقفال يومي رقم ${cid}. ألغِ ربط الإقفال أولًا.`, closureId: Number(cid) });
+        return res.status(409).json({ error: `لا يمكن تعديل اليومية لأنها مُضمَّنة في إغلاق رقم ${cid}. إذا كان مفتوحًا، يلغيه المدير العام أولًا ثم تصحح اليومية وتعيد إنشاءه. الإغلاق المعتمد لا يُفك من هذا المسار.`, closureId: Number(cid) });
       }
       if (error?.code === '23505') {
         const constraint: string = error?.constraint || '';
@@ -13177,6 +13178,7 @@ export async function registerRoutes(
       
       res.json({
         existingClosure,
+        businessDate: riyadhBusinessDate(new Date()),
         journals: journalsWithPayments,
         totals,
         paymentMethodTotals,
@@ -13293,13 +13295,12 @@ export async function registerRoutes(
       
       // SECURITY: Validate date format and prevent future dates
       const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-      if (!dateRegex.test(closureDate)) {
+      if (typeof closureDate !== "string" || !dateRegex.test(closureDate)
+        || !Number.isFinite(Date.parse(`${closureDate}T00:00:00Z`))
+        || new Date(`${closureDate}T00:00:00Z`).toISOString().slice(0, 10) !== closureDate) {
         return res.status(400).json({ error: "تنسيق التاريخ غير صالح" });
       }
-      const closureDateObj = new Date(closureDate + 'T00:00:00');
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      if (closureDateObj > today) {
+      if (closureDate > riyadhBusinessDate(new Date())) {
         return res.status(400).json({ error: "لا يمكن إنشاء إغلاق لتاريخ مستقبلي" });
       }
       
@@ -13312,7 +13313,8 @@ export async function registerRoutes(
       }
       
       // SECURITY: Validate journalIds are integers and limit array size
-      if (!Array.isArray(journalIds) || journalIds.some((id: any) => typeof id !== 'number' || isNaN(id))) {
+      if (!Array.isArray(journalIds) || journalIds.some((id: any) => !Number.isSafeInteger(id) || id < 1)
+        || new Set(journalIds).size !== journalIds.length) {
         return res.status(400).json({ error: "معرفات اليوميات غير صالحة" });
       }
       if (journalIds.length > 50) {
@@ -13338,7 +13340,7 @@ export async function registerRoutes(
       const newClosure = await db.transaction(async (tx) => {
         // Lock the selected journal rows; concurrent PATCH/DELETE/UNPOST will queue behind us.
         const lockedRows = await tx.execute(
-          sql`SELECT * FROM ${cashierSalesJournals} WHERE id IN (${sql.join(journalIds.map((id: number) => sql`${id}`), sql`, `)}) FOR UPDATE`
+          sql`SELECT * FROM ${cashierSalesJournals} WHERE id IN (${sql.join(journalIds.map((id: number) => sql`${id}`), sql`, `)}) ORDER BY id FOR UPDATE`
         );
         const journals: any[] = (lockedRows as any).rows ?? (Array.isArray(lockedRows) ? lockedRows as any : []);
         if (journals.length !== journalIds.length) {
@@ -13468,9 +13470,9 @@ export async function registerRoutes(
   // Close (finalize) branch daily closure
   app.post("/api/branch-daily-closures/:id/close", isAuthenticated, requirePermission("daily_closures", "approve"), async (req, res) => {
     try {
-      const id = parseInt(req.params.id, 10);
+      const id = Number(req.params.id);
       
-      if (isNaN(id)) {
+      if (!/^[1-9]\d*$/.test(req.params.id) || !Number.isSafeInteger(id)) {
         return res.status(400).json({ error: "معرف غير صالح" });
       }
       
@@ -13501,16 +13503,18 @@ export async function registerRoutes(
         return res.status(403).json({ error: "لا يمكن اعتماد إغلاق قمت بإنشائه بنفسك" });
       }
       
-      // SECURITY: Atomic update with status check to prevent TOCTOU race condition
-      const [updated] = await db.update(branchDailyClosures)
-        .set({
-          status: 'closed',
-          closedBy: user.id,
-          closedAt: new Date(),
-          updatedAt: new Date(),
-        })
-        .where(and(eq(branchDailyClosures.id, id), eq(branchDailyClosures.status, 'open')))
-        .returning();
+      // Share a closure row lock with removal: a correction can never delete a
+      // snapshot which another reviewer has finalized while this request waits.
+      const updated = await db.transaction(async tx => {
+        const [locked] = await tx.select().from(branchDailyClosures)
+          .where(eq(branchDailyClosures.id, id)).for("update");
+        if (!locked || locked.status !== "open") return null;
+        if (locked.createdBy === user.id && !isUserAdmin(req)) return null;
+        const [closed] = await tx.update(branchDailyClosures).set({
+          status: "closed", closedBy: user.id, closedAt: new Date(), updatedAt: new Date(),
+        }).where(and(eq(branchDailyClosures.id, id), eq(branchDailyClosures.status, "open"))).returning();
+        return closed;
+      });
       
       if (!updated) {
         return res.status(409).json({ error: "تم إغلاق هذا البيان من قبل مستخدم آخر" });
@@ -13531,28 +13535,40 @@ export async function registerRoutes(
         return res.status(403).json({ error: "غير مصرح - الحذف متاح للمدير العام فقط" });
       }
       
-      const id = parseInt(req.params.id, 10);
+      const id = Number(req.params.id);
       
-      if (isNaN(id)) {
+      if (!/^[1-9]\d*$/.test(req.params.id) || !Number.isSafeInteger(id)) {
         return res.status(400).json({ error: "معرف غير صالح" });
       }
       
-      const [closure] = await db.select()
-        .from(branchDailyClosures)
-        .where(eq(branchDailyClosures.id, id));
-      
-      if (!closure) {
+      // Keep the existing admin-only DELETE authority. Explicitly remove the
+      // whole OPEN snapshot before correcting journals, never auto-unlink one
+      // journal and leave saved totals/payment aggregates inconsistent.
+      const result = await db.transaction(async tx => {
+        const [closure] = await tx.select().from(branchDailyClosures)
+          .where(eq(branchDailyClosures.id, id)).for("update");
+        if (!closure) return { state: "missing" as const };
+        if (closure.status !== "open") return { state: "closed" as const };
+        const links = await tx.select({ journalId: branchDailyClosureJournals.journalId })
+          .from(branchDailyClosureJournals).where(eq(branchDailyClosureJournals.closureId, id));
+        if (links.length) await tx.execute(sql`SELECT id FROM ${cashierSalesJournals}
+          WHERE id IN (${sql.join(links.map(link => sql`${link.journalId}`), sql`, `)})
+          ORDER BY id FOR UPDATE`);
+        // Explicit child deletion also works on older databases whose cascade
+        // definition is absent. Journals and their financial state stay intact.
+        await tx.delete(branchDailyClosurePayments).where(eq(branchDailyClosurePayments.closureId, id));
+        await tx.delete(branchDailyClosureJournals).where(eq(branchDailyClosureJournals.closureId, id));
+        await tx.delete(branchDailyClosures)
+          .where(and(eq(branchDailyClosures.id, id), eq(branchDailyClosures.status, "open")));
+        return { state: "removed" as const, branchId: closure.branchId, closureDate: closure.closureDate };
+      });
+      if (result.state === "missing") {
         return res.status(404).json({ error: "Closure not found" });
       }
-      
-      if (closure.status === 'closed') {
-        return res.status(400).json({ error: "لا يمكن حذف يومية مغلقة" });
+      if (result.state === "closed") {
+        return res.status(409).json({ error: "لا يمكن حذف أو فك إغلاق معتمد؛ اللقطة المالية المغلقة ثابتة." });
       }
-      
-      await db.delete(branchDailyClosures)
-        .where(eq(branchDailyClosures.id, id));
-      
-      res.json({ success: true });
+      res.json({ success: true, branchId: result.branchId, closureDate: result.closureDate });
     } catch (error) {
       console.error("Error deleting branch daily closure:", error);
       res.status(500).json({ error: "Failed to delete branch daily closure" });
@@ -17319,7 +17335,7 @@ export async function registerRoutes(
   // ==========================================
 
   // Targets vs Actuals - مقارنة الأهداف بالفعليات
-  app.get("/api/analytics/targets-vs-actuals", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
+  app.get("/api/analytics/targets-vs-actuals", isAuthenticated, requirePermission("sales_analytics", "view"), async (req, res) => {
     try {
       const { branchId, fromDate, toDate, status, discrepancyType } = req.query;
       
@@ -17354,7 +17370,7 @@ export async function registerRoutes(
   });
 
   // Shift Analytics - تحليلات الورديات
-  app.get("/api/analytics/shifts", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
+  app.get("/api/analytics/shifts", isAuthenticated, requirePermission("sales_analytics", "view"), async (req, res) => {
     try {
       const { branchId, fromDate, toDate, status, discrepancyType } = req.query;
       

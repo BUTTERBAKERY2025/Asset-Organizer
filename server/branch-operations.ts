@@ -482,7 +482,8 @@ export function hasEffectiveViewPermission(req: Request, module: string, action 
 }
 
 async function evaluateEffectivePermission(req: Request, module: string, action: string): Promise<boolean> {
-  if (["warehouse", "branch_supply", "central_kitchen_orders", "delivery_tasks", "production"].includes(module))
+  if (["warehouse", "branch_supply", "central_kitchen_orders", "delivery_tasks", "production",
+    "cashier_journal", "cashier_performance", "daily_closures", "sales_analytics", "branch_closure"].includes(module))
     return hasAuthoritativePermission(req, module, action);
   const user = req.currentUser;
   if (!user) return false;

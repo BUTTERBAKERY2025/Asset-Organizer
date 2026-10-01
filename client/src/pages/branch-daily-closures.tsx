@@ -10,7 +10,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useBranches } from "@/hooks/useBranches";
 import { useBranchNavigation } from "@/hooks/use-branch-navigation";
 import { usePermissions } from "@/hooks/usePermissions";
-import { canApproveDailyClosure, dailyClosureDateRange, dailyClosureHref, dailyClosureIntent, dailyClosureScopeReady } from "@/lib/daily-closure-navigation";
+import { canApproveDailyClosure, dailyClosureCenterLabel, dailyClosureDateRange, dailyClosureHref, dailyClosureIntent, dailyClosureScopeReady } from "@/lib/daily-closure-navigation";
 import { operationsCenterReturnHref } from "@/lib/operations-center-navigation";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -257,10 +257,12 @@ export default function BranchDailyClosuresPage() {
       queryClient.invalidateQueries({ queryKey: [`/api/branch-daily-closures/${closure.id}`], exact: true });
       queryClient.invalidateQueries({ queryKey: ["/api/operations-center/month-workflow"] });
       queryClient.invalidateQueries({ queryKey: ["/api/operations-center"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/operations-center/sales"] });
       toast({ title: "تم إغلاق اليومية بنجاح" });
     },
     onError: (cause) => {
       queryClient.invalidateQueries({ queryKey: ["/api/branch-daily-closures"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/branch-daily-closures/journals-preview"] });
       queryClient.invalidateQueries({ queryKey: ["/api/my-permissions"] });
       toast({ title: "خطأ", description: cause.message || "فشل في إغلاق اليومية", variant: "destructive" });
     },
@@ -273,9 +275,11 @@ export default function BranchDailyClosuresPage() {
     },
     onSuccess: (_result, closure) => {
       queryClient.invalidateQueries({ queryKey: ["/api/branch-daily-closures"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/branch-daily-closures/journals-preview"] });
       queryClient.invalidateQueries({ queryKey: [`/api/branch-daily-closures/${closure.id}`], exact: true });
       queryClient.invalidateQueries({ queryKey: ["/api/operations-center/month-workflow"] });
       queryClient.invalidateQueries({ queryKey: ["/api/operations-center"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/operations-center/sales"] });
       toast({ title: "تم حذف الإغلاق اليومي بنجاح" });
     },
     onError: (error: any) => {
@@ -287,16 +291,18 @@ export default function BranchDailyClosuresPage() {
     },
   });
 
-  const canClose = (closure: BranchDailyClosure): boolean => closures.some(row => row.id === closure.id)
-    && canApproveDailyClosure(closure, {
-      actorId: user?.id, permitted: permissionsReady && permissions.canApprove("daily_closures"),
+  const canClose = (closure: BranchDailyClosure): boolean => {
+    const current = closures.find(row => row.id === closure.id);
+    return !!current && canApproveDailyClosure(current, {
+      actorId: user?.id, actorRole: user?.role, permitted: permissionsReady && permissions.canApprove("daily_closures"),
       scopeReady, pending: closeMutation.isPending || deleteMutation.isPending, fetching: isFetching,
       allowedIds, branchId: branchFilter, startDate: dateFrom, endDate: dateTo,
     });
+  };
   const canDelete = (closure: BranchDailyClosure): boolean => user?.role === "admin" && permissionsReady
     && permissions.canDelete("daily_closures") && scopeReady && !isFetching
     && !closeMutation.isPending && !deleteMutation.isPending
-    && closure.status === "open" && closures.some(row => row.id === closure.id);
+    && closure.status === "open" && closures.some(row => row.id === closure.id && row.status === "open");
   const selectedDay = dateFrom && dateFrom === dateTo ? dateFrom : "";
   const destination = (target: "list" | "create" | number, branch = branchFilter, day = selectedDay) =>
     dailyClosureHref(target, linkedSearch, branch, day,
@@ -342,6 +348,7 @@ export default function BranchDailyClosuresPage() {
           title="الإغلاقات اليومية للفروع"
           description={pagination.total > 0 ? `${pagination.total} إغلاق` : undefined}
           backHref={fromCenter ? operationsCenterReturnHref(linkedSearch, allowedIds) : "/cashier-journals"}
+          backLabel={fromCenter ? `العودة إلى ${dailyClosureCenterLabel(linkedSearch)}` : "العودة إلى يوميات الكاشير"}
           actions={
             <>
               <Button 
@@ -647,9 +654,9 @@ export default function BranchDailyClosuresPage() {
                                         </AlertDialogTrigger>
                                         <AlertDialogContent dir="rtl">
                                           <AlertDialogHeader>
-                                            <AlertDialogTitle>تأكيد الحذف</AlertDialogTitle>
+                                            <AlertDialogTitle>إلغاء لقطة الإغلاق المفتوح</AlertDialogTitle>
                                             <AlertDialogDescription>
-                                              هل أنت متأكد من حذف هذا الإغلاق اليومي؟ لا يمكن التراجع عن هذا الإجراء.
+                                              ستُحذف لقطة الإغلاق المفتوح وروابطها فقط، ولن تُحذف اليوميات أو تتغير حالتها. إن كان الهدف تصحيح يومية، صححها في مصدرها ثم أعد إنشاء الإغلاق. لا يمكن التراجع عن حذف اللقطة، ولا يمكن حذف إغلاق معتمد.
                                             </AlertDialogDescription>
                                           </AlertDialogHeader>
                                           <AlertDialogFooter className="flex-row-reverse gap-2">

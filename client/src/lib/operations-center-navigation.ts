@@ -1,7 +1,7 @@
 import { parseAnnouncementAction, parseNoticeAction } from "@shared/operations-center-notifications";
 import type { QueryClient } from "@tanstack/react-query";
 
-export const operationsCenterQueryRoots = ["/api/operations-center", "/api/operations-center/supply", "/api/operations-center/people", "/api/operations-center/notifications", "/api/operations-center/month-workflow", "/api/operations-center/monthly"] as const;
+export const operationsCenterQueryRoots = ["/api/operations-center", "/api/operations-center/supply", "/api/operations-center/people", "/api/operations-center/sales", "/api/operations-center/notifications", "/api/operations-center/month-workflow", "/api/operations-center/monthly"] as const;
 export function purgeOperationsCenterQueries(client: Pick<QueryClient, "cancelQueries" | "removeQueries">) {
   for (const endpoint of operationsCenterQueryRoots) {
     void client.cancelQueries({ queryKey: [endpoint] });
@@ -14,6 +14,85 @@ export function refreshOperationsCenterQueries(client: Pick<QueryClient, "invali
 }
 
 const monthPattern = /^20\d{2}-(0[1-9]|1[0-2])$/;
+const salesSources = ["all", "journals", "closures"] as const;
+export type SalesPageIntent = { source: typeof salesSources[number]; branchId: string; offset: number };
+function salesRecordIntent(value: string | null) {
+  const match = value?.match(/^(cashier_journal|daily_closure):([1-9]\d*)$/);
+  return match && Number.isSafeInteger(Number(match[2])) ? { type: match[1], id: match[2], record: value! } : null;
+}
+function salesPageIntent(params: URLSearchParams, prefix: "sales" | "centerSales", selectedBranch: string, type: string) {
+  const keys = [`${prefix}Source`, `${prefix}FilterBranchId`, `${prefix}Offset`];
+  if (keys.some(key => params.getAll(key).length !== 1)) return null;
+  const source = params.get(keys[0]) as SalesPageIntent["source"];
+  const branchId = params.get(keys[1])!;
+  const rawOffset = params.get(keys[2])!;
+  const offset = Number(rawOffset);
+  if (!salesSources.includes(source) || (source !== "all" && source !== (type === "cashier_journal" ? "journals" : "closures"))
+    || (branchId !== "" && branchId !== selectedBranch) || !/^(0|[1-9]\d*)$/.test(rawOffset)
+    || !Number.isSafeInteger(offset) || offset % 30 !== 0) return null;
+  return { source, branchId, offset };
+}
+function salesSelectionMatchesSource(params: URLSearchParams, selection: NonNullable<ReturnType<typeof salesRecordIntent>>, path?: string) {
+  const base = selection.type === "cashier_journal" ? "/cashier-journals" : "/branch-daily-closures";
+  const key = selection.type === "cashier_journal" ? "journalId" : "closureId";
+  if (path === "/branch-daily-closing" && selection.type === "daily_closure") {
+    const date = exactParam(params, "date") || "";
+    const month = exactParam(params, "month");
+    return exactParam(params, "correction") === "1" && /^20\d{2}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/.test(date)
+      && new Date(date).toISOString().slice(0, 10) === date
+      && (!params.has("month") || month === date.slice(0, 7))
+      && (!params.has(key) || exactRecordParam(params, key, selection.id));
+  }
+  // A source's fixed list is a recovery/return surface, not a promise that it
+  // still displays the case (approval can remove it). Detail routes remain
+  // exact; restoring selection still requires a fresh scoped workspace GET.
+  return path === `${base}/${selection.id}` || (path === base &&
+    (!params.has(key) || exactRecordParam(params, key, selection.id)));
+}
+export function salesSourceReturnIntent(search: string, allowedIds: readonly string[], sourcePath?: string) {
+  const params = new URLSearchParams(search);
+  const selection = salesRecordIntent(exactParam(params, "centerSalesRecord"));
+  const branchId = exactParam(params, "centerSalesBranchId");
+  const scope = strictPeopleScope(params, "centerBranchIds", allowedIds);
+  if (exactParam(params, "centerWorkspace") !== "sales" || !selection || !branchId || !scope
+    || !allowedIds.includes(branchId) || (scope.length > 0 && !scope.includes(branchId))
+    || exactParam(params, "branchId") !== branchId
+    || (params.has("from") && exactParam(params, "from") !== "operations-center")
+    || !salesSelectionMatchesSource(params, selection, sourcePath)) return null;
+  const page = salesPageIntent(params, "centerSales", branchId, selection.type);
+  return page ? { selection, branchId, scope, page } : null;
+}
+export function salesReturnIntent(search: string, allowedIds: readonly string[]) {
+  const params = new URLSearchParams(search);
+  const empty = { source: "all" as SalesPageIntent["source"], branchId: "", record: null as string | null, offset: 0, valid: true };
+  const scope = strictPeopleScope(params, "branchIds", allowedIds);
+  const keys = ["salesRecord", "salesBranchId", "salesSource", "salesFilterBranchId", "salesOffset"];
+  if (!scope || params.getAll("workspace").length > 1) return { ...empty, valid: false };
+  if (!keys.some(key => params.has(key))) return empty;
+  const selection = salesRecordIntent(exactParam(params, "salesRecord"));
+  const branchId = exactParam(params, "salesBranchId");
+  if (exactParam(params, "workspace") !== "sales" || !selection || !branchId || !allowedIds.includes(branchId)
+    || (scope.length > 0 && !scope.includes(branchId))) return { ...empty, valid: false };
+  const page = salesPageIntent(params, "sales", branchId, selection.type);
+  return page ? { ...page, record: selection.record, valid: true } : { ...empty, valid: false };
+}
+export function withSalesPageReturn(href: string, record: { sourceType: string; sourceId: string; branchId: string },
+  page: SalesPageIntent, origin: string) {
+  const url = new URL(href, origin);
+  const selection = salesRecordIntent(`${record.sourceType}:${record.sourceId}`);
+  if (url.origin !== origin || url.hash || !selection || !salesSelectionMatchesSource(url.searchParams, selection, url.pathname)
+    || (url.searchParams.has("branchId") && exactParam(url.searchParams, "branchId") !== record.branchId))
+    throw new Error("Invalid sales source selection");
+  url.searchParams.set("branchId", record.branchId);
+  url.searchParams.set("centerWorkspace", "sales");
+  url.searchParams.set("centerSalesRecord", selection.record);
+  url.searchParams.set("centerSalesBranchId", record.branchId);
+  url.searchParams.set("centerSalesSource", page.source);
+  url.searchParams.set("centerSalesFilterBranchId", page.branchId);
+  url.searchParams.set("centerSalesOffset", String(page.offset));
+  if (!salesPageIntent(url.searchParams, "centerSales", record.branchId, selection.type)) throw new Error("Invalid sales page");
+  return `${url.pathname}${url.search}`;
+}
 export const monthFiles = ["payroll", "expenses", "closing", "sales"] as const;
 export type MonthFile = typeof monthFiles[number];
 
@@ -347,6 +426,14 @@ export function attachCenterContext(url: URL, branchId: string, scope: readonly 
     || url.searchParams.getAll("from").length > 1
     || (url.searchParams.has("from") && url.searchParams.get("from") !== "operations-center")))
     throw new Error("Invalid people return scope");
+  const salesRequested = url.searchParams.getAll("centerWorkspace").includes("sales")
+    || url.searchParams.has("centerSalesRecord");
+  if (salesRequested && (url.searchParams.getAll("centerWorkspace").length !== 1
+    || url.searchParams.getAll("centerBranchIds").length > 1
+    || (url.searchParams.has("centerBranchIds") && url.searchParams.get("centerBranchIds") !== scope.join(","))
+    || url.searchParams.getAll("from").length > 1
+    || (url.searchParams.has("from") && url.searchParams.get("from") !== "operations-center")))
+    throw new Error("Invalid sales return scope");
   url.searchParams.set("branchId", branchId);
   url.searchParams.set("from", "operations-center");
   url.searchParams.set("centerBranchIds", scope.join(","));
@@ -354,6 +441,9 @@ export function attachCenterContext(url: URL, branchId: string, scope: readonly 
   if (peopleRequested) {
     if (!peopleSourceIntent(url, scope.length ? scope : [branchId])) throw new Error("Invalid people return selection");
   }
+  if (url.searchParams.getAll("centerWorkspace").includes("sales")
+    && !salesSourceReturnIntent(url.search, scope.length ? scope : [branchId], url.pathname))
+    throw new Error("Invalid sales return selection");
 }
 
 /** Preserve source intent; never pick an arbitrary selected branch for a notice.
@@ -454,6 +544,17 @@ export function operationsCenterReturnHref(search: string, allowedIds: readonly 
       params.set("peopleBranchId", people.branchId);
       if (people.selection) params.set("peopleRecord", people.selection.record);
     } else params.set("peopleBranchId", "__invalid_scope__");
+  } else if (input.getAll("centerWorkspace").includes("sales") || input.has("centerSalesRecord")) {
+    params.set("workspace", "sales");
+    const path = sourcePath ?? (typeof window !== "undefined" ? window.location.pathname : undefined);
+    const sales = salesSourceReturnIntent(search, allowedIds, path);
+    if (sales && validReturnScope) {
+      params.set("salesRecord", sales.selection.record);
+      params.set("salesBranchId", sales.branchId);
+      params.set("salesSource", sales.page.source);
+      params.set("salesFilterBranchId", sales.page.branchId);
+      params.set("salesOffset", String(sales.page.offset));
+    } else params.set("salesBranchId", "__invalid_scope__");
   } else if (input.get("centerWorkspace") === "analysis") {
     params.set("workspace", "analysis");
   } else if (input.get("centerWorkspace") === "production") {
@@ -497,7 +598,13 @@ export function navigateCenterSourceWithHistory(
   const supplyRequested = ["centerSupplySource", "centerSupplyFilterBranchId", "centerSupplyOffset"]
     .some(key => source.searchParams.has(key));
   if (supplyRequested && !supplySourceReturnIntent(source.search, allowedIds, source.pathname)) return;
-  if (people) {
+  const salesRequested = source.searchParams.getAll("centerWorkspace").includes("sales")
+    || source.searchParams.has("centerSalesRecord");
+  const sales = salesSourceReturnIntent(source.search, allowedIds, source.pathname);
+  if (salesRequested && !sales) return;
+  if (sales && restored.get("salesRecord") === sales.selection.record) {
+    navigate(returnHref, { replace: true });
+  } else if (people) {
     navigate(returnHref, { replace: true });
   } else if (monthly && restored.get("workspace") === "monthly"
     && restored.get("month") === monthly.month && restored.get("monthBranchId") === monthly.monthBranchId) {

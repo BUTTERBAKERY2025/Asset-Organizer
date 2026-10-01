@@ -1,9 +1,12 @@
 import { branchDeskDate } from "./branch-operation-navigation";
+import { riyadhBusinessDate } from "@shared/operations-performance";
 
 const monthPattern = /^20\d{2}-(0[1-9]|1[0-2])$/;
 const contextKeys = [
   "from", "centerBranchIds", "centerWorkspace", "centerMonth", "centerMonthBranchId", "centerMonthFile",
   "branchReturn",
+  "centerSalesRecord", "centerSalesBranchId", "centerSalesFilterBranchId",
+  "centerSalesSource", "centerSalesOffset",
 ] as const;
 
 /** A day is navigation intent, never authorization or permission to create a record. */
@@ -43,9 +46,19 @@ export function dailyClosureHref(
   const input = new URLSearchParams(search);
   const output = new URLSearchParams();
   for (const key of contextKeys) {
-    const value = input.get(key);
-    if (value) output.set(key, value);
+    // Keep duplicates invalid rather than laundering malformed return intent
+    // into a single valid-looking value on the next hop.
+    for (const value of input.getAll(key)) output.append(key, value);
   }
+  if (destination === "create") {
+    for (const value of input.getAll("correction")) output.append("correction", value);
+  }
+  // The list is also an approval hop for this exact source record. Preserve its
+  // selector as well as the empty ("all branches") outer filter.
+  const salesClosure = input.get("centerSalesRecord")?.match(/^daily_closure:([1-9]\d*)$/);
+  if (destination === "list" && input.getAll("centerWorkspace").length === 1
+    && input.getAll("centerSalesRecord").length === 1 && input.get("centerWorkspace") === "sales" && salesClosure
+    && Number.isSafeInteger(Number(salesClosure[1]))) output.set("closureId", salesClosure[1]);
   if (branchId && branchId !== "all") output.set("branchId", branchId);
   const selectedDate = date === undefined ? input.get("date") || "" : date;
   const selectedMonth = month === undefined ? input.get("month") || "" : month;
@@ -75,14 +88,24 @@ export function dailyClosureScopeReady(
 export function canApproveDailyClosure(
   closure: { branchId: string; createdBy: string; status: string; closureDate: string },
   context: {
-    actorId?: string; permitted: boolean; scopeReady: boolean; pending: boolean; fetching: boolean;
+    actorId?: string; actorRole?: string; permitted: boolean; scopeReady: boolean; pending: boolean; fetching: boolean;
     allowedIds: readonly string[]; branchId: string; startDate: string; endDate: string;
   },
 ) {
   return context.permitted && context.scopeReady && !context.pending && !context.fetching
-    && !!context.actorId && !!closure.createdBy && closure.createdBy !== context.actorId
+    && !!context.actorId && !!closure.createdBy && (closure.createdBy !== context.actorId || context.actorRole === "admin")
     && closure.status === "open" && context.allowedIds.includes(closure.branchId)
     && (context.branchId === "all" || closure.branchId === context.branchId)
     && (!context.startDate || closure.closureDate >= context.startDate)
     && (!context.endDate || closure.closureDate <= context.endDate);
+}
+
+export function dailyClosureToday(now = new Date()) {
+  return riyadhBusinessDate(now);
+}
+
+export function dailyClosureCenterLabel(search: string) {
+  const workspace = new URLSearchParams(search).get("centerWorkspace");
+  return workspace === "monthly" ? "ملف الشهر التشغيلي"
+    : workspace === "sales" ? "متابعة اليوميات والإغلاق اليومي" : "مركز إدارة التشغيل";
 }
