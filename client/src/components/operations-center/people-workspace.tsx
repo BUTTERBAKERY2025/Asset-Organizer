@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { createOperationsHrCommandGuard } from "@/lib/operations-hr-state";
 import { time } from "./record-sheet";
 import {
-  filterPeopleRecords, peopleCoverageText, peopleHasDecision, peopleNextAction, peoplePageFacts,
+  filterPeopleRecords, peopleCoverageComplete, peopleCoverageText, peopleEmptyText, peopleHasDecision, peopleNextAction, peoplePageFacts,
   peopleReadToolHref, peopleRecordKey, peopleRequestParams, peopleScopeMatches, peopleSelectionIntent,
   peopleSourceHref, peopleSourceLabel, peopleSources, peopleStageLabel, peopleToolHref,
   type PeopleRequest, type PeopleSource,
@@ -153,6 +153,7 @@ export function OperationsPeopleWorkspace({ branches, actorId, open }: {
         </label>
       </div>
       <p className="text-[11px] leading-5 text-muted-foreground">الفرع والمصدر يرشحان كامل نطاق الخادم قبل ترقيم الصفحات. المرحلة والبحث يرشحان الصفحة المحمّلة فقط؛ ليست هذه صفحة الطابور العام.</p>
+      {source === "joining" && <PeopleJoiningGuide data={data} branchId={branchId} refreshing={query.isFetching} onOpen={() => openTool("joining")} />}
       {query.isPending && <p role="status" className="text-sm">جار تحميل حالات الموظفين…</p>}
       {query.isError && <div role="alert" className="oc-panel space-y-2 p-3 text-sm text-destructive"><p>{query.error.message}</p><Button type="button" variant="outline" size="sm" onClick={() => changeIntent(() => { void query.refetch(); })}>إعادة المحاولة</Button></div>}
       {snapshotRejected && !query.isError && <p role="alert" className="text-xs leading-6 text-destructive">أخفيت بيانات سابقة لا تطابق نطاق الفروع أو صلاحيات المصدر أو الصفحة الحالية. حدّث الحالات للتحقق.</p>}
@@ -172,7 +173,7 @@ export function OperationsPeopleWorkspace({ branches, actorId, open }: {
           <span className="mt-1 block text-[11px] leading-5 text-muted-foreground">المسؤول: {item.owner || "غير مسجل في المصدر"}</span>
           {peopleHasDecision(item, actorId) && <span className="mt-1 block text-[11px] font-bold text-violet-800">بانتظار قرارك · صلاحية حالية من المصدر</span>}
         </button>)}
-        {!records.length && <p role="status" className="rounded-xl border border-dashed border-violet-200 p-4 text-sm text-muted-foreground">{stage !== "all" || search.trim() ? "لا نتائج تطابق المرحلة والبحث في هذه الصفحة." : "لا حالات ظاهرة لهذا المصدر في هذه الصفحة؛ الغياب لا يثبت اكتمال العمل."} تبقى أدوات المصادر المصرح بها متاحة ولو كان عدد الحالات صفرًا.</p>}
+        {!records.length && <p role="status" className="rounded-xl border border-dashed border-violet-200 p-4 text-sm text-muted-foreground">{peopleEmptyText(data, stage !== "all" || !!search.trim())} تبقى أدوات المصادر المصرح بها متاحة ولو كان عدد الحالات صفرًا.</p>}
         <nav aria-label="صفحات حالات الموظفين" className="flex flex-wrap items-center gap-2 pt-2">
           <Button type="button" variant="outline" size="sm" disabled={offset === 0 || query.isFetching} onClick={() => paginate(Math.max(0, offset - pageSize))}><ChevronRight className="size-4" />السابقة</Button>
           <span className="text-xs text-muted-foreground">صفحة {Math.floor(offset / pageSize) + 1}</span>
@@ -201,12 +202,29 @@ export function PeopleCounters({ records, actorId, data, filtered }: {
   records: OperationsPeopleRecord[]; actorId?: string; data: OperationsPeopleResponse; filtered: boolean;
 }) {
   const facts = peoplePageFacts(records, actorId);
+  const unavailable = !peopleCoverageComplete(data) && facts.count === 0;
   return <div aria-label="حقائق حالات الموظفين المعروضة" className="space-y-2">
     <p role="status" className="text-[11px] leading-5 text-muted-foreground">{peopleCoverageText(data)}</p>
     <dl className="oc-people-counters">{[["حالات ظاهرة", facts.count], ["بانتظار قرارك", facts.awaitingActor]].map(([label, value]) =>
-      <div key={String(label)}><dt>{label}</dt><dd>{Number(value).toLocaleString("en-US")}</dd></div>)}</dl>
+      <div key={String(label)}><dt>{label}</dt><dd>{unavailable ? "غير متاح" : Number(value).toLocaleString("en-US")}</dd></div>)}</dl>
     <p className="text-[10px] leading-5 text-muted-foreground">العدادات {filtered ? "للنتائج المرشحة في" : "في"} هذه الصفحة فقط، وليست عدد الموظفين أو مجموع أعمال اليوم. الحالة أو الإسناد وحدهما لا يمنحانك صلاحية قرار.</p>
   </div>;
+}
+
+export function PeopleJoiningGuide({ data, branchId, refreshing, onOpen }: {
+  data: OperationsPeopleResponse | null; branchId: string; refreshing: boolean; onOpen: () => void;
+}) {
+  const tool = data?.tools.find(item => item.id === "joining" && item.branchId === branchId);
+  const origin = typeof window !== "undefined" ? window.location.origin : "https://operations.invalid";
+  const available = !!tool && !!peopleToolHref(tool, branchId, "", origin);
+  return <section aria-label="نطاق متابعة المباشرات" className="oc-panel space-y-2 p-3">
+    <h3 className="text-sm font-bold">الموقّعة بانتظار اعتماد التشغيل فقط</h3>
+    <p className="text-xs leading-6 text-muted-foreground">تعرض القائمة إشعارات المباشرة الموقّعة المرتبطة بعروض مقبولة في الفرع نفسه، والتي لم تعتمد أو تُحوّل أو تُلغَ. تشمل جميع التواريخ، وليست مباشرات اليوم فقط.</p>
+    <p className="text-xs leading-6 text-muted-foreground">غير الموقّعة والمعتمدة سابقًا لا تظهر هنا. اعتماد التشغيل ينقل المتابعة إلى الموارد البشرية، ولا يعني اكتمال إنشاء ملف الموظف.</p>
+    {!branchId ? <p className="text-xs font-semibold text-violet-800">اختر فرعًا واحدًا من مرشح الفرع لفتح صفحة المباشرات الكاملة بمختلف مراحلها.</p>
+      : available ? <Button type="button" variant="outline" size="sm" disabled={refreshing} onClick={onOpen}>فتح صفحة المباشرات الكاملة للفرع<ArrowUpLeft className="mr-1 size-3.5 shrink-0" /></Button>
+      : <p className="text-xs text-muted-foreground">{refreshing ? "جار التحقق من إتاحة صفحة المباشرات…" : !data ? "لم يتم التحقق من إتاحة صفحة المباشرات؛ أعد تحميل الحالات." : "صفحة المباشرات الكاملة غير متاحة لهذا الفرع ضمن الصلاحيات الحالية."}</p>}
+  </section>;
 }
 
 export function PeopleRecordDetail({ record, branches, actorId, businessDate, refreshing, onOpen }: {

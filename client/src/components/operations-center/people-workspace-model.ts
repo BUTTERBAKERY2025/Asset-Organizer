@@ -6,7 +6,7 @@ export const peopleSources = [
   { id: "leave_movements", label: "حركات الإجازة" },
   { id: "advances", label: "السلف" },
   { id: "attendance", label: "سجلات الحضور" },
-  { id: "joining", label: "المباشرات" },
+  { id: "joining", label: "مباشرات موقّعة تنتظر اعتماد التشغيل" },
 ] as const;
 export type PeopleSource = "all" | OperationsPeopleSource;
 export type PeopleRequest = { branchIds: string[]; source: PeopleSource; offset: number; limit: number };
@@ -114,9 +114,23 @@ export function peoplePageFacts(records: readonly OperationsPeopleRecord[], acto
   return { count: unique.length, awaitingActor: unique.filter(record => peopleHasDecision(record, actorId)).length };
 }
 
-export function peopleCoverageText(response: OperationsPeopleResponse): string {
+export function peopleCoverageComplete(response: OperationsPeopleResponse): boolean {
   const sources = peopleSources.filter(source => response.scope.source === "all" || source.id === response.scope.source);
-  return sources.some(source => response.coverage.sources[source.id]?.state !== "complete") || response.coverage.total === null
+  return response.coverage.total !== null && sources.every(source => response.coverage.sources[source.id]?.state === "complete");
+}
+
+export function peopleEmptyText(response: OperationsPeopleResponse, filtered: boolean): string {
+  if (!peopleCoverageComplete(response)) return response.scope.source !== "all" && response.coverage.sources[response.scope.source]?.state === "forbidden"
+    ? "لا تتوفر صلاحية عرض هذا المصدر ضمن النطاق الحالي؛ هذا ليس دليلًا على عدم وجود حالات."
+    : "تعذر التحقق من جميع حالات المصدر؛ حدّث الحالات وأعد المحاولة. النتيجة ليست صفرًا مؤكدًا.";
+  if (filtered) return "لا نتائج تطابق المرحلة والبحث في هذه الصفحة.";
+  if (response.scope.source === "joining" && response.coverage.total === 0)
+    return "لا توجد مباشرات موقّعة تنتظر اعتماد التشغيل ضمن الفروع المحددة وقت التحقق. قد توجد مباشرات تنتظر التوقيع أو سبق اعتمادها؛ راجع صفحة المباشرات الكاملة.";
+  return "لا حالات ظاهرة لهذا المصدر في هذه الصفحة؛ الغياب لا يثبت اكتمال العمل.";
+}
+
+export function peopleCoverageText(response: OperationsPeopleResponse): string {
+  return !peopleCoverageComplete(response)
     ? "تغطية غير مكتملة؛ الأعداد تخص الحالات المعروضة، والمصدر غير المتاح ليس صفرًا."
     : `حالات قابلة للعرض في نطاق الفروع والمصدر: ${response.coverage.total.toLocaleString("en-US")}؛ العدادات أدناه للصفحة فقط.`;
 }

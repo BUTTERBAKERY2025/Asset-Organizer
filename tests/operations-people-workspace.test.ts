@@ -6,12 +6,12 @@ import { describe, expect, it, vi } from "vitest";
 import { makeOperationsQueueItem } from "../shared/operations-center";
 import { peopleJoiningHref, type OperationsPeopleRecord, type OperationsPeopleResponse } from "../shared/operations-people";
 import {
-  filterPeopleRecords, peopleCoverageText, peopleHasDecision, peopleNextAction, peoplePageFacts,
+  filterPeopleRecords, peopleCoverageText, peopleEmptyText, peopleHasDecision, peopleNextAction, peoplePageFacts,
   peopleReadToolHref, peopleRecordKey, peopleRequestParams, peopleScopeMatches, peopleSelectionIntent,
   peopleSourceHref, peopleStageLabel, peopleToolHref,
 } from "../client/src/components/operations-center/people-workspace-model";
 import {
-  OperationsPeopleWorkspace, PeopleCounters, PeopleRecordDetail, PeopleSummaries, PeopleTools, peopleQueryKey,
+  OperationsPeopleWorkspace, PeopleCounters, PeopleJoiningGuide, PeopleRecordDetail, PeopleSummaries, PeopleTools, peopleQueryKey,
 } from "../client/src/components/operations-center/people-workspace";
 
 const branches = [{ id: "a", name: "فرع الشرق" }, { id: "b", name: "فرع الغرب" }];
@@ -72,6 +72,36 @@ const response: OperationsPeopleResponse = {
     attendance: { state: "complete", reason: null }, joining: { state: "complete", reason: null },
   } },
 };
+
+describe("joining source explanation and zero-case access", () => {
+  const empty: OperationsPeopleResponse = { ...response, records: [],
+    scope: { ...response.scope, source: "joining" }, coverage: { ...response.coverage, total: 0, nextOffset: null } };
+  it("distinguishes a verified empty signing queue from filtering, missing permission, and failed loading", () => {
+    expect(peopleEmptyText(empty, false)).toContain("لا توجد مباشرات موقّعة تنتظر اعتماد التشغيل");
+    expect(peopleEmptyText(empty, true)).toContain("لا نتائج تطابق");
+    for (const state of ["forbidden", "unavailable"] as const) {
+      const missing = { ...empty, coverage: { ...empty.coverage, total: null,
+        sources: { ...empty.coverage.sources, joining: { state, reason: null } } } };
+      expect(peopleEmptyText(missing, false)).not.toContain("لا توجد مباشرات");
+      const html = renderToStaticMarkup(React.createElement(PeopleCounters, { records: [], data: missing, actorId: "me", filtered: false }));
+      expect(html).toContain("غير متاح");
+      expect(html).not.toContain("<dd>0</dd>");
+    }
+    expect(renderToStaticMarkup(React.createElement(PeopleCounters, { records: [], data: empty, actorId: "me", filtered: false }))).toContain("<dd>0</dd>");
+  });
+  it("offers the full source at zero only for an explicit authorized branch and disables it during refresh", () => {
+    const render = (branchId: string, data: OperationsPeopleResponse | null = empty, refreshing = false) =>
+      renderToStaticMarkup(React.createElement(PeopleJoiningGuide, { data, branchId, refreshing, onOpen: vi.fn() }));
+    expect(render("")).toContain("اختر فرعًا واحدًا");
+    expect(render("")).not.toContain("<button");
+    expect(render("a")).toContain("فتح صفحة المباشرات الكاملة للفرع");
+    expect(render("a")).toContain("تشمل جميع التواريخ");
+    expect(render("a", empty, true)).toContain('disabled=""');
+    expect(render("b")).not.toContain("<button");
+    expect(render("a", { ...empty, tools: [] })).not.toContain("<button");
+    expect(render("a", null)).not.toContain("<button");
+  });
+});
 
 describe("people domain independently paginated requests", () => {
   it("always supplies explicit branches and source, independently of the global queue offset", () => {
