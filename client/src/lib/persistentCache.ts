@@ -16,6 +16,11 @@ interface CacheStore {
 let memoryCache: CacheStore | null = null;
 let currentUserId: string | null = null;
 
+function isEmployeeAccountSensitiveKey(queryKey: string) {
+  const key = queryKey.toLowerCase();
+  return key.startsWith("/api/operations/employee-accounts") || key.startsWith("/api/admin/employee-account-policy");
+}
+
 function getCacheKey(): string {
   return CACHE_PREFIX + (currentUserId || 'anon');
 }
@@ -104,6 +109,7 @@ function persist() {
 }
 
 export function getCachedData(queryKey: string): any | undefined {
+  if (isEmployeeAccountSensitiveKey(queryKey)) return undefined;
   if (queryKey.toLowerCase().startsWith('/api/owner/') || queryKey.toLowerCase().startsWith('/api/operations-hr/') || queryKey.toLowerCase().startsWith('/api/operations-center/')) return undefined;
   const store = getStore();
   const entry = store.e[queryKey];
@@ -116,6 +122,7 @@ export function getCachedData(queryKey: string): any | undefined {
 }
 
 export function setCachedData(queryKey: string, data: any, ttlMs: number) {
+  if (isEmployeeAccountSensitiveKey(queryKey)) return;
   if (queryKey.toLowerCase().startsWith('/api/owner/') || queryKey.toLowerCase().startsWith('/api/operations-hr/') || queryKey.toLowerCase().startsWith('/api/operations-center/')) return;
   if (queryKey === '/api/auth/me' && data?.role === 'business_owner') return;
   const store = getStore();

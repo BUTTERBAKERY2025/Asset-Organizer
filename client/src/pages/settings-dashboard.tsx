@@ -164,6 +164,15 @@ const settingsSections: SettingSection[] = [
         keywords: ["صلاحيات", "أدوار", "أقسام", "permissions", "roles"],
       },
       {
+        id: "employee-account-policy",
+        title: "تفويض حسابات الموظفين",
+        description: "اعتماد الصلاحيات المسموح لمدير العمليات بمنحها",
+        icon: Shield,
+        path: "/operations-employee-accounts?policy=1",
+        adminOnly: true,
+        keywords: ["حساب", "موظف", "تفويض", "اعتماد", "صلاحيات"],
+      },
+      {
         id: "audit",
         title: "سجل التدقيق",
         description: "تتبع جميع العمليات والتغييرات",

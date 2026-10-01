@@ -1,0 +1,79 @@
+import type { DelegatedPermission } from "@shared/employee-account-delegation";
+
+export const EMPLOYEE_ACCOUNTS_ENDPOINT = "/api/operations/employee-accounts";
+export const EMPLOYEE_ACCOUNT_POLICY_ENDPOINT = "/api/admin/employee-account-policy";
+
+export function canManageEmployeeAccounts(role: string | null | undefined) {
+  return role === "admin" || role === "operations_manager";
+}
+
+/** Normalize using the server's catalog, never the global RBAC templates. */
+export function constrainDelegatedPermissions(selected: readonly DelegatedPermission[], available: readonly DelegatedPermission[]): DelegatedPermission[] {
+  return available.flatMap(permission => {
+    const actions = permission.actions.filter(action =>
+      selected.some(row => row.module === permission.module && row.actions.includes(action)));
+    return actions.length ? [{ module: permission.module, actions: Array.from(new Set(actions)) }] : [];
+  });
+}
+
+export function hasUnapprovedPermissions(selected: readonly DelegatedPermission[], available: readonly DelegatedPermission[]) {
+  return selected.some(permission => permission.actions.some(action =>
+    !available.some(row => row.module === permission.module && row.actions.includes(action))));
+}
+
+export function employeeAccountScope(user: {
+  id: string; role: string; branchId?: string | null; activeBranchId?: string | null;
+  allowedBranches?: { branchId: string; accessLevel?: string }[];
+}) {
+  return JSON.stringify([user.id, user.role, user.branchId ?? null, user.activeBranchId ?? null,
+    (user.allowedBranches ?? []).map(branch => `${branch.branchId}:${branch.accessLevel ?? ""}`).sort()]);
+}
+
+/** A→B→A and close/reopen must not accept a late credential response. */
+export function createEmployeeAccountCommandGuard() {
+  let generation = 0;
+  return {
+    capture: () => generation,
+    invalidate: () => { generation++; },
+    isCurrent: (token: number) => generation === token,
+  };
+}
+
+export class EmployeeAccountRequestError extends Error {
+  constructor(readonly status: number, message: string) {
+    super(message);
+    this.name = "EmployeeAccountRequestError";
+  }
+}
+
+/** No query/mutation cache, request deduplication, logging, or storage of responses. */
+export async function requestEmployeeAccount<T>(url: string, options: {
+  method?: "GET" | "POST" | "PUT" | "PATCH"; body?: unknown; signal?: AbortSignal;
+} = {}): Promise<T> {
+  const response = await fetch(url, {
+    method: options.method ?? "GET",
+    credentials: "include",
+    cache: "no-store",
+    signal: options.signal,
+    headers: options.body === undefined ? undefined : { "Content-Type": "application/json" },
+    body: options.body === undefined ? undefined : JSON.stringify(options.body),
+  });
+  if (!response.ok) {
+    let detail = "تعذر تنفيذ الطلب";
+    try {
+      const data: { error?: unknown } = await response.json();
+      if (typeof data.error === "string" && data.error) detail = data.error;
+    } catch {
+      detail = "استجابة غير صالحة من الخادم";
+    }
+    throw new EmployeeAccountRequestError(response.status, `${detail} (${response.status})`);
+  }
+  return response.json();
+}
+
+export function employeeAccountErrorMessage(error: unknown) {
+  if (error instanceof EmployeeAccountRequestError) return error.message;
+  if (error instanceof Error && (error.name === "AbortError" || error.name === "TimeoutError"))
+    return "انتهت مهلة الطلب. حدّث قائمة الحسابات للتحقق من نتيجة العملية قبل إعادة المحاولة.";
+  return "تعذر الاتصال بالخادم. حدّث قائمة الحسابات للتحقق من نتيجة العملية قبل إعادة المحاولة.";
+}

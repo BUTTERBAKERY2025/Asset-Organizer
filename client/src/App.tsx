@@ -16,6 +16,7 @@ import { ProductionProvider } from "@/contexts/ProductionContext";
 import { ProtectedRoute, PublicOnlyRoute, ModuleProtectedRoute, AnyModuleProtectedRoute, AccessDeniedPage } from "@/components/protected-route";
 import { useAuth } from "@/hooks/useAuth";
 import { canAccessDeliveryWorkspace } from "@shared/delivery-workspace-access";
+import { canManageEmployeeAccounts } from "@/lib/employee-account-delegation";
 import { AuthGate } from "@/contexts/AuthContext";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { Loader2 } from "lucide-react";
@@ -25,6 +26,7 @@ import type { SystemModule } from "@shared/schema";
 import NotFound from "@/pages/not-found";
 import LoginPage from "@/pages/login";
 import OperationsHRPage from "@/pages/operations-hr";
+import OperationsEmployeeAccountsPage from "@/pages/operations-employee-accounts";
 import { makeLazy, startAggressivePreload, prefetchAdjacentPages } from "@/lib/pagePreloader";
 import { installAutoReconnectOnVisibility, ensurePrinterConnection, getSavedPrinter, isPrinterConnected } from "@/lib/thermal-printer";
 
@@ -328,6 +330,15 @@ const AdminPage = React.memo(function AdminPage({ component: Component, module }
   );
 });
 
+const EmployeeAccountsPage = React.memo(function EmployeeAccountsPage() {
+  const { user } = useAuth();
+  return <ProtectedRoute>
+    {canManageEmployeeAccounts(user?.role)
+      ? <Suspense fallback={<PageLoadingFallback />}><PageWrapper><OperationsEmployeeAccountsPage /></PageWrapper></Suspense>
+      : <AccessDeniedPage message="هذه الصفحة متاحة فقط لمدير العمليات ومدير النظام." />}
+  </ProtectedRoute>;
+});
+
 const StandaloneDeliveryPage = React.memo(function StandaloneDeliveryPage() {
   const { user } = useAuth();
   return (
@@ -352,6 +363,7 @@ const Router = React.memo(function Router() {
       <Route path="/">{() => <ProtectedPage component={PlatformHomePage} />}</Route>
       <Route path="/branch-operations">{() => <ProtectedPage component={BranchOperationsPage} />}</Route>
       <Route path="/operations-center">{() => <ModulePage component={OperationsCenterPage} module="operations" />}</Route>
+      <Route path="/operations-employee-accounts">{() => <EmployeeAccountsPage />}</Route>
       <Route path="/branch-complaints">{() => <ModulePage component={BranchComplaintsPage} module="branch_complaints" />}</Route>
       <Route path="/driver-deliveries">{() => <StandaloneDeliveryPage />}</Route>
       <Route path="/login">

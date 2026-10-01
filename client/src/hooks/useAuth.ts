@@ -129,6 +129,7 @@ export function useAuth(verifyOnMount = false) {
   });
 
   const logoutMutation = useMutation({
+    mutationKey: ["auth", "logout"],
     mutationFn: async () => {
       await detachPushSubscriptionFromCurrentUser();
       setBadgeAccount(null);

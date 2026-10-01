@@ -1,0 +1,83 @@
+/** Narrow employee-account API. Never includes HR fields or stored credentials. */
+export interface DelegatedPermission {
+  module: string;
+  actions: string[];
+}
+
+export interface EmployeeAccountPolicy {
+  /** Prospective authority: disabling/narrowing does not silently revoke existing
+   * account access. Directory and suspension remain available. Permission
+   * reductions into the current ceiling remain allowed; creation/reactivation
+   * require enabled approval. Explicitly reduce or suspend existing accounts.
+   */
+  enabled: boolean;
+  permissions: DelegatedPermission[];
+}
+
+export interface DelegatedEmployeeAccount {
+  employeeId: number;
+  employeeName: string;
+  branchId: string;
+  branchName: string;
+  account: null | {
+    id: string;
+    username: string | null;
+    isActive: "active" | "inactive";
+    permissions: DelegatedPermission[];
+    canReactivate: boolean;
+  };
+}
+
+export interface EmployeeAccountTemplate {
+  id: string;
+  name: string;
+  permissions: DelegatedPermission[];
+}
+
+/** GET /api/operations/employee-accounts (admin or operations_manager). */
+export interface EmployeeAccountsResponse {
+  employees: DelegatedEmployeeAccount[];
+  policy: EmployeeAccountPolicy;
+  templates: EmployeeAccountTemplate[];
+  /** Approved choices for ops (safe maximum for admin). When policy is disabled,
+   * these are reduction-only choices, not permission to grant new access.
+   */
+  availablePermissions: DelegatedPermission[];
+}
+
+/** POST .../:employeeId and PUT .../:employeeId/permissions. Strict: no other fields. */
+export interface EmployeeAccountPermissionsInput {
+  permissions: DelegatedPermission[];
+}
+
+/** PATCH .../:employeeId/status. */
+export interface EmployeeAccountStatusInput {
+  isActive: "active" | "inactive";
+}
+
+/** POST atomically generates + creates. Credentials appear ONLY in this response.
+ * The UI button must say: توليد وإنشاء الحساب. No preview/edit/reset endpoint.
+ * Other mutations return { employee }, policy PUT returns { policy }.
+ * PUT /api/admin/employee-account-policy accepts EmployeeAccountPolicy.
+ * Errors use { error: string, code?: string }.
+ */
+export interface EmployeeAccountCreatedResponse {
+  employee: DelegatedEmployeeAccount;
+  credentials: { username: string; password: string };
+}
+
+/** Immutable security ceiling. Admin policy and all templates are subsets. */
+export const EMPLOYEE_ACCOUNT_SAFE_PERMISSIONS: DelegatedPermission[] = [
+  { module: "cashier_journal", actions: ["view", "create", "edit"] },
+  { module: "quality_control", actions: ["view", "create"] },
+  { module: "maintenance", actions: ["view", "create", "edit"] },
+  { module: "branch_complaints", actions: ["view", "create", "edit"] },
+  { module: "delivery_tasks", actions: ["view", "edit"] },
+];
+
+// Intentionally excluded: users/RBAC/security/settings, HR/payroll/attendance
+// (PII/biometrics), inventory (global branch creation/import/accounting exports),
+// shifts (global schedule templates), dashboard/operations (mixed broad APIs),
+// production (mixed legacy/global source routes), warehouse, finance, approvals,
+// deletion, exports and every unknown module. Expanding this ceiling requires
+// reviewing *all* consumers of the module, not trusting its display label.

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useSearch } from "wouter";
-import { AlertTriangle, Download, RefreshCw, ChevronDown, Bell, Check, X } from "lucide-react";
+import { AlertTriangle, Download, RefreshCw, ChevronDown, Bell, Check, X, KeyRound } from "lucide-react";
 import type { OperationsCenterResponse, OperationsQueueItem } from "@shared/operations-center";
 import type { OperationsSalesRecord, OperationsSalesResponse } from "@shared/operations-sales";
 import { Layout } from "@/components/layout";
@@ -23,6 +23,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useBranches } from "@/hooks/useBranches";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useOperationsCenterLive } from "@/hooks/useOperationsCenterLive";
+import { canManageEmployeeAccounts } from "@/lib/employee-account-delegation";
 const RECORD_PARAMS: Record<string, string> = {
   maintenance: "ticketId", branch_complaint: "complaintId", kitchen_order: "orderId", transfer: "transferId",
   reverse_movement: "movementId", delivery_assignment: "deliveryId",
@@ -471,6 +472,7 @@ export default function OperationsCenterPage() {
     } catch { setMessage("تعذر التصدير من الخادم. حاول مرة أخرى."); }
   };
   return <Layout><OperationsCenterScreen data={data} status={live.status === "connected" ? "مباشر" : live.status === "polling" ? "تحديث دوري" : live.status === "access-invalidated" ? "الصلاحيات تغيرت" : "جار التحقق"} actions={<>
+          {canManageEmployeeAccounts(user?.role) && <Button type="button" variant="outline" className="min-h-11 gap-2" disabled={!data} onClick={() => navigate(`/operations-employee-accounts${effectiveIds.length === 1 ? `?branchId=${encodeURIComponent(effectiveIds[0])}` : ""}`)}><KeyRound className="h-4 w-4" />حسابات الموظفين</Button>}
           <Popover open={scopeOpen} onOpenChange={setScopeOpen}>
             <PopoverTrigger asChild><button type="button" className="flex min-h-11 min-w-[190px] flex-1 items-center justify-between gap-2 rounded-lg border border-border bg-card px-3 text-sm font-bold text-foreground hover:bg-accent sm:flex-none"><span>نطاق الفروع · {effectiveIds.length ? `${effectiveIds.length} مختارة` : `${allowedIds.length} متاحة`}</span><ChevronDown className="h-4 w-4 text-muted-foreground" /></button></PopoverTrigger>
             <PopoverContent dir="rtl" align="end" className="w-[min(320px,calc(100vw-24px))] rounded-xl p-2">

@@ -314,6 +314,8 @@ declare module "express-session" {
     fingerprint?: string;
     createdAt?: number;
     ipAddress?: string;
+    localAuthRevoked?: boolean;
+    localAuthGeneration?: string;
     // المرحلة 5: حالة انتظار التحقق بخطوتين بعد كلمة المرور (قبل إنشاء الجلسة المصادَق عليها)
     pendingTwoFactor?: { userId: string; rememberMe: boolean; at: number };
   }
@@ -367,6 +369,7 @@ function establishSession(
   user: any,
   rememberMe: boolean,
   clientIp: string,
+  generation: string,
   opts?: { twoFactor?: boolean },
 ) {
   req.session.regenerate(async (regenerateErr: any) => {
@@ -377,6 +380,7 @@ function establishSession(
       }
 
       req.session.userId = user.id;
+      req.session.localAuthGeneration = generation;
       req.session.lastActivity = Date.now();
       req.session.fingerprint = generateSessionFingerprint(req);
       req.session.createdAt = Date.now();
@@ -396,6 +400,10 @@ function establishSession(
       req.session.save(async (saveErr: any) => {
         try {
           if (saveErr) {
+            if (saveErr.code === "LOCAL_SESSION_REVOKED") {
+              req.session.destroy(() => {});
+              return res.status(401).json({ error: "انتهت صلاحية تسجيل الدخول. يرجى المحاولة من جديد." });
+            }
             console.error("Session save error:", saveErr);
             return res.status(500).json({ error: "فشل تسجيل الدخول" });
           }
@@ -548,24 +556,80 @@ async function logSecurityAlert(data: {
   }
 }
 
-export function getSession() {
-  const sessionSecret = process.env.SESSION_SECRET;
-  if (!sessionSecret) {
-    throw new Error("SESSION_SECRET environment variable is required");
-  }
-  
+export function createLocalSessionStore(queryPool = pool) {
   const sessionTtl = 8 * 60 * 60 * 1000;
   const pgStore = connectPg(session);
   const sessionStore = new pgStore({
-    pool,
+    pool: queryPool,
     createTableIfMissing: false,
     ttl: sessionTtl / 1000,
     tableName: "sessions",
     pruneSessionInterval: 60,
   });
+
+  // connect-pg-simple's default UPSERT can resurrect a revoked session when an
+  // already-running request finishes. Serialize against revocation on the SID
+  // row and never overwrite a tombstone. Fresh logins regenerate a new SID.
+  sessionStore.set = (sid, sess, callback) => {
+    if (sid.startsWith("__local_auth_generation__:")) {
+      return callback?.(new Error("Reserved local authentication record"));
+    }
+    const expires = sess.cookie?.expires
+      ? new Date(sess.cookie.expires) : new Date(Date.now() + sessionTtl);
+    const userId = sess.userId || sess.pendingTwoFactor?.userId || null;
+    // The same SQL statement checks the credential snapshot's generation and
+    // writes the SID. If revocation commits concurrently after this snapshot,
+    // every subsequent authenticated request still checks the generation.
+    queryPool.query(`
+      INSERT INTO sessions (sid, sess, expire)
+      SELECT $1, $2, $3 WHERE $4::text IS NULL OR (
+        EXISTS (SELECT 1 FROM users WHERE id = $4 AND is_active IS DISTINCT FROM 'inactive')
+        AND $5 = COALESCE((SELECT sess::jsonb->>'localAuthGeneration' FROM sessions
+          WHERE sid = '__local_auth_generation__:' || $4), 'legacy')
+      )
+      ON CONFLICT (sid) DO UPDATE SET sess = EXCLUDED.sess, expire = EXCLUDED.expire
+      WHERE sessions.sess::jsonb->>'localAuthRevoked' IS DISTINCT FROM 'true'
+    `, [sid, JSON.stringify(sess), expires, userId, sess.localAuthGeneration ?? "legacy"]).then(
+      result => callback?.(result.rowCount ? undefined
+        : Object.assign(new Error("Local authentication was revoked"), { code: "LOCAL_SESSION_REVOKED" })),
+      error => callback?.(error),
+    );
+  };
+  sessionStore.touch = (sid, sess, callback) => {
+    if (sid.startsWith("__local_auth_generation__:")) return callback?.();
+    const expires = sess.cookie?.expires
+      ? new Date(sess.cookie.expires) : new Date(Date.now() + sessionTtl);
+    queryPool.query(`
+      UPDATE sessions SET expire = $2 WHERE sid = $1
+        AND sess::jsonb->>'localAuthRevoked' IS DISTINCT FROM 'true'
+    `, [sid, expires]).then(() => callback?.(), error => {
+      // express-session supplies an error-capable callback (the upstream
+      // connect-pg-simple type incorrectly declares it as zero-argument).
+      (callback as ((error?: unknown) => void) | undefined)?.(error);
+    });
+  };
+  // Destroying a rejected request must not remove the resurrection guard.
+  // Tombstones contain no identity/credentials and expire via normal pruning.
+  sessionStore.destroy = (sid, callback) => {
+    if (sid.startsWith("__local_auth_generation__:")) return callback?.();
+    queryPool.query(`
+      UPDATE sessions SET
+        sess = jsonb_build_object('cookie', sess::jsonb->'cookie', 'localAuthRevoked', true),
+        expire = GREATEST(expire, NOW() + INTERVAL '12 hours')
+      WHERE sid = $1 AND sess::jsonb->>'localAuthRevoked' IS DISTINCT FROM 'true'
+    `, [sid]).then(() => callback?.(), error => callback?.(error));
+  };
+  return sessionStore;
+}
+
+export function getSession() {
+  const sessionSecret = process.env.SESSION_SECRET;
+  if (!sessionSecret) {
+    throw new Error("SESSION_SECRET environment variable is required");
+  }
   return session({
     secret: sessionSecret,
-    store: sessionStore,
+    store: createLocalSessionStore(),
     resave: false,
     saveUninitialized: false,
     name: "__btr_sid",
@@ -578,6 +642,34 @@ export function getSession() {
     rolling: true,
   });
 }
+
+// Runs immediately after express-session, including on handlers that only read
+// session.userId (auth bootstrap, heartbeat, OTP, etc.). Never cache across
+// requests or workers; legacy sessions without tracking rows remain compatible.
+export const validateLocalSession: RequestHandler = async (req, res, next) => {
+  const userId = req.session?.userId || req.session?.pendingTwoFactor?.userId;
+  if (!userId) return next();
+  try {
+    const [user, valid] = await Promise.all([
+      storage.getUser(userId),
+      storage.isLocalSessionValid(userId, req.sessionID),
+    ]);
+    if (!user || !valid || user.isActive === "inactive") {
+      req.session.destroy(() => {});
+      res.clearCookie("__btr_sid", { path: "/" });
+      res.set("Cache-Control", "no-store");
+      return res.status(user?.isActive === "inactive" ? 403 : 401).json({
+        error: user?.isActive === "inactive"
+          ? "حسابك معطّل. يرجى التواصل مع المسؤول."
+          : "انتهت صلاحية الجلسة. يرجى تسجيل الدخول مرة أخرى",
+      });
+    }
+    next();
+  } catch (error) {
+    console.error("Local session validation failed:", error);
+    res.status(503).json({ error: "تعذر التحقق من صلاحية الحساب أو الجلسة" });
+  }
+};
 
 export const validateOrigin: RequestHandler = (req, res, next) => {
   if (req.method === "GET" || req.method === "HEAD" || req.method === "OPTIONS") {
@@ -618,6 +710,7 @@ export const validateOrigin: RequestHandler = (req, res, next) => {
 export async function setupAuth(app: Express) {
   app.set("trust proxy", 1);
   app.use(getSession());
+  app.use(validateLocalSession);
   app.use(createOwnerApiLockdown(
     id => storage.getUser(id),
     async (userId, sessionId) => {
@@ -648,11 +741,12 @@ export async function setupAuth(app: Express) {
         });
       }
 
-      const user = await storage.verifyPassword(username, password);
-      if (!user) {
+      const credentials = await storage.verifyLocalLoginPassword(username, password);
+      if (!credentials) {
         trackLoginAttempt(clientIp, false);
         return res.status(401).json({ error: "اسم المستخدم أو كلمة المرور غير صحيحة" });
       }
+      const { user, generation } = credentials;
 
       trackLoginAttempt(clientIp, true);
 
@@ -681,8 +775,13 @@ export async function setupAuth(app: Express) {
               return res.status(500).json({ error: "فشل تسجيل الدخول" });
             }
             req.session.pendingTwoFactor = { userId: user.id, rememberMe: !!rememberMe, at: Date.now() };
+            req.session.localAuthGeneration = generation;
             req.session.save((saveErr) => {
               if (saveErr) {
+                if (saveErr.code === "LOCAL_SESSION_REVOKED") {
+                  req.session.destroy(() => {});
+                  return res.status(401).json({ error: "انتهت صلاحية تسجيل الدخول. يرجى المحاولة من جديد." });
+                }
                 console.error("Session save (2FA) error:", saveErr);
                 return res.status(500).json({ error: "فشل تسجيل الدخول" });
               }
@@ -692,7 +791,7 @@ export async function setupAuth(app: Express) {
         }
       }
 
-      return establishSession(req, res, user, !!rememberMe, clientIp);
+      return establishSession(req, res, user, !!rememberMe, clientIp, generation);
     } catch (error) {
       console.error("Login error:", error);
       res.status(500).json({ error: "حدث خطأ أثناء تسجيل الدخول" });
@@ -732,9 +831,12 @@ export async function setupAuth(app: Express) {
         return res.status(403).json({ error: "تعذّر إكمال الدخول. يرجى التواصل مع الإدارة." });
       }
       const rememberMe = pending.rememberMe;
+      // Preserve the generation captured with the original password, never
+      // refresh it after OTP verification or an administrator's reset.
+      const generation = req.session.localAuthGeneration ?? "legacy";
       const clientIp = req.ip || req.socket?.remoteAddress || 'unknown';
       delete req.session.pendingTwoFactor;
-      return establishSession(req, res, user, rememberMe, clientIp, { twoFactor: true });
+      return establishSession(req, res, user, rememberMe, clientIp, generation, { twoFactor: true });
     } catch (error) {
       console.error("verify-otp error:", error);
       res.status(500).json({ error: "حدث خطأ أثناء التحقق" });

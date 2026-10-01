@@ -216,6 +216,7 @@ import { insertBranchSchema, insertInventoryItemSchema, insertSavedFilterSchema,
 import { z } from "zod";
 import { registerKitchenRoutingRoutes, kitchenActionAllowed, getKitchenRouting, getKitchenRoutingBatch, routingActor, routingPersonEligible } from "./central-kitchen-routing";
 import { setupAuth, isAuthenticated, requirePermission, requireAnyPermission, getActiveBranchFilter, requireBranchAccess, canAccessBranch, isUserAdmin, getAllowedBranchIds, getEffectiveBranchFilter, getWarehouseKeeperEffectivePermissions, getBranchManagerEffectivePermissions, invalidateAuthCache, HR_MANAGER_MODULES, HR_SPECIALIST_PERMISSIONS, FINANCIAL_MANAGER_PERMISSIONS, OPERATIONS_MANAGER_PERMISSIONS, BRANCH_MANAGER_INTRINSIC_PERMISSIONS, hasCrossBranchHrReadAccess, filterRoleDeniedPermissions } from "./auth";
+import { registerEmployeeAccountDelegation } from "./employee-account-delegation";
 import { comparisonBranchIds, comparisonDate, comparisonEvidence, comparisonRange, buildCanonicalComparisons, COMPARISON_REASON_PREFIX, COMPARISON_UNAVAILABLE } from "./production-comparison-evidence";
 import { authRateLimiter, biometricRateLimiter, uploadRateLimiter, apiRateLimiter, validateFileUpload, sanitizeFilename, trackLoginAttempt } from "./security";
 import { registerGovernanceRoutes } from "./governance-routes";
@@ -357,6 +358,7 @@ export async function registerRoutes(
 
   // Setup authentication
   await setupAuth(app);
+  registerEmployeeAccountDelegation(app);
   registerRecipeExceptionRoutes(app);
   registerProductionRecipeModeRoutes(app);
   // قفل حساب المراجع الخارجي: مقصور على /api/audit/* و /api/auth/* فقط
@@ -11263,6 +11265,13 @@ export async function registerRoutes(
         }
       }
       
+      // Match /submit: a create grant is not authority to finalize another
+      // cashier's journal, even when both cashiers work in an accessible branch.
+      const canViewAllPost = await canUserViewAllCashiers(req);
+      if (!canViewAllPost && String(existing.cashierId) !== String(getCurrentUser(req).id)) {
+        return res.status(403).json({ error: "غير مصرح - يمكنك فقط ترحيل يومياتك الخاصة" });
+      }
+
       if (existing.status !== 'draft') {
         return res.status(400).json({ error: "Journal already posted or submitted" });
       }

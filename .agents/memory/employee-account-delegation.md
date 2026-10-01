@@ -1,0 +1,22 @@
+---
+name: Employee account delegation
+description: User-approved security boundary for operations-manager employee account administration.
+---
+
+Operations managers may administer employee-linked accounts only within their explicitly assigned branches. Delegatable permissions come from an administrator-approved allowlist, not automatically from the manager's own permissions. Both job templates and custom selections must obey that ceiling.
+
+**Why:** The user explicitly chose administrator-approved permissions, and requires employee linkage before any account can be created. General user-administration authority would defeat this boundary.
+
+**How to apply:** Preserve employee linkage, branch scoping, protected-account exclusions and server-generated noneditable credentials across all entry points, including legacy APIs. Keep display names tied to the employee record; compact usernames must not weaken generated passwords.
+
+The delegation policy is prospective: disabling or narrowing it stops new grants, not existing employee access. Keep eligible accounts visible for suspension and reduction of permissions; require explicit action to remove existing access.
+
+**Why:** Hiding accounts on policy withdrawal prevented managers from performing emergency suspension. Silent bulk revocation would be a different, destructive policy that the user did not request.
+
+**How to apply:** Explain this distinction in policy controls. Allow safety suspension and reduction-only edits while disabled, without relaxing branch or protected-account checks.
+
+Session revocation must cover authentication already in progress, not just session IDs that already exist.
+
+**Why:** Password verification can finish before a reset but issue a new session afterward; deleting or marking existing sessions alone does not stop this race.
+
+**How to apply:** Carry the pre-verification revocation generation through password and OTP authentication, check it at issuance and on authenticated requests, and test paused authentication overlapping revocation.

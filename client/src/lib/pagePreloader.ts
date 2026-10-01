@@ -4,6 +4,7 @@ const pageImports: Record<string, () => Promise<any>> = {
   "platform-home": () => import("@/pages/platform-home"),
   "branch-operations": () => import("@/pages/branch-operations"),
   "operations-center": () => import("@/pages/operations-center"),
+  "operations-employee-accounts": () => import("@/pages/operations-employee-accounts"),
   "branch-complaints": () => import("@/pages/branch-complaints"),
   "driver-deliveries": () => import("@/pages/driver-deliveries"),
   "floor-plan": () => import("@/pages/floor-plan"),
@@ -255,7 +256,8 @@ export function startAggressivePreload() {
 
 const ADJACENT_PAGES: Record<string, string[]> = {
   "/": ["branch-operations", "operations-center", "dashboard", "cashier-journals", "operations-dashboard"],
-  "/operations-center": ["branch-operations", "operations-dashboard"],
+  "/operations-center": ["branch-operations", "operations-dashboard", "operations-employee-accounts"],
+  "/operations-employee-accounts": ["operations-center"],
   "/branch-operations": ["branch-complaints", "operations-dashboard", "cashier-journals", "branch-employees"],
   "/branch-complaints": ["branch-operations"],
   "/driver-deliveries": ["platform-home"],
@@ -288,6 +290,7 @@ const ROUTE_TO_PAGE: Record<string, string> = {
   "/owner": "owner-portal",
   "/branch-operations": "branch-operations",
   "/operations-center": "operations-center",
+  "/operations-employee-accounts": "operations-employee-accounts",
   "/branch-complaints": "branch-complaints",
   "/driver-deliveries": "driver-deliveries",
   "/dashboard": "dashboard",
