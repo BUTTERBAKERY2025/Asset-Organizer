@@ -65,18 +65,38 @@ describe("delivery notice outbox (local PostgreSQL only)", () => {
 
   afterAll(async () => {
     if (!connection) return;
+    const c = await connection.connect();
+    const fixtureUserIds = [driver, newDriver, manager, receiver].filter(Boolean);
     try {
-      await connection.query(`DELETE FROM system_notifications
-        WHERE auto_source='delivery_task' AND dedupe_key LIKE ANY(
-          SELECT 'delivery:' || id || ':%' FROM delivery_notification_outbox WHERE assignment_id=$1)`,
-        [taskId]);
-      await connection.query("DELETE FROM delivery_notification_outbox WHERE assignment_id=$1", [taskId]);
-      await connection.query("DELETE FROM delivery_assignment_events WHERE assignment_id=$1", [taskId]);
-      await connection.query("DELETE FROM delivery_assignments WHERE id=$1", [taskId]);
-      await connection.query("DELETE FROM material_transfers WHERE id=$1", [transferId]);
-      await connection.query("DELETE FROM users WHERE id=ANY($1::varchar[])", [[driver, newDriver, manager, receiver]]);
-      await connection.query("DELETE FROM branches WHERE id=ANY($1::varchar[])", [[source, destination]]);
-    } finally { await connection.end(); }
+      await c.query("BEGIN");
+      // The cancellation test removes overdue/escalated outbox rows before
+      // teardown, so their valid delivery:<outbox-id>:<user-id> keys can no
+      // longer be joined to the outbox. Include any other fixture-owned notices
+      // too, without deleting shared notices merely targeting one test user.
+      const { rows: notices } = await c.query(`SELECT id FROM system_notifications
+        WHERE created_by=ANY($1::varchar[])
+          OR (cardinality(target_user_ids)>0 AND target_user_ids <@ $1::text[])
+        FOR UPDATE`, [fixtureUserIds]);
+      const noticeIds = notices.map(row => row.id);
+      await c.query(`DELETE FROM notification_reads
+        WHERE user_id=ANY($1::varchar[]) OR notification_id=ANY($2::int[])`,
+        [fixtureUserIds, noticeIds]);
+      await c.query("DELETE FROM system_notifications WHERE id=ANY($1::int[])", [noticeIds]);
+      await c.query("DELETE FROM delivery_notification_outbox WHERE assignment_id=$1", [taskId]);
+      await c.query("DELETE FROM delivery_assignment_events WHERE assignment_id=$1", [taskId]);
+      await c.query("DELETE FROM delivery_assignments WHERE id=$1", [taskId]);
+      await c.query("DELETE FROM material_transfers WHERE id=$1", [transferId]);
+      await c.query("DELETE FROM user_permissions WHERE user_id=ANY($1::varchar[])", [fixtureUserIds]);
+      await c.query("DELETE FROM users WHERE id=ANY($1::varchar[])", [fixtureUserIds]);
+      await c.query("DELETE FROM branches WHERE id=ANY($1::varchar[])", [[source, destination].filter(Boolean)]);
+      await c.query("COMMIT");
+    } catch (error) {
+      await c.query("ROLLBACK");
+      throw error;
+    } finally {
+      c.release();
+      await connection.end();
+    }
   });
 
   it("enqueues transactionally; rollback discards event notice", async () => {
@@ -176,7 +196,7 @@ describe("delivery notice outbox (local PostgreSQL only)", () => {
       WHERE o.event_id=$1`, [third.rows[0].id, newDriver]);
     expect(stale.rows[0].count).toBe(0);
     await connection.query(`UPDATE delivery_assignments
-      SET scheduled_at=now()-interval '70 minutes' WHERE id=$1`, [taskId]);
+      SET scheduled_at=now()-interval '71 minutes' WHERE id=$1`, [taskId]);
   });
 
   it("dedupes transition and deadline revisions under concurrent sweeps", async () => {
@@ -275,6 +295,15 @@ describe("delivery notice outbox (local PostgreSQL only)", () => {
   });
 
   it("stops overdue and escalation after cancellation", async () => {
+    // Leave read rows and notices outside the delivery dedupe namespace for
+    // teardown to exercise both creator-owned and exclusively-targeted cleanup.
+    const extra = await connection.query(`INSERT INTO system_notifications
+      (title,content,target_all_branches,target_user_ids,created_by,dedupe_key)
+      VALUES ($1,$1,false,$2,$3,$4),($1,$1,false,$5,NULL,$6) RETURNING id`,
+      [prefix, [driver], manager, `${prefix}:cleanup-created`,
+        [receiver], `${prefix}:cleanup-targeted`]);
+    await connection.query(`INSERT INTO notification_reads (notification_id,user_id)
+      VALUES ($1,$2),($3,$4)`, [extra.rows[0].id, driver, extra.rows[1].id, receiver]);
     await connection.query("UPDATE delivery_assignments SET status='cancelled' WHERE id=$1", [taskId]);
     await connection.query(`DELETE FROM delivery_notification_outbox
       WHERE assignment_id=$1 AND event_type IN ('overdue','escalated')`, [taskId]);

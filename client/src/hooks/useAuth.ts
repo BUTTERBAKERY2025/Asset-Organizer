@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient, useIsMutating } from "@tanstack/react-query";
 import type { User, Branch } from "@shared/schema";
 import { clearPersistentCache, setCurrentUser } from "@/lib/persistentCache";
 import { detachPushSubscriptionFromCurrentUser, resumePushSubscriptionSync } from "@/lib/push-notifications";
@@ -22,6 +22,7 @@ interface AuthUser extends UserWithoutPassword {
 
 export function useAuth(verifyOnMount = false) {
   const queryClient = useQueryClient();
+  const branchSwitches = useIsMutating({ mutationKey: ["auth", "active-branch"] });
 
   const { data: user, isLoading, isFetching, isFetchedAfterMount, isError, refetch } = useQuery<AuthUser | null>({
     queryKey: ["/api/auth/me"],
@@ -151,6 +152,15 @@ export function useAuth(verifyOnMount = false) {
   });
 
   const switchBranchMutation = useMutation({
+    mutationKey: ["auth", "active-branch"],
+    onMutate: async () => {
+      // In-flight old-branch responses must not refill the recipient cache
+      // while the session's active branch is being changed.
+      await queryClient.cancelQueries({ queryKey: ["/api/active-notifications"] });
+      queryClient.setQueriesData({ queryKey: ["/api/active-notifications"] }, []);
+      await queryClient.cancelQueries({ queryKey: ["/api/system-notifications/my-reads"] });
+      queryClient.setQueriesData({ queryKey: ["/api/system-notifications/my-reads"] }, []);
+    },
     mutationFn: async (branchId: string) => {
       const res = await fetch("/api/auth/active-branch", {
         method: "PATCH",
@@ -164,11 +174,19 @@ export function useAuth(verifyOnMount = false) {
       }
       return res.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/my-permissions"] });
+    onSuccess: async () => {
+      // Keep the shared transition guard active until identity/branch context
+      // is fresh; notification keys will then change before their next fetch.
+      await queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
+      await queryClient.invalidateQueries({ queryKey: ["/api/my-permissions"] });
+      await queryClient.invalidateQueries({ queryKey: ["/api/active-notifications"] });
+      await queryClient.invalidateQueries({ queryKey: ["/api/system-notifications/my-reads"] });
       queryClient.invalidateQueries({ queryKey: ["/api/branches"] });
       queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
+    },
+    onError: () => {
+      void queryClient.invalidateQueries({ queryKey: ["/api/active-notifications"] });
+      void queryClient.invalidateQueries({ queryKey: ["/api/system-notifications/my-reads"] });
     },
   });
 
@@ -198,6 +216,6 @@ export function useAuth(verifyOnMount = false) {
     isVerifyingOtp: verifyOtpMutation.isPending,
     isResendingOtp: resendOtpMutation.isPending,
     isLoggingOut: logoutMutation.isPending,
-    isSwitchingBranch: switchBranchMutation.isPending,
+    isSwitchingBranch: branchSwitches > 0,
   };
 }

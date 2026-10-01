@@ -48,6 +48,7 @@ import {
 } from "@shared/schema";
 import { z } from "zod";
 import { notifyEmployeeOfDecision } from "./notify-helpers";
+import { queueHrSourceNotification } from "./hr-system-notifications";
 import { auditEvent } from "./audit-helpers";
 import {
   computeLeaveDays,
@@ -346,21 +347,25 @@ export function registerHrRoutes(app: Express) {
       const requiredLevels = chain
         ? chain.length
         : Math.min(3, Math.max(1, Number((parsed as any).requiredLevels) || 1));
-      const [created] = await db.insert(leaveRequests).values({
-        ...parsed,
-        totalDays,
-        workingDays,
-        status: "pending",
-        currentLevel: 1,
-        requiredLevels,
-        approvalFlow: [],
-        approvalChain: chain ?? null,
-        cancelReason: null,
-        cancelledBy: null,
-        cancelledAt: null,
-        branchId: emp.branchId,
-        createdBy: getUserId(req) || undefined,
-      }).returning();
+      const created = await db.transaction(async tx => {
+        const [row] = await tx.insert(leaveRequests).values({
+          ...parsed,
+          totalDays,
+          workingDays,
+          status: "pending",
+          currentLevel: 1,
+          requiredLevels,
+          approvalFlow: [],
+          approvalChain: chain ?? null,
+          cancelReason: null,
+          cancelledBy: null,
+          cancelledAt: null,
+          branchId: emp.branchId,
+          createdBy: getUserId(req) || undefined,
+        }).returning();
+        await queueHrSourceNotification("leave", row.id, tx);
+        return row;
+      });
       await auditEvent({
         req, module: "hr_leaves", entityId: created.id, action: "create",
         entityName: emp.employeeName, branchId: emp.branchId,
@@ -516,16 +521,20 @@ export function registerHrRoutes(app: Express) {
           sickTiers = await getSickTierBreakdown(existing.branchEmployeeId, existing.startDate, existing.endDate, existing.id);
         } catch (err) { console.error("[hr/leaves] sick tier compute failed:", err); }
       }
-      const [updated] = await db.update(leaveRequests).set({
-        status: finalStatus,
-        currentLevel: nextLevel,
-        approvalFlow: flow as any,
-        reviewedBy: isFinal ? userId : existing.reviewedBy,
-        reviewedAt: isFinal ? now : existing.reviewedAt,
-        reviewerNote: decision.note ?? existing.reviewerNote,
-        ...(sickTiers ? { sickTierBreakdown: sickTiers as any } : {}),
-        updatedAt: now,
-      }).where(eq(leaveRequests.id, id)).returning();
+      const updated = await db.transaction(async tx => {
+        const [row] = await tx.update(leaveRequests).set({
+          status: finalStatus,
+          currentLevel: nextLevel,
+          approvalFlow: flow as any,
+          reviewedBy: isFinal ? userId : existing.reviewedBy,
+          reviewedAt: isFinal ? now : existing.reviewedAt,
+          reviewerNote: decision.note ?? existing.reviewerNote,
+          ...(sickTiers ? { sickTierBreakdown: sickTiers as any } : {}),
+          updatedAt: now,
+        }).where(eq(leaveRequests.id, id)).returning();
+        if (finalStatus === "pending") await queueHrSourceNotification("leave", id, tx);
+        return row;
+      });
 
       // عند الاعتماد النهائي: مزامنة سجلات الحضور (إجازة) — غير متلف
       if (finalStatus === "approved") {

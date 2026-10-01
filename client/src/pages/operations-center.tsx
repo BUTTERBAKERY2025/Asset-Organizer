@@ -397,6 +397,14 @@ export default function OperationsCenterPage() {
     const destination = centerNoticeDestination(notice.buttonAction, notice.branchIds, data.scope.branchIds,
       effectiveIds, performanceDays, window.location.origin, new URLSearchParams(window.location.search).get("workspace") || undefined);
     if (!destination) { setMessage("رابط المصدر غير صالح أو خارج نطاق الفروع المختار؛ لم يتم فتحه."); return; }
+    if (destination.navigationKind === "external") {
+      window.open(destination.href, "_blank", "noopener,noreferrer");
+      return;
+    }
+    if (destination.navigationKind === "general") {
+      navigate(destination.href);
+      return;
+    }
     go(destination.href, destination.branchId);
   };
   const exportScope = async () => {

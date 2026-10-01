@@ -6,7 +6,7 @@ description: Which table/method to use for in-app vs WhatsApp notifications, and
 # In-app vs WhatsApp notifications
 
 There are TWO distinct in-app notification tables:
-- `notifications` — the per-user / branch-level inbox (columns: `userId` null=broadcast, `branchId`, `title`, `message`, `type`, `category`, `priority`, `linkUrl`, `isRead`, `isDismissed`, `readAt`). This is what employee-portal reads via `/api/my/notifications`.
+- `notifications` — the employee-portal per-user inbox. A null userId is NOT a working branch broadcast: the recipient reader requires the current user's ID.
 - `system_notifications` — a separate, unrelated table with different required fields (e.g. `content`).
 
 ## The trap
@@ -19,4 +19,8 @@ There are TWO distinct in-app notification tables:
 ## WhatsApp / SMS
 Queue outbound messages via `storage.createNotification({ recipientPhone, recipientName, channel: 'whatsapp'|'sms', message, relatedModule, relatedEntityId })` → writes to `notification_queue`; the scheduler (60s tick) delivers via Twilio. This method is unambiguous (single definition).
 
-Shared helpers live in `server/notify-helpers.ts`: `notifyEmployeeOfDecision` (in-app to employee's linkedUserId + WhatsApp to phoneNumber) and `notifyHrOfRequest` (branch-level in-app, userId=null). Both never throw.
+Reviewer workflow alerts must use current source authority and exact recipients on the system-notification surface, separately from employee personal messages and external channels.
+
+**Why:** Null-recipient HR inbox rows had no reader, while copying a role or an old reviewer list would preserve access after a branch or approval-stage change.
+
+**How to apply:** Resolve the reviewer from the persisted workflow stage and current grants at creation and again at read/Push. Do not backfill old alerts or broadcast when no eligible reviewer exists; log that condition explicitly.

@@ -18,6 +18,8 @@ import {
 } from "@shared/schema";
 import { isKnownPushProviderEndpoint } from "./push-endpoint-security";
 import { isWithinRiyadhDailyWindow, riyadhTimeShort } from "@shared/riyadh-time";
+import { operationsNoticeScopeAllowed } from "@shared/notification-recipient";
+import { recognizedSourceNotice } from "@shared/operations-center-notifications";
 
 let vapidReady: Promise<string> | null = null;
 
@@ -141,18 +143,29 @@ export async function sendTestPushToOwnedDevice(userId: string, endpoint: string
 // الفرع: يُطابق فرع المستخدم الأساسي أو أي فرع لديه وصول له (user_branch_access)
 // Re-evaluate explicit grants at dispatch time, including per-user targets.
 async function filterOperationsNotificationScope(n: SystemNotification, candidateIds: string[]): Promise<string[]> {
-  const scope = n.accessBranchIds?.length ? n.accessBranchIds
-    : !n.targetAllBranches ? n.targetBranchIds : null;
   if (!candidateIds.length) return candidateIds;
   const [people, grants] = await Promise.all([
     db.select({ id: users.id, role: users.role }).from(users).where(inArray(users.id, candidateIds)),
-    db.select({ uid: userBranchAccess.userId }).from(userBranchAccess)
-      .where(and(inArray(userBranchAccess.userId, candidateIds),
-        scope?.length ? inArray(userBranchAccess.branchId, scope) : undefined)),
+    db.select({ uid: userBranchAccess.userId, branchId: userBranchAccess.branchId }).from(userBranchAccess)
+      .where(inArray(userBranchAccess.userId, candidateIds)),
   ]);
   const roles = new Map(people.map(person => [person.id, person.role]));
-  const authorized = new Set(grants.map(grant => grant.uid));
-  return candidateIds.filter(id => roles.get(id) !== "operations_manager" || authorized.has(id));
+  const authorized = new Map<string, Set<string>>();
+  for (const grant of grants) {
+    if (!authorized.has(grant.uid)) authorized.set(grant.uid, new Set());
+    authorized.get(grant.uid)!.add(grant.branchId);
+  }
+  const sourceNotice = n.autoSource === "reverse_movement" || n.autoSource === "hr_workflow"
+    || recognizedSourceNotice(n) !== null;
+  const { projectSourceNotificationForRecipient } = await import("./source-notification-projection");
+  const permitted = await Promise.all(candidateIds.map(async id => {
+    // A workflow recipient sees only its reauthorized, one-branch projection.
+    // Raw freeform/manual notices still require ALL branches of their text.
+    const projected = sourceNotice ? await projectSourceNotificationForRecipient(n, id) : n;
+    return projected && (roles.get(id) !== "operations_manager"
+      || operationsNoticeScopeAllowed(projected, authorized.get(id) || new Set())) ? id : null;
+  }));
+  return permitted.filter((id): id is string => id !== null);
 }
 
 async function resolveTargetUserIds(n: SystemNotification): Promise<string[]> {
@@ -164,6 +177,10 @@ async function resolveTargetUserIds(n: SystemNotification): Promise<string[]> {
       .where(and(inArray(users.id, targetUserIds), eq(users.isActive, "active")));
     const activeIds = activeRows.map((row) => row.id);
     const scopedIds = await filterOperationsNotificationScope(n, activeIds);
+    if (n.autoSource === "reverse_movement") {
+      const { filterAuthorizedReverseNotificationUsers } = await import("./reverse-logistics-notifications");
+      return filterAuthorizedReverseNotificationUsers(n, scopedIds);
+    }
     if (n.accessModule === "central_kitchen_orders") {
       const { filterAuthorizedCentralKitchenNotificationUsers } = await import("./central-kitchen-notifications");
       return filterAuthorizedCentralKitchenNotificationUsers(db, n, scopedIds);
@@ -197,6 +214,10 @@ async function resolveTargetUserIds(n: SystemNotification): Promise<string[]> {
     .from(users)
     .where(conds.length ? and(...conds) : undefined);
   const userIds = await filterOperationsNotificationScope(n, rows.map((r) => r.id));
+  if (n.autoSource === "reverse_movement") {
+    const { filterAuthorizedReverseNotificationUsers } = await import("./reverse-logistics-notifications");
+    return filterAuthorizedReverseNotificationUsers(n, userIds);
+  }
   if (n.accessModule === "central_kitchen_orders") {
     const { filterAuthorizedCentralKitchenNotificationUsers } = await import("./central-kitchen-notifications");
     return filterAuthorizedCentralKitchenNotificationUsers(db, n, userIds);

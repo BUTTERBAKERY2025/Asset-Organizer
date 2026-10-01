@@ -1244,6 +1244,19 @@ export const requireRole = (roles: string[]): RequestHandler => {
   };
 };
 
+/** Explicit revocations must precede operations role auto-grants. Cache only
+ * on this authenticated request, never across users, heartbeats or requests. */
+async function operationsPermissionDenials(req: any): Promise<Set<string>> {
+  if (!req.operationsPermissionDenials) {
+    const result = await pool.query(`SELECT p.module,p.action
+      FROM user_permission_overrides o JOIN permissions p ON p.id=o.permission_id
+      WHERE o.user_id=$1 AND o.allow=false
+        AND (o.expires_at IS NULL OR o.expires_at > NOW())`, [req.currentUser.id]);
+    req.operationsPermissionDenials = new Set(result.rows.map((row: any) => `${row.module}:${row.action}`));
+  }
+  return req.operationsPermissionDenials;
+}
+
 // New middleware for granular permission checking
 export const requirePermission = (module: string, action?: string): RequestHandler => {
   return async (req, res, next) => {
@@ -1340,6 +1353,13 @@ export const requirePermission = (module: string, action?: string): RequestHandl
       if (isRoleModuleDenied(user.role, module)) {
         return res.status(403).json({ error: "استخدم صلاحيات موارد التشغيل المحددة" });
       }
+      const required = action ?? ({
+        GET: "view", HEAD: "view", OPTIONS: "view", POST: "create",
+        PATCH: "edit", PUT: "edit", DELETE: "delete",
+      } as Record<string, string>)[req.method] ?? "edit";
+      if ((await operationsPermissionDenials(req)).has(`${module}:${required}`)) {
+        return res.status(403).json({ error: "تم سحب صلاحية هذا الإجراء" });
+      }
       const allowed = operationsManagerActionsFor(module);
       if (allowed && (action == null || allowed.includes(action))) {
         return next();
@@ -1405,6 +1425,7 @@ export const requirePermission = (module: string, action?: string): RequestHandl
 export const requireAnyPermission = (module: string, actions: string[]): RequestHandler => {
   return async (req, res, next) => {
     const user = (req as any).currentUser;
+    let permittedActions = actions;
     if (user?.role === "warehouse_keeper") {
       const allowed = (req as any).authPermissions ?? await getWarehouseKeeperEffectivePermissions(user.id, await storage.getUserPermissions(user.id, { bypassCache: true }));
       return allowed.some((p: any) => p.module === module && actions.some((action) => p.actions.includes(action)))
@@ -1483,8 +1504,11 @@ export const requireAnyPermission = (module: string, actions: string[]): Request
       if (isRoleModuleDenied(user.role, module)) {
         return res.status(403).json({ error: "استخدم صلاحيات موارد التشغيل المحددة" });
       }
+      const denied = await operationsPermissionDenials(req);
+      permittedActions = actions.filter(action => !denied.has(`${module}:${action}`));
+      if (!permittedActions.length) return res.status(403).json({ error: "تم سحب صلاحيات هذه الإجراءات" });
       const allowed = operationsManagerActionsFor(module);
-      if (allowed && actions.some((a) => allowed.includes(a))) {
+      if (allowed && permittedActions.some((a) => allowed.includes(a))) {
         return next();
       }
     }
@@ -1511,7 +1535,7 @@ export const requireAnyPermission = (module: string, actions: string[]): Request
       return res.status(403).json({ message: "غير مسموح - ليس لديك صلاحية على هذه الوحدة" });
     }
     
-    const hasAnyAction = actions.some(action => modulePerm.actions.includes(action));
+    const hasAnyAction = permittedActions.some(action => modulePerm.actions.includes(action));
     if (!hasAnyAction) {
       return res.status(403).json({ message: "غير مسموح - صلاحيات غير كافية" });
     }

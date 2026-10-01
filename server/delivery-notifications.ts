@@ -142,7 +142,9 @@ async function recipients(a: Assignment, s: Source, kind: NoticeType): Promise<s
     else if (kind !== "cancelled" && s.source) {
       const people = await routingPeople(db, s.source);
       ids.push(...people.filter((p: any) =>
-        p.role === "production_development_manager" && routingPersonEligible(p, "view"))
+        (p.role === "production_development_manager"
+          || (["failed", "overdue", "escalated"].includes(kind) && p.role === "operations_manager"
+            && p.authorizedBranchIds?.includes(s.source))) && routingPersonEligible(p, "view"))
         .map((p: any) => p.id));
     }
   } else if (a.source_type === "kitchen_warehouse_shipment") {

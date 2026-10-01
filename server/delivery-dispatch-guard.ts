@@ -167,10 +167,19 @@ export async function cancelDeliveryAssignmentForSource(
       cancellation_reason=${reason},updated_at=now() WHERE id=${assignment.id}`,
     `UPDATE delivery_assignments SET status='cancelled',cancelled_at=now(),
       cancellation_reason=$2,updated_at=now() WHERE id=$1`, [assignment.id, reason]);
-  await rows(tx,
+  const [event] = await rows(tx,
     sql`INSERT INTO delivery_assignment_events(assignment_id,actor_id,action,from_status,to_status,detail)
-      VALUES (${assignment.id},${actorId},'cancel',${assignment.status},'cancelled',${JSON.stringify({ reason, sourceCancelled: true })}::jsonb)`,
+      VALUES (${assignment.id},${actorId},'cancel',${assignment.status},'cancelled',${JSON.stringify({ reason, sourceCancelled: true })}::jsonb) RETURNING id`,
     `INSERT INTO delivery_assignment_events(assignment_id,actor_id,action,from_status,to_status,detail)
-      VALUES ($1,$2,'cancel',$3,'cancelled',$4::jsonb)`,
+      VALUES ($1,$2,'cancel',$3,'cancelled',$4::jsonb) RETURNING id`,
     [assignment.id, actorId, assignment.status, JSON.stringify({ reason, sourceCancelled: true })]);
+  if (!event?.id) throw new Error("Source cancellation delivery event was not recorded");
+  const revision = `event:${event.id}`;
+  await rows(tx,
+    sql`INSERT INTO delivery_notification_outbox(assignment_id,event_id,event_type,revision)
+      VALUES (${assignment.id},${event.id},'cancelled',${revision})
+      ON CONFLICT(assignment_id,event_type,revision) DO NOTHING`,
+    `INSERT INTO delivery_notification_outbox(assignment_id,event_id,event_type,revision)
+      VALUES ($1,$2,'cancelled',$3) ON CONFLICT(assignment_id,event_type,revision) DO NOTHING`,
+    [assignment.id, event.id, revision]);
 }

@@ -5,13 +5,14 @@ import { storage } from "./storage";
 
 // Count each visible unread row once. The personal and system stores are
 // disjoint; the portal's merged view must not be added to the main bell again.
-export async function getUnreadBadgeCount(userId: string, branchId: string): Promise<number> {
+export async function getUnreadBadgeCount(userId: string, branchId: string | string[]): Promise<number> {
   const [account] = await db.select({ id: users.id }).from(users)
     .where(and(eq(users.id, userId), eq(users.isActive, "active"))).limit(1);
   if (!account) return 0;
   const now = new Date();
   const [system, reads, personal] = await Promise.all([
-    storage.getActiveNotificationsForUser(userId, branchId),
+    Array.isArray(branchId) ? storage.getActiveNotificationsForUserInBranches(userId, branchId)
+      : storage.getActiveNotificationsForUser(userId, branchId),
     storage.getNotificationReadsByUser(userId),
     db.select({ count: sql<number>`count(*)::int` }).from(notifications).where(and(
       eq(notifications.userId, userId),

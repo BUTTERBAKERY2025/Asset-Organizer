@@ -6,7 +6,7 @@ const access = vi.hoisted(() => ({ branches: ["branch-a"] as string[] }));
 vi.mock("../server/storage", () => ({
   storage: { getUserBranchAccess: vi.fn(async () => access.branches.map(branchId => ({ branchId }))) },
 }));
-vi.mock("../server/db", () => ({ db: {}, pool: {} }));
+vi.mock("../server/db", () => ({ db: {}, pool: { query: async () => ({ rows: [] }) } }));
 vi.mock("../server/security", () => ({ isLoginBlocked: vi.fn(), trackLoginAttempt: vi.fn() }));
 vi.mock("../server/shareholder-security", () => ({
   getTwoFactorConfig: vi.fn(), issueOtpForUser: vi.fn(),

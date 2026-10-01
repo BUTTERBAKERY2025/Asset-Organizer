@@ -1,6 +1,7 @@
 import { db } from "./db";
 import { notifications } from "@shared/schema";
 import { storage } from "./storage";
+import { queueHrSourceNotification, type HrNoticeSource } from "./hr-system-notifications";
 
 type EmpLike = {
   id: number;
@@ -70,25 +71,17 @@ export async function notifyEmployeeOfDecision(opts: {
 }
 
 /**
- * Notify HR / branch managers that an employee submitted a new portal request.
- * Creates a branch-level in-app notification (userId = null) in the
- * `notifications` table, visible to users who manage that branch. Never throws.
+ * Notify the current source-authorized reviewers, never a null-user portal
+ * inbox or a role broadcast. Employee external channels remain separate.
  */
 export async function notifyHrOfRequest(
   emp: EmpLike,
-  opts: { title: string; message: string; linkUrl?: string; relatedEntityId?: string | number },
+  opts: { title: string; message: string; linkUrl?: string; relatedEntityId?: string | number; source: HrNoticeSource },
 ): Promise<void> {
   try {
-    await db.insert(notifications).values({
-      branchId: emp.branchId,
-      userId: null,
-      title: opts.title,
-      message: opts.message,
-      type: "info",
-      category: "system",
-      priority: "normal",
-      linkUrl: opts.linkUrl || "/hr-hub",
-    });
+    // Source state supplies the actual branch, stage and canonical link.
+    // The caller's display text and employee identity are not authority.
+    await queueHrSourceNotification(opts.source, Number(opts.relatedEntityId));
   } catch (e: any) {
     console.error("[notifyHrOfRequest] in-app failed:", e?.message);
   }

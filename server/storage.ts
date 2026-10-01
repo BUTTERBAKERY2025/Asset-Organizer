@@ -1681,7 +1681,7 @@ export interface IStorage {
   updateSystemNotification(id: number, notification: Partial<InsertSystemNotification>): Promise<SystemNotification | undefined>;
   deleteSystemNotification(id: number): Promise<boolean>;
   getActiveNotificationsForUser(userId: string, branchId: string): Promise<SystemNotification[]>;
-  getActiveNotificationsForUserInBranches(userId: string, branchIds: string[]): Promise<SystemNotification[]>;
+  getActiveNotificationsForUserInBranches(userId: string, branchIds: string[], includeRead?: boolean): Promise<SystemNotification[]>;
   markNotificationRead(notificationId: number, userId: string): Promise<NotificationRead>;
   dismissNotification(notificationId: number, userId: string): Promise<NotificationRead>;
   getNotificationReadsByUser(userId: string): Promise<NotificationRead[]>;
@@ -18491,7 +18491,7 @@ export class DatabaseStorage implements IStorage {
     return this.getActiveNotificationsForUserInBranches(userId, [branchId]);
   }
 
-  async getActiveNotificationsForUserInBranches(userId: string, branchIds: string[]): Promise<SystemNotification[]> {
+  async getActiveNotificationsForUserInBranches(userId: string, branchIds: string[], includeRead = false): Promise<SystemNotification[]> {
     if (branchIds.length === 0) return [];
     const selectedBranches = new Set(branchIds);
     const now = new Date();
@@ -18515,23 +18515,26 @@ export class DatabaseStorage implements IStorage {
     const dismissedIds = new Set(reads.filter(r => r.dismissed).map(r => r.notificationId));
     const readOnceIds = new Set(reads.map(r => r.notificationId));
 
+    const { operationsNoticeScopeAllowed } = await import("@shared/notification-recipient");
+    const { recognizedSourceNotice } = await import("@shared/operations-center-notifications");
+    const isSourceNotice = (n: SystemNotification) => n.autoSource === "hr_workflow"
+      || n.autoSource === "reverse_movement" || recognizedSourceNotice(n) !== null;
     const visible = allActive.filter(n => {
-      if (dismissedIds.has(n.id)) return false;
-      if (n.showOnce && readOnceIds.has(n.id)) return false;
+      // Read/dismiss retries still require CURRENT targeting and authorization;
+      // receipts only suppress display, not the idempotent mutation gate.
+      if (!includeRead && dismissedIds.has(n.id)) return false;
+      if (!includeRead && n.showOnce && readOnceIds.has(n.id)) return false;
       // A per-user target or global broadcast must not bypass an event's
       // explicit access branch. Do not trust users.branchId/session on revoke.
-      if (operationsGrants) {
-        const scope = n.accessBranchIds?.length ? n.accessBranchIds
-          : !n.targetAllBranches ? n.targetBranchIds : null;
-        if (scope?.length && !scope.some(id => operationsGrants.has(id))) return false;
-      }
+      if (operationsGrants && !isSourceNotice(n) && !operationsNoticeScopeAllowed(n, operationsGrants)) return false;
       // Per-user targeting — if targetUserIds is set & non-empty, ONLY those users see it,
       // regardless of their active branch or role (used for "specific person" messages).
       const userIdsTarget = (n as any).targetUserIds as string[] | null | undefined;
       if (userIdsTarget && userIdsTarget.length > 0) {
         if (!userIdsTarget.includes(userId)) return false;
       } else {
-        if (!n.targetAllBranches && n.targetBranchIds && !n.targetBranchIds.some(id => selectedBranches.has(id))) return false;
+        if (!isSourceNotice(n) && !n.targetAllBranches && n.targetBranchIds
+          && !n.targetBranchIds.some(id => selectedBranches.has(id))) return false;
         // Phase 4: role-based targeting — if targetRoleIds is set and non-empty, only show to matching roles
         const roleIds = (n as any).targetRoleIds as string[] | null | undefined;
         if (roleIds && roleIds.length > 0) {
@@ -18541,15 +18544,18 @@ export class DatabaseStorage implements IStorage {
       return isWithinRiyadhDailyWindow(n.displayTimeStart, n.displayTimeEnd, now);
     });
     const scoped = visible.filter(n =>
-      n.accessModule === "central_kitchen_orders"
+      n.autoSource === "reverse_movement"
+      || n.accessModule === "central_kitchen_orders"
       || (n.accessModule === "warehouse" && n.autoSource === "warehouse_material_transfer")
       || (n.accessModule === "delivery_tasks" && n.autoSource === "delivery_task"));
-    if (!scoped.length) return visible;
     const scopedIds = new Set(scoped.map(n => n.id));
     const { filterAuthorizedCentralKitchenNotificationUsers } = await import("./central-kitchen-notifications");
     const allowedIds = new Set<number>();
     await Promise.all(scoped.map(async (notification) => {
-      const authorized = notification.accessModule === "central_kitchen_orders"
+      const authorized = notification.autoSource === "reverse_movement"
+        ? await (await import("./reverse-logistics-notifications"))
+          .filterAuthorizedReverseNotificationUsers(notification, [userId])
+        : notification.accessModule === "central_kitchen_orders"
         ? await filterAuthorizedCentralKitchenNotificationUsers(db, notification, [userId])
         : notification.accessModule === "delivery_tasks"
         ? await (await import("./delivery-notifications"))
@@ -18562,31 +18568,29 @@ export class DatabaseStorage implements IStorage {
       !scopedIds.has(n.id) || allowedIds.has(n.id));
     const { projectSourceNotificationForRecipient } = await import("./source-notification-projection");
     const projected = await Promise.all(authorized.map(n => projectSourceNotificationForRecipient(n, userId)));
-    return projected.filter((n): n is SystemNotification => n !== null);
+    return projected.filter((n): n is SystemNotification =>
+      n !== null && (!operationsGrants || operationsNoticeScopeAllowed(n, operationsGrants)));
   }
 
   async markNotificationRead(notificationId: number, userId: string): Promise<NotificationRead> {
-    const [existing] = await db.select().from(notificationReads)
-      .where(and(eq(notificationReads.notificationId, notificationId), eq(notificationReads.userId, userId)));
-    if (existing) return existing;
     const [created] = await db.insert(notificationReads)
       .values({ notificationId, userId, dismissed: false })
+      .onConflictDoUpdate({
+        target: [notificationReads.notificationId, notificationReads.userId],
+        // Do not undo dismissal or reset the original read timestamp on retry.
+        set: { dismissed: sql`${notificationReads.dismissed}` },
+      })
       .returning();
     return created;
   }
 
   async dismissNotification(notificationId: number, userId: string): Promise<NotificationRead> {
-    const [existing] = await db.select().from(notificationReads)
-      .where(and(eq(notificationReads.notificationId, notificationId), eq(notificationReads.userId, userId)));
-    if (existing) {
-      const [updated] = await db.update(notificationReads)
-        .set({ dismissed: true })
-        .where(eq(notificationReads.id, existing.id))
-        .returning();
-      return updated;
-    }
     const [created] = await db.insert(notificationReads)
       .values({ notificationId, userId, dismissed: true })
+      .onConflictDoUpdate({
+        target: [notificationReads.notificationId, notificationReads.userId],
+        set: { dismissed: true },
+      })
       .returning();
     return created;
   }

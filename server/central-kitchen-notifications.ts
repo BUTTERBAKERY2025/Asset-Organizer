@@ -174,9 +174,13 @@ export async function insertCentralKitchenNotification(
 export async function routedRecipients(tx: DatabaseExecutor, order: any, event: CentralKitchenNotificationEvent): Promise<string[]> {
   const kitchenPeople = await routingPeople(tx, order.centralKitchenId);
   const kitchenIds = kitchenPeople.filter((p: any) => kitchenManagerEligible(p, "view")).map((p: any) => p.id);
-  const ops = async () => (await routingPeople(tx, order.centralKitchenId)).filter((p: any) =>
-    p.role === "operations_manager" && p.authorizedBranchIds?.includes(order.centralKitchenId)
-      && routingPersonEligible(p, "view")).map((p: any) => p.id);
+  const ops = async (includeDestination = false) => {
+    const branches = includeDestination ? [order.centralKitchenId, order.requestBranchId] : [order.centralKitchenId];
+    const people = await Promise.all(branches.map(branch => routingPeople(tx, branch)));
+    return Array.from(new Set(people.flatMap((entries, index) => entries.filter((p: any) =>
+      p.role === "operations_manager" && p.authorizedBranchIds?.includes(branches[index])
+        && routingPersonEligible(p, "view")).map((p: any) => p.id))));
+  };
   if (event === "overdue" && ["received", "cancelled"].includes(order.status)) return [];
   if (event === "missing_responsible") return ops();
   if (event === "overdue") return Array.from(new Set([
@@ -185,13 +189,13 @@ export async function routedRecipients(tx: DatabaseExecutor, order: any, event: 
     ...await ops(),
   ]));
   if (["created", "edited", "cancelled", "received"].includes(event)) return kitchenIds;
-  if (event === "received_discrepancy") return Array.from(new Set([...kitchenIds, ...await ops()]));
+  if (event === "received_discrepancy") return Array.from(new Set([...kitchenIds, ...await ops(true)]));
   const branchRouting = await getKitchenRouting(tx, order.requestBranchId);
   const people = await routingPeople(tx, order.requestBranchId);
   const branchIds = people.filter((p: any) => routingPersonEligible(p, "view")
     && (p.id === order.createdBy || p.id === branchRouting.receiverUserId)).map((p: any) => p.id);
   return event === "discrepancy_resolved"
-    ? Array.from(new Set([...kitchenIds, ...branchIds]))
+    ? Array.from(new Set([...kitchenIds, ...branchIds, ...await ops(true)]))
     : branchIds;
 }
 

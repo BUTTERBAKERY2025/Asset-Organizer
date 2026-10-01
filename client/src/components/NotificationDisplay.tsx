@@ -1,8 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { syncAppBadge } from "@/lib/app-badge";
 import { useAuth } from "@/hooks/useAuth";
+import { parseAnnouncementAction } from "@shared/operations-center-notifications";
+import { activeNotificationsKey, reconcileNotificationQueue, type NotificationQueueState } from "@/lib/notification-view-state";
 
 interface SystemNotification {
   id: number;
@@ -11,11 +13,6 @@ interface SystemNotification {
   messageType: string;
   displayStyle: string;
   priority: number;
-  isActive: boolean;
-  targetAllBranches: boolean;
-  targetBranchIds: string[] | null;
-  startDate: string | null;
-  endDate: string | null;
   soundEnabled: boolean;
   soundType: string | null;
   backgroundColor: string | null;
@@ -30,9 +27,7 @@ interface SystemNotification {
   showOnce: boolean;
   autoCloseSeconds: number | null;
   designConfig: any | null;
-  createdBy: string | null;
   createdAt: string;
-  updatedAt: string;
 }
 
 const MESSAGE_TYPE_ICONS: Record<string, string> = {
@@ -120,13 +115,22 @@ function getAnimationName(animationType: string | null): string {
 }
 
 export function NotificationContent({ notification, onDismiss, isPreview }: { notification: SystemNotification; onDismiss: () => void; isPreview?: boolean }) {
+  const queryClient = useQueryClient();
   const autoCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hasMarkedRead = useRef(false);
 
   useEffect(() => {
     if (!hasMarkedRead.current && !isPreview) {
       hasMarkedRead.current = true;
-      apiRequest("POST", `/api/system-notifications/${notification.id}/read`).then(() => syncAppBadge()).catch(() => {});
+      apiRequest("POST", `/api/system-notifications/${notification.id}/read`).then(() => {
+        void queryClient.invalidateQueries({ queryKey: ["/api/system-notifications/my-reads"] });
+        return syncAppBadge();
+      }).catch(() => {
+        // A denied read can be the first signal of recipient revocation.
+        // Do not keep its content open while waiting for the next poll.
+        onDismiss();
+        void queryClient.invalidateQueries({ queryKey: ["/api/active-notifications"] });
+      });
     }
     if (notification.soundEnabled) {
       playSound(notification.soundType || "default");
@@ -143,18 +147,20 @@ export function NotificationContent({ notification, onDismiss, isPreview }: { no
 
   const handleDismiss = useCallback(() => {
     if (!isPreview) {
-      apiRequest("POST", `/api/system-notifications/${notification.id}/dismiss`).then(() => syncAppBadge()).catch(() => {});
+      apiRequest("POST", `/api/system-notifications/${notification.id}/dismiss`).then(() => {
+        void queryClient.invalidateQueries({ queryKey: ["/api/active-notifications"] });
+        void queryClient.invalidateQueries({ queryKey: ["/api/system-notifications/my-reads"] });
+        return syncAppBadge();
+      }).catch(() => {});
     }
     onDismiss();
   }, [notification.id, onDismiss, isPreview]);
 
   const handleButtonClick = useCallback(() => {
-    if (notification.buttonAction) {
-      if (notification.buttonAction.startsWith("http")) {
-        window.open(notification.buttonAction, "_blank");
-      } else {
-        window.location.href = notification.buttonAction;
-      }
+    const destination = parseAnnouncementAction(notification.buttonAction, window.location.origin);
+    if (destination) {
+      if (destination.kind === "external") window.open(destination.href, "_blank", "noopener,noreferrer");
+      else window.location.href = destination.href;
     }
     handleDismiss();
   }, [notification.buttonAction, handleDismiss]);
@@ -439,41 +445,47 @@ export function NotificationContent({ notification, onDismiss, isPreview }: { no
 }
 
 export function NotificationDisplay() {
-  const { activeBranchId } = useAuth();
-  const [queue, setQueue] = useState<SystemNotification[]>([]);
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const shownIds = useRef<Set<number>>(new Set());
+  const { user, activeBranchId, isAuthError, isSwitchingBranch } = useAuth();
+  const branchId = activeBranchId || user?.branchId || "";
+  const scope = JSON.stringify([user?.id || "", branchId]);
+  const [queue, setQueue] = useState<NotificationQueueState>({ scope, ids: [], shown: [] });
 
-  const { data: notifications } = useQuery<SystemNotification[]>({
-    queryKey: ["/api/active-notifications"],
-    queryFn: async () => {
-      const res = await fetch("/api/active-notifications", { credentials: "include" });
+  const query = useQuery<SystemNotification[]>({
+    queryKey: activeNotificationsKey(user?.id, branchId),
+    queryFn: async ({ signal }) => {
+      const res = await fetch("/api/active-notifications", { credentials: "include", cache: "no-store", signal });
       if (!res.ok) throw new Error(`${res.status}: request failed`);
       return res.json();
     },
     refetchInterval: () => (typeof document !== "undefined" && document.hidden ? false : 60000),
-    refetchOnMount: true,
-    staleTime: 30000,
-    enabled: true,
+    refetchOnMount: "always",
+    retry: false,
+    staleTime: 0,
+    gcTime: 0,
+    placeholderData: undefined,
+    enabled: !!user && !isAuthError && !isSwitchingBranch,
     // Background poller: a transient failure self-heals on the next tick, so
     // suppress the global "تعذّر تحميل بعض البيانات" banner for it.
     meta: { silentError: true },
   });
+  const failed = !user || isAuthError || isSwitchingBranch || query.isError;
+  const notifications = failed ? undefined : query.data;
 
   useEffect(() => {
-    if (!notifications || notifications.length === 0) return;
-    const newNotifs = notifications.filter((n) => !shownIds.current.has(n.id));
-    if (newNotifs.length > 0) {
-      newNotifs.forEach((n) => shownIds.current.add(n.id));
-      setQueue((prev) => [...prev, ...newNotifs]);
-    }
-  }, [notifications]);
+    setQueue(previous => reconcileNotificationQueue(previous, scope, notifications, failed));
+  }, [scope, notifications, failed]);
 
-  const handleDismiss = useCallback(() => {
-    setCurrentIndex((prev) => prev + 1);
-  }, []);
+  const handleDismiss = useCallback((dismissedId: number) => {
+    setQueue(previous => {
+      if (previous.scope !== scope) return previous;
+      return { ...previous, ids: previous.ids.filter(id => id !== dismissedId) };
+    });
+  }, [scope]);
 
-  const currentNotification = queue[currentIndex];
+  // Render-time intersection removes revoked content before reconciliation effects.
+  const currentNotification = !failed && queue.scope === scope
+    ? notifications?.find(notification => notification.id === queue.ids.find(id => notifications.some(row => row.id === id)))
+    : undefined;
 
   if (!currentNotification) return null;
 
@@ -528,7 +540,7 @@ export function NotificationDisplay() {
       <NotificationContent
         key={currentNotification.id}
         notification={currentNotification}
-        onDismiss={handleDismiss}
+        onDismiss={() => handleDismiss(currentNotification.id)}
       />
     </>
   );

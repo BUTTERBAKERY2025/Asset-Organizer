@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { 
@@ -25,12 +25,14 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { apiRequest } from "@/lib/queryClient";
 import { syncAppBadge } from "@/lib/app-badge";
+import { useAuth } from "@/hooks/useAuth";
+import { parseAnnouncementAction } from "@shared/operations-center-notifications";
+import { activeNotificationsKey, selectedRecipientNotice } from "@/lib/notification-view-state";
 import { formatDistanceToNow } from "date-fns";
 import { ar } from "date-fns/locale";
 import type { InventoryItem } from "@shared/schema";
 
-// Shape returned by /api/active-notifications (raw system_notifications rows,
-// already filtered per-user by branch + role on the server).
+// Public recipient display fields, filtered by current source authorization.
 interface ActiveNotification {
   id: number;
   title: string;
@@ -42,6 +44,7 @@ interface ActiveNotification {
   buttonText?: string | null;
   buttonAction?: string | null;
   createdAt: string;
+  showOnce?: boolean;
 }
 
 interface NotificationRead {
@@ -105,7 +108,10 @@ async function safeFetchList<T>(url: string): Promise<T[]> {
 export function NotificationsDropdown() {
   const [open, setOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("all");
-  const [selected, setSelected] = useState<ActiveNotification | null>(null);
+  const { user, activeBranchId, isAuthError, isSwitchingBranch } = useAuth();
+  const branchId = activeBranchId || user?.branchId || "";
+  const scope = JSON.stringify([user?.id || "", branchId]);
+  const [selection, setSelection] = useState<{ id: number; scope: string } | null>(null);
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
 
@@ -126,21 +132,33 @@ export function NotificationsDropdown() {
   });
 
   // Per-user notifications: server already filters by the viewer's branch + role.
-  const { data: notifications = [] } = useQuery<ActiveNotification[]>({
-    queryKey: ["/api/active-notifications"],
-    queryFn: () => safeFetchList<ActiveNotification>("/api/active-notifications"),
-    staleTime: 30 * 1000,
+  const activeQuery = useQuery<ActiveNotification[]>({
+    queryKey: activeNotificationsKey(user?.id, branchId),
+    queryFn: async ({ signal }) => {
+      const response = await fetch("/api/active-notifications", { credentials: "include", cache: "no-store", signal });
+      if (!response.ok) throw new Error("تعذر التحقق من الإشعارات المصرح بها.");
+      return response.json();
+    },
+    staleTime: 0, gcTime: 0, placeholderData: undefined, refetchOnMount: "always", retry: false,
+    enabled: !!user && !isAuthError && !isSwitchingBranch,
     refetchInterval: () => (typeof document !== "undefined" && document.hidden ? false : 60 * 1000),
     meta: { silentError: true },
   });
+  const failed = !user || isAuthError || isSwitchingBranch || activeQuery.isError;
+  const notifications = failed ? [] : activeQuery.data || [];
+  const selected = selectedRecipientNotice(selection, scope, notifications, failed);
+  useEffect(() => {
+    if (selection && !selected) setSelection(null);
+  }, [scope, selection, selected]);
 
   // Per-user read state, used only to compute the unread badge and styling.
   const { data: reads = [] } = useQuery<NotificationRead[]>({
-    queryKey: ["/api/system-notifications/my-reads"],
+    queryKey: ["/api/system-notifications/my-reads", user?.id || ""],
     queryFn: () => safeFetchList<NotificationRead>("/api/system-notifications/my-reads"),
     staleTime: 30 * 1000,
     refetchInterval: () => (typeof document !== "undefined" && document.hidden ? false : 60 * 1000),
     meta: { silentError: true },
+    enabled: !!user && !isAuthError && !isSwitchingBranch,
   });
 
   const readIds = new Set(reads.map((r) => r.notificationId));
@@ -153,20 +171,23 @@ export function NotificationsDropdown() {
     },
     onMutate: async (id: number) => {
       await queryClient.cancelQueries({ queryKey: ["/api/system-notifications/my-reads"] });
-      const previous = queryClient.getQueryData<NotificationRead[]>(["/api/system-notifications/my-reads"]);
+      const key = ["/api/system-notifications/my-reads", user?.id || ""];
+      const previous = queryClient.getQueryData<NotificationRead[]>(key);
       queryClient.setQueryData<NotificationRead[]>(
-        ["/api/system-notifications/my-reads"],
+        key,
         [...(previous || []).filter((r) => r.notificationId !== id), { notificationId: id, dismissed: false }]
       );
-      return { previous };
+      return { previous, key };
     },
     onError: (_err, _id, context) => {
+      setSelection(null);
       if (context?.previous) {
-        queryClient.setQueryData(["/api/system-notifications/my-reads"], context.previous);
+        queryClient.setQueryData(context.key, context.previous);
       }
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/system-notifications/my-reads"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/active-notifications"] });
       void syncAppBadge();
     },
   });
@@ -177,46 +198,50 @@ export function NotificationsDropdown() {
     },
     onMutate: async (ids: number[]) => {
       await queryClient.cancelQueries({ queryKey: ["/api/system-notifications/my-reads"] });
-      const previous = queryClient.getQueryData<NotificationRead[]>(["/api/system-notifications/my-reads"]);
+      const key = ["/api/system-notifications/my-reads", user?.id || ""];
+      const previous = queryClient.getQueryData<NotificationRead[]>(key);
       const merged = [...(previous || [])];
       for (const id of ids) {
         if (!merged.some((r) => r.notificationId === id)) merged.push({ notificationId: id, dismissed: false });
       }
-      queryClient.setQueryData<NotificationRead[]>(["/api/system-notifications/my-reads"], merged);
-      return { previous };
+      queryClient.setQueryData<NotificationRead[]>(key, merged);
+      return { previous, key };
     },
     onError: (_err, _ids, context) => {
+      setSelection(null);
       if (context?.previous) {
-        queryClient.setQueryData(["/api/system-notifications/my-reads"], context.previous);
+        queryClient.setQueryData(context.key, context.previous);
       }
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/system-notifications/my-reads"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/active-notifications"] });
       void syncAppBadge();
     },
   });
 
   // Clicking always opens the full content in a dialog and marks it read.
   const handleNotificationClick = (notification: ActiveNotification) => {
-    if (!readIds.has(notification.id)) {
+    if (!notification.showOnce && !readIds.has(notification.id)) {
       markAsReadMutation.mutate(notification.id);
     }
-    setSelected(notification);
+    setSelection({ id: notification.id, scope });
   };
 
-  const isInternalLink = (action?: string | null): action is string =>
-    !!action && action.startsWith("/");
+  const closeSelected = () => {
+    // A show-once notice is marked after the viewer finishes reading. Never
+    // retain it as a snapshot to defeat a server revocation/empty response.
+    if (selected?.showOnce && !readIds.has(selected.id)) markAsReadMutation.mutate(selected.id);
+    setSelection(null);
+  };
 
   const handleDialogAction = (notification: ActiveNotification) => {
-    const action = notification.buttonAction;
-    if (!action) return;
-    setSelected(null);
+    const destination = parseAnnouncementAction(notification.buttonAction, window.location.origin);
+    if (!destination) return;
+    closeSelected();
     setOpen(false);
-    if (isInternalLink(action)) {
-      setLocation(action);
-    } else if (/^https?:\/\//.test(action)) {
-      window.open(action, "_blank", "noopener,noreferrer");
-    }
+    if (destination.kind === "internal") setLocation(destination.href);
+    else window.open(destination.href, "_blank", "noopener,noreferrer");
   };
 
   const unreadNotifications = notifications.filter((n) => !readIds.has(n.id));
@@ -383,6 +408,7 @@ export function NotificationsDropdown() {
             </TabsContent>
 
             <TabsContent value="system" className="m-0 p-3">
+              {activeQuery.isError && <p role="alert" className="px-4 py-2 text-xs text-destructive">تعذر التحقق من الإشعارات المصرح بها؛ أخفيت المحتوى السابق. أعد المحاولة.</p>}
               {notifications.length === 0 ? (
                 <div className="p-8 text-center">
                   <div className="w-16 h-16 mx-auto mb-3 rounded-full bg-muted/50 flex items-center justify-center">
@@ -514,7 +540,7 @@ export function NotificationsDropdown() {
       </DropdownMenuContent>
     </DropdownMenu>
 
-    <Dialog open={!!selected} onOpenChange={(o) => !o && setSelected(null)}>
+    <Dialog open={!!selected} onOpenChange={(o) => !o && closeSelected()}>
       <DialogContent className="max-w-md" data-testid="dialog-notification-detail">
         {selected && (
           <>
@@ -537,7 +563,7 @@ export function NotificationsDropdown() {
               {selected.content}
             </p>
             <DialogFooter className="gap-2 sm:gap-2">
-              {selected.buttonAction && (isInternalLink(selected.buttonAction) || /^https?:\/\//.test(selected.buttonAction)) && (
+              {selected.buttonAction && parseAnnouncementAction(selected.buttonAction, window.location.origin) && (
                 <Button onClick={() => handleDialogAction(selected)} data-testid="button-notification-action">
                   {selected.buttonText || "فتح"}
                 </Button>

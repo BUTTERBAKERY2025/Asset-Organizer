@@ -15,6 +15,7 @@ import {
   users,
 } from "@shared/schema";
 import { activeReplacementCommitment, calculateDemandRemaining, demandDecimal, demandMicros, validateReceiptAttribution } from "@shared/central-kitchen-demand";
+import { insertCentralKitchenNotification, dispatchCentralKitchenNotificationAfterCommit } from "./central-kitchen-notifications";
 
 const id = z.coerce.number().int().positive();
 const quantity = z.union([z.string(), z.number()]).transform(String).refine((value) => {
@@ -340,6 +341,7 @@ export function registerCentralKitchenDemandRoutes(app: Express) {
       return res.status(400).json({ error: "المسؤول المحدد غير نشط أو غير مؤهل أو خارج تكليف المطبخ الحالي" });
     }
     const hash = fingerprint(body.data);
+    const notificationIds: number[] = [];
     const [replay] = await db.select().from(centralKitchenDemandActions).where(and(
       eq(centralKitchenDemandActions.commitmentId, commitment.id),
       eq(centralKitchenDemandActions.idempotencyKey, body.data.idempotencyKey),
@@ -447,11 +449,16 @@ export function registerCentralKitchenDemandRoutes(app: Express) {
             reportedAvailableQuantity: 0, unit: locked.unit, notes: `تعويض للطلب الأصلي #${locked.originalOrderId}`,
           }).returning({ id: centralKitchenOrderItems.id });
           replacementOrderItemId = replacementItem.id;
-          await tx.insert(centralKitchenOrderEvents).values({
+          const [createdEvent] = await tx.insert(centralKitchenOrderEvents).values({
             orderId: order.id, eventType: "created", fromStatus: null, toStatus: "requested",
             notes: `تعويض للالتزام #${locked.id}`, idempotencyKey: `created:${orderKey}`.slice(0, 128),
             payloadFingerprint: hash, actorId: currentUserId(req),
+          }).returning({ id: centralKitchenOrderEvents.id });
+          const notificationId = await insertCentralKitchenNotification(tx, {
+            eventId: createdEvent.id, orderId: order.id, event: "created",
+            branchId: locked.centralKitchenId, actorId: currentUserId(req),
           });
+          if (notificationId) notificationIds.push(notificationId);
         }
         const actionType = body.data.type === "replacement" ? "replacement_created"
           : body.data.type === "accept_substitute" ? "substitute_accepted" : "remainder_waived";
@@ -473,6 +480,7 @@ export function registerCentralKitchenDemandRoutes(app: Express) {
         }).where(eq(centralKitchenDemandCommitments.id, locked.id));
         return action;
       });
+      notificationIds.forEach(dispatchCentralKitchenNotificationAfterCommit);
       return res.status(201).json(result);
     } catch (error: any) {
       if (error?.status) return res.status(error.status).json({ error: error.message });

@@ -35,6 +35,14 @@ export function kitchenNoticeIsCurrent(event: CentralKitchenNotificationEvent, o
 /** Projection is recipient-specific and read-only. Keep dedupe/outbox/push IDs
  * unchanged. Arbitrary/manual multi-branch notices are never partially exposed. */
 export async function projectSourceNotificationForRecipient(n: SystemNotification, userId: string): Promise<SourceNotice | null> {
+  if (n.autoSource === "hr_workflow") {
+    const { projectHrSourceNotificationForRecipient } = await import("./hr-system-notifications");
+    return projectHrSourceNotificationForRecipient(n, userId);
+  }
+  if (n.autoSource === "reverse_movement") {
+    const { projectReverseSourceNotificationForRecipient } = await import("./reverse-logistics-notifications");
+    return projectReverseSourceNotificationForRecipient(n, userId);
+  }
   const kind = recognizedSourceNotice(n);
   if (!kind) return n;
   if (!n.targetUserIds?.includes(userId)) return null;
@@ -65,7 +73,11 @@ export async function projectSourceNotificationForRecipient(n: SystemNotificatio
     const { order, event } = context;
     const sourceSide = access.user.role === "production_development_manager"
       || ["created", "edited", "cancelled", "received", "received_discrepancy", "missing_responsible", "overdue"].includes(event);
-    const branch = sourceSide ? order.centralKitchenId : order.requestBranchId;
+    const operationsException = access.user.role === "operations_manager"
+      && ["received_discrepancy", "discrepancy_resolved"].includes(event);
+    const branch = operationsException
+      ? access.branch(order.centralKitchenId) ? order.centralKitchenId : order.requestBranchId
+      : sourceSide ? order.centralKitchenId : order.requestBranchId;
     if (!access.branch(branch)) return null;
     const current = kitchenNoticeIsCurrent(event, order)
       && (event !== "missing_responsible" || !(await getKitchenRouting(db, order.centralKitchenId)).hasKitchenResponsible);

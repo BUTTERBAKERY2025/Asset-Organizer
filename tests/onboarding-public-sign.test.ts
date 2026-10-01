@@ -7,6 +7,7 @@ const state = vi.hoisted(() => ({
   locks: [] as string[], predicates: [] as string[], writes: [] as string[],
   beforeRead: null as (() => void) | null,
   failToken: false, tokenConflict: false, notificationConflict: false,
+  failNotice: false, notices: [] as any[],
 }));
 vi.mock("../server/db", () => {
   const dialect = new PgDialect();
@@ -48,6 +49,12 @@ vi.mock("../server/db", () => {
   } } };
 });
 vi.mock("../server/storage", () => ({ storage: {} }));
+vi.mock("../server/hr-system-notifications", () => ({
+  queueHrSourceNotification: async (source: string, id: number, executor: any) => {
+    if (state.failNotice) throw new Error("private notice failure");
+    state.notices.push({ source, id, transactional: !!executor?.update });
+  },
+}));
 vi.mock("../server/twilio-service", () => ({ sendWhatsAppMessage: vi.fn(), isTwilioConfigured: () => false }));
 vi.mock("../server/auth", () => ({
   isAuthenticated: () => {}, requirePermission: () => () => {},
@@ -75,6 +82,7 @@ beforeEach(() => {
   state.notification = { id: 12, status: "sent", branchId: null, employeeSignature: null };
   state.locks = []; state.predicates = []; state.writes = []; state.queue = Promise.resolve();
   state.beforeRead = null; state.failToken = false; state.tokenConflict = false; state.notificationConflict = false;
+  state.failNotice = false; state.notices = [];
 });
 
 describe("atomic public work-commencement signing", () => {
@@ -94,6 +102,23 @@ describe("atomic public work-commencement signing", () => {
     expect((await sign({ selfiePhotoUrl: "/test-photo" })).status).toBe(400);
     expect((await sign({ signature: "test" })).status).toBe(400);
     expect(state.locks).toHaveLength(0);
+  });
+  it("queues the signed joining notice in the source transaction once, and rolls back on insert failure", async () => {
+    state.notification.branchId = "a";
+    expect((await sign()).status).toBe(200);
+    expect(state.notices).toEqual([{ source: "joining", id: 12, transactional: true }]);
+    expect((await sign()).status).toBe(410);
+    expect(state.notices).toHaveLength(1);
+    state.notification.status = "sent"; state.notification.employeeSignature = null;
+    state.token.usedAt = null; state.failNotice = true;
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const result = await sign();
+      expect(result.status).toBe(500);
+      expect(JSON.stringify(result.payload)).not.toContain("private notice failure");
+      expect(state.notification.status).toBe("sent");
+      expect(state.token.usedAt).toBeNull();
+    } finally { log.mockRestore(); }
   });
   it("refuses absent, revoked, used and expired tokens without saving a signature", async () => {
     const original = structuredClone(state.token);

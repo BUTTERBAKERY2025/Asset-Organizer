@@ -41757,11 +41757,13 @@ export async function registerRoutes(
   app.get("/api/active-notifications", isAuthenticated, async (req, res) => {
     try {
       const userId = req.session.userId;
-      const user = (req as any).currentUser;
-      const branchId = user?.activeBranch || user?.branchId || "";
-      const notifications = await storage.getActiveNotificationsForUser(userId!, branchId);
-      res.json(notifications);
+      const { notificationRecipientBranches } = await import("./notification-receiver-access");
+      const { publicRecipientNotice } = await import("@shared/notification-recipient");
+      const notifications = await storage.getActiveNotificationsForUserInBranches(userId!, await notificationRecipientBranches(req));
+      res.setHeader("Cache-Control", "no-store");
+      res.json(notifications.map(publicRecipientNotice));
     } catch (error) {
+      if ((error as any)?.status === 403) return res.status(403).json({ error: (error as Error).message });
       console.error("Error fetching active notifications:", error);
       res.status(500).json({ error: "فشل في جلب الإشعارات النشطة" });
     }
@@ -41771,11 +41773,12 @@ export async function registerRoutes(
     res.set("Cache-Control", "no-store");
     try {
       const { getUnreadBadgeCount } = await import("./notification-badge");
+      const { notificationRecipientBranches } = await import("./notification-receiver-access");
       const userId = req.session.userId!;
-      const user = (req as any).currentUser;
-      const count = await getUnreadBadgeCount(userId, user?.activeBranch || user?.branchId || "");
+      const count = await getUnreadBadgeCount(userId, await notificationRecipientBranches(req));
       res.json({ userId, count });
     } catch (error) {
+      if ((error as any)?.status === 403) return res.status(403).json({ error: (error as Error).message });
       console.error("Error fetching unread badge:", error);
       res.status(500).json({ error: "فشل في جلب عدد الإشعارات غير المقروءة" });
     }
@@ -41784,33 +41787,19 @@ export async function registerRoutes(
   app.post("/api/system-notifications/:id/read", isAuthenticated, async (req, res) => {
     try {
       const userId = req.session.userId;
-      const notificationId = Number.parseInt(req.params.id, 10);
-      if (!Number.isInteger(notificationId) || notificationId <= 0) {
+      const notificationId = Number(req.params.id);
+      if (!/^[1-9]\d*$/.test(req.params.id) || !Number.isSafeInteger(notificationId)) {
         return res.status(404).json({ error: "الإشعار غير موجود" });
       }
-      const notification = await storage.getSystemNotification(notificationId);
-      if (!notification) return res.status(404).json({ error: "الإشعار غير موجود" });
-      if (req.currentUser?.role === "operations_manager") {
-        const scopedBranches = notification.accessBranchIds?.length ? notification.accessBranchIds
-          : notification.targetAllBranches ? [] : notification.targetBranchIds || [];
-        if (scopedBranches.length && !(await Promise.all(scopedBranches.map(id => canAccessBranch(req, id)))).some(Boolean)) {
-          return res.status(403).json({ error: "لم تعد مصرحاً بالوصول إلى هذا الإشعار" });
-        }
-      }
-      if (notification.accessModule === "central_kitchen_orders") {
-        const { canUserAccessCentralKitchenNotification } = await import("./central-kitchen-notifications");
-        if (!(await canUserAccessCentralKitchenNotification(db, notification, userId))) {
-          return res.status(403).json({ error: "لم تعد مصرحاً بالوصول إلى هذا الإشعار" });
-        }
-      }
-      if (notification.accessModule === "delivery_tasks" && notification.autoSource === "delivery_task") {
-        const { filterAuthorizedDeliveryNoticeUsers } = await import("./delivery-notifications");
-        if (!(await filterAuthorizedDeliveryNoticeUsers(notification, [userId])).includes(userId))
-          return res.status(403).json({ error: "لم تعد مصرحاً بالوصول إلى هذا الإشعار" });
-      }
+      const { notificationRecipientBranches } = await import("./notification-receiver-access");
+      const visible = await storage.getActiveNotificationsForUserInBranches(userId!,
+        await notificationRecipientBranches(req), true);
+      if (!visible.some(notification => notification.id === notificationId))
+        return res.status(403).json({ error: "الإشعار غير متاح أو لم يعد موجّهًا إليك" });
       const read = await storage.markNotificationRead(notificationId, userId);
       res.json(read);
     } catch (error) {
+      if ((error as any)?.status === 403) return res.status(403).json({ error: (error as Error).message });
       console.error("Error marking notification read:", error);
       res.status(500).json({ error: "فشل في تسجيل القراءة" });
     }
@@ -41819,33 +41808,19 @@ export async function registerRoutes(
   app.post("/api/system-notifications/:id/dismiss", isAuthenticated, async (req, res) => {
     try {
       const userId = req.session.userId;
-      const notificationId = Number.parseInt(req.params.id, 10);
-      if (!Number.isInteger(notificationId) || notificationId <= 0) {
+      const notificationId = Number(req.params.id);
+      if (!/^[1-9]\d*$/.test(req.params.id) || !Number.isSafeInteger(notificationId)) {
         return res.status(404).json({ error: "الإشعار غير موجود" });
       }
-      const notification = await storage.getSystemNotification(notificationId);
-      if (!notification) return res.status(404).json({ error: "الإشعار غير موجود" });
-      if (req.currentUser?.role === "operations_manager") {
-        const scopedBranches = notification.accessBranchIds?.length ? notification.accessBranchIds
-          : notification.targetAllBranches ? [] : notification.targetBranchIds || [];
-        if (scopedBranches.length && !(await Promise.all(scopedBranches.map(id => canAccessBranch(req, id)))).some(Boolean)) {
-          return res.status(403).json({ error: "لم تعد مصرحاً بالوصول إلى هذا الإشعار" });
-        }
-      }
-      if (notification.accessModule === "central_kitchen_orders") {
-        const { canUserAccessCentralKitchenNotification } = await import("./central-kitchen-notifications");
-        if (!(await canUserAccessCentralKitchenNotification(db, notification, userId))) {
-          return res.status(403).json({ error: "لم تعد مصرحاً بالوصول إلى هذا الإشعار" });
-        }
-      }
-      if (notification.accessModule === "delivery_tasks" && notification.autoSource === "delivery_task") {
-        const { filterAuthorizedDeliveryNoticeUsers } = await import("./delivery-notifications");
-        if (!(await filterAuthorizedDeliveryNoticeUsers(notification, [userId])).includes(userId))
-          return res.status(403).json({ error: "لم تعد مصرحاً بالوصول إلى هذا الإشعار" });
-      }
+      const { notificationRecipientBranches } = await import("./notification-receiver-access");
+      const visible = await storage.getActiveNotificationsForUserInBranches(userId!,
+        await notificationRecipientBranches(req), true);
+      if (!visible.some(notification => notification.id === notificationId))
+        return res.status(403).json({ error: "الإشعار غير متاح أو لم يعد موجّهًا إليك" });
       const dismissed = await storage.dismissNotification(notificationId, userId);
       res.json(dismissed);
     } catch (error) {
+      if ((error as any)?.status === 403) return res.status(403).json({ error: (error as Error).message });
       console.error("Error dismissing notification:", error);
       res.status(500).json({ error: "فشل في إخفاء الإشعار" });
     }

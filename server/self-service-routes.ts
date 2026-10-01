@@ -28,6 +28,7 @@ import { buildCashierDailyChallengeToday } from "@shared/cashier-daily-challenge
 import { z } from "zod";
 import { sql } from "drizzle-orm";
 import { notifyEmployeeOfDecision, notifyHrOfRequest } from "./notify-helpers";
+import { queueHrSourceNotification } from "./hr-system-notifications";
 import { computeLeaveDays, computeLeaveDaysWithHolidays, findOverlappingLeave, getApplicableLeaveChain } from "./leave-helpers";
 import {
   getWarningTemplate,
@@ -348,28 +349,25 @@ export function registerSelfServiceRoutes(app: Express) {
       const { totalDays, workingDays } = await computeLeaveDaysWithHolidays(parsed.startDate, parsed.endDate);
       // نظام الموافقات والاعتمادات: تطبيق سلسلة الفرع (أو الافتراضية) عند الإنشاء
       const chain = await getApplicableLeaveChain(emp.branchId);
-      const [created] = await db.insert(leaveRequests).values({
-        branchEmployeeId: emp.id,
-        branchId: emp.branchId,
-        leaveType: parsed.leaveType,
-        startDate: parsed.startDate,
-        endDate: parsed.endDate,
-        totalDays,
-        workingDays,
-        reason: parsed.reason,
-        attachmentUrl: parsed.attachmentUrl,
-        status: "pending",
-        currentLevel: 1,
-        requiredLevels: chain ? chain.length : 1,
-        approvalChain: chain ?? null,
-        createdBy: getUserId(req) || undefined,
-      }).returning();
-      // Notify HR/branch managers of the new request (branch-level in-app) — non-blocking.
-      await notifyHrOfRequest(emp, {
-        title: "طلب إجازة جديد",
-        message: `${emp.employeeName} قدّم طلب إجازة (${parsed.startDate} إلى ${parsed.endDate}).`,
-        linkUrl: "/hr/leaves",
-        relatedEntityId: created.id,
+      const created = await db.transaction(async tx => {
+        const [row] = await tx.insert(leaveRequests).values({
+          branchEmployeeId: emp.id,
+          branchId: emp.branchId,
+          leaveType: parsed.leaveType,
+          startDate: parsed.startDate,
+          endDate: parsed.endDate,
+          totalDays,
+          workingDays,
+          reason: parsed.reason,
+          attachmentUrl: parsed.attachmentUrl,
+          status: "pending",
+          currentLevel: 1,
+          requiredLevels: chain ? chain.length : 1,
+          approvalChain: chain ?? null,
+          createdBy: getUserId(req) || undefined,
+        }).returning();
+        await queueHrSourceNotification("leave", row.id, tx);
+        return row;
       });
       res.status(201).json(created);
     } catch (e: any) {
@@ -445,22 +443,19 @@ export function registerSelfServiceRoutes(app: Express) {
       if (maxAdvance > 0 && parsed.amount > maxAdvance) {
         return res.status(400).json({ error: `الحد الأقصى المسموح للسلفة هو ${maxAdvance} ريال` });
       }
-      const [created] = await db.insert(advanceRequests).values({
-        branchEmployeeId: emp.id,
-        branchId: emp.branchId,
-        amount: parsed.amount,
-        requestedMonth: parsed.requestedMonth,
-        installments: parsed.installments ?? 1,
-        reason: parsed.reason,
-        status: "pending",
-        createdBy: getUserId(req) || undefined,
-      }).returning();
-      // Notify HR/branch managers of the new request (branch-level in-app) — non-blocking.
-      await notifyHrOfRequest(emp, {
-        title: "طلب سلفة جديد",
-        message: `${emp.employeeName} قدّم طلب سلفة بمبلغ ${parsed.amount} ر.س (شهر ${parsed.requestedMonth}).`,
-        linkUrl: "/hr/advances",
-        relatedEntityId: created.id,
+      const created = await db.transaction(async tx => {
+        const [row] = await tx.insert(advanceRequests).values({
+          branchEmployeeId: emp.id,
+          branchId: emp.branchId,
+          amount: parsed.amount,
+          requestedMonth: parsed.requestedMonth,
+          installments: parsed.installments ?? 1,
+          reason: parsed.reason,
+          status: "pending",
+          createdBy: getUserId(req) || undefined,
+        }).returning();
+        await queueHrSourceNotification("advance", row.id, tx);
+        return row;
       });
       res.status(201).json(created);
     } catch (e: any) {
@@ -516,23 +511,21 @@ export function registerSelfServiceRoutes(app: Express) {
         return res.status(404).json({ error: "الطلب غير موجود" });
       }
       // Atomic guard: sign only while awaiting signature and owned by this employee.
-      const updated = await db.update(advanceRequests)
-        .set({ status: "signed", signatureData: body.signatureData, signedAt: new Date(), updatedAt: new Date() })
-        .where(and(
-          eq(advanceRequests.id, id),
-          eq(advanceRequests.branchEmployeeId, emp.id),
-          eq(advanceRequests.status, "awaiting_signature"),
-        ))
-        .returning();
+      const updated = await db.transaction(async tx => {
+        const rows = await tx.update(advanceRequests)
+          .set({ status: "signed", signatureData: body.signatureData, signedAt: new Date(), updatedAt: new Date() })
+          .where(and(
+            eq(advanceRequests.id, id),
+            eq(advanceRequests.branchEmployeeId, emp.id),
+            eq(advanceRequests.status, "awaiting_signature"),
+          ))
+          .returning();
+        if (rows.length) await queueHrSourceNotification("advance", id, tx);
+        return rows;
+      });
       if (updated.length === 0) {
         return res.status(400).json({ error: "هذا الطلب غير متاح للتوقيع" });
       }
-      await notifyHrOfRequest(emp, {
-        title: "موظف وقّع نموذج سلفة",
-        message: `${emp.employeeName} وقّع نموذج السلفة (${existing.approvedAmount ?? existing.amount} ر.س على ${existing.installmentMonths ?? 1} قسطاً). الطلب جاهز للاعتماد النهائي من إدارة شؤون الموظفين.`,
-        linkUrl: "/hr/advances",
-        relatedEntityId: id,
-      });
       res.json(updated[0]);
     } catch (e: any) {
       if (e instanceof z.ZodError) return res.status(400).json({ error: "بيانات غير صحيحة", details: e.errors });
@@ -611,6 +604,7 @@ export function registerSelfServiceRoutes(app: Express) {
         return res.status(400).json({ error: "هذه التصفية غير متاحة للتوقيع" });
       }
       await notifyHrOfRequest(emp, {
+        source: "leave_settlement",
         title: "موظف وقّع تصفية إجازة",
         message: `${emp.employeeName} وقّع تصفية الإجازة (${existing.settledDays} يوم / ${existing.finalAmount} ر.س) وأقرّ بالاستلام. جاهزة لتأكيد الصرف وحفظها ضمن التصفيات المصروفة.`,
         linkUrl: "/hr/leaves",
@@ -1096,6 +1090,7 @@ export function registerSelfServiceRoutes(app: Express) {
         .returning();
       if (!row) return res.status(409).json({ error: "التقييم غير موجود أو سبق الإقرار عليه" });
       await notifyHrOfRequest(emp, {
+        source: "evaluation",
         title: "موظف اطّلع على تقييمه",
         message: `${emp.employeeName} أقرّ بالاطلاع على تقييم أدائه (${row.periodStart} → ${row.periodEnd})${comment ? ` — تعليقه: ${comment}` : ""}`,
         linkUrl: "/hr/evaluations",
@@ -1706,13 +1701,17 @@ export function registerSelfServiceRoutes(app: Express) {
 
       // الموافقة المبدئية (مستخدم بصلاحية approve فقط، والطلب pending)
       if (!isFinal) {
-        const [updated] = await db.update(advanceRequests).set({
-          status: "pre_approved",
-          preApprovedBy: reviewerId,
-          preApprovedAt: new Date(),
-          preApproverNote: decision.note,
-          updatedAt: new Date(),
-        }).where(and(eq(advanceRequests.id, id), eq(advanceRequests.status, "pending"))).returning();
+        const updated = await db.transaction(async tx => {
+          const [row] = await tx.update(advanceRequests).set({
+            status: "pre_approved",
+            preApprovedBy: reviewerId,
+            preApprovedAt: new Date(),
+            preApproverNote: decision.note,
+            updatedAt: new Date(),
+          }).where(and(eq(advanceRequests.id, id), eq(advanceRequests.status, "pending"))).returning();
+          if (row) await queueHrSourceNotification("advance", id, tx);
+          return row;
+        });
         if (!updated) return res.status(400).json({ error: "تمت معالجة هذا الطلب مسبقاً" });
 
         const [emp] = await db.select().from(branchEmployees).where(eq(branchEmployees.id, existing.branchEmployeeId));

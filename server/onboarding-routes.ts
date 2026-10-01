@@ -13,6 +13,7 @@ import {
   systemNotifications,
 } from "@shared/schema";
 import { storage } from "./storage";
+import { queueHrSourceNotification } from "./hr-system-notifications";
 import { sendWhatsAppMessage, isTwilioConfigured } from "./twilio-service";
 import { operationsHrManagerOnly } from "./operations-hr-routes";
 import {
@@ -1157,6 +1158,7 @@ export function registerOnboardingRoutes(app: Express) {
           sql`${onboardingTokens.expiresAt} > clock_timestamp()`,
         )).returning({ id: onboardingTokens.id });
         if (!used.length) throw new Error("JOINING_SIGN_STATE_CHANGED");
+        if (n.branchId) await queueHrSourceNotification("joining", n.id, tx);
         return { success: true, distanceM, withinRadius };
       });
       if ("error" in result) return res.status(result.status).json({ error: result.error });

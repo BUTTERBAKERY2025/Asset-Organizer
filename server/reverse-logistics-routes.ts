@@ -6,6 +6,7 @@ import { pool } from "./db";
 import { isAuthenticated, requirePermission, getAllowedBranchIds } from "./auth";
 import { reverseCanonical, reverseInspectionAllowed, reverseQuantityAllowed, reverseReceiptAllowed, reverseWriteoffAllowed, reverseReleaseLots } from "@shared/reverse-logistics";
 import { assertDeliveryDispatchReady, cancelDeliveryAssignmentForSource, DeliveryDispatchConflict } from "./delivery-dispatch-guard";
+import { insertReverseMovementNotification, dispatchReverseNotificationsAfterCommit } from "./reverse-logistics-notifications";
 
 // Main warehouse is represented by null ONLY inside this module. It is never a
 // second balance: warehouse_items.current_stock is its authoritative balance.
@@ -245,12 +246,14 @@ export function registerReverseLogisticsRoutes(app: Express) {
   const mainWarehouseReceiver = (req: Request) => globalWarehouse(req) ||
     req.currentUser?.role === "production_development_manager" ||
     (req.currentUser?.branchId === "main_warehouse" && scope(req, "main_warehouse"));
-  const run = async (req: Request, res: any, fn: (c: PoolClient) => Promise<any>) => {
+  const run = async (req: Request, res: any, fn: (c: PoolClient, notificationIds: number[]) => Promise<any>) => {
     const c = await pool.connect();
+    const notificationIds: number[] = [];
     try {
       await c.query("BEGIN");
-      const result = await fn(c);
+      const result = await fn(c, notificationIds);
       await c.query("COMMIT");
+      dispatchReverseNotificationsAfterCommit(notificationIds);
       res.json(result);
     } catch (e: any) {
       await c.query("ROLLBACK");
@@ -390,7 +393,7 @@ export function registerReverseLogisticsRoutes(app: Express) {
     if (!raced || raced.create_fingerprint !== fingerprint) throw new Reject("Creation key reused with different payload");
     return raced;
   }));
-  app.post("/api/reverse-logistics/:id/:action", ...warehouseEdit, async (req,res) => run(req,res,async c => {
+  app.post("/api/reverse-logistics/:id/:action", ...warehouseEdit, async (req,res) => run(req,res,async (c, notificationIds) => {
     const movementId = id.parse(req.params.id), op = z.enum(["request","cancel","dispatch","receive","inspect","writeoff"]).parse(req.params.action);
     const body = action.parse(req.body), userId = actor(req);
     // Lock the parent provenance row first for competing returns; for other
@@ -468,8 +471,9 @@ export function registerReverseLogisticsRoutes(app: Express) {
       carrier_name=CASE WHEN $3='dispatch' THEN $7 ELSE carrier_name END,
       vehicle_number=CASE WHEN $3='dispatch' THEN $8 ELSE vehicle_number END
       WHERE id=$1 RETURNING *`,[movementId,next,op,body.receivedQuantity??0,body.usableQuantity??0,body.damagedQuantity??0,dispatchDriver?.driverName??null,dispatchDriver?.vehicleNumber??null]))[0];
-    await c.query("INSERT INTO reverse_movement_events(movement_id,action,actor_id,idempotency_key,payload) VALUES($1,$2,$3,$4,$5)",
+    const noticeEvent = await c.query("INSERT INTO reverse_movement_events(movement_id,action,actor_id,idempotency_key,payload) VALUES($1,$2,$3,$4,$5) RETURNING id",
       [movementId,op,userId,body.idempotencyKey,JSON.stringify(body)]);
+    notificationIds.push(...await insertReverseMovementNotification(c, result, noticeEvent.rows[0].id, op, userId));
     return result;
   }));
 }

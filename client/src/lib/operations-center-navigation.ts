@@ -1,4 +1,4 @@
-import { parseNoticeAction } from "@shared/operations-center-notifications";
+import { parseAnnouncementAction, parseNoticeAction } from "@shared/operations-center-notifications";
 import type { QueryClient } from "@tanstack/react-query";
 
 export const operationsCenterQueryRoots = ["/api/operations-center", "/api/operations-center/supply", "/api/operations-center/people", "/api/operations-center/notifications", "/api/operations-center/month-workflow", "/api/operations-center/monthly"] as const;
@@ -362,7 +362,25 @@ export function centerNoticeDestination(
   action: string | null | undefined, noticeBranches: readonly string[], allowedScope: readonly string[],
   returnScope: readonly string[], performanceDays: 7 | 30, origin: string,
   workspace?: string,
-): { href: string; branchId: string } | null {
+): { href: string; branchId: string; navigationKind?: "general" | "external" } | null {
+  const announcement = noticeBranches.length === 0 ? parseAnnouncementAction(action, origin) : null;
+  if (announcement && !returnScope.some(id => !allowedScope.includes(id))) {
+    if (announcement.kind === "external") return { href: announcement.href, branchId: "", navigationKind: "external" };
+    const candidate = new URL(announcement.href, origin);
+    const recordRoutes = ["/central-kitchen-orders", "/transfer-requests", "/reverse-logistics", "/driver-deliveries",
+      "/delivery-management", "/finished-goods-inventory", "/kitchen-warehouse-shipping", "/hr/leaves", "/hr/advances",
+      "/hr-hub", "/hr/onboarding", "/employee-attendance-report", "/cashier-journals", "/daily-closures",
+      "/daily-closure", "/purchasing-requests", "/salaries"];
+    const contextKeys = ["branchId", "branchIds", "kitchenId", "orderId", "transferId", "movementId", "shipmentId", "deliveryId",
+      "leaveId", "advanceId", "attendanceId", "offerId", "notificationId", "closureId", "journalId"];
+    // General notices may open only known non-record pages without fabricating
+    // branch context. Unknown/source routes fall through to the strict gate.
+    const generalPages = ["/", "/notifications-center", "/notifications-management", "/help", "/profile",
+      "/my-portal", "/settings", "/operations-center", "/dashboard", "/platform-home"];
+    if (generalPages.includes(candidate.pathname) && !contextKeys.some(key => candidate.searchParams.has(key))
+      && !recordRoutes.some(path => candidate.pathname === path || candidate.pathname.startsWith(`${path}/`)))
+      return { href: announcement.href, branchId: "", navigationKind: "general" };
+  }
   const href = parseNoticeAction(action, origin);
   if (!href) return null;
   const url = new URL(href, origin);

@@ -52,3 +52,21 @@ export function parseNoticeAction(action: string | null | undefined, origin: str
     return `${url.pathname}${url.search}${url.hash}`;
   } catch { return null; }
 }
+
+/** Administrator-authored announcement CTA, not a business-source bypass.
+ * Record navigation still uses parseNoticeAction and its branch/source guards. */
+export function parseAnnouncementAction(action: string | null | undefined, origin: string):
+  { kind: "internal" | "external"; href: string } | null {
+  if (!action || /[\\\u0000-\u0020\u007f]/.test(action) || action.startsWith("//")) return null;
+  const internal = parseNoticeAction(action, origin);
+  if (internal) return { kind: "internal", href: internal };
+  try {
+    const url = new URL(action);
+    if (url.protocol !== "https:" || url.username || url.password) return null;
+    if (url.origin === origin) {
+      const href = parseNoticeAction(`${url.pathname}${url.search}${url.hash}`, origin);
+      return href ? { kind: "internal", href } : null;
+    }
+    return { kind: "external", href: url.href };
+  } catch { return null; }
+}
