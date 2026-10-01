@@ -21,7 +21,11 @@ import {
 } from "./employee-account-delegation-policy";
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
-type Actor = typeof users.$inferSelect;
+const accountProjection = {
+  id: users.id, username: users.username, role: users.role, branchId: users.branchId,
+  jobTitle: users.jobTitle, isActive: users.isActive, updatedAt: users.updatedAt,
+};
+type Actor = Pick<typeof users.$inferSelect, keyof typeof accountProjection>;
 type Employee = Pick<typeof branchEmployees.$inferSelect,
   "id" | "employeeName" | "branchId" | "linkedUserId" | "status" | "jobTitle">;
 const POLICY_KEY = "employee_account_delegation.policy.v1";
@@ -58,10 +62,11 @@ async function policy(tx: Tx): Promise<EmployeeAccountPolicy> {
     throw new DelegationError(503, "INVALID_POLICY", "سياسة التفويض غير صالحة؛ يرجى مراجعة مسؤول النظام");
   }
 }
-async function actorState(tx: Tx, id: string, adminOnly = false) {
-  const [actor] = await tx.select().from(users).where(eq(users.id, id));
+async function actorState(tx: Tx, id: string, adminOnly = false, beforeGrants?: () => Promise<void>) {
+  const [actor] = await tx.select(accountProjection).from(users).where(eq(users.id, id));
   if (!actor) deny("DELEGATION_FORBIDDEN", "الحساب غير موجود");
   actorMayManage(actor, adminOnly);
+  await beforeGrants?.();
   const grants = await tx.select({ branchId: userBranchAccess.branchId, accessLevel: userBranchAccess.accessLevel })
     .from(userBranchAccess).where(eq(userBranchAccess.userId, id));
   return { actor, grants: grants.filter(g => ["full", "limited"].includes(g.accessLevel))
@@ -81,9 +86,12 @@ async function audit(tx: Tx, actor: Actor, action: string, employee: Employee | 
 async function suspensionOwned(tx: Tx, account: Actor, employee: Employee) {
   const [row] = await tx.select({ value: portalSettings.value }).from(portalSettings)
     .where(eq(portalSettings.key, suspensionKey(account.id)));
-  if (!row || account.isActive !== "inactive" || !account.updatedAt) return false;
+  return suspensionMatches(row?.value, account, employee);
+}
+function suspensionMatches(value: string | undefined, account: Actor, employee: Employee) {
+  if (!value || account.isActive !== "inactive" || !account.updatedAt) return false;
   try {
-    const marker = JSON.parse(row.value);
+    const marker = JSON.parse(value);
     // Any subsequent admin edit/freeze changes updatedAt and invalidates this
     // token. Ops cannot "adopt" an already-inactive account to manufacture it.
     return marker.employeeId === employee.id && marker.branchId === employee.branchId
@@ -92,7 +100,7 @@ async function suspensionOwned(tx: Tx, account: Actor, employee: Employee) {
 }
 async function accountState(tx: Tx, actor: Actor, employee: Employee, approved: EmployeeAccountPolicy) {
   if (!employee.linkedUserId) return null;
-  const [account] = await tx.select().from(users).where(eq(users.id, employee.linkedUserId));
+  const [account] = await tx.select(accountProjection).from(users).where(eq(users.id, employee.linkedUserId));
   if (!account) deny("INVALID_LINK", "رابط حساب الموظف غير صالح");
   const access = await tx.select({ branchId: userBranchAccess.branchId }).from(userBranchAccess).where(eq(userBranchAccess.userId, account.id));
   const assignments = await tx.select({ id: userAssignments.id }).from(userAssignments).where(eq(userAssignments.userId, account.id));
@@ -134,7 +142,8 @@ function employeeId(value: string) {
     throw new DelegationError(400, "INVALID_EMPLOYEE", "معرف الموظف غير صالح");
   return Number(value);
 }
-const endpoint = (work: RequestHandler): RequestHandler => async (req, res, next) => {
+const endpoint = (work: RequestHandler, operation = "account_write"): RequestHandler => async (req, res, next) => {
+  const started = performance.now();
   res.setHeader("Cache-Control", "private, no-store");
   res.setHeader("Pragma", "no-cache");
   try { await work(req, res, next); } catch (error: any) {
@@ -142,6 +151,11 @@ const endpoint = (work: RequestHandler): RequestHandler => async (req, res, next
     if (error instanceof ZodError) return res.status(400).json({ error: "بيانات الطلب غير صالحة؛ الحقول الإضافية غير مسموحة", code: "INVALID_INPUT" });
     // SQL errors can contain the bound hashed password or account identifiers.
     // Never serialize/log the error object, request body, or generated response.
+    const rawCode = error?.code ?? error?.cause?.code;
+    const sqlstate = typeof rawCode === "string" && /^[0-9A-Z]{5}$/.test(rawCode) ? rawCode : null;
+    console.error(JSON.stringify({ operation, sqlstate, elapsedMs: Math.round(performance.now() - started) }));
+    if (sqlstate === "57014")
+      return res.status(503).json({ error: "انتهت مهلة قراءة البيانات؛ حاول مجدداً", code: "ACCOUNT_OPERATION_TIMEOUT" });
     if (["23505", "40001", "40P01", "55P03"].includes(error?.code ?? error?.cause?.code))
       return res.status(409).json({ error: "تغيرت البيانات أو أنشئ الحساب بالفعل؛ حدّث القائمة وحاول مجدداً", code: "CONCURRENT_CHANGE" });
     return res.status(500).json({ error: "تعذر إتمام عملية الحساب بأمان؛ لم يتم اعتماد التغيير", code: "ACCOUNT_OPERATION_FAILED" });
@@ -162,9 +176,25 @@ export function registerEmployeeAccountDelegation(app: Express) {
   });
 
   app.get("/api/operations/employee-accounts", isAuthenticated, endpoint(async (req, res) => {
+    const deadline = performance.now() + 10_000;
     const result = await db.transaction(async tx => {
-      await lockDelegationState(tx);
-      const { actor, grants } = await actorState(tx, req.session.userId!);
+      // Snapshot reads do not block legacy writers. Every query sees the same
+      // fresh snapshot; writes retain their authoritative table locks below.
+      // PostgreSQL versions before 17 lack transaction_timeout. Apply the
+      // remaining transaction budget before each bounded batch instead.
+      const remainingBudget = () => {
+        const remaining = Math.floor(deadline - performance.now());
+        if (remaining <= 0) throw Object.assign(new Error("Directory deadline"), { code: "57014" });
+        return remaining;
+      };
+      const budget = async () => {
+        const remaining = remainingBudget();
+        await tx.execute(sql`SELECT set_config('statement_timeout', ${String(remaining)}, true),
+          set_config('idle_in_transaction_session_timeout', '10000', true)`);
+      };
+      await budget();
+      const { actor, grants } = await actorState(tx, req.session.userId!, false, budget);
+      await budget();
       const approved = await policy(tx);
       // Disabled approval still supplies the ceiling for reduction-only editing;
       // it does not authorize creation, expansion or reactivation.
@@ -176,22 +206,78 @@ export function registerEmployeeAccountDelegation(app: Express) {
       // Policy withdrawal is prospective. Keep the safe minimal directory
       // visible so existing accounts can still be suspended or reduced.
       if (actor.role !== "admin" && !grants.length) return result;
-      const employees = await tx.select(employeeProjection).from(branchEmployees).where(and(
+      const scope = and(
         eq(branchEmployees.status, "active"), ne(branchEmployees.branchId, HQ_BRANCH_ID),
         actor.role !== "admin" ? inArray(branchEmployees.branchId, grants) : undefined,
-      )).orderBy(branchEmployees.employeeName, branchEmployees.id);
+      );
+      const linked = tx.select({ id: branchEmployees.linkedUserId }).from(branchEmployees).where(scope);
+      await budget();
+      const employees = await tx.select({ ...employeeProjection, branchName: branches.name })
+        .from(branchEmployees).leftJoin(branches, eq(branches.id, branchEmployees.branchId))
+        .where(scope).orderBy(branchEmployees.employeeName, branchEmployees.id);
+      await budget();
+      const accounts = await tx.select(accountProjection).from(users).where(inArray(users.id, linked));
+      await budget();
+      const access = await tx.select({ userId: userBranchAccess.userId, branchId: userBranchAccess.branchId })
+        .from(userBranchAccess).where(inArray(userBranchAccess.userId, linked));
+      await budget();
+      const assignments = await tx.selectDistinct({ userId: userAssignments.userId }).from(userAssignments)
+        .where(inArray(userAssignments.userId, linked));
+      await budget();
+      const overrides = await tx.selectDistinct({ userId: userPermissionOverrides.userId }).from(userPermissionOverrides)
+        .where(inArray(userPermissionOverrides.userId, linked));
+      await budget();
+      const direct = await tx.select({ userId: userPermissions.userId, module: userPermissions.module, actions: userPermissions.actions })
+        .from(userPermissions).where(inArray(userPermissions.userId, linked));
+      await budget();
+      const markers = await tx.select({ key: portalSettings.key, value: portalSettings.value }).from(portalSettings)
+        .where(inArray(portalSettings.key, tx.select({ key: sql<string>`'employee_account_delegation.suspension.' || ${branchEmployees.linkedUserId}` })
+          .from(branchEmployees).where(scope)));
+      const byAccount = new Map(accounts.map(a => [a.id, a]));
+      const assigned = new Set(assignments.map(a => a.userId));
+      const overridden = new Set(overrides.map(a => a.userId));
+      const markerValues = new Map(markers.map(m => [m.key, m.value]));
+      const grantsByUser = new Map<string, string[]>();
+      for (const g of access) {
+        const list = grantsByUser.get(g.userId) ?? [];
+        list.push(g.branchId); grantsByUser.set(g.userId, list);
+      }
+      const permissionsByUser = new Map<string, DelegatedPermission[]>();
+      for (const p of direct) {
+        const list = permissionsByUser.get(p.userId) ?? [];
+        list.push({ module: p.module, actions: p.actions }); permissionsByUser.set(p.userId, list);
+      }
       for (const employee of employees) {
-        try { result.employees.push(await dto(tx, actor, employee, approved)); }
+        remainingBudget();
+        try {
+          let account: DelegatedEmployeeAccount["account"] = null;
+          if (employee.linkedUserId) {
+            const target = byAccount.get(employee.linkedUserId);
+            if (!target) deny("INVALID_LINK", "رابط حساب الموظف غير صالح");
+            const permissions = permissionsByUser.get(target.id) ?? [];
+            targetMayManage(actor.id, target, employee.branchId, grantsByUser.get(target.id) ?? [],
+              Number(assigned.has(target.id)), Number(overridden.has(target.id)), permissions, approved);
+            if (!["active", "inactive"].includes(target.isActive ?? ""))
+              deny("PROTECTED_ACCOUNT", "حالة الحساب تتطلب مراجعة مسؤول النظام");
+            account = { id: target.id, username: target.username, isActive: target.isActive as "active" | "inactive",
+              permissions, canReactivate: approved.enabled
+                && permissionsWithin(effectiveDelegatedPermissions(target, permissions), approved.permissions)
+                && (actor.role === "admin" || suspensionMatches(markerValues.get(suspensionKey(target.id)), target, employee)) };
+          }
+          result.employees.push({ employeeId: employee.id, employeeName: employee.employeeName,
+            branchId: employee.branchId, branchName: employee.branchName ?? employee.branchId, account });
+        }
         catch (error) {
           // Protected accounts aren't disclosed to operations, even as a count
           // or a user identifier. Mutation routes still return explicit denials.
           if (!(error instanceof DelegationError) || error.status !== 403) throw error;
         }
       }
+      remainingBudget();
       return result;
-    });
+    }, { isolationLevel: "repeatable read", accessMode: "read only" });
     res.json(result);
-  }));
+  }, "employee_account_directory"));
 
   app.put("/api/admin/employee-account-policy", isAuthenticated, endpoint(async (req, res) => {
     const input = policyInput.parse(req.body);

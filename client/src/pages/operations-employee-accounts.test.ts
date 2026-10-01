@@ -74,6 +74,20 @@ afterEach(async () => {
 });
 
 describe("operations employee account page", () => {
+  it("shows an explicit offline state instead of an indefinite loading skeleton or stale accounts", async () => {
+    mocks.state = { data, isError: false, isFetchedAfterMount: false, isFetching: false, isPaused: true };
+    await mount();
+    expect(JSON.stringify(renderer.toJSON())).toContain("الاتصال غير متاح");
+    expect(renderer.root.findAllByProps({ role: "status" })).toHaveLength(0);
+    expect(renderer.root.findAllByProps({ "data-testid": "employee-account-2" })).toHaveLength(0);
+    mocks.state = { ...mocks.state, isFetchedAfterMount: true };
+    await renderAgain();
+    expect(renderer.root.findAllByProps({ "data-testid": "employee-account-2" })).toHaveLength(0);
+    mocks.state = { ...mocks.state, isPaused: false };
+    await renderAgain();
+    expect(renderer.root.findAllByProps({ "data-testid": "employee-account-2" })).toHaveLength(1);
+  });
+
   it("eagerly loads the real protected route rather than stranding its lazy payload", () => {
     const app = readFileSync(new URL("../App.tsx", import.meta.url), "utf8");
     expect(app).toContain('import OperationsEmployeeAccountsPage from "@/pages/operations-employee-accounts";');

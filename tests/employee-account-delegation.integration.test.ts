@@ -4,7 +4,7 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-const runtime = vi.hoisted(() => ({ db: null as any, pool: null as any }));
+const runtime = vi.hoisted(() => ({ db: null as any, pool: null as any, queries: [] as string[] }));
 vi.mock("../server/db", () => ({
   db: new Proxy({}, { get: (_object, key) => {
     const value = runtime.db?.[key];
@@ -79,7 +79,7 @@ describe("employee account delegation atomic PostgreSQL API", () => {
     await root.query(`CREATE SCHEMA "${schema}"`);
     pool = new pg.Pool({ connectionString: process.env.DATABASE_URL, max: 6, options: `-c search_path=${schema}` });
     runtime.pool = pool;
-    runtime.db = drizzle(pool);
+    runtime.db = drizzle(pool, { logger: { logQuery: (text: string) => runtime.queries.push(text) } });
     await query(`
       CREATE TABLE branches (id varchar PRIMARY KEY, name text NOT NULL);
       CREATE TABLE users (
@@ -146,6 +146,97 @@ describe("employee account delegation atomic PostgreSQL API", () => {
     expect(result.body.employees).toEqual([{ employeeId: 1, employeeName: "موظف مسجل", branchId: "a", branchName: "الفرع أ", account: null }]);
     expect(JSON.stringify(result.body)).not.toMatch(/salary|iqama|bank|secret-|9000/);
     expect(result.headers["Cache-Control"]).toContain("no-store");
+  });
+  it("uses a constant bounded number of minimal snapshot reads for large linked/unlinked directories", async () => {
+    await configure();
+    runtime.queries = [];
+    expect((await invoke("get")).statusCode).toBe(200);
+    const smallCount = runtime.queries.length;
+    await query(`
+      INSERT INTO users(id,username,password,role,branch_id)
+        SELECT 'scale-'||n, 'u-'||n, 'sensitive-hash', CASE WHEN n > 400 THEN 'admin' ELSE 'employee' END, 'a'
+        FROM generate_series(1,420) n;
+      INSERT INTO branch_employees(branch_id,employee_name,linked_user_id)
+        SELECT 'a', 'linked-'||n, 'scale-'||n FROM generate_series(1,420) n;
+      INSERT INTO branch_employees(branch_id,employee_name)
+        SELECT 'a', 'unlinked-'||n FROM generate_series(1,400) n;
+      INSERT INTO user_branch_access(user_id,branch_id)
+        SELECT 'scale-'||n,'a' FROM generate_series(1,420) n;
+      INSERT INTO user_permissions(user_id,module,actions)
+        SELECT 'scale-'||n,'cashier_journal',ARRAY['view'] FROM generate_series(1,420) n;
+      INSERT INTO user_assignments(user_id) VALUES ('scale-1');
+      INSERT INTO user_permission_overrides(user_id) VALUES ('scale-2');
+      INSERT INTO user_branch_access(user_id,branch_id) VALUES ('scale-3','b');
+      UPDATE users SET is_active='frozen' WHERE id='scale-4';
+      INSERT INTO user_permissions(user_id,module,actions) VALUES ('scale-5','users',ARRAY['view']);
+    `);
+    runtime.queries = [];
+    const result = await invoke("get");
+    expect(result.statusCode).toBe(200);
+    expect(result.body.employees).toHaveLength(796);
+    expect(result.body.employees.filter((e: any) => e.account)).toHaveLength(395);
+    expect(runtime.queries.length).toBe(smallCount);
+    expect(runtime.queries.length).toBeLessThanOrEqual(24);
+    expect(runtime.queries.join("\n")).not.toMatch(/lock table|password|first_name|profile_image|select \*/i);
+    expect(runtime.queries.join("\n")).toMatch(/repeatable read read only/i);
+    expect(JSON.stringify(result.body)).not.toMatch(/sensitive-hash|scale-(?:[1-5]|40[1-9]|41\d|420)"/);
+    // No cache: a subsequent write is visible on the very next request.
+    await query("UPDATE users SET role='admin' WHERE id='scale-6'");
+    expect((await invoke("get")).body.employees).toHaveLength(795);
+  });
+  it("matches locked mutation DTOs for owned suspension, admin refreeze and policy withdrawal", async () => {
+    await configure();
+    const created = await create();
+    const directoryEmployee = async (actor = "ops") =>
+      (await invoke("get", "", {}, actor)).body.employees.find((e: any) => e.employeeId === 1);
+    expect(await directoryEmployee()).toEqual(created.body.employee);
+    const suspended = await invoke("patch", "/:employeeId/status", { isActive: "inactive" });
+    expect(suspended.body.employee.account.canReactivate).toBe(true);
+    expect(await directoryEmployee()).toEqual(suspended.body.employee);
+    await invoke("patch", "/:employeeId/status", { isActive: "inactive" }, "admin");
+    expect((await directoryEmployee()).account.canReactivate).toBe(false);
+    expect((await directoryEmployee("admin")).account.canReactivate).toBe(true);
+    await configure(false);
+    expect((await directoryEmployee("admin")).account.canReactivate).toBe(false);
+  });
+  it("reports only sanitized SQLSTATE, operation and elapsed time on database timeouts", async () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.spyOn(runtime.db, "transaction").mockRejectedValueOnce({
+      cause: { code: "57014", message: "secret-password", parameters: ["secret-user-id"] },
+    });
+    const result = await invoke("get");
+    expect(result.statusCode).toBe(503);
+    expect(result.body.code).toBe("ACCOUNT_OPERATION_TIMEOUT");
+    expect(logged).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(logged.mock.calls[0][0])).toEqual({
+      operation: "employee_account_directory", sqlstate: "57014", elapsedMs: expect.any(Number),
+    });
+  });
+  it("does not take write-blocking table locks and respects delivery authority and invalid suspension markers", async () => {
+    await configure();
+    await create();
+    const accountId = await id();
+    await invoke("patch", "/:employeeId/status", { isActive: "inactive" });
+    const client = await pool.connect();
+    try {
+      // Compatible with snapshot reads, incompatible with the former directory
+      // SHARE ROW EXCLUSIVE lock. No uncommitted data should leak into GET.
+      await client.query("BEGIN");
+      await client.query("UPDATE users SET role='admin' WHERE id=$1", [accountId]);
+      const result = await invoke("get");
+      expect(result.statusCode).toBe(200);
+      expect(result.body.employees[0].account.canReactivate).toBe(true);
+    } finally {
+      await client.query("ROLLBACK");
+      client.release();
+    }
+    await query("UPDATE portal_settings SET value='invalid-json' WHERE key=$1",
+      [`employee_account_delegation.suspension.${accountId}`]);
+    expect((await invoke("get")).body.employees[0].account.canReactivate).toBe(false);
+    await query("UPDATE users SET job_title='delivery' WHERE id=$1", [accountId]);
+    // Even admin cannot reactivate intrinsic delivery rights outside approval.
+    const result = await invoke("get", "", {}, "admin");
+    expect(result.body.employees.find((e: any) => e.employeeId === 1).account.canReactivate).toBe(false);
   });
   it("atomically creates one linked branch account, hashes the one-time secret, and audits no secrets", async () => {
     await configure();

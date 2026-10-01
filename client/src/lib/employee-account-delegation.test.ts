@@ -2,9 +2,45 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { canManageEmployeeAccounts, constrainDelegatedPermissions, createEmployeeAccountCommandGuard, employeeAccountScope, EmployeeAccountRequestError, hasUnapprovedPermissions, requestEmployeeAccount } from "./employee-account-delegation";
 import { getCachedData, setCachedData, shouldPersist } from "./persistentCache";
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers(); });
 
 describe("narrow employee account frontend security", () => {
+  it.each(["headers", "body"])("bounds a stalled directory %s request without retrying", async phase => {
+    vi.useFakeTimers();
+    let signal: AbortSignal;
+    const fetch = vi.fn((_url, options) => {
+      signal = options.signal;
+      const stalled = new Promise((_resolve, reject) => signal.addEventListener("abort", () => reject(signal.reason)));
+      return phase === "headers" ? stalled : Promise.resolve({ ok: true, json: () => stalled });
+    });
+    vi.stubGlobal("fetch", fetch);
+    const result = requestEmployeeAccount("/api/operations/employee-accounts", { signal: new AbortController().signal });
+    const settled = vi.fn();
+    void result.then(settled, settled);
+    await vi.advanceTimersByTimeAsync(30_001);
+    expect(settled).toHaveBeenCalledOnce();
+    await expect(result).rejects.toMatchObject({ name: "TimeoutError" });
+    expect(signal!.aborted).toBe(true);
+    expect(fetch).toHaveBeenCalledOnce();
+  });
+
+  it("forwards cancellation and cleans up the deadline after success", async () => {
+    vi.useFakeTimers();
+    const controller = new AbortController();
+    const fetch = vi.fn((_url, options) => new Promise((_resolve, reject) => {
+      options.signal.addEventListener("abort", () => reject(options.signal.reason));
+    }));
+    vi.stubGlobal("fetch", fetch);
+    const result = requestEmployeeAccount("/api/operations/employee-accounts", { signal: controller.signal });
+    const rejected = expect(result).rejects.toMatchObject({ name: "AbortError" });
+    controller.abort();
+    await rejected;
+    expect(vi.getTimerCount()).toBe(0);
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("{}")));
+    await requestEmployeeAccount("/api/operations/employee-accounts");
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
   const approved = [{ module: "cashier_journal", actions: ["view", "create"] }];
 
   it("admits only admin and operations_manager, not blanket users access", () => {

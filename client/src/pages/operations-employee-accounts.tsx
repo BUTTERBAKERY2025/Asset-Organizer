@@ -48,7 +48,7 @@ function EmployeeAccountsWorkspace({ actorId, actorRole, authScope }: { actorId:
     void client.cancelQueries({ queryKey: key, exact: true });
     client.removeQueries({ queryKey: key, exact: true });
   }, [client, actorId, authScope]);
-  const data = !directory.isError && directory.isFetchedAfterMount ? directory.data : undefined;
+  const data = !directory.isError && !directory.isPaused && directory.isFetchedAfterMount ? directory.data : undefined;
   const branches = Array.from(new Map((data?.employees ?? []).map(employee => [employee.branchId, { id: employee.branchId, name: employee.branchName }])).values());
   const validBranch = !branchId || branches.some(branch => branch.id === branchId);
   // Fresh server scope/policy changes unmount any open credential or action dialog.
@@ -87,7 +87,10 @@ function EmployeeAccountsWorkspace({ actorId, actorRole, authScope }: { actorId:
         </div>
       </div>
     </header>
-    {directory.isError ? <div role="alert" className="rounded-xl border border-destructive/30 bg-card p-5 text-center">
+    {directory.isPaused ? <div role="alert" className="rounded-xl border border-amber-200 bg-card p-5 text-center">
+      <p className="text-sm">الاتصال غير متاح. تحقق من الشبكة؛ ستتم إعادة التحقق من الحسابات عند عودة الاتصال.</p>
+      <p className="mt-1 text-xs text-muted-foreground">لم نعرض بيانات أو صلاحيات قديمة.</p>
+    </div> : directory.isError ? <div role="alert" className="rounded-xl border border-destructive/30 bg-card p-5 text-center">
       <AlertTriangle className="mx-auto mb-2 h-6 w-6 text-destructive" /><p className="text-sm text-destructive">{employeeAccountErrorMessage(directory.error)}</p>
       <p className="mt-1 text-xs text-muted-foreground">لم نعرض بيانات أو صلاحيات قديمة.</p><Button variant="outline" className="mt-3 min-h-11" onClick={refresh}>إعادة المحاولة</Button>
     </div> : !data ? <div role="status" className="space-y-3 rounded-xl border bg-card p-5"><div className="h-5 w-44 animate-pulse rounded bg-muted" /><div className="h-28 animate-pulse rounded-lg bg-muted" /><span className="sr-only">جار التحقق من الموظفين والسياسة</span></div> : <>

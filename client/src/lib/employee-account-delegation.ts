@@ -50,25 +50,40 @@ export class EmployeeAccountRequestError extends Error {
 export async function requestEmployeeAccount<T>(url: string, options: {
   method?: "GET" | "POST" | "PUT" | "PATCH"; body?: unknown; signal?: AbortSignal;
 } = {}): Promise<T> {
-  const response = await fetch(url, {
-    method: options.method ?? "GET",
-    credentials: "include",
-    cache: "no-store",
-    signal: options.signal,
-    headers: options.body === undefined ? undefined : { "Content-Type": "application/json" },
-    body: options.body === undefined ? undefined : JSON.stringify(options.body),
-  });
-  if (!response.ok) {
-    let detail = "تعذر تنفيذ الطلب";
-    try {
-      const data: { error?: unknown } = await response.json();
-      if (typeof data.error === "string" && data.error) detail = data.error;
-    } catch {
-      detail = "استجابة غير صالحة من الخادم";
+  const controller = new AbortController();
+  const cancel = () => controller.abort(options.signal?.reason);
+  if (options.signal?.aborted) cancel();
+  else options.signal?.addEventListener("abort", cancel, { once: true });
+  // Keep the deadline through body consumption, not just response headers.
+  // A timed-out mutation is NOT retried: the server may have committed it.
+  const deadline = setTimeout(() => controller.abort(new DOMException("Request timed out", "TimeoutError")), 30_000);
+  try {
+    const response = await fetch(url, {
+      method: options.method ?? "GET",
+      credentials: "include",
+      cache: "no-store",
+      signal: controller.signal,
+      headers: options.body === undefined ? undefined : { "Content-Type": "application/json" },
+      body: options.body === undefined ? undefined : JSON.stringify(options.body),
+    });
+    if (!response.ok) {
+      let detail = "تعذر تنفيذ الطلب";
+      try {
+        const data: { error?: unknown } = await response.json();
+        if (typeof data.error === "string" && data.error) detail = data.error;
+      } catch {
+        detail = "استجابة غير صالحة من الخادم";
+      }
+      throw new EmployeeAccountRequestError(response.status, `${detail} (${response.status})`);
     }
-    throw new EmployeeAccountRequestError(response.status, `${detail} (${response.status})`);
+    return await response.json();
+  } catch (error) {
+    if (controller.signal.aborted) throw controller.signal.reason;
+    throw error;
+  } finally {
+    clearTimeout(deadline);
+    options.signal?.removeEventListener("abort", cancel);
   }
-  return response.json();
 }
 
 export function employeeAccountErrorMessage(error: unknown) {
