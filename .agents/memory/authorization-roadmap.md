@@ -1,0 +1,10 @@
+---
+name: Authorization rollout roadmap
+description: User-supplied six-stage sequence and rollout boundaries, distinct from individual security fixes.
+---
+
+The user supplied this sequence: approve the job/action/scope/assigner matrix; fix core authorization; build approved versioned job templates; simplify the operations-manager assignment UI; separate admin-managed additions; compare existing accounts and run an approved gradual pilot and migration.
+
+**Why:** The user asked to assess actual progress against these six stages, rather than treat individual fixes or test infrastructure as completion of the template rollout.
+
+**How to apply:** Use docs/operational-job-template-matrix.md and docs/governance/phase1-inventory-and-policy.md as starting evidence, not proof of matrix approval. Report implementation separately from approved policy and verified deployment. Do not change existing employee accounts or permissions in bulk. Library dependency remediation remains a separate parallel track, not a replacement for the six stages.
