@@ -1331,6 +1331,16 @@ export const MODULE_ACTIONS = [
 export type ModuleAction = (typeof MODULE_ACTIONS)[number];
 
 // User Permissions table - صلاحيات المستخدمين التفصيلية
+// Separate metadata keeps ordinary users reads compatible before the manual
+// migration. Permission resolvers MUST fail closed if this table is unavailable.
+export const userPermissionSourceModes = pgTable("user_permission_source_modes", {
+  userId: varchar("user_id").primaryKey().references(() => users.id, { onDelete: "cascade" }),
+  sourceMode: varchar("source_mode", { length: 20 }).$type<"direct" | "inherit">(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  check("chk_user_permission_source_modes", sql`${table.sourceMode} IS NULL OR ${table.sourceMode} IN ('direct', 'inherit')`),
+]);
+
 export const userPermissions = pgTable("user_permissions", {
   id: serial("id").primaryKey(),
   userId: varchar("user_id")

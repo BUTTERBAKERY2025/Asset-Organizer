@@ -5,7 +5,7 @@ import { and, eq, inArray, ne, sql } from "drizzle-orm";
 import { ZodError, z } from "zod";
 import {
   branchEmployees, branches, users, userBranchAccess, userPermissions,
-  userAssignments, userPermissionOverrides, portalSettings, systemAuditLogs,
+  userAssignments, userPermissionOverrides, userPermissionSourceModes, portalSettings, systemAuditLogs,
 } from "@shared/schema";
 import {
   EMPLOYEE_ACCOUNT_SAFE_PERMISSIONS, type DelegatedEmployeeAccount,
@@ -157,6 +157,13 @@ async function dto(tx: Tx, actor: Actor, employee: Employee, approved: EmployeeA
   };
 }
 async function replacePermissions(tx: Tx, id: string, selected: DelegatedPermission[]) {
+  // Delegated replacement has the same explicit-empty semantics as an admin
+  // replacement; persist it within the existing account-write transaction.
+  await tx.insert(userPermissionSourceModes).values({ userId: id, sourceMode: "direct" })
+    .onConflictDoUpdate({
+      target: userPermissionSourceModes.userId,
+      set: { sourceMode: "direct", updatedAt: new Date() },
+    });
   await tx.delete(userPermissions).where(eq(userPermissions.userId, id));
   if (selected.length) await tx.insert(userPermissions).values(selected.map(p => ({ userId: id, ...p })));
 }

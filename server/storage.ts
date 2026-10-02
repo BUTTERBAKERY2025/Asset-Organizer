@@ -1,5 +1,10 @@
 import memoize from "memoizee";
 import { randomUUID } from "node:crypto";
+import {
+  normalizePermissionDecisionSnapshot, checkPermissionDecision,
+  evaluatePermissionDecision, isPermissionTupleCurrent,
+  type PermissionContext, type PermissionDecisionSnapshot,
+} from "./permission-decision";
 import { assertDeliveryDispatchReady, cancelDeliveryAssignmentForSource } from "./delivery-dispatch-guard";
 import {
   allocateMaterialTransferCreation,
@@ -332,6 +337,7 @@ import {
   rolePermissions,
   userAssignments,
   userPermissionOverrides,
+  userPermissionSourceModes,
   userBranchAccess,
   cashierShiftTargets,
   averageTicketTargets,
@@ -777,6 +783,13 @@ export interface PermissionWithSource {
   roleName?: string;
   isActive: boolean;
   permissionId?: number;
+  scopeType?: string;
+  branchId?: string | null;
+  departmentId?: number | null;
+  startDate?: Date | string | null;
+  endDate?: Date | string | null;
+  expiresAt?: Date | string | null;
+  deny?: boolean;
 }
 
 export type UserAssignmentUpdate = Partial<Pick<InsertUserAssignment,
@@ -999,9 +1012,10 @@ export interface IStorage {
   getDailyLogExpenses(dailyLogId: number): Promise<ProjectExpense[]>;
 
   // User Permissions
-  getUserPermissions(userId: string, options?: { bypassCache?: boolean }): Promise<UserPermission[]>;
-  getUserPermissionsWithSources(userId: string): Promise<PermissionWithSource[]>;
-  getInheritedPermissions(userId: string): Promise<{ module: string; action: string; permissionId: number }[]>;
+  getPermissionDecisionSnapshot(userId: string): Promise<PermissionDecisionSnapshot>;
+  getUserPermissions(userId: string, options?: { bypassCache?: boolean; context?: PermissionContext }): Promise<UserPermission[]>;
+  getUserPermissionsWithSources(userId: string, context?: PermissionContext): Promise<PermissionWithSource[]>;
+  getInheritedPermissions(userId: string, context?: PermissionContext): Promise<{ module: string; action: string; permissionId: number }[]>;
   setUserPermission(permission: InsertUserPermission): Promise<UserPermission>;
   deleteUserPermissions(userId: string): Promise<boolean>;
   hasPermission(userId: string, module: string, action: string): Promise<boolean>;
@@ -3986,105 +4000,63 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(projectExpenses.expenseDate), desc(projectExpenses.id));
   }
 
-  // User Permissions - with caching
+  // Compatibility invalidator retained for all legacy mutation callers. Reads
+  // are now fresh, so neither context nor temporal boundaries can become stale.
   private permissionsCache = new Map<string, { data: UserPermission[], timestamp: number }>();
-  private PERMISSIONS_CACHE_TTL = 30000; // 30 seconds cache
 
-  async getUserPermissions(userId: string, options?: { bypassCache?: boolean }): Promise<UserPermission[]> {
-    const cached = this.permissionsCache.get(userId);
-    const now = Date.now();
-    if (!options?.bypassCache && cached && (now - cached.timestamp) < this.PERMISSIONS_CACHE_TTL) {
-      return cached.data;
-    }
-    
-    const permissionState = new Map<string, boolean>();
-    
-    const directPerms = await db
-      .select()
-      .from(userPermissions)
-      .where(eq(userPermissions.userId, userId));
-    
-    const hasCustomPermissions = directPerms.some(p => p.actions.length > 0);
-    
-    if (hasCustomPermissions) {
-      for (const perm of directPerms) {
-        for (const action of perm.actions) {
-          permissionState.set(`${perm.module}:${action}`, true);
-        }
+  async getPermissionDecisionSnapshot(userId: string): Promise<PermissionDecisionSnapshot> {
+    // A fresh coherent read per request. Never use the legacy flat cache for
+    // contextual decisions, and never turn a missing migration into inheritance.
+    return db.transaction(async (tx) => {
+      let sourceRows: { sourceMode: "direct" | "inherit" | null }[];
+      try {
+        sourceRows = await tx.select({ sourceMode: userPermissionSourceModes.sourceMode })
+          .from(userPermissionSourceModes).where(eq(userPermissionSourceModes.userId, userId));
+      } catch (error) {
+        throw new Error("Permission source metadata unavailable; apply approved manual migration 050_permission_source_mode.sql", { cause: error });
       }
-    } else {
-      const rolePermsFromAssignments = await db
-        .select({
-          module: permissions.module,
-          action: permissions.action,
-        })
-        .from(userAssignments)
+      const direct = await tx.select().from(userPermissions).where(eq(userPermissions.userId, userId));
+      const roleRows = await tx.select({
+        module: permissions.module, action: permissions.action, permissionId: permissions.id,
+        roleName: roles.name, scopeType: userAssignments.scopeType,
+        branchId: userAssignments.branchId, departmentId: userAssignments.departmentId,
+        startDate: userAssignments.startDate, endDate: userAssignments.endDate,
+        isActive: userAssignments.isActive,
+      }).from(userAssignments)
         .innerJoin(rolePermissions, eq(userAssignments.roleId, rolePermissions.roleId))
         .innerJoin(permissions, eq(rolePermissions.permissionId, permissions.id))
-        .where(and(
-          eq(userAssignments.userId, userId),
-          eq(userAssignments.isActive, true)
-        ));
-      
-      for (const rp of rolePermsFromAssignments) {
-        permissionState.set(`${rp.module}:${rp.action}`, true);
-      }
-    }
-    
-    const overrides = await db
-      .select({
-        module: permissions.module,
-        action: permissions.action,
-        allow: userPermissionOverrides.allow,
-        expiresAt: userPermissionOverrides.expiresAt,
-      })
-      .from(userPermissionOverrides)
-      .innerJoin(permissions, eq(userPermissionOverrides.permissionId, permissions.id))
-      .where(eq(userPermissionOverrides.userId, userId));
-    
-    for (const override of overrides) {
-      if (override.expiresAt && new Date(override.expiresAt).getTime() < now) {
-        continue;
-      }
-      
-      const key = `${override.module}:${override.action}`;
-      if (override.allow) {
-        permissionState.set(key, true);
-      } else {
-        permissionState.delete(key);
-      }
-    }
-    
-    // Convert to module -> actions format
-    const moduleActionsMap = new Map<string, Set<string>>();
-    Array.from(permissionState.entries()).forEach(([key, granted]) => {
-      if (granted) {
-        const [module, action] = key.split(':');
-        if (!moduleActionsMap.has(module)) {
-          moduleActionsMap.set(module, new Set());
-        }
-        moduleActionsMap.get(module)!.add(action);
-      }
-    });
-    
-    // 5. Convert map to UserPermission format with unique IDs
-    const mergedPerms: UserPermission[] = [];
-    let virtualId = -1; // Use negative IDs to distinguish from real DB IDs
-    Array.from(moduleActionsMap.entries()).forEach(([module, actions]) => {
-      mergedPerms.push({
-        id: virtualId--,
-        userId,
-        module,
-        actions: Array.from(actions),
-        createdAt: new Date(),
-        updatedAt: new Date(),
+        .innerJoin(roles, eq(userAssignments.roleId, roles.id))
+        .where(eq(userAssignments.userId, userId));
+      const overrides = await tx.select({
+        module: permissions.module, action: permissions.action, permissionId: permissions.id,
+        allow: userPermissionOverrides.allow, branchId: userPermissionOverrides.branchId,
+        departmentId: userPermissionOverrides.departmentId, expiresAt: userPermissionOverrides.expiresAt,
+      }).from(userPermissionOverrides)
+        .innerJoin(permissions, eq(userPermissionOverrides.permissionId, permissions.id))
+        .where(eq(userPermissionOverrides.userId, userId));
+      return normalizePermissionDecisionSnapshot({
+        userId, sourceMode: sourceRows.length ? sourceRows[0].sourceMode : null,
+        direct, roles: roleRows, overrides,
       });
-    });
-    
-    // Security-sensitive callers resolve fresh without reading OR populating
-    // the shared cache. Keep the existing effective-grant algorithm identical.
-    if (!options?.bypassCache) this.permissionsCache.set(userId, { data: mergedPerms, timestamp: now });
-    return mergedPerms;
+    }, { isolationLevel: "repeatable read", accessMode: "read only" });
+  }
+
+  async getUserPermissions(userId: string, options?: { bypassCache?: boolean; context?: PermissionContext }): Promise<UserPermission[]> {
+    // Return shape stays compatible. Flat reads expose only context-safe grants.
+    // Fresh reads also honor expiry boundaries without waiting for a cache TTL.
+    const snapshot = await this.getPermissionDecisionSnapshot(userId);
+    const modules = new Map<string, string[]>();
+    for (const permission of evaluatePermissionDecision(snapshot, options?.context)) {
+      if (!permission.allowed) continue;
+      const actions = modules.get(permission.module) || [];
+      actions.push(permission.action);
+      modules.set(permission.module, actions);
+    }
+    let id = -1;
+    return [...modules].map(([module, actions]) => ({
+      id: id--, userId, module, actions,
+      createdAt: new Date(snapshot.capturedAt), updatedAt: new Date(snapshot.capturedAt),
+    }));
   }
 
   invalidatePermissionsCache(userId?: string) {
@@ -4095,91 +4067,17 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async getUserPermissionsWithSources(userId: string): Promise<PermissionWithSource[]> {
-    const result: PermissionWithSource[] = [];
-    const now = Date.now();
-    
-    const directPerms = await db
-      .select()
-      .from(userPermissions)
-      .where(eq(userPermissions.userId, userId));
-    
-    const hasCustomPermissions = directPerms.some(p => p.actions.length > 0);
-    
-    if (hasCustomPermissions) {
-      for (const perm of directPerms) {
-        for (const action of perm.actions) {
-          result.push({
-            module: perm.module,
-            action,
-            source: 'direct',
-            isActive: true,
-          });
-        }
-      }
-    } else {
-      const rolePermsFromAssignments = await db
-        .select({
-          module: permissions.module,
-          action: permissions.action,
-          permissionId: permissions.id,
-          roleName: roles.name,
-        })
-        .from(userAssignments)
-        .innerJoin(rolePermissions, eq(userAssignments.roleId, rolePermissions.roleId))
-        .innerJoin(permissions, eq(rolePermissions.permissionId, permissions.id))
-        .innerJoin(roles, eq(userAssignments.roleId, roles.id))
-        .where(and(
-          eq(userAssignments.userId, userId),
-          eq(userAssignments.isActive, true)
-        ));
-      
-      for (const rp of rolePermsFromAssignments) {
-        result.push({
-          module: rp.module,
-          action: rp.action,
-          source: 'role',
-          roleName: rp.roleName,
-          isActive: true,
-          permissionId: rp.permissionId,
-        });
-      }
-    }
-    
-    const overrides = await db
-      .select({
-        module: permissions.module,
-        action: permissions.action,
-        permissionId: permissions.id,
-        allow: userPermissionOverrides.allow,
-        expiresAt: userPermissionOverrides.expiresAt,
-      })
-      .from(userPermissionOverrides)
-      .innerJoin(permissions, eq(userPermissionOverrides.permissionId, permissions.id))
-      .where(eq(userPermissionOverrides.userId, userId));
-    
-    for (const override of overrides) {
-      if (override.expiresAt && new Date(override.expiresAt).getTime() < now) {
-        continue;
-      }
-      
-      const existingIdx = result.findIndex(r => r.module === override.module && r.action === override.action);
-      if (existingIdx >= 0) {
-        result[existingIdx].source = override.allow ? 'override_grant' : 'override_deny';
-        result[existingIdx].isActive = override.allow;
-        result[existingIdx].permissionId = override.permissionId;
-      } else if (override.allow) {
-        result.push({
-          module: override.module,
-          action: override.action,
-          source: 'override_grant',
-          isActive: true,
-          permissionId: override.permissionId,
-        });
-      }
-    }
-    
-    return result;
+  async getUserPermissionsWithSources(userId: string, context: PermissionContext = {}): Promise<PermissionWithSource[]> {
+    const snapshot = await this.getPermissionDecisionSnapshot(userId);
+    // Preserve each scope separately instead of overwriting same-action tuples.
+    return snapshot.tuples.flatMap(tuple =>
+      evaluatePermissionDecision({ ...snapshot, tuples: [tuple] }, context).map(pair => ({
+        ...tuple, module: pair.module,
+        isActive: !tuple.deny && isPermissionTupleCurrent(tuple, snapshot.capturedAt)
+          && checkPermissionDecision({ ...snapshot, tuples: [
+            tuple, ...snapshot.tuples.filter(candidate => candidate.deny),
+          ] }, pair.module, tuple.action, context),
+      })));
   }
 
   async setPermissionOverride(userId: string, permissionId: number, allow: boolean, changedByUserId: string, reason?: string): Promise<void> {
@@ -4253,86 +4151,55 @@ export class DatabaseStorage implements IStorage {
       .where(eq(userPermissionOverrides.userId, userId));
   }
 
-  async getInheritedPermissions(userId: string): Promise<{ module: string; action: string; permissionId: number }[]> {
-    const rolePerms = await db
-      .select({
-        module: permissions.module,
-        action: permissions.action,
-        permissionId: permissions.id,
-      })
-      .from(userAssignments)
-      .innerJoin(rolePermissions, eq(userAssignments.roleId, rolePermissions.roleId))
-      .innerJoin(permissions, eq(rolePermissions.permissionId, permissions.id))
-      .where(and(
-        eq(userAssignments.userId, userId),
-        eq(userAssignments.isActive, true)
-      ));
-    
-    return rolePerms;
+  async getInheritedPermissions(userId: string, context: PermissionContext = {}): Promise<{ module: string; action: string; permissionId: number }[]> {
+    const snapshot = await this.getPermissionDecisionSnapshot(userId);
+    const inherited = { ...snapshot, tuples: snapshot.tuples.filter(tuple => tuple.source === "role" || tuple.deny) };
+    return inherited.tuples.filter(tuple => tuple.source === "role" && tuple.permissionId !== undefined
+      && isPermissionTupleCurrent(tuple, snapshot.capturedAt))
+      .flatMap(tuple => evaluatePermissionDecision({ ...snapshot, tuples: [tuple] }, context)
+        .filter(pair => pair.allowed && checkPermissionDecision(inherited, pair.module, pair.action, context))
+        .map(pair => ({ module: pair.module, action: pair.action, permissionId: tuple.permissionId! })));
   }
 
   async setUserPermission(permission: InsertUserPermission): Promise<UserPermission> {
     // Invalidate cache immediately for security
     this.invalidatePermissionsCache(permission.userId);
     
-    // Check if permission for this user+module exists
-    const [existing] = await db
-      .select()
-      .from(userPermissions)
-      .where(
-        and(
-          eq(userPermissions.userId, permission.userId),
-          eq(userPermissions.module, permission.module)
-        )
-      );
-
-    if (existing) {
-      // Update existing permission
-      const [updated] = await db
-        .update(userPermissions)
-        .set({ actions: permission.actions, updatedAt: new Date() })
-        .where(eq(userPermissions.id, existing.id))
-        .returning();
-      return updated;
-    } else {
-      // Create new permission
-      const [created] = await db
-        .insert(userPermissions)
-        .values(permission)
-        .returning();
+    const saved = await db.transaction(async (tx) => {
+      await tx.insert(userPermissionSourceModes).values({ userId: permission.userId, sourceMode: "direct" })
+        .onConflictDoUpdate({ target: userPermissionSourceModes.userId, set: { sourceMode: "direct", updatedAt: new Date() } });
+      const [existing] = await tx.select().from(userPermissions).where(and(
+        eq(userPermissions.userId, permission.userId),
+        eq(userPermissions.module, permission.module)
+      ));
+      if (existing) {
+        const [updated] = await tx.update(userPermissions)
+          .set({ actions: permission.actions, updatedAt: new Date() })
+          .where(eq(userPermissions.id, existing.id)).returning();
+        return updated;
+      }
+      const [created] = await tx.insert(userPermissions).values(permission).returning();
       return created;
-    }
+    });
+    this.invalidatePermissionsCache(permission.userId);
+    return saved;
   }
 
   async deleteUserPermissions(userId: string): Promise<boolean> {
     // Invalidate cache immediately for security
     this.invalidatePermissionsCache(userId);
     
-    const result = await db
-      .delete(userPermissions)
-      .where(eq(userPermissions.userId, userId))
-      .returning();
+    const result = await db.transaction(async (tx) => {
+      await tx.insert(userPermissionSourceModes).values({ userId, sourceMode: "direct" })
+        .onConflictDoUpdate({ target: userPermissionSourceModes.userId, set: { sourceMode: "direct", updatedAt: new Date() } });
+      return tx.delete(userPermissions).where(eq(userPermissions.userId, userId)).returning();
+    });
+    this.invalidatePermissionsCache(userId);
     return result.length >= 0;
   }
 
   async hasPermission(userId: string, module: string, action: string): Promise<boolean> {
-    // First check if user is admin (admins have all permissions)
-    const user = await this.getUser(userId);
-    if (user?.role === "admin") return true;
-
-    // Check specific permission
-    const [permission] = await db
-      .select()
-      .from(userPermissions)
-      .where(
-        and(
-          eq(userPermissions.userId, userId),
-          eq(userPermissions.module, module)
-        )
-      );
-
-    if (!permission) return false;
-    return permission.actions.includes(action);
+    return this.userHasPermission(userId, module, action);
   }
 
   // Permission Audit Logs
@@ -4368,44 +4235,19 @@ export class DatabaseStorage implements IStorage {
     // Invalidate cache immediately for security
     this.invalidatePermissionsCache(userId);
     
-    return await db.transaction(async (tx) => {
-      // Get current inherited permission IDs for cleanup (always run cleanup)
-      const currentInheritedIds = new Set((inheritedOverrides || []).map(o => o.permissionId));
-      
-      // Clean up stale deny overrides (for permissions no longer inherited)
-      const existingDenyOverrides = await tx
-        .select({
-          id: userPermissionOverrides.id,
-          permissionId: userPermissionOverrides.permissionId,
-        })
-        .from(userPermissionOverrides)
-        .where(and(
-          eq(userPermissionOverrides.userId, userId),
-          eq(userPermissionOverrides.allow, false)
-        ));
-      
-      for (const staleOverride of existingDenyOverrides) {
-        if (!currentInheritedIds.has(staleOverride.permissionId)) {
-          // This deny override is for a permission no longer inherited - remove it with audit
-          const [perm] = await tx.select().from(permissions).where(eq(permissions.id, staleOverride.permissionId));
-          
-          await tx
-            .delete(userPermissionOverrides)
-            .where(eq(userPermissionOverrides.id, staleOverride.id));
-          
-          // Audit log for stale override cleanup (using 'modify' action to indicate cleanup)
-          if (perm) {
-            await tx.insert(permissionAuditLogs).values({
-              targetUserId: userId,
-              changedByUserId,
-              action: 'modify',
-              module: perm.module,
-              oldActions: ['override_deny'],
-              newActions: [],
-              templateApplied: 'تنظيف تجاوز قديم - الصلاحية لم تعد موروثة',
-            });
-          }
-        }
+    const saved = await db.transaction(async (tx) => {
+      // Stamp even an empty intentional replacement. Existing independent deny
+      // overrides are NEVER removed just because the direct list changed.
+      const [oldSource] = await tx.select({ sourceMode: userPermissionSourceModes.sourceMode })
+        .from(userPermissionSourceModes).where(eq(userPermissionSourceModes.userId, userId));
+      await tx.insert(userPermissionSourceModes).values({ userId, sourceMode: "direct" })
+        .onConflictDoUpdate({ target: userPermissionSourceModes.userId, set: { sourceMode: "direct", updatedAt: new Date() } });
+      if (oldSource?.sourceMode !== "direct") {
+        await tx.insert(permissionAuditLogs).values({
+          targetUserId: userId, changedByUserId, action: "modify", module: null,
+          oldActions: [`source_mode:${oldSource?.sourceMode ?? "legacy"}`],
+          newActions: ["source_mode:direct"], templateApplied: templateApplied || null,
+        });
       }
       
       // Handle inherited permission overrides atomically with audit logging
@@ -4555,6 +4397,8 @@ export class DatabaseStorage implements IStorage {
 
       return savedPermissions;
     });
+    this.invalidatePermissionsCache(userId);
+    return saved;
   }
 
   async applyJobRolePermissions(
@@ -9223,6 +9067,7 @@ export class DatabaseStorage implements IStorage {
 
   async addRolePermission(rp: InsertRolePermission): Promise<RolePermission> {
     const [created] = await db.insert(rolePermissions).values(rp).returning();
+    this.invalidatePermissionsCache();
     return created;
   }
 
@@ -9230,6 +9075,7 @@ export class DatabaseStorage implements IStorage {
     const result = await db.delete(rolePermissions).where(
       and(eq(rolePermissions.roleId, roleId), eq(rolePermissions.permissionId, permissionId))
     );
+    this.invalidatePermissionsCache();
     return true;
   }
 
@@ -9295,11 +9141,13 @@ export class DatabaseStorage implements IStorage {
 
   async createUserPermissionOverride(override: InsertUserPermissionOverride): Promise<UserPermissionOverride> {
     const [created] = await db.insert(userPermissionOverrides).values(override).returning();
+    this.invalidatePermissionsCache(override.userId);
     return created;
   }
 
   async deleteUserPermissionOverride(id: number): Promise<boolean> {
-    await db.delete(userPermissionOverrides).where(eq(userPermissionOverrides.id, id));
+    const removed = await db.delete(userPermissionOverrides).where(eq(userPermissionOverrides.id, id)).returning();
+    for (const override of removed) this.invalidatePermissionsCache(override.userId);
     return true;
   }
 
@@ -9328,91 +9176,37 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Get User Effective Permissions (combining role permissions + overrides)
-  async getUserEffectivePermissions(userId: string): Promise<{
+  async getUserEffectivePermissions(userId: string, context: PermissionContext = {}): Promise<{
     permissions: Array<{ module: string; action: string; allowed: boolean }>;
     allowedBranches: string[];
     allowedDepartments: number[];
     primaryRole: Role | null;
   }> {
+    const snapshot = await this.getPermissionDecisionSnapshot(userId);
     const assignments = await this.getUserAssignments(userId);
-    const overrides = await this.getUserPermissionOverrides(userId);
-    const branchAccess = await this.getUserBranchAccess(userId);
-    
-    const allPermissions = await this.getAllPermissions();
-    const effectivePermissions: Map<string, { module: string; action: string; allowed: boolean }> = new Map();
-    
-    let primaryRole: Role | null = null;
-    
-    // Get permissions from all assigned roles
-    for (const assignment of assignments) {
-      if (!assignment.isActive) continue;
-      
-      const role = await this.getRole(assignment.roleId);
-      if (role && assignment.isPrimary) {
-        primaryRole = role;
-      }
-      
-      const rolePerms = await this.getRolePermissions(assignment.roleId);
-      for (const rp of rolePerms) {
-        const perm = allPermissions.find(p => p.id === rp.permissionId);
-        if (perm) {
-          const key = `${perm.module}:${perm.action}`;
-          effectivePermissions.set(key, { module: perm.module, action: perm.action, allowed: true });
-        }
-      }
-    }
-    
-    // Apply overrides (grant or revoke specific permissions)
-    for (const override of overrides) {
-      if (override.expiresAt && new Date(override.expiresAt) < new Date()) continue;
-      
-      const perm = allPermissions.find(p => p.id === override.permissionId);
-      if (perm) {
-        const key = `${perm.module}:${perm.action}`;
-        effectivePermissions.set(key, { module: perm.module, action: perm.action, allowed: override.allow });
-      }
-    }
-    
-    // Determine allowed branches
-    let allowedBranches: string[] = [];
-    if (branchAccess.length > 0) {
-      allowedBranches = branchAccess.map(ba => ba.branchId);
-    } else {
-      // Check if any assignment has global scope
-      const hasGlobalScope = assignments.some(a => a.scopeType === 'global' && a.isActive);
-      if (hasGlobalScope) {
-        const allBranches = await this.getAllBranches();
-        allowedBranches = allBranches.map(b => b.id);
-      } else {
-        allowedBranches = assignments.filter(a => a.branchId && a.isActive).map(a => a.branchId!);
-      }
-    }
-    
-    // Determine allowed departments
-    const allowedDepartments: number[] = assignments
-      .filter(a => a.departmentId && a.isActive)
-      .map(a => a.departmentId!);
-    
+    const primary = assignments.find(assignment => assignment.isPrimary && assignment.isActive
+      && (assignment.startDate === null || new Date(assignment.startDate).getTime() <= snapshot.capturedAt)
+      && (assignment.endDate === null || new Date(assignment.endDate).getTime() > snapshot.capturedAt));
+    const current = snapshot.tuples.filter(tuple => !tuple.deny && isPermissionTupleCurrent(tuple, snapshot.capturedAt));
+    const branches = new Set(current.flatMap(tuple => tuple.branchId ? [tuple.branchId] : []));
+    const broadBranches = current.some(tuple => tuple.branchId === null
+      && (tuple.scopeType === "global" || tuple.scopeType === "branch"));
+    if (broadBranches) for (const branch of await this.getAllBranches()) branches.add(branch.id);
+    const departments = new Set(current.flatMap(tuple => tuple.departmentId !== null ? [tuple.departmentId] : []));
     return {
-      permissions: Array.from(effectivePermissions.values()),
-      allowedBranches: Array.from(new Set(allowedBranches)),
-      allowedDepartments: Array.from(new Set(allowedDepartments)),
-      primaryRole,
+      permissions: evaluatePermissionDecision(snapshot, context),
+      // These are discovery summaries only, NEVER an action × scope ACL.
+      allowedBranches: [...branches].filter(branchId =>
+        evaluatePermissionDecision(snapshot, { ...context, branchId }).some(permission => permission.allowed)),
+      allowedDepartments: [...departments].filter(departmentId =>
+        evaluatePermissionDecision(snapshot, { ...context, departmentId }).some(permission => permission.allowed)),
+      primaryRole: primary ? (await this.getRole(primary.roleId)) || null : null,
     };
   }
 
   // Check if user has specific permission
-  async userHasPermission(userId: string, module: string, action: string, branchId?: string): Promise<boolean> {
-    const { permissions, allowedBranches } = await this.getUserEffectivePermissions(userId);
-    
-    const hasPerm = permissions.some(p => p.module === module && p.action === action && p.allowed);
-    if (!hasPerm) return false;
-    
-    if (branchId && allowedBranches.length > 0) {
-      return allowedBranches.includes(branchId);
-    }
-    
-    return true;
+  async userHasPermission(userId: string, module: string, action: string, branchId?: string, departmentId?: number): Promise<boolean> {
+    return checkPermissionDecision(await this.getPermissionDecisionSnapshot(userId), module, action, { branchId, departmentId });
   }
 
   // ==========================================

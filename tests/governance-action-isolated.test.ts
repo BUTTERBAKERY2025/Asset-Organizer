@@ -36,8 +36,10 @@ import {
   requirePermission, requireAnyPermission, getEffectiveBranchFilter, hasCrossBranchHrReadAccess,
   HR_MANAGER_MODULES, HR_SPECIALIST_PERMISSIONS, FINANCIAL_MANAGER_PERMISSIONS,
   OPERATIONS_MANAGER_PERMISSIONS,
+  hasPermissionScopeConstraint,
 } from "../server/auth";
 import { employeeDocuments, branchEmployees, systemAuditLogs, MODULE_ACTIONS, ROLE_PERMISSION_TEMPLATES } from "../shared/schema";
+import { normalizePermissionDecisionSnapshot } from "../server/permission-decision";
 
 let blockSockets: ReturnType<typeof vi.spyOn>;
 beforeAll(() => {
@@ -51,7 +53,7 @@ afterAll(() => {
 });
 
 function request(role: string, method: string, module = "employee_reports", actions = ["view"]) {
-  return {
+  const req = {
     method, currentUser: { id: "synthetic-actor", role, branchId: "test-branch-a" },
     authPermissions: [{ module, actions }],
     userBranchAccess: [{ branchId: "test-branch-a", accessLevel: "full" }],
@@ -59,6 +61,29 @@ function request(role: string, method: string, module = "employee_reports", acti
     session: {}, params: { id: "71" }, query: {}, body: {},
     headers: {}, originalUrl: "/isolated-probe",
   };
+  // Exercise the authoritative snapshot path, not the legacy authPermissions
+  // fallback. Re-normalize this synthetic loaded data so subsequent explicit
+  // denials added by a test are reflected without any storage/database lookup.
+  return Object.defineProperty(req, "authPermissionDecisionSnapshot", {
+    get: () => ({
+      ...normalizePermissionDecisionSnapshot({
+        userId: req.currentUser.id,
+        sourceMode: null,
+        direct: req.authPermissions,
+        roles: [],
+        overrides: [...req.operationsPermissionDenials].map((key, index) => {
+          const [deniedModule, action] = key.split(":");
+          return {
+            module: deniedModule, action, permissionId: index + 1, allow: false,
+            branchId: null, departmentId: null, expiresAt: null,
+          };
+        }),
+      }),
+      // Preserve actual raw module selections, including explicit empty arrays.
+      directPermissions: req.authPermissions,
+    }),
+    enumerable: true,
+  });
 }
 function response() {
   const res: any = { statusCode: 200, payload: undefined };
@@ -233,12 +258,14 @@ function extractFunction(name: string, deps: Record<string, unknown>) {
     (n): n is ts.FunctionDeclaration => ts.isFunctionDeclaration(n) && n.name?.text === name,
   );
   if (!node?.body) throw new Error(`Missing real HR helper ${name}`);
-  return compile(`function(${node.parameters.map(p => p.getText(hrSource)).join(",")}) ${node.body.getText(hrSource)}`, deps);
+  const asyncPrefix = node.modifiers?.some(modifier => modifier.kind === ts.SyntaxKind.AsyncKeyword) ? "async " : "";
+  return compile(`${asyncPrefix}function(${node.parameters.map(p => p.getText(hrSource)).join(",")}) ${node.body.getText(hrSource)}`, deps);
 }
 const resolveScope = extractFunction("resolveHrBranchScope", {});
 const realScope = extractFunction("getBranchScope", {
   getEffectiveBranchFilter, resolveHrBranchScope: resolveScope,
   hasCrossBranchHrAccess: hasCrossBranchHrReadAccess,
+  hasPermissionScopeConstraint,
 });
 
 function documentDeleteFixture(documentBranch = "test-branch-a") {
@@ -252,9 +279,18 @@ function documentDeleteFixture(documentBranch = "test-branch-a") {
           innerJoin: (joined: unknown) => {
             expect(joined).toBe(branchEmployees);
             return {
-              where: async (condition: any) => {
+              where: (condition: any) => {
                 expect(condition).toEqual({ column: employeeDocuments.id, value: 71 });
-                return document ? [{ document, currentBranchId: documentBranch }] : [];
+                const rows = document ? [{ document, currentBranchId: documentBranch }] : [];
+                // Handler awaits where(); trusted context resolver uses limit().
+                return {
+                  then: (resolve: (value: unknown) => unknown, reject: (error: unknown) => unknown) =>
+                    Promise.resolve(rows).then(resolve, reject),
+                  limit: async (count: number) => {
+                    expect(count).toBe(1);
+                    return document ? [{ branchId: documentBranch }] : [];
+                  },
+                };
               },
             };
           },
@@ -284,7 +320,13 @@ function documentDeleteFixture(documentBranch = "test-branch-a") {
   expect(registration.arguments).toHaveLength(4);
   expect(registration.arguments[1].getText(hrSource)).toBe("isAuthenticated");
   // Only session authentication is pre-satisfied; real registered permission guard is retained.
-  const permission = compile(registration.arguments[2].getText(hrSource), { requirePermission });
+  const hrDocumentResourceContext = extractFunction("hrDocumentResourceContext", {
+    db, employeeDocuments, branchEmployees,
+    eq: (column: unknown, value: unknown) => ({ column, value }),
+  });
+  const permission = compile(registration.arguments[2].getText(hrSource), {
+    requirePermission, hrDocumentResourceContext,
+  });
   const handler = compile(registration.arguments[3].getText(hrSource), {
     db, employeeDocuments, branchEmployees, getBranchScope: realScope,
     eq: (column: unknown, value: unknown) => ({ column, value }),

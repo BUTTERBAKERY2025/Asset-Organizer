@@ -3,6 +3,8 @@ import { createContext, Script } from "node:vm";
 import ts from "typescript";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
+import { assignmentUserId, assignmentCreateBody, assignmentUpdateBody, normalizeAssignmentScope, isValidAssignmentScopeAndTime } from "../server/user-assignment-validation";
+import { checkPermissionDecision, normalizePermissionDecisionSnapshot, type PermissionSourceMode } from "../server/permission-decision";
 
 // Regression tests: formerly unsafe assignment and permission writes must now
 // fail without mutation, while authorized admin controls remain functional.
@@ -49,6 +51,7 @@ function declarations(path: string, roots: string[]) {
 }
 
 const assignmentPath = "/api/rbac/users/:userId/assignments/:assignmentId";
+const assignmentCreatePath = "/api/rbac/users/:userId/assignments";
 const permissionPath = "/api/users/:id/permissions";
 function registration(method: string, path: string) {
   const source = sources["server/routes.ts"];
@@ -77,6 +80,7 @@ const realCode = [
   ]),
   declarations("server/auth.ts", ["requirePermission", "invalidateAuthCache"]),
   declarations("server/routes.ts", ["getCurrentUser"]),
+  registration("post", assignmentCreatePath),
   registration("patch", assignmentPath),
   registration("delete", assignmentPath),
   registration("put", permissionPath),
@@ -124,10 +128,37 @@ function fixture(owner = "other", targetRole = "employee", targetBranch = "branc
   const inherited = [{ module: "settings", action: "view", permissionId: 901 }];
   const audits: unknown[][] = [];
   const overrides = new Map<string, { permissionId: number; deny: boolean }[]>();
+  const sourceModes = new Map<string, PermissionSourceMode>();
+  // Pure decisions over the storage contract double, not an assertion about SQL
+  // transactions. Distinguish explicitly saved [] from automatic inheritance.
+  function permissionSnapshot(userId: string) {
+    return normalizePermissionDecisionSnapshot({
+      userId, sourceMode: sourceModes.get(userId) ?? null,
+      direct: permissions.get(userId) ?? [],
+      roles: inherited.map(row => ({
+        ...row, scopeType: "global", branchId: null, departmentId: null,
+        startDate: null, endDate: null, isActive: true,
+      })),
+      overrides: (overrides.get(userId) ?? []).map(change => {
+        const row = inherited.find(row => row.permissionId === change.permissionId);
+        if (!row) return forbidden(`unknown override permission ${change.permissionId}`);
+        return { ...row, allow: !change.deny, branchId: null, departmentId: null, expiresAt: null };
+      }),
+    });
+  }
    // Storage contract doubles only, not authorization or route logic. Assignment
    // mutations match on ID AND expected owner; extracted storage is tested separately.
   // Atomic permission persistence is simulated, not a test of SQL/audit durability.
   const storage = strictObject("storage", {
+    // Explicit legacy-fixture capability absence (the real resolver is tested separately).
+    getPermissionDecisionSnapshot: undefined,
+    getUserAssignments: vi.fn(async (userId: string) =>
+      [...assignments.values()].filter(row => row.userId === userId)),
+    createUserAssignment: vi.fn(async (values: Record<string, unknown>) => {
+      const created = { id: 42, ...values };
+      assignments.set(42, created);
+      return created;
+    }),
     updateUserAssignment: vi.fn(async (id: number, userId: string, changes: Record<string, unknown>) => {
       const row = assignments.get(id);
       if (!row || row.userId !== userId) return undefined;
@@ -147,7 +178,14 @@ function fixture(owner = "other", targetRole = "employee", targetBranch = "branc
     ) => {
       if (!accounts.has(id)) return forbidden(`unknown target ${id}`);
       permissions.set(id, structuredClone(grants));
-      overrides.set(id, structuredClone(changes));
+      sourceModes.set(id, "direct");
+      // Apply only explicitly supplied override changes. Empty changes must
+      // neither create omission denies nor erase an independent deny.
+      if (changes.length) {
+        const existing = new Map((overrides.get(id) ?? []).map(row => [row.permissionId, row]));
+        for (const change of changes) existing.set(change.permissionId, structuredClone(change));
+        overrides.set(id, [...existing.values()]);
+      }
       audits.push([id, structuredClone(grants), changedBy, template, structuredClone(changes)]);
       return structuredClone(grants);
     }),
@@ -163,8 +201,10 @@ function fixture(owner = "other", targetRole = "employee", targetBranch = "branc
   });
   const blocked = strictObject("I/O", {});
   const context = createContext({
-    app: strictObject("app", { patch: capture("patch"), delete: capture("delete"), put: capture("put") }),
+    app: strictObject("app", { post: capture("post"), patch: capture("patch"), delete: capture("delete"), put: capture("put") }),
     storage, z, db: blocked, pool: blocked, process: blocked,
+    assignmentUserId, assignmentCreateBody, assignmentUpdateBody, normalizeAssignmentScope, isValidAssignmentScopeAndTime,
+    getCachedBranches: () => forbidden("getCachedBranches"),
     fetch: () => forbidden("fetch"), require: () => forbidden("require"),
     setTimeout: () => forbidden("setTimeout"), setInterval: () => forbidden("setInterval"),
     console: strictObject("console", {
@@ -178,11 +218,14 @@ function fixture(owner = "other", targetRole = "employee", targetBranch = "branc
   async function request(method: string, options: {
     user?: typeof actor; grants?: Grant[]; pathUser?: string; assignmentId?: string; body?: unknown;
   } = {}) {
-    const path = method === "put" ? permissionPath : assignmentPath;
+    const authenticationCalls = preAuthenticated.mock.calls.length;
+    const path = method === "put" ? permissionPath : method === "post" ? assignmentCreatePath : assignmentPath;
     const req = {
       currentUser: options.user ?? { ...actor },
       authPermissions: options.grants ?? structuredClone(initialGrant),
       authBranchIds: ["branch-a"],
+      // Synthetic already-loaded denial snapshot, like the grants above; never query SQL.
+      operationsPermissionDenials: new Set<string>(),
       method: method.toUpperCase(), originalUrl: path, headers: {}, ip: "fixture",
       params: { id: options.pathUser ?? "other", userId: options.pathUser ?? "other",
         assignmentId: options.assignmentId ?? "41" },
@@ -207,10 +250,10 @@ function fixture(owner = "other", targetRole = "employee", targetBranch = "branc
       if (res.ended) throw new Error("Middleware continued after response");
     }
     expect(res.ended).toBe(true);
-    expect(preAuthenticated).toHaveBeenCalledOnce();
+    expect(preAuthenticated).toHaveBeenCalledTimes(authenticationCalls + 1);
     return res;
   }
-  return { request, assignments, permissions, accounts, inherited, overrides, audits, storage };
+  return { request, assignments, permissions, accounts, inherited, overrides, sourceModes, permissionSnapshot, audits, storage };
 }
 
 describe("isolated registered RBAC assignment routes (pre-authenticated fixtures)", () => {
@@ -255,7 +298,8 @@ describe("isolated registered RBAC assignment routes (pre-authenticated fixtures
       expect(res.body).toEqual({ error: "التعيين غير موجود" });
       expect(f.assignments.get(41)).toEqual(before);
       if (method === "patch") {
-        expect(f.storage.updateUserAssignment).toHaveBeenCalledExactlyOnceWith(41, "other", { roleId: 9 });
+        expect(f.storage.updateUserAssignment).not.toHaveBeenCalled();
+        expect(f.storage.getUserAssignments).toHaveBeenCalledExactlyOnceWith("other");
       } else {
         expect(f.storage.deleteUserAssignment).toHaveBeenCalledExactlyOnceWith(41, "other");
       }
@@ -380,6 +424,194 @@ describe("isolated registered RBAC assignment routes (pre-authenticated fixtures
   });
 });
 
+describe("assignment scope and interval stay on the assignment (real registered handlers)", () => {
+  const admin = { ...actor, role: "admin" };
+
+  it.each([
+    { scopeType: "global" },
+    { scopeType: "branch" },
+    {},
+  ])("POST all_branches never reads branches or mutates permanent branch grants: %j", async scope => {
+    const f = fixture();
+    // db is a throwing strict proxy, so even a delete/insert attempt fails this test.
+    const body = { roleId: 9, branchId: "all_branches", ...scope,
+      startDate: "2026-01-01T00:00:00Z", endDate: "2026-01-02T00:00:00Z" };
+    const res = await f.request("post", { user: admin, grants: [], body });
+    expect(res.statusCode).toBe(201);
+    expect(f.storage.createUserAssignment).toHaveBeenCalledExactlyOnceWith({
+      userId: "other", roleId: 9, branchId: null, departmentId: null,
+      scopeType: scope.scopeType ?? "global", isPrimary: true, isActive: true,
+      startDate: new Date(body.startDate), endDate: new Date(body.endDate),
+    });
+    expect(f.assignments.get(41)?.branchId).toBe("branch-a");
+  });
+
+  it("POST allows already expired assignments without materializing access", async () => {
+    const f = fixture();
+    const res = await f.request("post", { user: admin, grants: [], body: {
+      roleId: 9, branchId: "all_branches", endDate: "2000-01-01",
+    } });
+    expect(res.statusCode).toBe(201);
+    expect(f.assignments.get(42)).toMatchObject({
+      branchId: null, scopeType: "global", endDate: new Date("2000-01-01"), startDate: null,
+    });
+  });
+
+  it.each([
+    { branchId: "branch-a", scopeType: "branch" },
+    { branchId: null, scopeType: "branch" },
+    { branchId: null, departmentId: 3, scopeType: "department" },
+    { branchId: null, scopeType: "global" },
+  ])("POST authorized admin scope %j remains available", async scope => {
+    const f = fixture();
+    const res = await f.request("post", { user: admin, grants: [], body: { roleId: 9, ...scope } });
+    expect(res.statusCode).toBe(201);
+    expect(f.assignments.get(42)).toMatchObject({ userId: "other", roleId: 9, ...scope });
+  });
+
+  it.each(["employee", "operations_manager", "branch_manager", "hr_manager", "business_owner"])(
+    "POST denies generic users:edit %s without reading or writing storage", async role => {
+      const f = fixture();
+      const res = await f.request("post", { user: { ...actor, role }, body: { roleId: 9, branchId: "all_branches" } });
+      expect(res.statusCode).toBe(403);
+      expect(f.storage.createUserAssignment).not.toHaveBeenCalled();
+      expect(f.storage.getUserAssignments).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    { userId: "third", roleId: 9 }, { id: 42, roleId: 9 }, { roleId: "9" },
+    { roleId: 0 }, { roleId: 1.5 }, { roleId: 2147483648 }, {},
+    { roleId: 9, branchId: " branch-a" }, { roleId: 9, departmentId: "3" },
+    { roleId: 9, isActive: false }, { roleId: 9, isPrimary: "true" },
+    { roleId: 9, scopeType: "unknown" },
+  ])("POST strict body rejects %j before any persistence", async body => {
+    const f = fixture();
+    const res = await f.request("post", { user: admin, body });
+    expect(res.statusCode).toBe(400);
+    expect(f.storage.createUserAssignment).not.toHaveBeenCalled();
+  });
+
+  for (const method of ["post", "patch"]) {
+    it.each(["", " ", " other "])(`${method}: invalid URL user %j cannot persist`, async pathUser => {
+      const f = fixture();
+      const res = await f.request(method, { user: admin, pathUser });
+      expect(res.statusCode).toBe(400);
+      expect(f.storage.createUserAssignment).not.toHaveBeenCalled();
+      expect(f.storage.updateUserAssignment).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      "not-a-date", "", "2026-02-30", "2026-02-30T00:00:00Z", "2025-02-29",
+      "2026-13-01", "2026-01-01T24:00:00Z", "01/02/2026", "2026-01-01T00:00:00",
+      123,
+    ])(`${method}: invalid date %j cannot persist`, async date => {
+      for (const field of ["startDate", "endDate"]) {
+        const f = fixture();
+        const res = await f.request(method, { user: admin, body: { roleId: 9, [field]: date } });
+        expect(res.statusCode).toBe(400);
+        expect(f.storage.createUserAssignment).not.toHaveBeenCalled();
+        expect(f.storage.updateUserAssignment).not.toHaveBeenCalled();
+      }
+    });
+
+    it.each([
+      { scopeType: "global", branchId: "branch-a" },
+      { scopeType: "global", departmentId: 3 },
+      { scopeType: "branch", branchId: "branch-a", departmentId: 3 },
+      { scopeType: "department", branchId: null, departmentId: null },
+      { scopeType: "department", branchId: "branch-a", departmentId: 3 },
+      { scopeType: "department", branchId: "all_branches", departmentId: 3 },
+      { startDate: "2026-02-01", endDate: "2026-01-01" },
+      { startDate: "2026-01-01", endDate: "2026-01-01" },
+    ])(`${method}: incompatible scope or interval %j is rejected`, async values => {
+      const f = fixture();
+      const res = await f.request(method, { user: admin, body: { roleId: 9, ...values } });
+      expect(res.statusCode).toBe(400);
+      expect(f.storage.createUserAssignment).not.toHaveBeenCalled();
+      expect(f.storage.updateUserAssignment).not.toHaveBeenCalled();
+    });
+  }
+
+  it.each([
+    { startDate: "2026-03-01" }, { endDate: "2025-12-01" }, { endDate: "2026-01-01" },
+  ])("PATCH validates the interval merged with the stored row: %j", async body => {
+    const f = fixture();
+    Object.assign(f.assignments.get(41)!, {
+      startDate: new Date("2026-01-01"), endDate: new Date("2026-02-01"),
+    });
+    const before = structuredClone(f.assignments.get(41));
+    const res = await f.request("patch", { user: admin, body });
+    expect(res.statusCode).toBe(400);
+    expect(f.assignments.get(41)).toEqual(before);
+    expect(f.storage.updateUserAssignment).not.toHaveBeenCalled();
+  });
+
+  it("PATCH rejects changing only scope to global when stored branch is specific", async () => {
+    const f = fixture();
+    const res = await f.request("patch", { user: admin, body: { scopeType: "global" } });
+    expect(res.statusCode).toBe(400);
+    expect(f.storage.updateUserAssignment).not.toHaveBeenCalled();
+  });
+
+  it("PATCH allows a valid partial interval update using explicit timezone dates", async () => {
+    const f = fixture();
+    Object.assign(f.assignments.get(41)!, {
+      startDate: new Date("2026-01-01"), endDate: new Date("2026-02-01"),
+    });
+    const res = await f.request("patch", { user: admin, body: { startDate: "2026-01-02T03:00:00+03:00" } });
+    expect(res.statusCode).toBe(200);
+    expect(f.storage.updateUserAssignment).toHaveBeenCalledExactlyOnceWith(
+      41, "other", { startDate: new Date("2026-01-02T00:00:00Z") },
+    );
+  });
+
+  it("PATCH can explicitly clear an interval boundary", async () => {
+    const f = fixture();
+    Object.assign(f.assignments.get(41)!, {
+      startDate: new Date("2026-01-01"), endDate: new Date("2026-02-01"),
+    });
+    const res = await f.request("patch", { user: admin, body: { startDate: null } });
+    expect(res.statusCode).toBe(200);
+    expect(f.assignments.get(41)?.startDate).toBeNull();
+  });
+
+  it("PATCH preserves historical branch=null all-branches semantics, without changing scope", async () => {
+    const f = fixture();
+    Object.assign(f.assignments.get(41)!, { branchId: null, scopeType: "branch" });
+    const res = await f.request("patch", { user: admin, grants: [], body: { endDate: "2026-01-01" } });
+    expect(res.statusCode).toBe(200);
+    expect(f.assignments.get(41)).toMatchObject({ branchId: null, scopeType: "branch" });
+    expect(f.storage.updateUserAssignment).toHaveBeenCalledExactlyOnceWith(
+      41, "other", { endDate: new Date("2026-01-01") },
+    );
+  });
+
+  it("PATCH can normalize all_branches and preserve an explicit expiry", async () => {
+    const f = fixture();
+    const res = await f.request("patch", { user: admin, grants: [], body: {
+      branchId: "all_branches", endDate: "2000-01-01",
+    } });
+    expect(res.statusCode).toBe(200);
+    expect(f.storage.updateUserAssignment).toHaveBeenCalledExactlyOnceWith(41, "other", {
+      branchId: null, scopeType: "global", endDate: new Date("2000-01-01"),
+    });
+  });
+
+  it("PATCH still binds the write to URL owner after the validation read", async () => {
+    const f = fixture();
+    f.storage.updateUserAssignment.mockImplementationOnce(async (id, _owner, _changes) => {
+      // Simulate ownership changing between read and atomic storage update.
+      f.assignments.get(id)!.userId = "third";
+      return undefined;
+    });
+    const res = await f.request("patch", { user: admin });
+    expect(res.statusCode).toBe(404);
+    expect(f.assignments.get(41)?.roleId).toBe(5);
+    expect(f.storage.updateUserAssignment).toHaveBeenCalledExactlyOnceWith(41, "other", { roleId: 9 });
+  });
+});
+
 describe("isolated PUT user permissions: generic users:edit is not a delegation ceiling", () => {
   const admin = { ...actor, role: "admin" };
   it.each([
@@ -446,14 +678,58 @@ describe("isolated PUT user permissions: generic users:edit is not a delegation 
     expect(f.audits).toHaveLength(1);
   });
 
-  it("legitimate lower-privilege grant persists and keeps requested inherited permission", async () => {
+  it("legitimate lower-privilege grant persists as direct without synthesizing inherited override changes", async () => {
     const f = fixture();
     const grants = [{ module: "settings", actions: ["view"] }];
     const res = await f.request("put", { user: admin, grants: [], body: { permissions: grants, templateApplied: "fixture-template" } });
     expect(res.statusCode).toBe(200);
     expect(res.body).toEqual(grants);
     expect(f.permissions.get("other")).toEqual(grants);
-    expect(f.audits).toEqual([["other", grants, "editor", "fixture-template", [{ permissionId: 901, deny: false }]]]);
+    expect(f.audits).toEqual([["other", grants, "editor", "fixture-template", []]]);
+    expect(f.sourceModes.get("other")).toBe("direct");
+    expect(f.overrides.size).toBe(0);
+    expect(f.storage.getInheritedPermissions).not.toHaveBeenCalled();
+    expect(checkPermissionDecision(f.permissionSnapshot("other"), "settings", "view")).toBe(true);
+  });
+
+  it("explicit empty direct replacement prevents inherited resurrection without manufacturing permanent denies", async () => {
+    const f = fixture();
+    f.permissions.delete("other");
+    expect(f.permissionSnapshot("other").resolvedSourceMode).toBe("inherit");
+    expect(checkPermissionDecision(f.permissionSnapshot("other"), "settings", "view")).toBe(true);
+    const res = await f.request("put", { user: admin, grants: [], body: { permissions: [] } });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toEqual([]);
+    expect(f.permissions.get("other")).toEqual([]);
+    expect(f.sourceModes.get("other")).toBe("direct");
+    expect(f.permissionSnapshot("other").resolvedSourceMode).toBe("direct");
+    expect(checkPermissionDecision(f.permissionSnapshot("other"), "settings", "view")).toBe(false);
+    expect(f.overrides.size).toBe(0);
+    expect(f.audits).toEqual([["other", [], "editor", null, []]]);
+    expect(f.storage.getInheritedPermissions).not.toHaveBeenCalled();
+  });
+
+  it("independent deny persists through empty replacement and restoring the denied direct checkbox", async () => {
+    const f = fixture();
+    const deny = [{ permissionId: 901, deny: true }];
+    f.overrides.set("other", structuredClone(deny));
+    const empty = await f.request("put", { user: admin, grants: [], body: { permissions: [] } });
+    expect(empty.statusCode).toBe(200);
+    expect(f.overrides.get("other")).toEqual(deny);
+    expect(f.sourceModes.get("other")).toBe("direct");
+    expect(checkPermissionDecision(f.permissionSnapshot("other"), "settings", "view")).toBe(false);
+    const restored = [{ module: "settings", actions: ["view"] }, { module: "users", actions: ["view"] }];
+    const restore = await f.request("put", { user: admin, grants: [], body: { permissions: restored } });
+    expect(restore.statusCode).toBe(200);
+    expect(f.permissions.get("other")).toEqual(restored);
+    expect(f.overrides.get("other")).toEqual(deny);
+    expect(f.sourceModes.get("other")).toBe("direct");
+    expect(checkPermissionDecision(f.permissionSnapshot("other"), "settings", "view")).toBe(false);
+    expect(checkPermissionDecision(f.permissionSnapshot("other"), "users", "view")).toBe(true);
+    expect(f.audits).toEqual([
+      ["other", [], "editor", null, []], ["other", restored, "editor", null, []],
+    ]);
+    expect(f.storage.getInheritedPermissions).not.toHaveBeenCalled();
   });
 
   it("non-array permission input is rejected without persistence", async () => {

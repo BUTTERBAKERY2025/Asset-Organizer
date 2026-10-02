@@ -3,6 +3,7 @@ import { centralKitchenInventoryMovements } from "@shared/schema";
 import { createServer, type Server } from "http";
 import memoize from "memoizee";
 import { storage } from "./storage";
+import { assignmentUserId, assignmentCreateBody, assignmentUpdateBody, normalizeAssignmentScope, isValidAssignmentScopeAndTime } from "./user-assignment-validation";
 import { readEmployeeDocumentMetadata } from "./employee-documents-read";
 import { authenticatedUploadMatchesActor, makeAuthenticatedUploadName, mayDownloadUpload, resolveUploadBindings, validUploadKey, type UploadBinding } from "./upload-file-access";
 import { isDedicatedSocialMediaKey, noStoreProtectedUpload, sendLocalProtectedUpload } from "./protected-upload-response";
@@ -1313,39 +1314,14 @@ export async function registerRoutes(
         .filter((perm: any) => perm.actions.length > 0);
       
 
-      // Build a set of requested module:action pairs
-      const requestedPerms = new Set<string>();
-      for (const perm of validatedPermissions) {
-        for (const action of perm.actions) {
-          requestedPerms.add(`${perm.module}:${action}`);
-        }
-      }
-      
-      // Get inherited permissions from roles
-      const inheritedPerms = await storage.getInheritedPermissions(targetUserId);
-      console.log("[Permissions] Inherited permissions count:", inheritedPerms.length);
-      
-      // Build inherited permission overrides for atomic transaction
-      const inheritedOverrides: { permissionId: number; deny: boolean }[] = [];
-      for (const inherited of inheritedPerms) {
-        const key = `${inherited.module}:${inherited.action}`;
-        if (!requestedPerms.has(key)) {
-          // User wants to remove this inherited permission - mark for deny override
-          console.log(`[Permissions] Marking for deny override: ${key}`);
-          inheritedOverrides.push({ permissionId: inherited.permissionId, deny: true });
-        } else {
-          // User wants to keep this inherited permission - mark to remove deny override
-          inheritedOverrides.push({ permissionId: inherited.permissionId, deny: false });
-        }
-      }
-      
-      // Use transactional update for atomicity (includes both direct permissions and inherited overrides)
+      // An intentional replacement atomically selects direct mode, including [].
+      // Never manufacture or erase independent denies from checkbox omissions.
       const savedPermissions = await storage.updateUserPermissionsWithAudit(
         req.params.id,
         validatedPermissions,
         currentUser.id,
         templateApplied || null,
-        inheritedOverrides
+        []
       );
       
       invalidateAuthCache(req.params.id);
@@ -1636,7 +1612,11 @@ export async function registerRoutes(
         permissions = Array.from(merged, ([module, moduleActions]) => ({ module, actions: [...moduleActions] }));
       }
 
-      res.json(filterRoleDeniedPermissions(currentUser.role, permissions));
+      const { getNavigationPermissionProjection } = await import("./auth");
+      const navigationPermissions = await getNavigationPermissionProjection(
+        req, (await getCachedBranches()).map(branch => branch.id), permissions,
+      );
+      res.json(filterRoleDeniedPermissions(currentUser.role, navigationPermissions));
     } catch (error) {
       console.error("Error fetching my permissions:", error);
       res.status(500).json({ error: "Failed to fetch permissions" });
@@ -23883,7 +23863,11 @@ export async function registerRoutes(
       }
       const currentUser = getCurrentUser(req);
       const userId = req.params.userId;
-      const { roleId, branchId, departmentId, scopeType, isPrimary, startDate, endDate } = req.body;
+      const parsed = assignmentCreateBody.safeParse(req.body);
+      if (!assignmentUserId.safeParse(userId).success || !parsed.success) {
+        return res.status(400).json({ error: "حقول إنشاء التعيين غير صالحة" });
+      }
+      const values = normalizeAssignmentScope(parsed.data);
       
       // SECURITY: Prevent users from modifying their own role assignments
       if (currentUser.id === userId && currentUser.role !== "admin") {
@@ -23891,46 +23875,20 @@ export async function registerRoutes(
       }
       
 
-      if (!roleId) {
-        return res.status(400).json({ error: "معرف الدور مطلوب" });
-      }
-      
-      // Handle "all_branches" - grant access to all branches via user_branch_access
-      let actualBranchId = branchId;
-      if (branchId === "all_branches") {
-        // Branch access granted
-        actualBranchId = null; // No specific branch in assignment
-        
-        // Get all branches and grant access
-        const allBranches = await getCachedBranches();
-        console.log("Found branches:", allBranches.length);
-        
-        // Clear existing branch access first
-        await db.delete(userBranchAccess).where(eq(userBranchAccess.userId, userId));
-        
-        // Add access to all branches
-        for (const branch of allBranches) {
-          await db.insert(userBranchAccess).values({
-            userId,
-            branchId: branch.id,
-            accessLevel: 'full',
-            isDefault: false,
-          }).onConflictDoNothing();
-        }
-        console.log("Branch access granted successfully");
-        invalidateAuthCache(userId);
+      if (!isValidAssignmentScopeAndTime(values)) {
+        return res.status(400).json({ error: "نطاق التعيين أو فترة صلاحيته غير صالح" });
       }
       
       const assignment = await storage.createUserAssignment({
         userId,
-        roleId,
-        branchId: actualBranchId,
-        departmentId,
-        scopeType: scopeType || 'branch',
-        isPrimary: isPrimary ?? true,
+        roleId: values.roleId,
+        branchId: values.branchId ?? null,
+        departmentId: values.departmentId ?? null,
+        scopeType: values.scopeType ?? 'branch',
+        isPrimary: values.isPrimary ?? true,
         isActive: true,
-        startDate: startDate ? new Date(startDate) : null,
-        endDate: endDate ? new Date(endDate) : null,
+        startDate: values.startDate ?? null,
+        endDate: values.endDate ?? null,
       });
       
       console.log("Assignment created:", assignment);
@@ -23962,23 +23920,22 @@ export async function registerRoutes(
       }
 
       // Reject identity/owner fields (including id and userId), rather than mass-assigning the body.
-      const nullableDate = z.string().min(1).refine(value => Number.isFinite(Date.parse(value)))
-        .transform(value => new Date(value)).nullable();
-      const parsed = z.object({
-        roleId: z.number().int().positive().max(2147483647).optional(),
-        branchId: z.string().min(1).refine(value => value === value.trim() && !!value.trim()).nullable().optional(),
-        departmentId: z.number().int().positive().max(2147483647).nullable().optional(),
-        scopeType: z.enum(["global", "branch", "department"]).optional(),
-        isPrimary: z.boolean().optional(),
-        isActive: z.boolean().optional(),
-        startDate: nullableDate.optional(),
-        endDate: nullableDate.optional(),
-      }).strict().refine(value => Object.keys(value).length > 0).safeParse(req.body);
+      const parsed = assignmentUpdateBody.safeParse(req.body);
       if (!parsed.success) {
         return res.status(400).json({ error: "حقول تحديث التعيين غير صالحة" });
       }
+      // Read only to validate the merged scope/interval; the write still binds the
+      // assignment ID AND URL owner atomically in storage.
+      const existing = (await storage.getUserAssignments(userId)).find(row => row.id === assignmentId);
+      if (!existing) {
+        return res.status(404).json({ error: "التعيين غير موجود" });
+      }
+      const changes = normalizeAssignmentScope(parsed.data);
+      if (!isValidAssignmentScopeAndTime({ ...existing, ...changes })) {
+        return res.status(400).json({ error: "نطاق التعيين أو فترة صلاحيته غير صالح" });
+      }
       // Ownership is part of the atomic storage mutation, not a pre-read check.
-      const assignment = await storage.updateUserAssignment(assignmentId, userId, parsed.data);
+      const assignment = await storage.updateUserAssignment(assignmentId, userId, changes);
       if (!assignment) {
         return res.status(404).json({ error: "التعيين غير موجود" });
       }

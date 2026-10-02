@@ -4,6 +4,22 @@ import connectPg from "connect-pg-simple";
 import rateLimit from "express-rate-limit";
 import { createPasswordLoginRateLimiter } from "./password-login-limiter";
 import { storage } from "./storage";
+import {
+  checkPermissionDecision, evaluatePermissionDecision, hasPermissionDecisionDeny,
+  type PermissionContext, type PermissionDecisionSnapshot,
+} from "./permission-decision";
+import {
+  getPermissionScopeConstraint, isValidPermissionRequestContext,
+  recordPermissionScopeConstraint,
+  type PermissionContextResolver, type PermissionRequestContext,
+} from "./permission-request-context";
+export { getPermissionScopeConstraint } from "./permission-request-context";
+export type { PermissionContextResolver, PermissionRequestContext } from "./permission-request-context";
+
+export function hasPermissionScopeConstraint(req: any): boolean {
+  return getPermissionScopeConstraint(req)?.branchIds !== undefined
+    && getPermissionScopeConstraint(req)?.branchIds !== null;
+}
 import { createOwnerApiLockdown, isOwnerRequestAllowed, isOwnerSessionValid } from "./owner-security";
 import { db, pool } from "./db";
 import { systemAuditLogs, MODULE_ACTIONS, ROLE_PERMISSION_TEMPLATES, JOB_ROLE_PERMISSION_TEMPLATES, userPermissions, userPermissionOverrides, permissions as permissionDefinitions } from "@shared/schema";
@@ -41,6 +57,8 @@ export function hasCrossBranchHrReadAccess(req: any): boolean {
   // explicit branch boundary.
   if (user.role === "operations_manager") return false;
   if (user.role === "admin") return true;
+  // A route's resource decision must not be widened by a later HR shortcut.
+  if (hasPermissionScopeConstraint(req)) return false;
   if (user.role === "hr_manager") return true;
   if (user.role === "hr_specialist") return true;
   const perms = (req as any).authPermissions || [];
@@ -1268,7 +1286,16 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
   }
   let permissions: any[] = [];
   if (user.role !== "admin" && user.role !== "business_owner") {
-    permissions = await storage.getUserPermissions(userId, { bypassCache: true });
+    try {
+      const snapshot = await getRequestPermissionSnapshot(req, userId);
+      if (snapshot) {
+        permissions = snapshotModulePermissions(snapshot, user, req.method);
+      } else {
+        permissions = await storage.getUserPermissions(userId, { bypassCache: true });
+      }
+    } catch (error) {
+      return res.status(503).json({ message: "تعذر التحقق من الصلاحيات. يلزم إعداد مصدر الصلاحيات وترحيل 050 قبل النشر." });
+    }
   }
 
   (req as any).currentUser = user;
@@ -1285,10 +1312,10 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
   // Fresh, request-local snapshot: permission middleware can reuse this read
   // within this request, never across sessions or workers.
   (req as any).authPermissions = permissions;
-  if (user.role === "warehouse_keeper") {
+  if (user.role === "warehouse_keeper" && !(req as any).authPermissionDecisionSnapshot) {
     (req as any).authPermissions = await getWarehouseKeeperEffectivePermissions(user.id, permissions);
   }
-  if (user.role === "branch_manager") {
+  if (user.role === "branch_manager" && !(req as any).authPermissionDecisionSnapshot) {
     (req as any).authPermissions = await getBranchManagerEffectivePermissions(user.id, permissions);
   }
   
@@ -1321,6 +1348,27 @@ export const requireProductWritePermission = (action: "create" | "edit"): Reques
   async (req, res, next) => {
     const user = (req as any).currentUser;
     if (!user) return res.status(401).json({ message: "غير مصرح" });
+    if (user.role === "admin") return next();
+    // Use the same deny/source/scope decision for the narrow grant and the legacy
+    // operations alternative. Never let this specialized guard bypass revocation.
+    if (typeof storage.getPermissionDecisionSnapshot === "function"
+      || (req as any).authPermissionDecisionSnapshot) {
+      try {
+        const snapshot = await getRequestPermissionSnapshot(req, user.id);
+        if (snapshot && hasPermissionDecisionDeny(snapshot, "products", action)) {
+          return res.status(403).json({ message: "تم سحب صلاحية هذا الإجراء" });
+        }
+      } catch (error) {
+        return res.status(503).json({ message: "تعذر التحقق من الصلاحيات. يلزم إعداد مصدر الصلاحيات وترحيل 050 قبل النشر." });
+      }
+      const probeResponse: any = {
+        status() { return probeResponse; }, json() { return probeResponse; },
+      };
+      let allowed = false;
+      await requirePermission("products", action)(req, probeResponse, () => { allowed = true; });
+      if (allowed) return next();
+      return requirePermission("operations", action)(req, res, next);
+    }
     if (user.role === "viewer" || user.role === "attendance_clerk") {
       return requirePermission("products", action)(req, res, next);
     }
@@ -1360,8 +1408,264 @@ async function operationsPermissionDenials(req: any): Promise<Set<string>> {
   return req.operationsPermissionDenials;
 }
 
+function snapshotModulePermissions(snapshot: PermissionDecisionSnapshot, user?: any, method = "GET"): { module: string; actions: string[] }[] {
+  const modules = new Map<string, string[]>();
+  for (const decision of evaluatePermissionDecision(snapshot)) {
+    if (!decision.allowed) continue;
+    if (user?.role === "warehouse_keeper" && !WAREHOUSE_KEEPER_PERMISSIONS[decision.module]?.includes(decision.action)) continue;
+    if (user && !checkPermissionDecision(roleAdjustedSnapshot(snapshot, user, decision.module), decision.module, decision.action)) continue;
+    const actions = modules.get(decision.module) ?? [];
+    actions.push(decision.action);
+    modules.set(decision.module, actions);
+  }
+  // These two roles historically expose their effective intrinsic selection on
+  // authPermissions as well as in the middleware. Keep that compatibility, but
+  // never flatten a scoped assignment into it or lose conservative deny checks.
+  const intrinsic = user?.role === "warehouse_keeper" ? WAREHOUSE_KEEPER_PERMISSIONS
+    : user?.role === "branch_manager" ? BRANCH_MANAGER_INTRINSIC_PERMISSIONS : {};
+  for (const [module, actions] of Object.entries(intrinsic)) {
+    const selected = new Set(modules.get(module) ?? []);
+    for (const action of actions) {
+      if (intrinsicPermissionGranted(user, snapshot, module, action, method)
+        && !hasPermissionDecisionDeny(snapshot, module, action)) selected.add(action);
+    }
+    modules.set(module, [...selected]);
+  }
+  return Array.from(modules, ([module, actions]) => ({ module, actions }));
+}
+
+function directSnapshotRows(snapshot: PermissionDecisionSnapshot): { module: string; actions: string[] }[] {
+  if (snapshot.sourceMode === "inherit") return [];
+  const direct = (snapshot as PermissionDecisionSnapshot & {
+    directPermissions?: { module: string; actions: string[] }[];
+  }).directPermissions;
+  if (!Array.isArray(direct)) throw new Error("Permission snapshot must retain raw direct rows, including empty selections");
+  return direct;
+}
+
+function roleAdjustedSnapshot(snapshot: PermissionDecisionSnapshot, user: any, module: string): PermissionDecisionSnapshot {
+  if (user.role !== "branch_manager") return snapshot;
+  const custom = directSnapshotRows(snapshot).find(row => row.module === module);
+  if (!custom) return snapshot;
+  // The branch manager's explicit module row is a complete selection (including
+  // []). An inherited/aliased action cannot undo that selection; independent
+  // approved overrides and denies still apply to their own resource scopes.
+  return { ...snapshot, tuples: snapshot.tuples.filter(tuple =>
+    tuple.source === "override_grant" || tuple.source === "override_deny"
+    || (tuple.module === module && custom.actions.includes(tuple.action))) };
+}
+
+async function getRequestPermissionSnapshot(req: any, userId: string): Promise<PermissionDecisionSnapshot | undefined> {
+  if (req.authPermissionDecisionSnapshot) {
+    if (req.authPermissionDecisionSnapshot.userId !== userId) throw new Error("Permission snapshot user mismatch");
+    return req.authPermissionDecisionSnapshot;
+  }
+  // The production storage implements this method. Legacy, isolated middleware
+  // fixtures which provide a partial storage stub retain their original path.
+  if (typeof storage.getPermissionDecisionSnapshot !== "function") return undefined;
+  const snapshot = await storage.getPermissionDecisionSnapshot(userId);
+  if (snapshot.userId !== userId) throw new Error("Permission snapshot user mismatch");
+  req.authPermissionDecisionSnapshot = snapshot;
+  return snapshot;
+}
+
+function intrinsicPermissionGranted(
+  user: any, snapshot: PermissionDecisionSnapshot, module: string, action: string, method: string,
+): boolean {
+  const direct = user.role === "warehouse_keeper" || user.role === "branch_manager" ? directSnapshotRows(snapshot) : [];
+  if (user.role === "warehouse_keeper") {
+    return direct.length === 0 && !!WAREHOUSE_KEEPER_PERMISSIONS[module]?.includes(action);
+  }
+  if (user.role === "branch_manager") {
+    const custom = direct.find(row => row.module === module);
+    return custom ? custom.actions.includes(action)
+      : !!BRANCH_MANAGER_INTRINSIC_PERMISSIONS[module]?.includes(action);
+  }
+  if (user.role === "attendance_clerk") return module === "attendance_check" && ["view", "create", "edit"].includes(action);
+  if (deliveryEmployeeActions(user, module).includes(action)) return true;
+  if (user.role === "hr_manager") return HR_MANAGER_MODULES.has(module) && (MODULE_ACTIONS as readonly string[]).includes(action);
+  if (user.role === "hr_specialist") return !!HR_SPECIALIST_PERMISSIONS[module]?.includes(action);
+  if (user.role === "production_development_manager") {
+    return !!PRODUCTION_DEVELOPMENT_MANAGER_PERMISSIONS[module]?.includes(action);
+  }
+  if (user.role === "financial_manager") return !!financialManagerActionsFor(module)?.includes(action);
+  if (user.role === "operations_manager") return !!operationsManagerActionsFor(module)?.includes(action);
+  return false;
+}
+
+function contextualActionAllowed(
+  req: any, snapshot: PermissionDecisionSnapshot, module: string, action: string, context: PermissionContext,
+): boolean {
+  const user = req.currentUser;
+  snapshot = roleAdjustedSnapshot(snapshot, user, module);
+  if (user.role === "viewer" && action !== "view") return false;
+  if (user.role === "attendance_clerk" && (module !== "attendance_check" || !["view", "create", "edit"].includes(action))) return false;
+  if (isRoleModuleDenied(user.role, module)) return false;
+  if (user.role === "warehouse_keeper" && !WAREHOUSE_KEEPER_PERMISSIONS[module]?.includes(action)) return false;
+  if (hasPermissionDecisionDeny(snapshot, module, action, context)) return false;
+  const unknownProductionInference = req.permissionActionInferred
+    && user.role === "production_development_manager"
+    && !["GET", "HEAD", "OPTIONS", "POST", "PUT", "PATCH", "DELETE"].includes(req.method);
+  const intrinsic = intrinsicPermissionGranted(user, snapshot, module, unknownProductionInference ? "delete" : action, req.method);
+  if (!context.branchId) return intrinsic || checkPermissionDecision(snapshot, module, action, context);
+
+  const legacyBranches = getLegacyAllowedBranchIds(req);
+  const hrRead = ["GET", "HEAD"].includes(req.method) && action === "view"
+    && HR_MANAGER_MODULES.has(module) && hasCrossBranchHrReadAccess({
+      ...req, permissionScopeConstraint: undefined,
+    });
+  const inLegacyScope = hrRead || legacyBranches === null || legacyBranches.includes(context.branchId);
+  // Preserve explicit operational and warehouse boundaries even if a historical
+  // assignment has a wider scope. Other scoped sources carry their own scope.
+  if ((user.role === "operations_manager" || user.role === "warehouse_keeper"
+    || user.role === "business_owner") && !inLegacyScope) return false;
+  if (inLegacyScope && intrinsic) return true;
+  const scopedSources = { ...snapshot, tuples: snapshot.tuples.filter(tuple => tuple.source !== "direct") };
+  return checkPermissionDecision(inLegacyScope ? snapshot : scopedSources, module, action, context);
+}
+
+/** Navigation ONLY: union actions usable in at least one candidate context.
+ * This result is never installed as authPermissions or a request constraint.
+ * Department IDs here describe granted tuples, not proof of an ID resource.
+ * Routes still need persisted ownership/department context and the normal guard.
+ */
+export function projectNavigationPermissions(
+  snapshot: PermissionDecisionSnapshot, req: any, branchCandidates: readonly string[],
+  seed: { module: string; actions: string[] }[] = [],
+): { module: string; actions: string[] }[] {
+  const user = req.currentUser;
+  if (!user) return [];
+  if (["admin", "business_owner", "shareholder"].includes(user.role)) {
+    return seed.map(row => ({ module: row.module, actions: [...row.actions] }));
+  }
+  const navigationRequest = {
+    ...req, method: "GET", permissionActionInferred: false,
+    permissionResourceContext: undefined, permissionScopeConstraint: undefined,
+  };
+  const keys = new Map<string, { module: string; action: string }>();
+  const add = (module: string, action: string) => keys.set(JSON.stringify([module, action]), { module, action });
+  for (const pair of evaluatePermissionDecision(snapshot)) add(pair.module, pair.action);
+  for (const row of seed) for (const action of row.actions) add(row.module, action);
+  const roleMaps: Record<string, string[]>[] = [];
+  if (user.role === "hr_manager") roleMaps.push(Object.fromEntries([...HR_MANAGER_MODULES].map(module => [module, [...MODULE_ACTIONS]])));
+  if (user.role === "hr_specialist") roleMaps.push(HR_SPECIALIST_PERMISSIONS);
+  if (user.role === "financial_manager") roleMaps.push(FINANCIAL_MANAGER_PERMISSIONS);
+  if (user.role === "production_development_manager") roleMaps.push(PRODUCTION_DEVELOPMENT_MANAGER_PERMISSIONS);
+  if (user.role === "operations_manager") roleMaps.push(OPERATIONS_MANAGER_PERMISSIONS);
+  if (user.role === "branch_manager") roleMaps.push(BRANCH_MANAGER_INTRINSIC_PERMISSIONS);
+  if (user.role === "warehouse_keeper") roleMaps.push(WAREHOUSE_KEEPER_PERMISSIONS);
+  if (user.role === "attendance_clerk") roleMaps.push({ attendance_check: ["view", "create", "edit"] });
+  if (user.role === "employee" && user.jobTitle === "delivery") roleMaps.push({ delivery_tasks: DELIVERY_EMPLOYEE_ACTIONS });
+  for (const map of roleMaps) for (const [module, actions] of Object.entries(map)) {
+    for (const action of actions) add(module, action);
+  }
+  const branches = user.role === "warehouse_keeper" ? ["main_warehouse"] : [...new Set(branchCandidates)];
+  const departments = [...new Set(snapshot.tuples.flatMap(tuple => tuple.departmentId == null ? [] : [tuple.departmentId]))];
+  const contexts: PermissionContext[] = user.role === "warehouse_keeper" ? [] : [{}];
+  for (const branchId of branches) {
+    contexts.push({ branchId });
+    for (const departmentId of departments) contexts.push({ branchId, departmentId });
+  }
+  // Department-only resources can have no branch. This is display capability
+  // only; unknown department context in request authorization still fails closed.
+  if (user.role !== "warehouse_keeper") for (const departmentId of departments) contexts.push({ departmentId });
+  const modules = new Map<string, Set<string>>();
+  for (const { module, action } of keys.values()) {
+    if (!contexts.some(context => contextualActionAllowed(navigationRequest, snapshot, module, action, context))) continue;
+    const actions = modules.get(module) ?? new Set<string>();
+    actions.add(action);
+    modules.set(module, actions);
+  }
+  return Array.from(modules, ([module, actions]) => ({ module, actions: [...actions] }));
+}
+
+export async function getNavigationPermissionProjection(
+  req: any, branchCandidates: readonly string[], seed: { module: string; actions: string[] }[] = [],
+): Promise<{ module: string; actions: string[] }[]> {
+  const user = req.currentUser;
+  if (!user) return [];
+  if (["admin", "business_owner", "shareholder"].includes(user.role)) {
+    return seed.map(row => ({ module: row.module, actions: [...row.actions] }));
+  }
+  const snapshot = await getRequestPermissionSnapshot(req, user.id);
+  if (!snapshot) throw new Error("Navigation projection requires an authoritative permission decision snapshot");
+  return projectNavigationPermissions(snapshot, req, branchCandidates, seed);
+}
+
+/** Route opt-in: resolve persisted ownership BEFORE evaluating the permission.
+ * A null resolver result is a missing resource, not an unknown/global scope. */
+export const withPermissionContext = (resolver: PermissionContextResolver): RequestHandler =>
+  async (req, res, next) => {
+    if ((req as any).currentUser?.role === "admin") return next();
+    try {
+      const context = await resolver(req);
+      if (context === null) return res.status(404).json({ message: "المورد غير موجود" });
+      if (!isValidPermissionRequestContext(context)) return res.status(403).json({ message: "تعذر إثبات نطاق المورد" });
+      (req as any).permissionResourceContext = context;
+      return next();
+    } catch (error) {
+      return next(error);
+    }
+  };
+
+async function enforceContextualPermission(
+  req: any, res: any, next: any, module: string, actions: string[],
+  resolver?: PermissionContextResolver, actionInferred = false,
+): Promise<boolean> {
+  const snapshot = await getRequestPermissionSnapshot(req, req.currentUser.id);
+  if (!snapshot) return false;
+  req.permissionActionInferred = actionInferred;
+  let context: PermissionRequestContext | undefined = req.permissionResourceContext;
+  if (resolver) {
+    const resolved = await resolver(req);
+    if (resolved === null) {
+      res.status(404).json({ message: "المورد غير موجود" });
+      return true;
+    }
+    context = resolved;
+  }
+  if (context && !isValidPermissionRequestContext(context)) {
+    res.status(403).json({ message: "تعذر إثبات نطاق المورد" });
+    return true;
+  }
+  if (context) req.permissionResourceContext = context;
+  const allowedActions: string[] = [];
+  let branchIds: string[] | null = null;
+  if (context?.kind === "collection") {
+    branchIds = [...new Set(context.branchIds)].filter(branchId => actions.some(action =>
+      contextualActionAllowed(req, snapshot, module, action, { branchId, departmentId: context.departmentId })));
+    for (const action of actions) {
+      if (branchIds.some(branchId => contextualActionAllowed(req, snapshot, module, action, {
+        branchId, departmentId: context.departmentId,
+      }))) allowedActions.push(action);
+    }
+    // Empty authorized collections are permitted only with whole-route authority;
+    // their [] constraint still forces an empty result, never a null/all filter.
+    if (context.branchIds.length === 0) {
+      allowedActions.push(...actions.filter(action => contextualActionAllowed(req, snapshot, module, action, {})));
+    }
+  } else {
+    const resource = context?.kind === "resource" ? context : {};
+    allowedActions.push(...actions.filter(action => contextualActionAllowed(req, snapshot, module, action, resource)));
+    if (context?.kind === "resource" && context.branchId) branchIds = [context.branchId];
+  }
+  if (!allowedActions.length) {
+    res.status(403).json({ message: "غير مسموح - ليس لديك صلاحية سارية ضمن نطاق هذا المورد" });
+    return true;
+  }
+  recordPermissionScopeConstraint(req, {
+    module, actions: allowedActions, kind: context?.kind ?? "unknown", branchIds,
+  });
+  if (getPermissionScopeConstraint(req)?.branchIds?.length === 0 && context?.kind !== "collection") {
+    res.status(403).json({ message: "غير مسموح - نطاقات الصلاحيات لا تتطابق" });
+    return true;
+  }
+  next();
+  return true;
+}
+
 // New middleware for granular permission checking
-export const requirePermission = (module: string, action?: string): RequestHandler => {
+export const requirePermission = (module: string, action?: string, contextResolver?: PermissionContextResolver): RequestHandler => {
   return async (req, res, next) => {
     const user = (req as any).currentUser;
     if (!user) {
@@ -1378,6 +1682,11 @@ export const requirePermission = (module: string, action?: string): RequestHandl
       GET: "view", HEAD: "view", OPTIONS: "view", POST: "create",
       PUT: "edit", PATCH: "edit", DELETE: "delete",
     } as Record<string, string>)[req.method] ?? "edit";
+    try {
+      if (await enforceContextualPermission(req, res, next, module, [effectiveAction], contextResolver, action === undefined)) return;
+    } catch (error) {
+      return res.status(503).json({ message: "تعذر التحقق من الصلاحيات أو نطاق المورد. يلزم إعداد مصدر الصلاحيات وترحيل 050 قبل النشر." });
+    }
     if (user.role === "warehouse_keeper") {
       const allowed = (req as any).authPermissions ?? await getWarehouseKeeperEffectivePermissions(user.id, await storage.getUserPermissions(user.id, { bypassCache: true }));
       return allowed.some((p: any) => p.module === module && p.actions.includes(effectiveAction))
@@ -1516,9 +1825,17 @@ export const requirePermission = (module: string, action?: string): RequestHandl
 };
 
 // Helper to require any of multiple actions (useful for edit/create combined routes)
-export const requireAnyPermission = (module: string, actions: string[]): RequestHandler => {
+export const requireAnyPermission = (module: string, actions: string[], contextResolver?: PermissionContextResolver): RequestHandler => {
   return async (req, res, next) => {
     const user = (req as any).currentUser;
+    if (user?.role === "admin") return next();
+    if (user) {
+      try {
+        if (await enforceContextualPermission(req, res, next, module, actions, contextResolver)) return;
+      } catch (error) {
+        return res.status(503).json({ message: "تعذر التحقق من الصلاحيات أو نطاق المورد. يلزم إعداد مصدر الصلاحيات وترحيل 050 قبل النشر." });
+      }
+    }
     let permittedActions = actions;
     if (user?.role === "warehouse_keeper") {
       const allowed = (req as any).authPermissions ?? await getWarehouseKeeperEffectivePermissions(user.id, await storage.getUserPermissions(user.id, { bypassCache: true }));
@@ -1642,6 +1959,11 @@ export const requireAnyPermission = (module: string, actions: string[]): Request
 // Get active branch ID from request - returns null for admins (can see all) or the active branch for regular users
 export function getActiveBranchFilter(req: any): string | null {
   const user = req.currentUser;
+  const constraint = getPermissionScopeConstraint(req);
+  if (user?.role !== "admin" && constraint?.branchIds !== undefined && constraint.branchIds !== null) {
+    return constraint.branchIds.includes(req.session?.activeBranchId) ? req.session.activeBranchId
+      : constraint.branchIds.length === 1 ? constraint.branchIds[0] : "__no_authorized_branch__";
+  }
   if (user?.role === "warehouse_keeper") return "main_warehouse";
   if (user?.role === "operations_manager") {
     const allowed = getAllowedBranchIds(req)!;
@@ -1661,6 +1983,13 @@ export function getActiveBranchFilter(req: any): string | null {
 export async function canAccessBranch(req: any, branchId: string): Promise<boolean> {
   const user = req.currentUser;
   if (!user) return false;
+  if (user.role === "admin") return true;
+  const constraint = getPermissionScopeConstraint(req);
+  if (constraint?.branchIds !== undefined && constraint.branchIds !== null) {
+    return constraint.branchIds.includes(branchId);
+  }
+  if (constraint && req.authPermissionDecisionSnapshot && !constraint.actions.some(action =>
+    contextualActionAllowed(req, req.authPermissionDecisionSnapshot, constraint.module, action, { branchId }))) return false;
   if (user.role === "business_owner") {
     const grants = await storage.getUserBranchAccess(user.id);
     return grants.some(grant => grant.branchId === branchId);
@@ -1754,6 +2083,11 @@ export const requireBranchAccess: RequestHandler = async (req, res, next) => {
 export function getMandatoryBranchFilter(req: any): string | null {
   const user = req.currentUser;
   if (!user) return null;
+  const constraint = getPermissionScopeConstraint(req);
+  if (user.role !== "admin" && constraint?.branchIds !== undefined && constraint.branchIds !== null) {
+    return constraint.branchIds.includes(req.session?.activeBranchId) ? req.session.activeBranchId
+      : constraint.branchIds.length === 1 ? constraint.branchIds[0] : "__no_authorized_branch__";
+  }
   if (user.role === "warehouse_keeper") return "main_warehouse";
   // This legacy helper cannot express multiple branch IDs. Fail closed rather
   // than returning null (which callers interpret as unrestricted).
@@ -1797,6 +2131,16 @@ export function isUserAdmin(req: any): boolean {
 // Returns null if user can access ALL branches (admin or has all_branches access)
 // Returns array of branch IDs if user has limited access
 export function getAllowedBranchIds(req: any): string[] | null {
+  if (req.currentUser?.role === "admin") return null;
+  const constraint = getPermissionScopeConstraint(req);
+  if (constraint?.branchIds !== undefined && constraint.branchIds !== null) return [...constraint.branchIds];
+  const legacy = getLegacyAllowedBranchIds(req);
+  if (!constraint || !req.authPermissionDecisionSnapshot || legacy === null) return legacy;
+  return legacy.filter(branchId => constraint.actions.some(action =>
+    contextualActionAllowed(req, req.authPermissionDecisionSnapshot, constraint.module, action, { branchId })));
+}
+
+function getLegacyAllowedBranchIds(req: any): string[] | null {
   const user = req.currentUser;
   if (!user) return [];
   if (user.role === "business_owner") return (req.userBranchAccess || []).map((grant: any) => grant.branchId);

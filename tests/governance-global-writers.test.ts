@@ -3,6 +3,7 @@ import { createContext, Script } from "node:vm";
 import ts from "typescript";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
+import { assignmentUserId, assignmentCreateBody, assignmentUpdateBody, normalizeAssignmentScope, isValidAssignmentScopeAndTime } from "../server/user-assignment-validation";
 
 // Execute original AST-selected handlers, never import/bootstrap the server.
 // Authentication/middleware is covered by governance-route-isolated; these
@@ -103,6 +104,7 @@ async function request(method: string, path: string, options: {
   const storage = strict("storage", options.storage);
   const context = createContext({
     storage, z, db: io, pool: io, process: io, invalidateAuthCache,
+    assignmentUserId, assignmentCreateBody, assignmentUpdateBody, normalizeAssignmentScope, isValidAssignmentScopeAndTime,
     getCachedBranches: () => forbidden("getCachedBranches"),
     fetch: () => forbidden("fetch"), require: () => forbidden("require"),
     console: strict("console", { log: vi.fn(), error: () => forbidden("caught route error") }),
@@ -149,7 +151,7 @@ describe("global authority writers fail closed before storage", () => {
     );
   }
 
-  it("admin PUT retains original validated atomic persistence and cache invalidation", async () => {
+  it("admin PUT selects direct permissions without manufacturing omission denies and retains cache invalidation", async () => {
     const grants = [{ module: "users", actions: ["delete"] }];
     const getInheritedPermissions = vi.fn(async () => [{ module: "settings", action: "view", permissionId: 901 }]);
     const updateUserPermissionsWithAudit = vi.fn(async () => grants);
@@ -159,8 +161,9 @@ describe("global authority writers fail closed before storage", () => {
     expect(res.statusCode).toBe(200);
     expect(res.body).toEqual(grants);
     expect(updateUserPermissionsWithAudit).toHaveBeenCalledExactlyOnceWith(
-      "other", grants, "editor", null, [{ permissionId: 901, deny: true }],
+      "other", grants, "editor", null, [],
     );
+    expect(getInheritedPermissions).not.toHaveBeenCalled();
     expect(invalidateAuthCache).toHaveBeenCalledExactlyOnceWith("other");
   });
 

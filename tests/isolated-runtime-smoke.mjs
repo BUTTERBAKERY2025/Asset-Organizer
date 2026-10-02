@@ -3,6 +3,7 @@ import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import pg from "pg";
 import guard from "../scripts/isolated-test/target.cjs";
+import { runPermissionScopeSmoke } from "./isolated-runtime-permission-scopes.mjs";
 
 const target = guard.assertRuntime();
 const origin = `http://127.0.0.1:${target.appPort}`;
@@ -135,9 +136,12 @@ try {
   check([401, 403].includes((await request("/api/my-permissions", { cookie: employee })).status), "DELEGATION_OLD_SESSION_NOT_REVIVED");
   const reactivated = await login("isolated-fixture-employee");
   check((await request("/api/my-permissions", { cookie: reactivated })).status === 200, "DELEGATION_FRESH_LOGIN_AFTER_REACTIVATION");
-  console.log(`Isolated HTTP smoke passed: ${count} real authenticated admin/delegation/G01/G02/G03 assertions.`);
+  // Keep every original smoke assertion above intact; phase2 mutates only the
+  // existing runner's disposable fixtures, after the original baseline checks.
+  await runPermissionScopeSmoke({ client, request, admin, editor, check });
+  console.log(`Isolated HTTP smoke passed: ${count} real authenticated admin/delegation/G01/G02/G03/G04/G05 assertions.`);
 } catch (error) {
-  console.error(`Isolated HTTP smoke failed [${guard.safeReason(error)}]: ${/^SMOKE_|^G0[123]_|^DELEGATION_/.test(error.message) ? error.message : "see guarded runtime diagnostics"}`);
+  console.error(`Isolated HTTP smoke failed [${guard.safeReason(error)}]: ${/^SMOKE_|^G0[12345]_|^DELEGATION_/.test(error.message) ? error.message : "see guarded runtime diagnostics"}`);
   process.exitCode = 1;
 } finally {
   await client.end().catch(() => {});

@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { db } from "./db";
 import { eq, and, ne, desc, sql, inArray, gte, lte, lt } from "drizzle-orm";
-import { isAuthenticated, requirePermission, getEffectiveBranchFilter, getCachedPermissionsForUser, hasCrossBranchHrReadAccess } from "./auth";
+import { isAuthenticated, requirePermission, getEffectiveBranchFilter, getCachedPermissionsForUser, hasCrossBranchHrReadAccess, hasPermissionScopeConstraint } from "./auth";
 import {
   WARNING_TEMPLATES,
   WARNING_REASON_CATEGORIES,
@@ -120,8 +120,41 @@ export function resolveHrBranchScope(
 
 function getBranchScope(req: any, requestedBranchId?: string): { branchIds: string[] | null; hasAccess: boolean } {
   const f = getEffectiveBranchFilter(req, requestedBranchId);
+  // A resource/action constraint must not be erased by the legacy HR read
+  // elevation. Admin remains unrestricted in the authorization middleware.
+  if (hasPermissionScopeConstraint(req)) return f;
   const isSafeMethod = req.method === "GET" || req.method === "HEAD";
   return resolveHrBranchScope(f, requestedBranchId, isSafeMethod, hasCrossBranchHrAccess(req));
+}
+
+async function hrDocumentCollectionContext(req: any) {
+  // This is a candidate universe, not access: the guard applies each action's
+  // source/deny and legacy ceiling before the handler uses getBranchScope.
+  const branchIds = (await db.select({ id: branches.id }).from(branches)).map(row => row.id);
+  return { kind: "collection" as const, branchIds };
+}
+
+async function hrDocumentResourceContext(req: any) {
+  const id = Number(req.params.id);
+  if (!Number.isSafeInteger(id) || id <= 0) {
+    return { kind: "resource" as const, branchId: "__unresolved_hr_document__" };
+  }
+  const [row] = await db.select({ branchId: branchEmployees.branchId })
+    .from(employeeDocuments)
+    .innerJoin(branchEmployees, eq(employeeDocuments.branchEmployeeId, branchEmployees.id))
+    .where(eq(employeeDocuments.id, id)).limit(1);
+  // Client branchId is never proof of an existing document's ownership.
+  return { kind: "resource" as const, branchId: row?.branchId ?? "__unresolved_hr_document__" };
+}
+
+async function hrDocumentCreateContext(req: any) {
+  const id = Number(req.body?.branchEmployeeId);
+  if (!Number.isSafeInteger(id) || id <= 0) {
+    return { kind: "resource" as const, branchId: "__unresolved_hr_employee__" };
+  }
+  const [row] = await db.select({ branchId: branchEmployees.branchId })
+    .from(branchEmployees).where(eq(branchEmployees.id, id)).limit(1);
+  return { kind: "resource" as const, branchId: row?.branchId ?? "__unresolved_hr_employee__" };
 }
 
 function applyBranchScope<T extends { branchId: any }>(table: T, branchIds: string[] | null) {
@@ -134,7 +167,7 @@ export function registerHrRoutes(app: Express) {
   // ========================================================================
   // 1) وثائق الموظفين  /api/hr/documents
   // ========================================================================
-  app.get("/api/hr/documents", isAuthenticated, requirePermission("hr_documents"), async (req, res) => {
+  app.get("/api/hr/documents", isAuthenticated, requirePermission("hr_documents", "view", hrDocumentCollectionContext), async (req, res) => {
     try {
       const requestedBranchId = req.query.branchId as string | undefined;
       const { branchIds, hasAccess } = getBranchScope(req, requestedBranchId);
@@ -159,7 +192,7 @@ export function registerHrRoutes(app: Express) {
     }
   });
 
-  app.post("/api/hr/documents", isAuthenticated, requirePermission("hr_documents"), async (req, res) => {
+  app.post("/api/hr/documents", isAuthenticated, requirePermission("hr_documents", "create", hrDocumentCreateContext), async (req, res) => {
     try {
       const parsed = insertEmployeeDocumentSchema.parse(req.body);
       const { branchIds } = getBranchScope(req);
@@ -185,7 +218,7 @@ export function registerHrRoutes(app: Express) {
     }
   });
 
-  app.patch("/api/hr/documents/:id", isAuthenticated, requirePermission("hr_documents"), async (req, res) => {
+  app.patch("/api/hr/documents/:id", isAuthenticated, requirePermission("hr_documents", "edit", hrDocumentResourceContext), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       const { branchIds } = getBranchScope(req);
@@ -216,7 +249,7 @@ export function registerHrRoutes(app: Express) {
     }
   });
 
-  app.delete("/api/hr/documents/:id", isAuthenticated, requirePermission("hr_documents"), async (req, res) => {
+  app.delete("/api/hr/documents/:id", isAuthenticated, requirePermission("hr_documents", "delete", hrDocumentResourceContext), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       const { branchIds } = getBranchScope(req);
