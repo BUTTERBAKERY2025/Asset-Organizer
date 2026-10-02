@@ -20,3 +20,9 @@ Do not assume a Supabase development branch automatically reproduces this projec
 **Why:** An authorized schema-only branch reached MIGRATIONS_FAILED with zero public application tables. The production migration ledger did not show a base users-table definition in the checked statements. A functioning existing production database does not prove its recorded migrations can initialize an empty one.
 
 **How to apply:** Prepare and validate a complete schema-only baseline before paying for another branch. Verify actual table readiness before attempting application startup, keep test connection credentials distinct, and delete only the disposable branch after the attempt. Never merge/reset the main branch to repair a test environment.
+
+Use the independently owned local PostgreSQL test path before paying for cloud staging again.
+
+**Why:** PostgreSQL was already available locally; a disposable cluster let real startup/authentication checks run without cloud credentials or production service access. Node/pg returns inet_server_addr()::text with a subnet suffix, so literal socket proof must normalize with host() rather than reject its own cluster. Node listen may also look up literal IPs.
+
+**How to apply:** Keep identity/ownership proof fail-closed, normalize only actual literal addresses, and permit no hostname lookup just to accommodate loopback listeners. Test-only dependencies must stay lazy in normal CJS builds; unconditional createRequire(import.meta.url) breaks production even when test mode is off. See docs/governance/isolated-runtime.md for limitations.

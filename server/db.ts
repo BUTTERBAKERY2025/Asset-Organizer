@@ -2,13 +2,14 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
 import * as schema from "@shared/schema";
 import { ensureOperationsJoiningSchema } from "./operations-joining-schema";
+import { isolatedTestMode, isolatedTestTarget, proveIsolatedRuntimeDatabase } from "./isolated-test-runtime";
 
 const { Pool } = pg;
 
 // Use local DATABASE_URL first, then Supabase if local is not available
 // To use Supabase: set USE_SUPABASE=true in environment variables
 const useSupabase = process.env.USE_SUPABASE === 'true';
-const connectionString = useSupabase 
+const connectionString = isolatedTestMode ? isolatedTestTarget!.url : useSupabase
   ? (process.env.SUPABASE_DATABASE_URL || process.env.DATABASE_URL)
   : (process.env.DATABASE_URL || process.env.SUPABASE_DATABASE_URL);
 
@@ -28,7 +29,7 @@ const poolMax = Number.isFinite(configuredPoolMax) && configuredPoolMax >= 1 && 
 
 // Log connection info for debugging (without password)
 const sanitizedUrl = connectionString.replace(/:([^:@]+)@/, ':***@');
-console.log(`Database connection: ${sanitizedUrl.substring(0, 50)}...`);
+if (!isolatedTestMode) console.log(`Database connection: ${sanitizedUrl.substring(0, 50)}...`);
 console.log(`SSL enabled: ${isSupabase}`);
 
 export const pool = new Pool({ 
@@ -155,6 +156,9 @@ export async function ensurePnlExpenseSchema() {
 }
 
 export async function runStartupMigrations() {
+  // The test runtime may only bootstrap after re-proving the actual connected
+  // server; the launcher's earlier proof alone is not a mutation authorization.
+  await proveIsolatedRuntimeDatabase(pool);
   await ensureOperationsMonthWorkflowSchema();
   await ensurePnlExpenseSchema();
   await ensureOperationsJoiningSchema(pool);

@@ -1,0 +1,14 @@
+{
+  "shared/schema.ts": "eeb267843020ed9b3f0dfb340ddb8c6269a2a1300369b20d0aecc1d0087dc38f",
+  "shared/material-quantity.ts": "49c7f13ad2892a1960bb080fb1d6c89d8130a50b3475d8dffdc1401abba8e4f8",
+  "migrations/029_central_kitchen_real_inventory.sql": "87093bf5fadd2e5efe700e9e2f11e3d54d1e0d1aeb9b90e9131a41ace3751571",
+  "migrations/030_central_kitchen_real_inventory_hardening.sql": "a175a591c8a892ebdf467cea754704ce190113a13567e368158ca756f252e268",
+  "migrations/031_central_kitchen_recipes.sql": "5315e467596f245ddbde7a54f810bfc9fd60e0236c87b076f8f4627a4ccc255e",
+  "migrations/033_central_kitchen_batch_materials.sql": "db6bf970304ac5be6c0e7ea16790c6c6540e1408686635e705717219593043bc",
+  "migrations/035_central_kitchen_preparation_sources.sql": "f0bfedcf81ba3da7dd3404099c564e2d649b982e4c2e9e14ea33bbbf75378801",
+  "migrations/039_finished_products_operational_sale_gates.sql": "5054cf1872a2665f38de145f2f8359197f86582048bc54ee4086afb9b12cff82",
+  "migrations/043_recipe_exceptions.sql": "da35ba0361116bc03d7287a4b91217f92c91ca4d713c3fceec9d0212d4953948",
+  "migrations/advanced_production_explicit_execution.sql": "320d975b0dda27fd1f6ca45daee2da4c5cf917b0a7c45e3daf238c05945e42dc",
+  "migrations/044_advanced_request_coverage.sql": "27c3e85d622dca470ae2cc639b07e316e72917a84467301e7254a284d7821b40",
+  "migrations/049_production_recipe_output_only.sql": "759f324900afdf42a814511c6c7905071887c4d0bb1f214fae2eeabb364c0731"
+}

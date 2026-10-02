@@ -8,6 +8,7 @@ import helmet from "helmet";
 import compression from "compression";
 import { db, pool, runStartupMigrations, warmupPool } from "./db";
 import { sql } from "drizzle-orm";
+import { isolatedTestMode, proveIsolatedRuntimeDatabase } from "./isolated-test-runtime";
 import { securityHeaders, csrfProtection, apiRateLimiter } from "./security";
 import {
   createCentralKitchenHttpDiagnostics,
@@ -223,6 +224,7 @@ process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
 process.on("SIGINT", () => gracefulShutdown("SIGINT"));
 
 (async () => {
+  await proveIsolatedRuntimeDatabase(pool);
   await warmupPool();
   await runStartupMigrations();
   // Read-only release gate: do not publish a server that needs columns the
@@ -282,7 +284,7 @@ process.on("SIGINT", () => gracefulShutdown("SIGINT"));
   await registerRoutes(httpServer, app);
   
   // Ensure Supabase Storage bucket exists on startup
-  try {
+  if (!isolatedTestMode) try {
     const { ensureBucketExists } = await import("./supabase-storage");
     await ensureBucketExists();
   } catch (e) {
@@ -290,7 +292,7 @@ process.on("SIGINT", () => gracefulShutdown("SIGINT"));
   }
   
   // Phase 11: start scheduler (queue worker + monthly reports)
-  try {
+  if (!isolatedTestMode) try {
     const { startScheduler } = await import("./scheduler");
     startScheduler();
   } catch (e) {
@@ -319,7 +321,10 @@ process.on("SIGINT", () => gracefulShutdown("SIGINT"));
     }
   });
 
-  if (process.env.NODE_ENV === "production") {
+  if (isolatedTestMode) {
+    // API-only test startup avoids Vite plugins, remote assets and child tools.
+    app.use((_req, res) => res.status(404).json({ error: "Isolated API test runtime" }));
+  } else if (process.env.NODE_ENV === "production") {
     try {
       const { execFileSync } = await import("child_process");
       execFileSync("node", ["scripts/precompress.js"], { timeout: 30000 });
@@ -344,7 +349,7 @@ process.on("SIGINT", () => gracefulShutdown("SIGINT"));
   httpServer.listen(
     {
       port,
-      host: "0.0.0.0",
+      host: isolatedTestMode ? "127.0.0.1" : "0.0.0.0",
       reusePort: true,
     },
     () => {
