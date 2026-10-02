@@ -58,6 +58,22 @@ async function mount() {
 async function renderAgain() {
   await act(async () => renderer.update(createElement(OperationsEmployeeAccountsPage)));
 }
+function templateFetch(password = "page-test-secret") {
+  return vi.fn((url: string, options: { method: string }) => Promise.resolve(new Response(JSON.stringify(
+    options.method === "POST"
+      ? { employee: data.employees[0], credentials: { username: "unit-user", password } }
+      : url.includes("job-templates")
+        ? { templates: [{ templateId: 7, version: 3, key: "test", name: "قالب اختبار", scopeType: "branch", permissions: [], approvedAt: "2026-05-05T10:03:00Z" }] }
+        : { employeeId: Number(url.split("/").at(-2)), branchId: "a", assignment: null, currentPermissions: [], expectedAssignmentRevision: "f".repeat(64) },
+  ))));
+}
+async function confirmCreate() {
+  await act(async () => renderer.root.findByProps({ id: "approved-employee-template" }).props.onChange({ target: { value: "7:3" } }));
+  await act(async () => renderer.root.findByProps({ id: "approved-employee-branch" }).props.onChange({ target: { value: "a" } }));
+  await act(async () => renderer.root.findByProps({ id: "employee-template-reason" }).props.onChange({ target: { value: "اختبار الإسناد" } }));
+  await act(async () => renderer.root.findByProps({ id: "employee-template-confirm" }).props.onChange({ target: { checked: true } }));
+  await act(async () => button("تأكيد الإسناد وتوليد الحساب").props.onClick());
+}
 beforeEach(() => {
   mocks.user = { id: "manager-test", role: "operations_manager", branchId: "a", activeBranchId: "a", allowedBranches: [{ branchId: "a" }] };
   mocks.state = { data, isError: false, isFetchedAfterMount: true, isFetching: false };
@@ -66,6 +82,7 @@ beforeEach(() => {
   mocks.loggingOut = false;
   vi.stubGlobal("window", { isSecureContext: true });
   vi.stubGlobal("navigator", { clipboard: { writeText: vi.fn() } });
+  vi.stubGlobal("fetch", templateFetch());
 });
 afterEach(async () => {
   if (renderer) await act(async () => renderer.unmount());
@@ -81,7 +98,7 @@ describe("operations employee account page", () => {
     expect(renderer.root.findAllByProps({ "data-testid": "employee-account-2" })).toHaveLength(1);
     expect(JSON.stringify(renderer.toJSON())).toContain("حساب محمي — يتطلب مسؤول النظام");
     expect(JSON.stringify(renderer.toJSON())).toContain("فرع بلا موظفين");
-    expect(button("الصلاحيات")).toBeUndefined();
+    expect(button("إسناد قالب معتمد")).toBeUndefined();
     expect(button("إعادة الفتح")).toBeUndefined();
     await act(async () => button("موظفون دون حساب").props.onClick());
     expect(renderer.root.findAllByProps({ "data-testid": "employee-account-2" })).toHaveLength(0);
@@ -90,21 +107,37 @@ describe("operations employee account page", () => {
 
   it.each(["not_selected", "read_only_branch"])("hides actions on %s and closes a stale open dialog immediately", async reason => {
     await mount();
-    await act(async () => button("الصلاحيات").props.onClick());
-    expect(button("حفظ الصلاحيات")).toBeTruthy();
+    await act(async () => button("إسناد قالب معتمد").props.onClick());
+    expect(button("تأكيد إسناد الإصدار")).toBeTruthy();
     mocks.state.data = { ...data, employees: [{ ...data.employees[1], account: null, management: { allowed: false, reason } }] };
     await renderAgain();
-    expect(button("حفظ الصلاحيات")).toBeUndefined();
-    expect(button("الصلاحيات")).toBeUndefined();
+    expect(button("تأكيد إسناد الإصدار")).toBeUndefined();
+    expect(button("إسناد قالب معتمد")).toBeUndefined();
     expect(JSON.stringify(renderer.toJSON())).toContain(reason === "not_selected" ? "لم يفوضك مسؤول النظام" : "للقراءة فقط");
   });
 
   it("closes a modal if the active roster no longer contains its employee", async () => {
     await mount();
-    await act(async () => button("الصلاحيات").props.onClick());
+    await act(async () => button("إسناد قالب معتمد").props.onClick());
     mocks.state.data = { ...data, employees: [] };
     await renderAgain();
-    expect(button("حفظ الصلاحيات")).toBeUndefined();
+    expect(button("تأكيد إسناد الإصدار")).toBeUndefined();
+  });
+  it("preserves template/branch/reason review when a linked account changes while its employee remains eligible", async () => {
+    await mount();
+    await act(async () => button("إسناد قالب معتمد").props.onClick());
+    await act(async () => renderer.root.findByProps({ id: "approved-employee-template" }).props.onChange({ target: { value: "7:3" } }));
+    await act(async () => renderer.root.findByProps({ id: "approved-employee-branch" }).props.onChange({ target: { value: "a" } }));
+    await act(async () => renderer.root.findByProps({ id: "employee-template-reason" }).props.onChange({ target: { value: "احتفظ بالمراجعة" } }));
+    await act(async () => renderer.root.findByProps({ id: "employee-template-confirm" }).props.onChange({ target: { checked: true } }));
+    mocks.state.data = { ...data, employees: [{ ...data.employees[1], account: { ...data.employees[1].account!, permissions: [{ module: "cashier_journal", actions: ["view"] }] } }] };
+    await renderAgain();
+    expect(renderer.root.findByProps({ id: "approved-employee-template" }).props.value).toBe("7:3");
+    expect(renderer.root.findByProps({ id: "approved-employee-branch" }).props.value).toBe("a");
+    expect(renderer.root.findByProps({ id: "employee-template-reason" }).props.value).toBe("احتفظ بالمراجعة");
+    expect(button("تأكيد إسناد الإصدار").props.disabled).toBe(true);
+    expect(renderer.root.findByProps({ id: "employee-template-confirm" }).props.checked).toBe(false);
+    expect(JSON.stringify(renderer.toJSON())).toContain("تغيّرت بيانات الحساب في الدليل");
   });
 
   it("fails closed when individual management approval is absent", async () => {
@@ -116,12 +149,11 @@ describe("operations employee account page", () => {
   });
 
   it("retains the one-time handoff on its own successful create refresh but clears it on revoked selection", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ employee: data.employees[0], credentials: { username: "unit-user", password: "handoff-secret" } }))));
+    vi.stubGlobal("fetch", templateFetch("handoff-secret"));
     await mount();
     await act(async () => button("موظفون دون حساب").props.onClick());
     await act(async () => button("اختيار الموظف").props.onClick());
-    await act(async () => renderer.root.findAllByType("input").find((node: any) => node.props.type === "checkbox").props.onChange({ target: { checked: true } }));
-    await act(async () => button("توليد وإنشاء الحساب").props.onClick());
+    await confirmCreate();
     const created = { ...data.employees[0], hasAccount: true, account: data.employees[1].account };
     mocks.state.data = { ...data, employees: [created] };
     await renderAgain();
@@ -165,11 +197,11 @@ describe("operations employee account page", () => {
     await mount();
     expect(renderer.root.findAllByProps({ "data-testid": "employee-account-2" })).toHaveLength(1);
     expect(renderer.root.findAllByProps({ "data-testid": "employee-account-1" })).toHaveLength(0);
-    expect(button("توليد وإنشاء الحساب")).toBeUndefined();
+    expect(button("تأكيد الإسناد وتوليد الحساب")).toBeUndefined();
     await act(async () => button("موظفون دون حساب").props.onClick());
     await act(async () => button("اختيار الموظف").props.onClick());
     expect(renderer.root.findByProps({ id: "delegated-employee-name" }).props.value).toBe("موظف مؤهل");
-    expect(button("توليد وإنشاء الحساب")).toBeTruthy();
+    expect(button("تأكيد الإسناد وتوليد الحساب")).toBeTruthy();
     expect(button("سياسة التفويض")).toBeUndefined();
   });
 
@@ -195,12 +227,11 @@ describe("operations employee account page", () => {
   });
 
   it("clears credentials immediately when actor/active branch changes and on logout", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ employee: data.employees[0], credentials: { username: "unit-user", password: "unit-secret" } }))));
+    vi.stubGlobal("fetch", templateFetch("unit-secret"));
     await mount();
     await act(async () => button("موظفون دون حساب").props.onClick());
     await act(async () => button("اختيار الموظف").props.onClick());
-    await act(async () => renderer.root.findAllByType("input").find((node: any) => node.props.type === "checkbox").props.onChange({ target: { checked: true } }));
-    await act(async () => button("توليد وإنشاء الحساب").props.onClick());
+    await confirmCreate();
     expect(JSON.stringify(renderer.toJSON())).toContain("unit-secret");
     mocks.user = { ...mocks.user, activeBranchId: "b" };
     await renderAgain();
@@ -214,20 +245,18 @@ describe("operations employee account page", () => {
   });
 
   it("clears credentials on a client branch change or newly disabled policy", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ employee: data.employees[0], credentials: { username: "unit-user", password: "scope-secret" } }))));
+    vi.stubGlobal("fetch", templateFetch("scope-secret"));
     await mount();
     await act(async () => button("موظفون دون حساب").props.onClick());
     await act(async () => button("اختيار الموظف").props.onClick());
-    await act(async () => renderer.root.findAllByType("input").find((node: any) => node.props.type === "checkbox").props.onChange({ target: { checked: true } }));
-    await act(async () => button("توليد وإنشاء الحساب").props.onClick());
+    await confirmCreate();
     expect(JSON.stringify(renderer.toJSON())).toContain("scope-secret");
     mocks.search = "?branchId=a";
     await renderAgain();
     expect(JSON.stringify(renderer.toJSON())).not.toContain("scope-secret");
     await act(async () => button("اختيار الموظف").props.onClick());
-    await act(async () => renderer.root.findAllByType("input").find((node: any) => node.props.type === "checkbox").props.onChange({ target: { checked: true } }));
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ employee: data.employees[0], credentials: { username: "unit-user", password: "policy-secret" } }))));
-    await act(async () => button("توليد وإنشاء الحساب").props.onClick());
+    vi.stubGlobal("fetch", templateFetch("policy-secret"));
+    await confirmCreate();
     expect(JSON.stringify(renderer.toJSON())).toContain("policy-secret");
     mocks.state = { ...mocks.state, data: { ...data, policy: { enabled: false, permissions: [] } } };
     await renderAgain();
@@ -243,12 +272,11 @@ describe("operations employee account page", () => {
   });
 
   it("clears credentials at logout start, before the auth cookie response arrives", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ employee: data.employees[0], credentials: { username: "unit-user", password: "logout-secret" } }))));
+    vi.stubGlobal("fetch", templateFetch("logout-secret"));
     await mount();
     await act(async () => button("موظفون دون حساب").props.onClick());
     await act(async () => button("اختيار الموظف").props.onClick());
-    await act(async () => renderer.root.findAllByType("input").find((node: any) => node.props.type === "checkbox").props.onChange({ target: { checked: true } }));
-    await act(async () => button("توليد وإنشاء الحساب").props.onClick());
+    await confirmCreate();
     expect(JSON.stringify(renderer.toJSON())).toContain("logout-secret");
     mocks.loggingOut = true;
     await renderAgain();
@@ -272,10 +300,12 @@ describe("operations employee account page", () => {
     mocks.state = { ...mocks.state, data: { ...data, policy, availablePermissions: policy.permissions, employees: [account] } };
     await mount();
     expect(renderer.root.findAllByProps({ "data-testid": "employee-account-2" })).toHaveLength(1);
-    expect(button("الصلاحيات").props.disabled).toBe(false);
+    expect(button("إسناد قالب معتمد").props.disabled).toBe(false);
     expect(JSON.stringify(renderer.toJSON())).toContain("تعطيل السياسة أو تضييقها لا يسحب تلقائيًا وصول الحسابات الحالية");
-    await act(async () => button("الصلاحيات").props.onClick());
-    expect(button("حفظ تخفيض الصلاحيات").props.disabled).toBe(false);
+    await act(async () => button("إسناد قالب معتمد").props.onClick());
+    expect(button("تأكيد إسناد الإصدار").props.disabled).toBe(true);
+    expect(renderer.root.findAllByType("input").filter((node: any) => node.props.type === "checkbox")).toHaveLength(1);
+    expect(button("حفظ تخفيض الصلاحيات")).toBeUndefined();
     await act(async () => button("إلغاء").props.onClick());
     expect(button("تجميد").props.disabled).toBe(false);
     await act(async () => button("تجميد").props.onClick());

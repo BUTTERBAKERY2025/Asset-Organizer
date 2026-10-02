@@ -27,6 +27,7 @@ export const selectedMigrations = [
   "050_permission_source_mode.sql",
   "051_job_permission_template_drafts.sql",
   "052_job_permission_template_approvals.sql",
+  "053_employee_template_assignments.sql",
 ] as const;
 
 export const releaseGuards = [

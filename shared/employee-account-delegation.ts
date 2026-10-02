@@ -105,6 +105,49 @@ export interface EmployeeAccountCreatedResponse {
   credentials: { username: string; password: string };
 }
 
+export interface EmployeeTemplateAssignmentInput {
+  templateId: number;
+  version: number;
+  branchId: string;
+  reason: string;
+  expectedAssignmentRevision: string;
+}
+export interface EmployeeTemplateAssignment {
+  templateId: number;
+  version: number;
+  branchId: string;
+  revision: string;
+  assignedAt: string;
+  assignedBy: string;
+  reason: string;
+}
+export interface EmployeeTemplateAssignmentResponse {
+  employeeId: number;
+  branchId: string;
+  assignment: EmployeeTemplateAssignment | null;
+  currentPermissions: DelegatedPermission[];
+  expectedAssignmentRevision: string;
+}
+export interface EmployeeJobTemplateSummary {
+  templateId: number;
+  version: number;
+  key: string;
+  name: string;
+  scopeType: "branch" | "self" | "assigned_tasks";
+  permissions: DelegatedPermission[];
+  approvedAt: string;
+}
+export interface EmployeeJobTemplatesResponse {
+  templates: EmployeeJobTemplateSummary[];
+}
+export interface EmployeeTemplateAssignedResponse {
+  employee: DelegatedEmployeeAccount;
+  assignment: EmployeeTemplateAssignment;
+}
+export interface EmployeeTemplateAccountCreatedResponse extends EmployeeTemplateAssignedResponse {
+  credentials: { username: string; password: string };
+}
+
 /** Immutable security ceiling. Admin policy and all templates are subsets. */
 export const EMPLOYEE_ACCOUNT_SAFE_PERMISSIONS: DelegatedPermission[] = [
   { module: "cashier_journal", actions: ["view", "create", "edit"] },

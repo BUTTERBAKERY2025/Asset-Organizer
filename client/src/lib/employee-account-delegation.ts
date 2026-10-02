@@ -59,7 +59,7 @@ export function createEmployeeAccountCommandGuard() {
 }
 
 export class EmployeeAccountRequestError extends Error {
-  constructor(readonly status: number, message: string) {
+  constructor(readonly status: number, message: string, readonly code?: string) {
     super(message);
     this.name = "EmployeeAccountRequestError";
   }
@@ -87,13 +87,15 @@ export async function requestEmployeeAccount<T>(url: string, options: {
     });
     if (!response.ok) {
       let detail = "تعذر تنفيذ الطلب";
+      let code: string | undefined;
       try {
-        const data: { error?: unknown } = await response.json();
+        const data: { error?: unknown; code?: unknown } = await response.json();
         if (typeof data.error === "string" && data.error) detail = data.error;
+        if (typeof data.code === "string") code = data.code;
       } catch {
         detail = "استجابة غير صالحة من الخادم";
       }
-      throw new EmployeeAccountRequestError(response.status, `${detail} (${response.status})`);
+      throw new EmployeeAccountRequestError(response.status, `${detail} (${response.status})`, code);
     }
     return await response.json();
   } catch (error) {

@@ -7,6 +7,7 @@ import { runPermissionScopeSmoke } from "./isolated-runtime-permission-scopes.mj
 import { runHrScopeSmoke } from "./isolated-runtime-hr-scope.mjs";
 import { runJobTemplateSmoke } from "./isolated-runtime-job-templates.mjs";
 import { runJobTemplateApprovalSmoke } from "./isolated-runtime-job-template-approvals.mjs";
+import { runTemplateAssignmentSmoke } from "./isolated-runtime-template-assignment.mjs";
 
 const target = guard.assertRuntime();
 const origin = `http://127.0.0.1:${target.appPort}`;
@@ -115,10 +116,29 @@ try {
   check((await request("/api/operations/employee-accounts/900003/status", {
     method: "PATCH", cookie: manager, body: { isActive: "inactive" },
   })).status === 403, "DELEGATION_CROSS_BRANCH_MUTATION_DENIED");
-  const generated = await request("/api/operations/employee-accounts/900002", {
+  const beforeRawCreate = (await client.query(`SELECT
+    (SELECT count(*)::int FROM users) AS accounts,
+    (SELECT linked_user_id FROM branch_employees WHERE id=900002) AS linked_user_id,
+    (SELECT count(*)::int FROM user_permissions) AS permissions,
+    (SELECT count(*)::int FROM system_audit_logs) AS audits`)).rows[0];
+  const rejectedRawCreate = await request("/api/operations/employee-accounts/900002", {
     method: "POST", cookie: manager, body: { permissions },
   });
-  check(generated.status === 201 && generated.json?.credentials?.username && generated.json?.credentials?.password, "DELEGATION_SCOPED_CREATE_CONTROL");
+  check(rejectedRawCreate.status === 403 && rejectedRawCreate.json?.code === "APPROVED_TEMPLATE_REQUIRED",
+    "DELEGATION_OPS_RAW_CREATE_REQUIRES_APPROVED_TEMPLATE");
+  assert.deepEqual((await client.query(`SELECT
+    (SELECT count(*)::int FROM users) AS accounts,
+    (SELECT linked_user_id FROM branch_employees WHERE id=900002) AS linked_user_id,
+    (SELECT count(*)::int FROM user_permissions) AS permissions,
+    (SELECT count(*)::int FROM system_audit_logs) AS audits`)).rows[0], beforeRawCreate,
+  "DELEGATION_OPS_RAW_CREATE_NO_MUTATION");
+  check(true, "DELEGATION_OPS_RAW_CREATE_NO_MUTATION");
+  // Admin fixture setup retains the original safe-creation/login expectations;
+  // actual delegated creation is certified through approved templates in phase4.
+  const generated = await request("/api/operations/employee-accounts/900002", {
+    method: "POST", cookie: admin, body: { permissions },
+  });
+  check(generated.status === 201 && generated.json?.credentials?.username && generated.json?.credentials?.password, "DELEGATION_ADMIN_RAW_CREATE_CONTROL");
   const generatedCookie = await loginCredentials(generated.json.credentials);
   check((await request("/api/my-permissions", { cookie: generatedCookie })).status === 200, "DELEGATION_GENERATED_ACCOUNT_AUTHENTICATED");
   const generatedIdentity = await request("/api/auth/me", { cookie: generatedCookie });
@@ -145,9 +165,10 @@ try {
   await runHrScopeSmoke({ client, request, admin, editor, check });
   await runJobTemplateSmoke({ client, request, admin, editor, manager, employee: reactivated, check });
   await runJobTemplateApprovalSmoke({ client, request, admin, editor, manager, employee: reactivated, check });
-  console.log(`Isolated HTTP smoke passed: ${count} real authenticated admin/delegation/G01/G02/G03/G04/G05/HR_SCOPE/JT/JTA assertions.`);
+  await runTemplateAssignmentSmoke({ client, request, admin, editor, manager, employee: reactivated, loginCredentials, check });
+  console.log(`Isolated HTTP smoke passed: ${count} real authenticated admin/delegation/G01/G02/G03/G04/G05/HR_SCOPE/JT/JTA/TA assertions.`);
 } catch (error) {
-  console.error(`Isolated HTTP smoke failed [${guard.safeReason(error)}]: ${/^SMOKE_|^G0[12345]_|^DELEGATION_|^HR_SCOPE_|^JT_|^JTA_/.test(error.message) ? error.message : "see guarded runtime diagnostics"}`);
+  console.error(`Isolated HTTP smoke failed [${guard.safeReason(error)}]: ${/^SMOKE_|^G0[12345]_|^DELEGATION_|^HR_SCOPE_|^JT_|^JTA_|^TA_/.test(error.message) ? error.message : "see guarded runtime diagnostics"}`);
   process.exitCode = 1;
 } finally {
   await client.end().catch(() => {});

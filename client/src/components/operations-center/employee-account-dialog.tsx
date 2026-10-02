@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import { Copy, KeyRound, Loader2, Lock, ShieldCheck, Unlock } from "lucide-react";
+import { KeyRound, Loader2, Lock, Unlock } from "lucide-react";
 import type { DelegatedPermission, EmployeeAccountCreatedResponse } from "@shared/employee-account-delegation";
 import type { DelegatedEmployeeAccount, EmployeeAccountsResponse } from "@/lib/employee-account-types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { EmployeeAccountPermissions } from "./employee-account-permissions";
+import { EmployeeAccountCredentials } from "./employee-account-credentials";
 import { constrainDelegatedPermissions, createEmployeeAccountCommandGuard, EMPLOYEE_ACCOUNTS_ENDPOINT, employeeAccountErrorMessage, hasMissingViewPermission, hasUnapprovedPermissions, requestEmployeeAccount } from "@/lib/employee-account-delegation";
 
 export type EmployeeAccountDialogMode = "create" | "permissions" | "freeze" | "reopen";
@@ -61,6 +62,10 @@ export function EmployeeAccountDialog({ employee, mode, directory, close, refres
     if (pending || completed) return;
     if (!actionAllowed) {
       setError("لم تعد إدارة حساب هذا الموظف متاحة. حدّث الدليل للتحقق من التفويض.");
+      return;
+    }
+    if (mode === "reopen" && (!directory.policy.enabled || !employee.account?.canReactivate)) {
+      setError("هذا الحساب غير مؤهل لإعادة الفتح وفق السياسة الحالية.");
       return;
     }
     if (!statusMode && (missingView || emptyNewGrant || (mode === "create" && !canGrant))) {
@@ -125,22 +130,7 @@ export function EmployeeAccountDialog({ employee, mode, directory, close, refres
       <div className="space-y-4">
         <div><label htmlFor="delegated-employee-name" className="mb-1 block text-xs font-bold">اسم الموظف · للقراءة فقط</label>
           <Input id="delegated-employee-name" value={employee.employeeName} readOnly className="min-h-11 bg-muted/40" /></div>
-        {credentials ? <section className="space-y-3 rounded-xl border border-emerald-200 bg-emerald-50/60 p-3">
-          <p className="flex items-center gap-2 text-sm font-bold text-emerald-800"><ShieldCheck className="h-4 w-4" />حساب جاهز للتسليم للموظف</p>
-          <p className="text-xs leading-6 text-emerald-900">تظهر بيانات الدخول مرة واحدة فقط. احفظها بطريقة آمنة قبل الإغلاق؛ لن يمكن عرض كلمة المرور مجددًا. لا تشاركها إلا مع الموظف المعني.</p>
-          {(["username", "password"] as const).map(kind => <div key={kind}>
-            <p className="mb-1 text-xs font-bold">{kind === "username" ? "اسم المستخدم المولّد" : "كلمة المرور القوية المولّدة"}</p>
-            <div className="flex items-center gap-2 rounded-lg border bg-white px-3">
-              <code dir="ltr" className="min-w-0 flex-1 select-text break-all py-3 text-left text-sm" data-testid={`generated-${kind}`}>{credentials[kind]}</code>
-              <Button type="button" variant="ghost" size="icon" className="min-h-11 min-w-11" onClick={() => copy(kind)} aria-label={kind === "username" ? "نسخ اسم المستخدم" : "نسخ كلمة المرور"}><Copy className="h-4 w-4" /></Button>
-            </div>
-          </div>)}
-          {copied && <p role="status" className="text-xs text-emerald-800">{copied}</p>}
-          <label className="flex min-h-11 cursor-pointer items-center gap-2 text-xs font-bold text-emerald-900">
-            <input type="checkbox" className="h-4 w-4 accent-emerald-700" checked={handoffSaved} onChange={event => { setHandoffSaved(event.target.checked); setError(""); }} />
-            حفظت بيانات الدخول بطريقة آمنة لتسليمها للموظف المعني
-          </label>
-        </section> : statusMode ? <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm leading-7">
+        {credentials ? <EmployeeAccountCredentials credentials={credentials} copied={copied} saved={handoffSaved} onCopy={copy} onSaved={saved => { setHandoffSaved(saved); setError(""); }} /> : statusMode ? <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm leading-7">
           <p className="font-bold">{mode === "freeze" ? "هل تؤكد تجميد الحساب؟" : "هل تؤكد إعادة فتح الحساب؟"}</p>
           <p>{mode === "freeze" ? "سيتوقف دخول الموظف بهذا الحساب، دون حذف الموظف أو حسابه. يمكنك إعادة فتحه لاحقًا إذا استوفى شروط التفويض." : "سيتمكن الموظف من تسجيل الدخول مجددًا بصلاحيات الحساب المعتمدة. لن يتم توليد كلمة مرور جديدة."}</p>
           {mode === "reopen" && !employee.account?.canReactivate && <p role="alert" className="text-destructive">هذا الحساب غير مؤهل لإعادة الفتح. راجع السياسة وصلاحيات الحساب أولًا.</p>}
@@ -168,7 +158,7 @@ export function EmployeeAccountDialog({ employee, mode, directory, close, refres
         {error && <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-xs leading-6 text-destructive">{error}</p>}
       </div>
       <DialogFooter className="gap-2 sm:gap-2">
-        {!credentials && <Button type="button" className="min-h-11 gap-2" variant={mode === "freeze" ? "destructive" : "default"} disabled={!actionAllowed || pending || completed || (statusMode ? mode === "reopen" && (!canGrant || !employee.account?.canReactivate) : missingView || emptyNewGrant || (mode === "create" && !canGrant))} onClick={act}>
+        {!credentials && <Button type="button" className="min-h-11 gap-2" variant={mode === "freeze" ? "destructive" : "default"} disabled={!actionAllowed || pending || completed || (statusMode ? mode === "reopen" && (!directory.policy.enabled || !employee.account?.canReactivate) : missingView || emptyNewGrant || (mode === "create" && !canGrant))} onClick={act}>
           {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : mode === "freeze" ? <Lock className="h-4 w-4" /> : mode === "reopen" ? <Unlock className="h-4 w-4" /> : <KeyRound className="h-4 w-4" />}
           {pending ? "جار التنفيذ…" : mode === "create" ? "توليد وإنشاء الحساب" : mode === "permissions" ? reductionOnly ? "حفظ تخفيض الصلاحيات" : "حفظ الصلاحيات" : mode === "freeze" ? "تأكيد التجميد" : "تأكيد إعادة الفتح"}
         </Button>}

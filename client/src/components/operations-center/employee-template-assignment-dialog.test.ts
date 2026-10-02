@@ -1,0 +1,253 @@
+import { createElement } from "react";
+import { createRequire } from "node:module";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { DelegatedEmployeeAccount, EmployeeAccountsResponse } from "@/lib/employee-account-types";
+import type { ApprovedEmployeeTemplate, EmployeeAssignmentSnapshot } from "@/lib/employee-template-assignment";
+import { employeeTemplateDiff } from "@/lib/employee-template-assignment";
+import { EmployeeTemplateAssignmentDialog } from "./employee-template-assignment-dialog";
+
+const { act, create } = createRequire(import.meta.url)("react-test-renderer");
+Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+vi.mock("@/components/ui/dialog", () => {
+  const element = ({ children }: { children: React.ReactNode }) => createElement("section", null, children);
+  const dialog = ({ children, onOpenChange }: { children: React.ReactNode; onOpenChange: (open: boolean) => void }) =>
+    createElement("section", { "data-testid": "test-dialog", onOpenChange }, children);
+  return { Dialog: dialog, DialogContent: element, DialogHeader: element, DialogTitle: element, DialogDescription: element, DialogFooter: element };
+});
+const employee: DelegatedEmployeeAccount = {
+  employeeId: 19, employeeName: "موظف مراجعة", branchId: "a", branchName: "فرع الاختبار",
+  hasAccount: true, management: { allowed: true, reason: "allowed" },
+  account: { id: "test-account", username: "test-user", isActive: "active", permissions: [{ module: "cashier_journal", actions: ["view", "create"] }], canReactivate: true },
+};
+const directory: EmployeeAccountsResponse = {
+  branches: [{ id: "a", name: "فرع الاختبار" }, { id: "b", name: "فرع آخر مصرح" }],
+  employees: [employee], policy: { enabled: true, permissions: [] }, availablePermissions: [], templates: [],
+};
+const template: ApprovedEmployeeTemplate = {
+  templateId: 7, version: 3, key: "review-template", name: "خدمة الفرع", scopeType: "branch",
+  permissions: [{ module: "cashier_journal", actions: ["view", "edit"] }], approvedAt: "2026-05-05T10:03:00Z",
+};
+const snapshot: EmployeeAssignmentSnapshot = {
+  employeeId: 19, branchId: "a", assignment: null, currentPermissions: employee.account!.permissions,
+  expectedAssignmentRevision: "f".repeat(64),
+};
+let renderer: any;
+let catalog: ApprovedEmployeeTemplate[];
+let current: EmployeeAssignmentSnapshot;
+let write: ReturnType<typeof vi.fn>;
+let fetchMock: ReturnType<typeof vi.fn>;
+const text = (node: any): string => typeof node === "string" ? node : (node.children ?? []).map(text).join("");
+const button = (label: string) => renderer.root.findAllByType("button").find((node: any) => text(node).includes(label));
+const serialized = () => JSON.stringify(renderer.toJSON());
+const change = async (id: string, value: string) => act(async () => renderer.root.findByProps({ id }).props.onChange({ target: { value } }));
+const confirm = async () => act(async () => renderer.root.findByProps({ id: "employee-template-confirm" }).props.onChange({ target: { checked: true } }));
+async function select(key = "7:3") {
+  await change("approved-employee-template", key);
+  await change("approved-employee-branch", "a");
+  await change("employee-template-reason", "اعتماد مهام الفرع");
+}
+async function mount(mode: "create" | "permissions" = "permissions", row = employee, data = directory) {
+  const close = vi.fn(), refresh = vi.fn();
+  await act(async () => { renderer = create(createElement(EmployeeTemplateAssignmentDialog, { employee: row, mode, directory: data, close, refresh })); });
+  return { close, refresh };
+}
+beforeEach(() => {
+  catalog = [template];
+  current = snapshot;
+  write = vi.fn().mockResolvedValue(new Response(JSON.stringify({ employee, assignment: {} })));
+  fetchMock = vi.fn((url: string, options: { method: string }) => {
+    if (options.method === "POST") return write(url, options);
+    return Promise.resolve(new Response(JSON.stringify(url.includes("job-templates") ? { templates: catalog } : current)));
+  });
+  vi.stubGlobal("fetch", fetchMock);
+  vi.stubGlobal("window", { isSecureContext: true });
+  vi.stubGlobal("navigator", { clipboard: { writeText: vi.fn().mockResolvedValue(undefined) } });
+});
+afterEach(async () => {
+  if (renderer) await act(async () => renderer.unmount());
+  renderer = undefined;
+  vi.unstubAllGlobals();
+});
+
+describe("approved employee template review", () => {
+  it("loads an employee-filtered catalog and snapshot, with no implicit grant selection", async () => {
+    await mount();
+    expect(fetchMock.mock.calls.map(call => call[0])).toEqual([
+      "/api/operations/employee-accounts/job-templates?employeeId=19",
+      "/api/operations/employee-accounts/19/template-assignment",
+    ]);
+    expect(renderer.root.findByProps({ id: "approved-employee-template" }).props.value).toBe("");
+    expect(renderer.root.findByProps({ id: "approved-employee-branch" }).props.value).toBe("");
+    expect(renderer.root.findByProps({ id: "delegated-employee-name" }).props.readOnly).toBe(true);
+    expect(renderer.root.findAllByType("input").filter((node: any) => node.props.type === "checkbox")).toHaveLength(1);
+    expect(write).not.toHaveBeenCalled();
+    expect(button("تأكيد إسناد الإصدار").props.disabled).toBe(true);
+    expect(serialized()).not.toContain("فرع آخر مصرح");
+  });
+  it("shows additions/removals before explicit confirmation and sends only the strict snapshot-bound command", async () => {
+    const { close, refresh } = await mount();
+    await select();
+    expect(serialized()).toContain("سيُضاف");
+    expect(serialized()).toContain("سيُزال");
+    expect(button("تأكيد إسناد الإصدار").props.disabled).toBe(true);
+    await act(async () => button("تأكيد إسناد الإصدار").props.onClick());
+    expect(write).not.toHaveBeenCalled();
+    await confirm();
+    await act(async () => button("تأكيد إسناد الإصدار").props.onClick());
+    expect(write).toHaveBeenCalledOnce();
+    expect(write.mock.calls[0][0]).toBe("/api/operations/employee-accounts/19/template-assignment");
+    expect(JSON.parse(write.mock.calls[0][1].body)).toEqual({
+      templateId: 7, version: 3, branchId: "a", reason: "اعتماد مهام الفرع", expectedAssignmentRevision: snapshot.expectedAssignmentRevision,
+    });
+    expect(close).toHaveBeenCalledOnce();
+    expect(refresh).toHaveBeenCalledOnce();
+  });
+  it("allows an empty approved template under enabled policy without operational grants", async () => {
+    catalog = [{ ...template, scopeType: "self", permissions: [] }];
+    current = { ...snapshot, currentPermissions: [] };
+    await mount();
+    await select();
+    expect(serialized()).toContain("بوابة الموظف الذاتية مستقلة");
+    await confirm();
+    expect(button("تأكيد إسناد الإصدار").props.disabled).toBe(false);
+    await act(async () => button("تأكيد إسناد الإصدار").props.onClick());
+    expect(JSON.parse(write.mock.calls[0][1].body)).not.toHaveProperty("permissions");
+  });
+  it("preserves choices/reason after 409, requires reloading both resources and a fresh confirmation", async () => {
+    write.mockResolvedValueOnce(new Response(JSON.stringify({ error: "تغيرت الصلاحيات", code: "ASSIGNMENT_REVISION_CONFLICT" }), { status: 409 }));
+    await mount();
+    await select();
+    await confirm();
+    await act(async () => button("تأكيد إسناد الإصدار").props.onClick());
+    expect(renderer.root.findByProps({ id: "approved-employee-template" }).props.value).toBe("7:3");
+    expect(renderer.root.findByProps({ id: "approved-employee-branch" }).props.value).toBe("a");
+    expect(renderer.root.findByProps({ id: "employee-template-reason" }).props.value).toBe("اعتماد مهام الفرع");
+    expect(renderer.root.findByProps({ id: "employee-template-confirm" }).props.checked).toBe(false);
+    expect(button("تأكيد إسناد الإصدار").props.disabled).toBe(true);
+    current = { ...snapshot, expectedAssignmentRevision: "a".repeat(64), currentPermissions: [] };
+    await act(async () => button("تحديث المعاينة والقوالب").props.onClick());
+    expect(fetchMock.mock.calls.filter(call => call[1].method === "GET")).toHaveLength(4);
+    expect(button("تأكيد إسناد الإصدار").props.disabled).toBe(true);
+    await confirm();
+    await act(async () => button("تأكيد إسناد الإصدار").props.onClick());
+    expect(JSON.parse(write.mock.calls[1][1].body).expectedAssignmentRevision).toBe(current.expectedAssignmentRevision);
+  });
+  it.each(["TEMPLATE_NOT_APPROVED", "STALE_TEMPLATE_VERSION"])("does not automatically replace a revoked or superseded selected version (%s)", async code => {
+    write.mockResolvedValueOnce(new Response(JSON.stringify({ error: "الإصدار غير متاح", code }), { status: 409 }));
+    await mount();
+    await select();
+    await confirm();
+    await act(async () => button("تأكيد إسناد الإصدار").props.onClick());
+    catalog = [{ ...template, version: 4 }];
+    await act(async () => button("تحديث المعاينة والقوالب").props.onClick());
+    expect(renderer.root.findByProps({ id: "approved-employee-template" }).props.value).toBe("7:3");
+    expect(serialized()).toContain("لم يعد الإصدار المختار مؤهلًا");
+    expect(button("تأكيد إسناد الإصدار").props.disabled).toBe(true);
+    expect(write).toHaveBeenCalledOnce();
+  });
+  it("shows missing migration 053 explicitly, never as an empty template list, with retry", async () => {
+    fetchMock.mockImplementation(() => Promise.resolve(new Response(JSON.stringify({ error: "storage unavailable", code: "migration_required" }), { status: 503 })));
+    await mount();
+    expect(serialized()).toContain("053");
+    expect(serialized()).not.toContain("لا يوجد إصدار معتمد مؤهل");
+    expect(button("إعادة المحاولة")).toBeTruthy();
+    expect(button("تأكيد إسناد الإصدار").props.disabled).toBe(true);
+  });
+  it("explains protected/unsupported roles and preserves backend forbidden errors", async () => {
+    fetchMock.mockImplementation(() => Promise.resolve(new Response(JSON.stringify({ error: "إسناد قديم أو استثناء", code: "PROTECTED_ACCOUNT" }), { status: 403 })));
+    await mount();
+    expect(serialized()).toContain("إسناد قديم أو استثناء");
+    expect(serialized()).toContain("الأدوار غير المدعومة");
+    expect(write).not.toHaveBeenCalled();
+  });
+  it("distinguishes a genuinely empty eligible catalog and documents delivery compatibility", async () => {
+    catalog = [];
+    await mount();
+    expect(serialized()).toContain("لا يوجد إصدار معتمد مؤهل");
+    expect(serialized()).toContain("وظيفة توصيل محفوظة");
+    expect(serialized()).not.toContain("053");
+  });
+  it("never uses the legacy directory templates or an admin-only fallback", async () => {
+    catalog = [];
+    await mount("permissions", employee, { ...directory, templates: [{ id: "admin-only", name: "قالب إدارة النظام", permissions: [{ module: "users", actions: ["manage"] }] }] });
+    expect(serialized()).not.toContain("قالب إدارة النظام");
+    expect(renderer.root.findByProps({ id: "approved-employee-template" }).props.value).toBe("");
+    expect(write).not.toHaveBeenCalled();
+  });
+  it("blocks non-authorized branches and changes to the server's persisted employee branch", async () => {
+    await mount();
+    await select();
+    await change("approved-employee-branch", "b");
+    await confirm();
+    await act(async () => button("تأكيد إسناد الإصدار").props.onClick());
+    expect(write).not.toHaveBeenCalled();
+  });
+  it("requires confirmation again after changing the selected branch, template or reason", async () => {
+    await mount();
+    await select();
+    await confirm();
+    await change("employee-template-reason", "سبب آخر");
+    expect(renderer.root.findByProps({ id: "employee-template-confirm" }).props.checked).toBe(false);
+    expect(button("تأكيد إسناد الإصدار").props.disabled).toBe(true);
+  });
+  it("creates through the selected employee, shows secrets once and reuses secure handoff", async () => {
+    write.mockResolvedValueOnce(new Response(JSON.stringify({ employee, assignment: {}, credentials: { username: "new-user", password: "one-time-password" } })));
+    const { close, refresh } = await mount("create", { ...employee, hasAccount: false, account: null });
+    await select();
+    await confirm();
+    await act(async () => button("تأكيد الإسناد وتوليد الحساب").props.onClick());
+    expect(write.mock.calls[0][0]).toBe("/api/operations/employee-accounts/19/template-account");
+    expect(renderer.root.findByProps({ "data-testid": "generated-password" }).children).toEqual(["one-time-password"]);
+    expect(refresh).not.toHaveBeenCalled();
+    await act(async () => renderer.root.findByProps({ "aria-label": "نسخ كلمة المرور" }).props.onClick());
+    expect(navigator.clipboard.writeText).toHaveBeenCalledWith("one-time-password");
+    await act(async () => renderer.root.findByProps({ "data-testid": "test-dialog" }).props.onOpenChange(false));
+    expect(close).not.toHaveBeenCalled();
+    await act(async () => renderer.root.findAllByType("input").find((node: any) => node.props.type === "checkbox").props.onChange({ target: { checked: true } }));
+    await act(async () => button("حفظت البيانات").props.onClick());
+    expect(close).toHaveBeenCalledOnce();
+    expect(refresh).toHaveBeenCalledOnce();
+    expect(serialized()).not.toContain("one-time-password");
+  });
+  it("ignores a late secret response after dismissal without caching it", async () => {
+    let resolve!: (response: Response) => void;
+    write.mockImplementationOnce(() => new Promise<Response>(done => { resolve = done; }));
+    const { close, refresh } = await mount("create", { ...employee, hasAccount: false, account: null });
+    await select();
+    await confirm();
+    let pending!: Promise<void>;
+    await act(async () => { pending = button("تأكيد الإسناد وتوليد الحساب").props.onClick(); });
+    await act(async () => button("إلغاء").props.onClick());
+    expect(close).toHaveBeenCalledOnce();
+    expect(refresh).toHaveBeenCalledOnce();
+    await act(async () => {
+      resolve(new Response(JSON.stringify({ employee, assignment: {}, credentials: { username: "late-user", password: "late-secret" } })));
+      await pending;
+    });
+    expect(serialized()).not.toContain("late-secret");
+  });
+  it("never opens a frozen account or resets login credentials while assigning", async () => {
+    await mount("permissions", { ...employee, account: { ...employee.account!, isActive: "inactive" } });
+    expect(serialized()).toContain("إسناد القالب لا يعيد فتحه");
+    await select();
+    await confirm();
+    await act(async () => button("تأكيد إسناد الإصدار").props.onClick());
+    expect(JSON.parse(write.mock.calls[0][1].body)).not.toHaveProperty("isActive");
+    expect(JSON.parse(write.mock.calls[0][1].body)).not.toHaveProperty("password");
+  });
+  it("does not apply under disabled policy even if a previously rendered catalog exists", async () => {
+    await mount("permissions", employee, { ...directory, policy: { enabled: false, permissions: [] } });
+    await select();
+    await confirm();
+    await act(async () => button("تأكيد إسناد الإصدار").props.onClick());
+    expect(write).not.toHaveBeenCalled();
+  });
+  it("computes exact direct-permission differences including retained and removed modules", () => {
+    expect(employeeTemplateDiff(snapshot.currentPermissions, template.permissions)).toEqual([{
+      module: "cashier_journal", before: ["create", "view"], after: ["edit", "view"], added: ["edit"], removed: ["create"],
+    }]);
+    expect(employeeTemplateDiff(snapshot.currentPermissions, [])).toEqual([{
+      module: "cashier_journal", before: ["create", "view"], after: [], added: [], removed: ["create", "view"],
+    }]);
+  });
+});

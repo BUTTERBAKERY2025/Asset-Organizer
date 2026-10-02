@@ -9,10 +9,11 @@ import { AccessDeniedPage } from "@/components/protected-route";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { EmployeeAccountDialog, type EmployeeAccountDialogMode } from "@/components/operations-center/employee-account-dialog";
+import { EmployeeTemplateAssignmentDialog } from "@/components/operations-center/employee-template-assignment-dialog";
 import { EmployeeAccountPolicyEditor } from "@/components/operations-center/employee-account-policy";
 import { EmployeeAccountManagerSelectionEditor } from "@/components/operations-center/employee-account-manager-selection";
 import { useAuth } from "@/hooks/useAuth";
-import { canManageEmployeeAccounts, constrainDelegatedPermissions, employeeAccountErrorMessage, employeeAccountScope, EMPLOYEE_ACCOUNTS_ENDPOINT, requestEmployeeAccount } from "@/lib/employee-account-delegation";
+import { canManageEmployeeAccounts, employeeAccountErrorMessage, employeeAccountScope, EMPLOYEE_ACCOUNTS_ENDPOINT, requestEmployeeAccount } from "@/lib/employee-account-delegation";
 
 function Empty({ children }: { children: React.ReactNode }) {
   return <p className="rounded-xl border border-dashed border-border bg-muted/20 px-4 py-8 text-center text-sm text-muted-foreground">{children}</p>;
@@ -58,7 +59,7 @@ function EmployeeAccountsWorkspace({ actorId, actorRole, authScope }: { actorId:
   const currentEmployee = data?.employees.find(employee => employee.employeeId === dialog?.employee.employeeId);
   const dialogEligible = !!dialog && !!currentEmployee && currentEmployee.management?.allowed === true && currentEmployee.branchId === dialog.employee.branchId
     && currentEmployee.employeeName === dialog.employee.employeeName
-    && (dialog.mode === "create" || JSON.stringify(currentEmployee.account) === JSON.stringify(dialog.employee.account));
+    && (dialog.mode === "create" || dialog.mode === "permissions" || JSON.stringify(currentEmployee.account) === JSON.stringify(dialog.employee.account));
   useEffect(() => { setDialog(null); }, [dialogScope, directory.isError]);
   useEffect(() => { if (dialog && !dialogEligible) setDialog(null); }, [dialogEligible]);
   const refresh = () => { void client.invalidateQueries({ queryKey: key, exact: true }); };
@@ -79,7 +80,7 @@ function EmployeeAccountsWorkspace({ actorId, actorRole, authScope }: { actorId:
     if (!employee.management?.allowed || directory.isFetching || (mode === "create" ? employee.hasAccount : !employee.account)) return;
     setDialog({ employee, mode, scope: dialogScope });
   };
-  const delegationEnabled = !!data?.policy.enabled && constrainDelegatedPermissions(data.availablePermissions, data.policy.permissions).length > 0;
+   const delegationEnabled = !!data?.policy.enabled;
   return <Layout><main dir="rtl" className="page-container mx-auto max-w-[1550px] space-y-4 pb-8" data-testid="operations-employee-accounts-page">
     <header className="border-b border-[#e7def0] pb-3 pt-2">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -101,7 +102,7 @@ function EmployeeAccountsWorkspace({ actorId, actorRole, authScope }: { actorId:
     </div> : !data ? <div role="status" className="space-y-3 rounded-xl border bg-card p-5"><div className="h-5 w-44 animate-pulse rounded bg-muted" /><div className="h-28 animate-pulse rounded-lg bg-muted" /><span className="sr-only">جار التحقق من الموظفين والسياسة</span></div> : <>
       {policyOpen && actorRole === "admin" && <div id="employee-account-policy" className="space-y-4"><EmployeeAccountPolicyEditor key={JSON.stringify([authScope, data.policy, data.availablePermissions])} directory={data} refresh={refresh} /><EmployeeAccountManagerSelectionEditor key={authScope} refresh={refresh} /></div>}
       <div className={`flex items-start gap-2 rounded-lg border p-3 text-xs leading-6 ${delegationEnabled ? "border-violet-200 bg-violet-50/60 text-violet-900" : "border-amber-200 bg-amber-50 text-amber-900"}`}>
-        <ShieldCheck className="mt-1 h-4 w-4 shrink-0" /><p>{delegationEnabled ? "التفويض معتمد. اختر موظفًا موجودًا ثم قالبًا وظيفيًا أو صلاحيات مخصصة ضمن القائمة المعتمدة. الحسابات ذات الصلاحيات الواقعة خارج قائمة ضُيّقت لاحقًا تسمح بالتخفيض فقط." : "التفويض معطّل أو لم تُعتمد صلاحيات بعد. الإنشاء وإعادة الفتح غير متاحين؛ يبقى عرض الحسابات وتجميدها وتخفيض صلاحياتها متاحًا."}{" "}تعطيل السياسة أو تضييقها لا يسحب تلقائيًا وصول الحسابات الحالية. لتغيير وصولها، خفّض صلاحياتها أو جمّدها صراحةً.</p>
+        <ShieldCheck className="mt-1 h-4 w-4 shrink-0" /><p>{delegationEnabled ? "اختر موظفًا ثم إصدارًا معتمدًا وفرعه المصرّح به. راجع الفرق قبل وبعد وأكّد تغيير حسابه وحده؛ الخادم يتحقق من أهلية الموظف والاعتماد وسقف السياسة. القالب الفارغ صالح وبوابة الموظف الذاتية مستقلة." : "التفويض معطّل. إسناد القوالب والإنشاء وإعادة الفتح غير متاحة؛ يبقى عرض الحسابات وتجميدها متاحًا."}{" "}تعطيل السياسة أو تضييقها لا يسحب تلقائيًا وصول الحسابات الحالية. لا توجد تغييرات جماعية أو تعديل يدوي للصلاحيات في هذه الصفحة؛ لتوقيف الدخول جمّد الحساب صراحةً.</p>
       </div>
       <section className="rounded-xl border border-border bg-card p-3 sm:p-4" aria-label="دليل حسابات الموظفين">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
@@ -132,14 +133,16 @@ function EmployeeAccountsWorkspace({ actorId, actorRole, authScope }: { actorId:
             </div>
             {employee.management?.allowed && <div className="flex flex-wrap gap-2">
               {!employee.hasAccount ? <Button className="min-h-11 gap-2" disabled={!delegationEnabled || directory.isFetching} onClick={() => open(employee, "create")}><KeyRound className="h-4 w-4" />اختيار الموظف</Button> : employee.account && <>
-                <Button variant="outline" className="min-h-11 gap-2" disabled={directory.isFetching} onClick={() => open(employee, "permissions")}><ShieldCheck className="h-4 w-4" />الصلاحيات</Button>
+                 <Button variant="outline" className="min-h-11 gap-2" disabled={directory.isFetching} onClick={() => open(employee, "permissions")}><ShieldCheck className="h-4 w-4" />إسناد قالب معتمد</Button>
                 {employee.account.isActive === "active" ? <Button variant="outline" className="min-h-11 gap-2 text-amber-800" disabled={directory.isFetching} onClick={() => open(employee, "freeze")}><Lock className="h-4 w-4" />تجميد</Button>
                   : <Button variant="outline" className="min-h-11 gap-2" disabled={!delegationEnabled || !employee.account.canReactivate || directory.isFetching} onClick={() => open(employee, "reopen")}><Unlock className="h-4 w-4" />إعادة الفتح</Button>}
               </>}
             </div>}
           </article>)}</div>}
       </section>
-      {dialog && dialogEligible && currentEmployee && dialog.scope === dialogScope && <EmployeeAccountDialog key={`${dialogScope}:${dialog.employee.employeeId}:${dialog.mode}`} employee={currentEmployee} mode={dialog.mode} directory={data} close={() => setDialog(null)} refresh={refresh} />}
+      {dialog && dialogEligible && currentEmployee && dialog.scope === dialogScope && (dialog.mode === "create" || dialog.mode === "permissions"
+        ? <EmployeeTemplateAssignmentDialog key={`${dialogScope}:${dialog.employee.employeeId}:${dialog.mode}`} employee={currentEmployee} mode={dialog.mode} directory={data} close={() => setDialog(null)} refresh={refresh} />
+        : <EmployeeAccountDialog key={`${dialogScope}:${dialog.employee.employeeId}:${dialog.mode}`} employee={currentEmployee} mode={dialog.mode} directory={data} close={() => setDialog(null)} refresh={refresh} />)}
     </>}
   </main></Layout>;
 }

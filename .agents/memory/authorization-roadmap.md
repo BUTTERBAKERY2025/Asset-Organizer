@@ -20,3 +20,9 @@ Version approval certifies reviewed template content, not employee authority. Ap
 **Why:** The authorized next step was explicit admin review without applying templates to employees; these are distinct transitions.
 
 **How to apply:** Preserve prior approval history when adding an unapproved version. Phase-four assignment must recheck employee eligibility, branch scope and the allowed permission ceiling even when a version is approved.
+
+Operations template-only granting must cover legacy write paths, not just the new selector. Preserve true safety reductions and existing admin authority; a reduction must not leave a current binding falsely describing an unchanged template base.
+
+**Why:** The old delegated raw-permission endpoints could still grant without approval after the new selector was added. Explicit inheritance also makes stored dormant direct rows an unsafe reference for deciding whether a write is only a reduction.
+
+**How to apply:** Judge reductions against effective authority, keep assignment provenance and audit atomic, and do not relax independent-assignment/override protections before phase five separates admin additions.

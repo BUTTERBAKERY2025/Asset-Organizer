@@ -11,7 +11,9 @@ import {
   EMPLOYEE_ACCOUNT_SAFE_PERMISSIONS, type DelegatedEmployeeAccount,
   type DelegatedPermission, type EmployeeAccountPolicy, type EmployeeAccountsResponse,
   type EmployeeAccountManagerSelectionResponse, type EmployeeAccountManagersResponse,
+  type EmployeeTemplateAssignment, type EmployeeTemplateAssignmentResponse, type EmployeeJobTemplateSummary,
 } from "@shared/employee-account-delegation";
+import { assignmentSnapshotRevision, eligibleTemplatePermissions, templateAssignmentInput } from "./employee-template-assignment-policy";
 import { HQ_BRANCH_ID } from "@shared/employee-organization";
 import { db } from "./db";
 import { storage } from "./storage";
@@ -176,6 +178,103 @@ function employeeId(value: string) {
     throw new DelegationError(400, "INVALID_EMPLOYEE", "معرف الموظف غير صالح");
   return Number(value);
 }
+
+async function requireTemplateStorage(tx: Tx) {
+  const result = await tx.execute(sql`SELECT
+    to_regclass('public.employee_job_template_assignments') IS NOT NULL
+    AND to_regclass('public.job_permission_template_drafts') IS NOT NULL
+    AND to_regclass('public.job_permission_template_draft_versions') IS NOT NULL
+    AND to_regclass('public.job_permission_template_approvals') IS NOT NULL
+    AND to_regclass('public.user_permission_source_modes') IS NOT NULL AS ready`);
+  if (!(result.rows[0] as any)?.ready)
+    throw new DelegationError(503, "migration_required", "يلزم ترحيل القوالب وإسنادها 051–053 قبل استخدام هذه الخدمة");
+}
+async function templateEmployeeState(tx: Tx, actor: Actor, grants: string[], approved: EmployeeAccountPolicy, id: number) {
+  const [employee] = await tx.select(employeeProjection).from(branchEmployees).where(eq(branchEmployees.id, id));
+  if (!employee) throw new DelegationError(404, "EMPLOYEE_NOT_FOUND", "الموظف غير موجود");
+  branchMayManage(actor, employee.branchId, grants);
+  if (employee.status !== "active") deny("EMPLOYEE_INACTIVE", "يلزم موظف مسجل ونشط في الفرع");
+  if (actor.role !== "admin" && !individuallySelected(await managerSelection(tx, actor.id), employee))
+    deny("EMPLOYEE_NOT_SELECTED", "لم يعتمد مسؤول النظام إدارة هذا الموظف لهذا المدير");
+  const state = await accountState(tx, actor, employee, approved);
+  return { employee, state };
+}
+async function effectiveAccountBase(tx: Tx, state: Awaited<ReturnType<typeof accountState>>) {
+  const [source] = state ? await tx.select({ mode: userPermissionSourceModes.sourceMode })
+    .from(userPermissionSourceModes).where(eq(userPermissionSourceModes.userId, state.account.id)) : [];
+  const currentByModule = new Map<string, string[]>();
+  // Eligible targets cannot have role assignments or overrides. Explicit
+  // inheritance therefore grants no base actions, even if dormant direct rows
+  // exist. Viewer action restrictions and intrinsic delivery remain applicable.
+  const direct = source?.mode === "inherit" ? [] : state?.permissions ?? [];
+  const effective = state ? effectiveDelegatedPermissions(state.account, direct) : [];
+  for (const p of effective) {
+    const actions = currentByModule.get(p.module) ?? [];
+    for (const action of p.actions) {
+      if (state?.account.role === "viewer" && action !== "view") continue;
+      if (!actions.includes(action)) actions.push(action);
+    }
+    if (actions.length) currentByModule.set(p.module, actions);
+  }
+  const permissions = validatePermissions(Array.from(currentByModule, ([module, actions]) => ({ module, actions })),
+    EMPLOYEE_ACCOUNT_SAFE_PERMISSIONS, false);
+  return { sourceMode: source?.mode ?? null, permissions };
+}
+async function templateAssignmentSnapshot(tx: Tx, employee: Employee, state: Awaited<ReturnType<typeof accountState>>): Promise<EmployeeTemplateAssignmentResponse> {
+  const result = await tx.execute(sql`SELECT template_id AS "templateId", version,
+    branch_id AS "branchId", revision::text, assigned_at AS "assignedAt",
+    assigned_by AS "assignedBy", reason, user_id AS "userId"
+    FROM public.employee_job_template_assignments WHERE employee_id = ${employee.id}`);
+  const stored = result.rows[0] as any;
+  const assignment: EmployeeTemplateAssignment | null = stored ? {
+    templateId: stored.templateId, version: stored.version, branchId: stored.branchId,
+    revision: stored.revision, assignedAt: new Date(stored.assignedAt).toISOString(),
+    assignedBy: stored.assignedBy, reason: stored.reason,
+  } : null;
+  const { sourceMode, permissions: currentPermissions } = await effectiveAccountBase(tx, state);
+  // Keep the actual direct rows in the hash too (intrinsic grants may duplicate
+  // them). A legacy permissions writer invalidates this token without having to
+  // participate in the metadata protocol.
+  const expectedAssignmentRevision = assignmentSnapshotRevision({
+    employee, account: state?.account ?? null, sourceMode,
+    assignment, assignmentUserId: stored?.userId ?? null,
+    direct: state?.permissions.map(p => ({ module: p.module, actions: [...p.actions].sort() }))
+      .sort((a,b) => a.module.localeCompare(b.module)) ?? [],
+  }, currentPermissions);
+  return { employeeId: employee.id, branchId: employee.branchId, assignment, currentPermissions, expectedAssignmentRevision };
+}
+async function resolveAssignmentTemplate(tx: Tx, templateId: number, version: number, approved: EmployeeAccountPolicy, jobTitle: string | null, role: string) {
+  // Shared with append/approval writers and their DB triggers. Hold parent row
+  // until permission replacement, session revocation and audit have committed.
+  const parent = await tx.execute(sql`SELECT id FROM public.job_permission_template_drafts WHERE id = ${templateId} FOR UPDATE`);
+  if (!parent.rows.length) throw new DelegationError(404, "TEMPLATE_NOT_FOUND", "القالب غير موجود");
+  const result = await tx.execute(sql`SELECT v.version, v.content,
+    EXISTS (SELECT 1 FROM public.job_permission_template_approvals a
+      WHERE a.template_id = v.template_id AND a.version = v.version) AS approved
+    FROM public.job_permission_template_draft_versions v WHERE v.template_id = ${templateId}
+    ORDER BY v.version DESC LIMIT 1`);
+  const latest = result.rows[0] as any;
+  if (latest?.version !== version)
+    throw new DelegationError(409, "STALE_TEMPLATE_VERSION", "تغير آخر إصدار للقالب؛ حدّث القائمة وراجع الفروقات");
+  if (!latest.approved)
+    throw new DelegationError(409, "TEMPLATE_NOT_APPROVED", "آخر إصدار للقالب غير معتمد");
+  return eligibleTemplatePermissions(latest.content, approved, jobTitle, role).permissions;
+}
+async function saveTemplateAssignment(tx: Tx, actor: Actor, employee: Employee, input: z.infer<typeof templateAssignmentInput>) {
+  const assignment: EmployeeTemplateAssignment = {
+    templateId: input.templateId, version: input.version, branchId: employee.branchId,
+    revision: randomUUID(), assignedAt: new Date().toISOString(), assignedBy: actor.id, reason: input.reason,
+  };
+  await tx.execute(sql`INSERT INTO public.employee_job_template_assignments
+    (employee_id,user_id,template_id,version,branch_id,revision,assigned_at,assigned_by,reason)
+    VALUES (${employee.id},${employee.linkedUserId},${input.templateId},${input.version},
+      ${employee.branchId},${assignment.revision}::uuid,${assignment.assignedAt}::timestamptz,${actor.id},${input.reason})
+    ON CONFLICT (employee_id) DO UPDATE SET user_id = EXCLUDED.user_id,
+      template_id = EXCLUDED.template_id, version = EXCLUDED.version, branch_id = EXCLUDED.branch_id,
+      revision = EXCLUDED.revision, assigned_at = EXCLUDED.assigned_at,
+      assigned_by = EXCLUDED.assigned_by, reason = EXCLUDED.reason`);
+  return assignment;
+}
 const endpoint = (work: RequestHandler, operation = "account_write"): RequestHandler => async (req, res, next) => {
   const started = performance.now();
   res.setHeader("Cache-Control", "private, no-store");
@@ -336,6 +435,60 @@ export function registerEmployeeAccountDelegation(app: Express) {
     });
   });
 
+  app.get("/api/operations/employee-accounts/job-templates", isAuthenticated, endpoint(async (req, res) => {
+    const id = req.query.employeeId === undefined ? undefined
+      : employeeId(z.string().parse(req.query.employeeId));
+    const templates = await db.transaction(async tx => {
+      const budget = readBudget(performance.now() + 10_000, tx);
+      await budget();
+      const { actor, grants } = await actorState(tx, req.session.userId!);
+      await requireTemplateStorage(tx);
+      const approved = await policy(tx);
+      let jobTitle: string | null | undefined;
+      let targetRole = "employee";
+      if (id !== undefined) {
+        const { employee, state } = await templateEmployeeState(tx, actor, grants, approved, id);
+        jobTitle = state ? state.account.jobTitle : employee.jobTitle === "delivery" ? "delivery" : null;
+        targetRole = state?.account.role ?? "employee";
+      }
+      const result = await tx.execute(sql`SELECT d.id AS "templateId", v.version, v.content,
+        a.approved_at AS "approvedAt"
+        FROM public.job_permission_template_drafts d
+        JOIN public.job_permission_template_draft_versions v ON v.template_id = d.id
+        JOIN public.job_permission_template_approvals a ON a.template_id = v.template_id AND a.version = v.version
+        WHERE v.version = (SELECT MAX(x.version) FROM public.job_permission_template_draft_versions x WHERE x.template_id = d.id)
+        ORDER BY d.id`);
+      const summaries: EmployeeJobTemplateSummary[] = [];
+      for (const raw of result.rows as any[]) {
+        try {
+          const { content, permissions } = eligibleTemplatePermissions(raw.content, approved, jobTitle, targetRole);
+          summaries.push({ templateId: raw.templateId, version: raw.version, key: content.key,
+            name: content.name, scopeType: content.scopeType as EmployeeJobTemplateSummary["scopeType"],
+            permissions, approvedAt: new Date(raw.approvedAt).toISOString() });
+        } catch (error) {
+          if (!(error instanceof DelegationError)) throw error;
+          // Ineligibility is a catalog filter, never a permissive write fallback.
+        }
+      }
+      await budget();
+      return summaries;
+    }, { isolationLevel: "repeatable read", accessMode: "read only" });
+    res.json({ templates });
+  }, "employee_job_template_catalog"));
+
+  app.get("/api/operations/employee-accounts/:employeeId/template-assignment", isAuthenticated, endpoint(async (req, res) => {
+    const id = employeeId(req.params.employeeId);
+    const result = await db.transaction(async tx => {
+      await readBudget(performance.now() + 10_000, tx)();
+      const { actor, grants } = await actorState(tx, req.session.userId!);
+      await requireTemplateStorage(tx);
+      const approved = await policy(tx);
+      const { employee, state } = await templateEmployeeState(tx, actor, grants, approved, id);
+      return templateAssignmentSnapshot(tx, employee, state);
+    }, { isolationLevel: "repeatable read", accessMode: "read only" });
+    res.json(result);
+  }, "employee_template_assignment_snapshot"));
+
   app.get("/api/operations/employee-accounts", isAuthenticated, endpoint(async (req, res) => {
     const deadline = performance.now() + 10_000;
     const result = await db.transaction(async tx => {
@@ -448,19 +601,39 @@ export function registerEmployeeAccountDelegation(app: Express) {
     res.json({ policy: approved });
   }));
 
-  const mutate = (mode: "create" | "permissions" | "status"): RequestHandler => endpoint(async (req, res) => {
+  const mutate = (mode: "create" | "permissions" | "status" | "template-account" | "template-assignment"): RequestHandler => endpoint(async (req, res) => {
     const id = employeeId(req.params.employeeId);
-    const input = mode === "status" ? statusInput.parse(req.body)
+    const templateMode = mode === "template-account" || mode === "template-assignment";
+    const creating = mode === "create" || mode === "template-account";
+    const input = templateMode ? templateAssignmentInput.parse(req.body) : mode === "status" ? statusInput.parse(req.body)
       : mode === "create" ? createAccountInput.parse(req.body) : permissionsInput.parse(req.body);
     // Expensive CSPRNG/hash outside the lock; no credential or user is persisted
     // unless every authoritative check succeeds inside the transaction.
-    const credentials = mode === "create" ? generatedCredentials() : null;
+    const credentials = creating ? generatedCredentials() : null;
     const passwordHash = credentials ? await bcrypt.hash(credentials.password, 12) : null;
     const result = await db.transaction(async tx => {
       await lockDelegationState(tx);
+      if (templateMode) {
+        await requireTemplateStorage(tx);
+        await tx.execute(sql`LOCK TABLE public.employee_job_template_assignments,
+          public.user_permission_source_modes IN SHARE ROW EXCLUSIVE MODE`);
+      }
       const { actor, grants } = await actorState(tx, req.session.userId!);
+      if (actor.role === "operations_manager" && mode === "create")
+        deny("APPROVED_TEMPLATE_REQUIRED", "إنشاء حساب الموظف يتطلب اختيار إصدار قالب معتمد");
+      let legacyReductionMetadataReady = false;
+      if (actor.role === "operations_manager" && mode === "permissions") {
+        await tx.execute(sql`LOCK TABLE public.user_permission_source_modes IN SHARE ROW EXCLUSIVE MODE`);
+        // Safety maintenance remains available before migration 053. An absent
+        // table cannot hold a binding; a present table is locked before its read.
+        const ready = await tx.execute(sql`SELECT
+          to_regclass('public.employee_job_template_assignments') IS NOT NULL AS ready`);
+        legacyReductionMetadataReady = Boolean((ready.rows[0] as any)?.ready);
+        if (legacyReductionMetadataReady)
+          await tx.execute(sql`LOCK TABLE public.employee_job_template_assignments IN SHARE ROW EXCLUSIVE MODE`);
+      }
       const approved = await policy(tx);
-      if (!approved.enabled && (mode === "create" || ("isActive" in input && input.isActive === "active")))
+      if (!approved.enabled && (creating || templateMode || ("isActive" in input && input.isActive === "active")))
         deny("DELEGATION_DISABLED", "التفويض غير مفعّل: يمكن عرض الحسابات وتعليقها وتقليل صلاحياتها فقط");
       const [employee] = await tx.select(employeeProjection).from(branchEmployees).where(eq(branchEmployees.id, id)).for("update");
       if (!employee) throw new DelegationError(404, "EMPLOYEE_NOT_FOUND", "الموظف غير موجود");
@@ -471,8 +644,20 @@ export function registerEmployeeAccountDelegation(app: Express) {
         ? { revision: "0", selections: [] } : await managerSelection(tx, actor.id);
       if (actor.role !== "admin" && !individuallySelected(individualGrant, employee))
         deny("EMPLOYEE_NOT_SELECTED", "لم يعتمد مسؤول النظام إدارة هذا الموظف لهذا المدير");
-      const selected = "permissions" in input ? validatePermissions(input.permissions, approved.permissions) : null;
-      if (mode === "create") {
+      let previousAssignment: EmployeeTemplateAssignment | null = null;
+      let assigned: EmployeeTemplateAssignment | null = null;
+      let selected = "permissions" in input ? validatePermissions(input.permissions, approved.permissions) : null;
+      if ("templateId" in input) {
+        if (input.branchId !== employee.branchId) deny("BRANCH_FORBIDDEN", "الفرع المختار لا يطابق فرع الموظف المسجل");
+        const snapshot = await templateAssignmentSnapshot(tx, employee, state);
+        if (snapshot.expectedAssignmentRevision !== input.expectedAssignmentRevision)
+          throw new DelegationError(409, "ASSIGNMENT_REVISION_CONFLICT", "تغير الحساب أو إسناده؛ حدّث المعاينة وراجع الفروقات");
+        previousAssignment = snapshot.assignment;
+        selected = await resolveAssignmentTemplate(tx, input.templateId, input.version, approved,
+          state ? state.account.jobTitle : employee.jobTitle === "delivery" ? "delivery" : null,
+          state?.account.role ?? "employee");
+      }
+      if (creating) {
         if (state) throw new DelegationError(409, "ACCOUNT_ALREADY_LINKED", "الموظف مرتبط بحساب بالفعل");
         // Descriptive HR titles never become admin/RBAC roles. The sole
         // title-dependent auth behavior (delivery) is explicitly ceiling-checked.
@@ -504,8 +689,20 @@ export function registerEmployeeAccountDelegation(app: Express) {
       } else {
         if (!state) throw new DelegationError(409, "ACCOUNT_NOT_LINKED", "لا يوجد حساب مرتبط بالموظف");
         const account = state.account;
-        if (mode === "permissions") {
+        if (mode === "permissions" || mode === "template-assignment") {
           enforceIntrinsicSelection(account.jobTitle, selected!);
+          let removedTemplateBinding: EmployeeTemplateAssignment | null = null;
+          if (actor.role === "operations_manager" && mode === "permissions") {
+            const { permissions: effectiveBase } = await effectiveAccountBase(tx, state);
+            if (!permissionsWithin(selected!, effectiveBase))
+              deny("REDUCTION_ONLY", "إضافة الصلاحيات أو تبديلها يتطلب إصدار قالب معتمد؛ المسار القديم لخفض الصلاحيات فقط");
+            const actualReduction = !permissionsWithin(effectiveBase, selected!);
+            if (actualReduction && legacyReductionMetadataReady) {
+              removedTemplateBinding = (await templateAssignmentSnapshot(tx, employee, state)).assignment;
+              if (removedTemplateBinding)
+                await tx.execute(sql`DELETE FROM public.employee_job_template_assignments WHERE employee_id = ${employee.id}`);
+            }
+          }
           const existingEffective = effectiveDelegatedPermissions(account, state.permissions);
           // Disabled policies and accounts outside a narrowed approval may only
           // lose permissions, never exchange them for new rights. The requested
@@ -515,7 +712,13 @@ export function registerEmployeeAccountDelegation(app: Express) {
             deny("REDUCTION_ONLY", "بعد سحب التفويض يسمح بتقليل الصلاحيات الحالية إلى الحدود المعتمدة فقط");
           await storage.invalidateAllUserSessions(account.id, tx);
           await replacePermissions(tx, account.id, selected!);
-          await audit(tx, actor, "permissions_update", employee, { before: state.permissions, after: selected }, account.id);
+          await audit(tx, actor, "permissions_update", employee, {
+            before: state.permissions, after: selected,
+            ...(actor.role === "operations_manager" && mode === "permissions" ? {
+              reason: "خفض صلاحيات عبر مسار الصيانة القديم",
+              removedTemplateBinding,
+            } : {}),
+          }, account.id);
         } else if ("isActive" in input) {
           if (input.isActive === "active"
               && !permissionsWithin(effectiveDelegatedPermissions(account, state.permissions), approved.permissions))
@@ -541,11 +744,21 @@ export function registerEmployeeAccountDelegation(app: Express) {
           }
         }
       }
-      return await dto(tx, actor, employee, approved);
+      if ("templateId" in input) {
+        assigned = await saveTemplateAssignment(tx, actor, employee, input);
+        await audit(tx, actor, creating ? "template_account_create" : "template_assignment_update", employee, {
+          reason: input.reason, before: previousAssignment, after: assigned,
+          permissionsBefore: state?.permissions ?? [], permissionsAfter: selected,
+        }, employee.linkedUserId!);
+      }
+      return { employee: await dto(tx, actor, employee, approved), assignment: assigned };
     });
-    if (result.account) invalidateAuthCache(result.account.id);
-    res.status(mode === "create" ? 201 : 200).json({ employee: result, ...(credentials ? { credentials } : {}) });
+    if (result.employee.account) invalidateAuthCache(result.employee.account.id);
+    res.status(creating ? 201 : 200).json({ employee: result.employee,
+      ...(templateMode ? { assignment: result.assignment } : {}), ...(credentials ? { credentials } : {}) });
   });
+  app.post("/api/operations/employee-accounts/:employeeId/template-account", isAuthenticated, mutate("template-account"));
+  app.post("/api/operations/employee-accounts/:employeeId/template-assignment", isAuthenticated, mutate("template-assignment"));
   app.post("/api/operations/employee-accounts/:employeeId", isAuthenticated, mutate("create"));
   app.put("/api/operations/employee-accounts/:employeeId/permissions", isAuthenticated, mutate("permissions"));
   app.patch("/api/operations/employee-accounts/:employeeId/status", isAuthenticated, mutate("status"));

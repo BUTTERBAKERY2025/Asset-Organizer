@@ -246,6 +246,14 @@ describe("employee account dialog without browser or persistent secrets", () => 
     expect(fetch).toHaveBeenCalledWith("/api/operations/employee-accounts/19/status", expect.objectContaining({ method: "PATCH", body: JSON.stringify({ isActive: "active" }) }));
     expect(renderer.root.findAllByProps({ "data-testid": "generated-password" })).toHaveLength(0);
   });
+  it("reopens a server-eligible empty-template account without requiring an operational grant", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ employee }))));
+    await mount("reopen", { ...employee, hasAccount: true, account: { id: "unit-account", username: "unit-user", isActive: "inactive", permissions: [], canReactivate: true } },
+      { ...directory, policy: { enabled: true, permissions: [] }, availablePermissions: [], templates: [] });
+    expect(button("تأكيد إعادة الفتح").props.disabled).toBe(false);
+    await act(async () => button("تأكيد إعادة الفتح").props.onClick());
+    expect(fetch).toHaveBeenCalledWith("/api/operations/employee-accounts/19/status", expect.objectContaining({ method: "PATCH", body: JSON.stringify({ isActive: "active" }) }));
+  });
 
   it("keeps admin policy disabled until explicit approval and sends the exact PUT contract", async () => {
     const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ policy: directory.policy })));
