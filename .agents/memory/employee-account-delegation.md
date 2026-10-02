@@ -62,3 +62,9 @@ For non-admin accounts, the user approved that an explicit, currently applicable
 **Why:** The user selected this rule while approving the shared organization-wide governance policy.
 
 **How to apply:** Include direct permissions, templates, assigned roles and automatic grants. Admin and emergency-access policy remain undecided. Policy approval is not permission to change current accounts; review impact before implementation.
+
+Across all departments, the user approved granting authority for the administrator and explicitly bounded delegates. The administrator defines delegatable permissions, manageable accounts and scope; possessing a permission does not authorize granting it, and delegates cannot expand their own authority.
+
+**Why:** The user selected bounded delegation as the shared organization-wide policy.
+
+**How to apply:** Preserve the existing operations-specific safeguards. This approves the principle, not new delegates or changes to current delegations; review those separately before applying it.
