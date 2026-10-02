@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { EmployeeAccountDialog, type EmployeeAccountDialogMode } from "@/components/operations-center/employee-account-dialog";
 import { EmployeeTemplateAssignmentDialog } from "@/components/operations-center/employee-template-assignment-dialog";
 import { EmployeeAccountAdditionsDialog } from "@/components/operations-center/employee-account-additions-dialog";
+import { EmployeeTemplatePilotDialog } from "@/components/operations-center/employee-template-pilot-dialog";
 import { EmployeeAccountPolicyEditor } from "@/components/operations-center/employee-account-policy";
 import { EmployeeAccountManagerSelectionEditor } from "@/components/operations-center/employee-account-manager-selection";
 import { useAuth } from "@/hooks/useAuth";
@@ -30,7 +31,7 @@ function EmployeeAccountsWorkspace({ actorId, actorRole, authScope }: { actorId:
   const [filter, setFilter] = useState<"linked" | "eligible">("linked");
   const [term, setTerm] = useState("");
   const [policyOpen, setPolicyOpen] = useState(() => actorRole === "admin" && params.get("policy") === "1");
-  const [dialog, setDialog] = useState<{ employee: DelegatedEmployeeAccount; mode: EmployeeAccountDialogMode | "additions"; scope: string } | null>(null);
+  const [dialog, setDialog] = useState<{ employee: DelegatedEmployeeAccount; mode: EmployeeAccountDialogMode | "additions" | "pilot"; scope: string } | null>(null);
   const key = [EMPLOYEE_ACCOUNTS_ENDPOINT, actorId, authScope];
   useEffect(() => {
     if (actorRole === "admin" && new URLSearchParams(search).get("policy") === "1") setPolicyOpen(true);
@@ -55,13 +56,16 @@ function EmployeeAccountsWorkspace({ actorId, actorRole, authScope }: { actorId:
   const data = !directory.isError && !directory.isPaused && directory.isFetchedAfterMount ? directory.data : undefined;
   const branches = data?.branches ?? [];
   const validBranch = !branchId || branches.some(branch => branch.id === branchId);
-  // Fresh server scope/policy changes unmount any open credential or action dialog.
-  const dialogScope = JSON.stringify([authScope, branchId, branches.map(branch => branch.id).sort(), data?.policy, data?.availablePermissions]);
+  // Access changes unmount every dialog. Policy changes invalidate pilot review
+  // in-place so its explicit selection/reason survive; delegated dialogs close.
+  const accessScope = JSON.stringify([authScope, branchId, branches.map(branch => branch.id).sort()]);
+  const dialogScope = JSON.stringify([accessScope, data?.policy, data?.availablePermissions]);
   const currentEmployee = data?.employees.find(employee => employee.employeeId === dialog?.employee.employeeId);
-  const dialogEligible = !!dialog && !!currentEmployee && (dialog.mode === "additions" ? actorRole === "admin" && currentEmployee.hasAccount : currentEmployee.management?.allowed === true) && currentEmployee.branchId === dialog.employee.branchId
+  const dialogEligible = !!dialog && !!currentEmployee && (dialog.mode === "additions" || dialog.mode === "pilot" ? actorRole === "admin" && currentEmployee.hasAccount : currentEmployee.management?.allowed === true) && currentEmployee.branchId === dialog.employee.branchId
     && currentEmployee.employeeName === dialog.employee.employeeName
-    && (dialog.mode === "create" || dialog.mode === "permissions" || dialog.mode === "additions" || JSON.stringify(currentEmployee.account) === JSON.stringify(dialog.employee.account));
-  useEffect(() => { setDialog(null); }, [dialogScope, directory.isError]);
+    && (dialog.mode === "create" || dialog.mode === "permissions" || dialog.mode === "additions" || dialog.mode === "pilot" || JSON.stringify(currentEmployee.account) === JSON.stringify(dialog.employee.account));
+  useEffect(() => { setDialog(null); }, [accessScope, directory.isError]);
+  useEffect(() => { setDialog(current => current?.mode === "pilot" ? current : null); }, [dialogScope]);
   useEffect(() => { if (dialog && !dialogEligible) setDialog(null); }, [dialogEligible]);
   const refresh = () => { void client.invalidateQueries({ queryKey: key, exact: true }); };
   const changeBranch = (id: string) => {
@@ -77,11 +81,11 @@ function EmployeeAccountsWorkspace({ actorId, actorRole, authScope }: { actorId:
   const eligible = scopedEmployees.filter(employee => !employee.hasAccount);
   const rows = (filter === "linked" ? linked : eligible).filter(employee =>
     `${employee.employeeName} ${employee.branchName} ${employee.account?.username ?? ""}`.toLocaleLowerCase().includes(term.trim().toLocaleLowerCase()));
-  const open = (employee: DelegatedEmployeeAccount, mode: EmployeeAccountDialogMode | "additions") => {
+  const open = (employee: DelegatedEmployeeAccount, mode: EmployeeAccountDialogMode | "additions" | "pilot") => {
     if (directory.isFetching) return;
-    if (mode === "additions" ? actorRole !== "admin" || !employee.hasAccount
+    if (mode === "additions" || mode === "pilot" ? actorRole !== "admin" || !employee.hasAccount
       : !employee.management?.allowed || (mode === "create" ? employee.hasAccount : !employee.account)) return;
-    setDialog({ employee, mode, scope: dialogScope });
+    setDialog({ employee, mode, scope: mode === "pilot" ? accessScope : dialogScope });
   };
   const delegationEnabled = !!data?.policy.enabled;
   return <Layout><main dir="rtl" className="page-container mx-auto max-w-[1550px] space-y-4 pb-8" data-testid="operations-employee-accounts-page">
@@ -142,11 +146,14 @@ function EmployeeAccountsWorkspace({ actorId, actorRole, authScope }: { actorId:
                   : <Button variant="outline" className="min-h-11 gap-2" disabled={!delegationEnabled || !employee.account.canReactivate || directory.isFetching} onClick={() => open(employee, "reopen")}><Unlock className="h-4 w-4" />إعادة الفتح</Button>}
               </>)}
               {actorRole === "admin" && employee.hasAccount && <Button variant="outline" className="min-h-11 gap-2 border-amber-200 text-amber-900" disabled={directory.isFetching} onClick={() => open(employee, "additions")}><ShieldCheck className="h-4 w-4" />الإضافات المستقلة</Button>}
+              {actorRole === "admin" && employee.hasAccount && <Button variant="outline" className="min-h-11 gap-2" disabled={directory.isFetching} onClick={() => open(employee, "pilot")}><ShieldCheck className="h-4 w-4" />مقارنة وتجربة قالب</Button>}
             </div>}
           </article>)}</div>}
       </section>
-      {dialog && dialogEligible && currentEmployee && dialog.scope === dialogScope && (dialog.mode === "additions"
-        ? <EmployeeAccountAdditionsDialog key={`${dialogScope}:${dialog.employee.employeeId}:${dialog.mode}`} actorRole={actorRole} employee={currentEmployee} close={() => setDialog(null)} refresh={refresh} />
+      {dialog && dialogEligible && currentEmployee && dialog.scope === (dialog.mode === "pilot" ? accessScope : dialogScope) && (dialog.mode === "pilot"
+        ? <EmployeeTemplatePilotDialog key={`${accessScope}:${dialog.employee.employeeId}:pilot`} actorRole={actorRole} actorId={actorId} contextRevision={JSON.stringify([data.policy, data.availablePermissions])} employee={currentEmployee} close={() => setDialog(null)} refresh={refresh} />
+        : dialog.mode === "additions"
+          ? <EmployeeAccountAdditionsDialog key={`${dialogScope}:${dialog.employee.employeeId}:${dialog.mode}`} actorRole={actorRole} employee={currentEmployee} close={() => setDialog(null)} refresh={refresh} />
         : dialog.mode === "create" || dialog.mode === "permissions"
           ? <EmployeeTemplateAssignmentDialog key={`${dialogScope}:${dialog.employee.employeeId}:${dialog.mode}`} employee={currentEmployee} mode={dialog.mode} directory={data} close={() => setDialog(null)} refresh={refresh} />
           : <EmployeeAccountDialog key={`${dialogScope}:${dialog.employee.employeeId}:${dialog.mode}`} employee={currentEmployee} mode={dialog.mode} directory={data} close={() => setDialog(null)} refresh={refresh} />)}

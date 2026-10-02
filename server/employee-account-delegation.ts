@@ -13,17 +13,22 @@ import {
   type DelegatedPermission, type EmployeeAccountPolicy, type EmployeeAccountsResponse,
   type EmployeeAccountManagerSelectionResponse, type EmployeeAccountManagersResponse,
   type EmployeeTemplateAssignment, type EmployeeTemplateAssignmentResponse, type EmployeeJobTemplateSummary,
+  type EmployeeTemplatePilotResponse,
 } from "@shared/employee-account-delegation";
 import { assignmentSnapshotRevision, eligibleTemplatePermissions, templateAssignmentInput } from "./employee-template-assignment-policy";
 import {
   ADDITION_CAPABILITIES, additionInput, additionUpdateInput, additionDeleteInput,
   additionDTO, additionFingerprint, additionIsDelegationSafe, requireAdditionsStorage,
+  additionsStorageReady,
   readManagedAdditions, validateAddition, type AdditionRecord,
 } from "./employee-account-additions-policy";
 import { HQ_BRANCH_ID } from "@shared/employee-organization";
 import { db } from "./db";
 import { storage } from "./storage";
-import { isAuthenticated, invalidateAuthCache } from "./auth";
+import { isAuthenticated, invalidateAuthCache, contextualActionAllowed, intrinsicPermissionGranted } from "./auth";
+import { pilotQuery, pilotInput, pilotAuthority, predictTemplateSnapshot, authorityDifferences,
+  nextDecisionBoundary, permissionGroups } from "./employee-template-pilot-policy";
+import { evaluatePermissionDecision, checkPermissionDecision, type PermissionDecisionSnapshot } from "./permission-decision";
 import {
   actorMayManage, availableGeneratedUsername, branchMayManage, createAccountInput, DEFAULT_POLICY, DelegationError, deny,
   delegationTemplates, effectiveDelegatedPermissions, generatedCredentials, isLegacyAccountPath, permissionsInput,
@@ -229,24 +234,28 @@ async function effectiveAccountBase(tx: Tx, state: Awaited<ReturnType<typeof acc
     EMPLOYEE_ACCOUNT_SAFE_PERMISSIONS, false);
   return { sourceMode: source?.mode ?? null, permissions };
 }
-async function templateAssignmentSnapshot(tx: Tx, employee: Employee, state: Awaited<ReturnType<typeof accountState>>): Promise<EmployeeTemplateAssignmentResponse> {
+async function readTemplateBinding(tx: Tx, employeeId: number) {
   const result = await tx.execute(sql`SELECT template_id AS "templateId", version,
     branch_id AS "branchId", revision::text, assigned_at AS "assignedAt",
     assigned_by AS "assignedBy", reason, user_id AS "userId"
-    FROM public.employee_job_template_assignments WHERE employee_id = ${employee.id}`);
+    FROM public.employee_job_template_assignments WHERE employee_id = ${employeeId}`);
   const stored = result.rows[0] as any;
   const assignment: EmployeeTemplateAssignment | null = stored ? {
     templateId: stored.templateId, version: stored.version, branchId: stored.branchId,
     revision: stored.revision, assignedAt: new Date(stored.assignedAt).toISOString(),
     assignedBy: stored.assignedBy, reason: stored.reason,
   } : null;
+  return { assignment, assignmentUserId: stored?.userId ?? null };
+}
+async function templateAssignmentSnapshot(tx: Tx, employee: Employee, state: Awaited<ReturnType<typeof accountState>>): Promise<EmployeeTemplateAssignmentResponse> {
+  const { assignment, assignmentUserId } = await readTemplateBinding(tx, employee.id);
   const { sourceMode, permissions: currentPermissions } = await effectiveAccountBase(tx, state);
   // Keep the actual direct rows in the hash too (intrinsic grants may duplicate
   // them). A legacy permissions writer invalidates this token without having to
   // participate in the metadata protocol.
   const expectedAssignmentRevision = assignmentSnapshotRevision({
     employee, account: state?.account ?? null, sourceMode,
-    assignment, assignmentUserId: stored?.userId ?? null,
+    assignment, assignmentUserId,
     direct: state?.permissions.map(p => ({ module: p.module, actions: [...p.actions].sort() }))
       .sort((a,b) => a.module.localeCompare(b.module)) ?? [],
     additions: state?.additions ?? [],
@@ -254,10 +263,10 @@ async function templateAssignmentSnapshot(tx: Tx, employee: Employee, state: Awa
   return { employeeId: employee.id, branchId: employee.branchId, assignment, currentPermissions,
     expectedAssignmentRevision, additions: (state?.additions ?? []).map(additionDTO) };
 }
-async function resolveAssignmentTemplate(tx: Tx, templateId: number, version: number, approved: EmployeeAccountPolicy, jobTitle: string | null, role: string) {
+async function resolveAssignmentTemplate(tx: Tx, templateId: number, version: number, approved: EmployeeAccountPolicy, jobTitle: string | null, role: string, lock = true) {
   // Shared with append/approval writers and their DB triggers. Hold parent row
   // until permission replacement, session revocation and audit have committed.
-  const parent = await tx.execute(sql`SELECT id FROM public.job_permission_template_drafts WHERE id = ${templateId} FOR UPDATE`);
+  const parent = await tx.execute(sql`SELECT id FROM public.job_permission_template_drafts WHERE id = ${templateId} ${lock ? sql`FOR UPDATE` : sql``}`);
   if (!parent.rows.length) throw new DelegationError(404, "TEMPLATE_NOT_FOUND", "القالب غير موجود");
   const result = await tx.execute(sql`SELECT v.version, v.content,
     EXISTS (SELECT 1 FROM public.job_permission_template_approvals a
@@ -285,6 +294,112 @@ async function saveTemplateAssignment(tx: Tx, actor: Actor, employee: Employee, 
       revision = EXCLUDED.revision, assigned_at = EXCLUDED.assigned_at,
       assigned_by = EXCLUDED.assigned_by, reason = EXCLUDED.reason`);
   return assignment;
+}
+/** Shared phase-4 write primitive; caller holds guards and all state locks. */
+async function applyTemplateBase(
+  tx: Tx, actor: Actor, employee: Employee, state: NonNullable<Awaited<ReturnType<typeof accountState>>>,
+  selected: DelegatedPermission[], input: z.infer<typeof templateAssignmentInput>, previous: EmployeeTemplateAssignment | null,
+) {
+  await storage.invalidateAllUserSessions(state.account.id, tx);
+  await replacePermissions(tx, state.account.id, selected);
+  await audit(tx, actor, "permissions_update", employee, { before: state.permissions, after: selected }, state.account.id);
+  const assignment = await saveTemplateAssignment(tx, actor, employee, input);
+  await audit(tx, actor, "template_assignment_update", employee, {
+    reason: input.reason, before: previous, after: assignment,
+    permissionsBefore: state.permissions, permissionsAfter: selected,
+  }, state.account.id);
+  return assignment;
+}
+async function pilotComparison(
+  tx: Tx, actorId: string, id: number, input: { templateId: number; version: number }, applying: boolean,
+) {
+  const { actor } = await actorState(tx, actorId, true);
+  await requireTemplateStorage(tx);
+  const approved = await policy(tx);
+  const [employee] = await tx.select(employeeProjection).from(branchEmployees).where(eq(branchEmployees.id, id));
+  if (!employee) throw new DelegationError(404, "EMPLOYEE_NOT_FOUND", "الموظف غير موجود");
+  const blockedReasons: EmployeeTemplatePilotResponse["blockedReasons"] = [];
+  const guard = async (work: () => any) => {
+    try { return await work(); } catch (error) {
+      if (!(error instanceof DelegationError)) throw error;
+      blockedReasons.push({ code: error.code, message: error.message });
+      return null;
+    }
+  };
+  await guard(() => branchMayManage(actor, employee.branchId, []));
+  if (employee.status !== "active") blockedReasons.push({ code: "EMPLOYEE_INACTIVE", message: "الموظف غير نشط" });
+  const [account] = employee.linkedUserId
+    ? await tx.select(accountProjection).from(users).where(eq(users.id, employee.linkedUserId)) : [];
+  if (!account) blockedReasons.push({ code: "ACCOUNT_NOT_LINKED", message: "التجربة لحساب قائم مرتبط فقط" });
+  if (account && account.isActive !== "active") blockedReasons.push({ code: "ACCOUNT_INACTIVE", message: "الحساب غير نشط؛ التجربة لا تعيد تفعيله" });
+  const state = account ? await guard(() => accountState(tx, actor, employee, approved)) : null;
+  const access = account ? await tx.select().from(userBranchAccess).where(eq(userBranchAccess.userId, account.id)) : [];
+  const snapshot = account ? await storage.getPermissionDecisionSnapshot(account.id, tx) : null;
+  const selected = await guard(() => resolveAssignmentTemplate(tx, input.templateId, input.version, approved,
+    account?.jobTitle ?? null, account?.role ?? "employee", applying));
+  const template = await tx.execute(sql`SELECT v.version, v.content, a.approved_at AS "approvedAt",
+    a.approved_by AS "approvedBy" FROM public.job_permission_template_draft_versions v
+    LEFT JOIN public.job_permission_template_approvals a ON a.template_id=v.template_id AND a.version=v.version
+    WHERE v.template_id=${input.templateId} ORDER BY v.version DESC LIMIT 1`);
+  const binding = await readTemplateBinding(tx, employee.id);
+  if (binding.assignment && (binding.assignmentUserId !== account?.id || binding.assignment.branchId !== employee.branchId))
+    blockedReasons.push({ code: "STALE_TEMPLATE_BINDING", message: "ارتباط القالب السابق لا يطابق الحساب أو فرع الموظف" });
+  const linkedEmployees = account ? await tx.select({ id: branchEmployees.id }).from(branchEmployees)
+    .where(eq(branchEmployees.linkedUserId, account.id)) : [];
+  if (linkedEmployees.length > 1)
+    blockedReasons.push({ code: "AMBIGUOUS_ACCOUNT_LINK", message: "الحساب مرتبط بأكثر من موظف؛ يلزم مراجعة الربط خارج التجربة" });
+  const extras = account ? await readManagedAdditions(tx, [account.id]) : [];
+  // System bypass roles cannot be represented by the non-admin permission gate.
+  // Other role-auto policies can be inspected using the runtime predicate, but
+  // remain protected from this bounded employee/viewer pilot application.
+  const knownRole = account && [
+    "employee", "viewer", "hr_manager", "hr_specialist", "financial_manager",
+    "production_development_manager", "operations_manager", "branch_manager",
+    "warehouse_keeper", "attendance_clerk",
+  ].includes(account.role);
+  const authority = (decision: PermissionDecisionSnapshot) => {
+    const authPermissions = permissionGroups(evaluatePermissionDecision(decision).filter(p => p.allowed));
+    const req = { currentUser: account, userBranchAccess: access, authPermissions,
+      method: "GET", permissionActionInferred: false };
+    return pilotAuthority(decision, employee.branchId,
+      (module, action) => account!.isActive === "active"
+        && contextualActionAllowed(req, decision, module, action, { branchId: employee.branchId }),
+      (module, action) => intrinsicPermissionGranted(account, decision, module, action, "GET"));
+  };
+  const before = snapshot && knownRole ? authority(snapshot) : null;
+  const canApply = Boolean(account && state && selected && !blockedReasons.length);
+  const afterSnapshot = canApply ? predictTemplateSnapshot(snapshot!, selected!) : null;
+  const after = afterSnapshot ? authority(afterSnapshot) : null;
+  const baseSnapshot = snapshot ? { ...snapshot,
+    tuples: snapshot.tuples.filter(t => t.source === "direct" || t.source === "role") } : null;
+  // BASE excludes independent overlays AND intrinsic role/job authority. Keep
+  // the actual runtime gate, but require an actual base tuple for each action.
+  const base = baseSnapshot && knownRole ? permissionGroups(authority(baseSnapshot).effectivePermissions.flatMap(p =>
+    p.actions.filter(action => checkPermissionDecision(baseSnapshot, p.module, action, { branchId: employee.branchId }))
+      .map(action => ({ module: p.module, action })))) : [];
+  const response: EmployeeTemplatePilotResponse = {
+    employeeId: employee.id, branchId: employee.branchId, ...input,
+    comparisonStatus: canApply ? "known" : "unknown", canApply, blockedReasons,
+    expectedComparisonRevision: "", capturedAt: new Date(snapshot?.capturedAt ?? Date.now()).toISOString(),
+    nextDecisionBoundary: snapshot ? nextDecisionBoundary(snapshot) : null,
+    scope: { kind: "employee_branch", branchId: employee.branchId, limitations: [
+      "هذه مقارنة بوابة الصلاحية في فرع الموظف، وليست صلاحية عامة لكل الفروع",
+      "ملكية المهام والملفات وحالات سير العمل وضوابط المسارات الأخرى ما زالت مطلوبة",
+      "لا إثبات لتقييد الفرع في المسارات القديمة التي لم تعتمد سياق المورد",
+      "الأدوار الإدارية وإسنادات RBAC والاستثناءات غير الآمنة لا تُرحّل بهذه التجربة",
+    ] },
+    currentBase: base, proposedBase: selected, before, after,
+    differences: before && after ? authorityDifferences(before, after) : null,
+    extras: extras.map(additionDTO), assignment: binding.assignment,
+  };
+  // Wall clock alone must not invalidate a confirmation. All actual decision
+  // and source temporal states are hashed, so crossing a boundary does.
+  response.expectedComparisonRevision = createHash("sha256").update(JSON.stringify({
+    employee, account, access, linkedEmployees, approved, template: template.rows, binding, extras,
+    snapshot: snapshot ? { ...snapshot, capturedAt: undefined } : null,
+    before, after, blockedReasons, selected,
+  })).digest("hex");
+  return { response, actor, employee, state, selected };
 }
 async function adminAdditionEmployee(tx: Tx, actorId: string, id: number) {
   const { actor } = await actorState(tx, actorId, true);
@@ -620,6 +735,54 @@ export function registerEmployeeAccountDelegation(app: Express) {
   app.patch("/api/admin/employee-account-additions/:employeeId/:id", isAuthenticated, mutateAddition("update"));
   app.delete("/api/admin/employee-account-additions/:employeeId/:id", isAuthenticated, mutateAddition("delete"));
 
+  app.get("/api/admin/employee-template-pilot/:employeeId", isAuthenticated, endpoint(async (req, res) => {
+    const input = pilotQuery.parse(req.query);
+    const result = await db.transaction(async tx => {
+      await readBudget(performance.now() + 10_000, tx)();
+      return pilotComparison(tx, req.session.userId!, employeeId(req.params.employeeId), input, false);
+    }, { isolationLevel: "repeatable read", accessMode: "read only" });
+    res.json(result.response);
+  }, "employee_template_pilot_preview"));
+  app.post("/api/admin/employee-template-pilot/:employeeId", isAuthenticated, endpoint(async (req, res) => {
+    const input = pilotInput.parse(req.body);
+    const result = await db.transaction(async tx => {
+      await lockDelegationState(tx);
+      // Hold catalogue/provenance, template-parent and existing phase-4 locks
+      // while recomputing the reviewed evidence and writing the one account.
+      await tx.execute(sql`LOCK TABLE public.employee_job_template_assignments,
+        public.user_permission_source_modes IN SHARE ROW EXCLUSIVE MODE`);
+      if (await additionsStorageReady(tx))
+        await tx.execute(sql`LOCK TABLE public.employee_account_additions, public.permissions IN SHARE ROW EXCLUSIVE MODE`);
+      const current = await pilotComparison(tx, req.session.userId!, employeeId(req.params.employeeId),
+        { templateId: input.templateId, version: input.version }, true);
+      if (input.branchId !== current.employee.branchId) deny("BRANCH_FORBIDDEN", "الفرع لا يطابق فرع الموظف المسجل");
+      if (current.response.expectedComparisonRevision !== input.expectedComparisonRevision)
+        throw new DelegationError(409, "COMPARISON_REVISION_CONFLICT", "تغيرت المقارنة؛ أعد معاينة المصادر والفروقات");
+      if (!current.response.canApply || !current.state || !current.selected)
+        return { blocked: current.response, userId: null };
+      const ensureBoundaryUnchanged = () => {
+        if (current.response.nextDecisionBoundary && Date.now() >= Date.parse(current.response.nextDecisionBoundary))
+          throw new DelegationError(409, "COMPARISON_REVISION_CONFLICT", "انتهت صلاحية المقارنة عند حد زمني؛ أعد المعاينة");
+      };
+      ensureBoundaryUnchanged();
+      const assignmentInput = { ...input, expectedAssignmentRevision: current.response.expectedComparisonRevision };
+      const assignment = await applyTemplateBase(tx, current.actor, current.employee, current.state,
+        current.selected, assignmentInput, current.response.assignment);
+      await audit(tx, current.actor, "pilot_apply", current.employee, {
+        reason: input.reason, comparisonRevision: current.response.expectedComparisonRevision,
+        scope: current.response.scope, before: current.response.before, after: current.response.after,
+        differences: current.response.differences, extras: current.response.extras, assignment,
+      }, current.state.account.id);
+      ensureBoundaryUnchanged();
+      return { userId: current.state.account.id, employee: await dto(tx, current.actor, current.employee, await policy(tx)),
+        assignment, comparison: current.response };
+    });
+    if (result.blocked) return res.status(403).json({ error: "الحساب أو القالب خارج التجربة المحدودة",
+      code: "PILOT_BLOCKED", blockedReasons: result.blocked.blockedReasons });
+    invalidateAuthCache(result.userId!);
+    res.json({ employee: result.employee, assignment: result.assignment, comparison: result.comparison });
+  }, "employee_template_pilot_apply"));
+
   app.get("/api/operations/employee-accounts", isAuthenticated, endpoint(async (req, res) => {
     const deadline = performance.now() + 10_000;
     const result = await db.transaction(async tx => {
@@ -847,15 +1010,19 @@ export function registerEmployeeAccountDelegation(app: Express) {
           if ((!approved.enabled || !permissionsWithin(existingEffective, approved.permissions))
               && !permissionsWithin(selected!, existingEffective))
             deny("REDUCTION_ONLY", "بعد سحب التفويض يسمح بتقليل الصلاحيات الحالية إلى الحدود المعتمدة فقط");
-          await storage.invalidateAllUserSessions(account.id, tx);
-          await replacePermissions(tx, account.id, selected!);
-          await audit(tx, actor, "permissions_update", employee, {
-            before: state.permissions, after: selected,
-            ...(actor.role === "operations_manager" && mode === "permissions" ? {
-              reason: "خفض صلاحيات عبر مسار الصيانة القديم",
-              removedTemplateBinding,
-            } : {}),
-          }, account.id);
+          if (mode === "template-assignment" && "templateId" in input) {
+            assigned = await applyTemplateBase(tx, actor, employee, state, selected!, input, previousAssignment);
+          } else {
+            await storage.invalidateAllUserSessions(account.id, tx);
+            await replacePermissions(tx, account.id, selected!);
+            await audit(tx, actor, "permissions_update", employee, {
+              before: state.permissions, after: selected,
+              ...(actor.role === "operations_manager" && mode === "permissions" ? {
+                reason: "خفض صلاحيات عبر مسار الصيانة القديم",
+                removedTemplateBinding,
+              } : {}),
+            }, account.id);
+          }
         } else if ("isActive" in input) {
           if (input.isActive === "active"
               && !permissionsWithin(effectiveDelegatedPermissions(account, state.permissions), approved.permissions))
@@ -881,7 +1048,7 @@ export function registerEmployeeAccountDelegation(app: Express) {
           }
         }
       }
-      if ("templateId" in input) {
+      if ("templateId" in input && !assigned) {
         assigned = await saveTemplateAssignment(tx, actor, employee, input);
         await audit(tx, actor, creating ? "template_account_create" : "template_assignment_update", employee, {
           reason: input.reason, before: previousAssignment, after: assigned,

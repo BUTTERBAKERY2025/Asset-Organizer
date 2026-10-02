@@ -32,3 +32,9 @@ Independent extras may relax operations protection only when their provenance is
 **Why:** Separating the base from additions is not permission to let operations manage accounts carrying admin-level authority, or to relabel an old deny as an approved new addition.
 
 **How to apply:** Preserve extras and denies on base changes; advertise scoped additions only where actual resource routes enforce that scope. Record start dates in the runtime authority source, not merely auxiliary provenance.
+
+Pilot approval is approval of a fresh contextual comparison for one existing account, not permission for a bulk rollout or automatic rollback.
+
+**Why:** The sixth stage requires comparison and an approved limited experiment before migration; time boundaries can change effective authority without changing stored rows.
+
+**How to apply:** Recompute the comparison inside the application transaction, reject stale decisions including validity-boundary changes, preserve evidence, and treat unsupported/protected accounts as unknown rather than safe empty diffs. Live participants still require explicit approval.

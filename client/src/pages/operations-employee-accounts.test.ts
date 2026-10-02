@@ -254,6 +254,37 @@ describe("operations employee account page", () => {
     await act(async () => button("موظفون دون حساب").props.onClick());
     expect(button("الإضافات المستقلة")).toBeUndefined();
   });
+  it("keeps the pilot entry admin-only and separate, including blocked linked accounts but never account creation", async () => {
+    await mount();
+    expect(button("مقارنة وتجربة قالب")).toBeUndefined();
+    mocks.user = { ...mocks.user, role: "admin" };
+    mocks.state.data = { ...data, employees: [{ ...data.employees[1], account: null, management: { allowed: false, reason: "protected_account" } }, data.employees[0]] };
+    await renderAgain();
+    expect(button("مقارنة وتجربة قالب")).toBeTruthy();
+    expect(button("إسناد قالب معتمد")).toBeUndefined();
+    await act(async () => button("مقارنة وتجربة قالب").props.onClick());
+    expect(renderer.root.findByProps({ id: "pilot-employee" }).props.value).toBe(data.employees[1].employeeName);
+    await act(async () => button("إغلاق").props.onClick());
+    await act(async () => button("موظفون دون حساب").props.onClick());
+    expect(button("مقارنة وتجربة قالب")).toBeUndefined();
+  });
+  it("preserves pilot choices and reason on policy changes but clears the dialog when admin identity/role is withdrawn", async () => {
+    mocks.user = { ...mocks.user, role: "admin" };
+    await mount();
+    await act(async () => button("مقارنة وتجربة قالب").props.onClick());
+    await act(async () => renderer.root.findByProps({ id: "pilot-template" }).props.onChange({ target: { value: "7:3" } }));
+    await act(async () => renderer.root.findByProps({ id: "pilot-reason" }).props.onChange({ target: { value: "سبب تجربة محفوظ" } }));
+    mocks.state.data = { ...data, policy: { enabled: false, permissions: [] } };
+    await renderAgain();
+    expect(renderer.root.findByProps({ id: "pilot-template" }).props.value).toBe("7:3");
+    expect(renderer.root.findByProps({ id: "pilot-reason" }).props.value).toBe("سبب تجربة محفوظ");
+    expect(JSON.stringify(renderer.toJSON())).toContain("تغيّرت بيانات الحساب أو السياسة");
+    expect(renderer.root.findByProps({ id: "pilot-review" }).props.checked).toBe(false);
+    mocks.user = { ...mocks.user, role: "operations_manager" };
+    await renderAgain();
+    expect(renderer.root.findAllByProps({ id: "pilot-reason" })).toHaveLength(0);
+    expect(button("مقارنة وتجربة قالب")).toBeUndefined();
+  });
 
   it("fails closed on stale directory errors and does not silently expand an invalid branch", async () => {
     mocks.search = "?branchId=unauthorized";

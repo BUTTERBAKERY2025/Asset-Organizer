@@ -2,17 +2,36 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getTableName } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 import { additionFingerprint } from "../server/employee-account-additions-policy";
+import { normalizePermissionDecisionSnapshot, checkPermissionDecision, hasPermissionDecisionDeny } from "../server/permission-decision";
 
 const runtime = vi.hoisted(() => ({ transaction: null as any, invalidate: vi.fn(), failSessions: false }));
 vi.mock("../server/db", () => ({ db: { transaction: (...args: any[]) => runtime.transaction(...args) } }));
 vi.mock("../server/auth", () => ({
   isAuthenticated: (_req: any, _res: any, next: any) => next(),
   invalidateAuthCache: runtime.invalidate,
+  intrinsicPermissionGranted: (user: any, _snapshot: any, module: string, action: string) =>
+    user.role === "employee" && user.jobTitle === "delivery" && module === "delivery_tasks" && ["view", "edit"].includes(action),
+  contextualActionAllowed: (req: any, snapshot: any, module: string, action: string, context: any) =>
+    !(req.currentUser.role === "viewer" && action !== "view")
+    && !hasPermissionDecisionDeny(snapshot, module, action, context)
+    && (checkPermissionDecision(snapshot, module, action, context)
+      || (req.currentUser.role === "employee" && req.currentUser.jobTitle === "delivery"
+        && module === "delivery_tasks" && ["view", "edit"].includes(action))),
 }));
 vi.mock("../server/storage", () => ({
   storage: { invalidateAllUserSessions: vi.fn(async () => {
     if (runtime.failSessions) throw new Error("Synthetic invalidation failure");
-  }) },
+  }), getPermissionDecisionSnapshot: async (userId: string, executor: any) => {
+    expect(executor).toBeTruthy();
+    return normalizePermissionDecisionSnapshot({
+      userId, sourceMode: state.source, direct: state.permissions, roles: [],
+      overrides: state.extraRows.map((row: any) => {
+        const permission = state.catalog.find((p: any) => p.id === row.permissionId);
+        return { ...permission, permissionId: row.permissionId, allow: row.allow,
+          branchId: row.branchId, departmentId: row.departmentId, startDate: row.startsAt, expiresAt: row.expiresAt };
+      }),
+    });
+  } },
 }));
 vi.mock("bcrypt", () => ({ default: { hash: vi.fn(async () => "$2b$synthetic_test_hash") } }));
 import { registerEmployeeAccountDelegation } from "../server/employee-account-delegation";
@@ -539,5 +558,116 @@ describe("admin addition CRUD and protected-base integration (actual route/mock 
       scopeType: "branch", branchId: "B" })).body.code).toBe("BRANCH_FORBIDDEN");
     await createAddition({ ...additionBody, module: "hr_documents", action: "view", scopeType: "branch", branchId: "A" });
     expect((await invoke("get", "template-assignment")).statusCode).toBe(403);
+  });
+});
+async function invokePilot(method = "get", body: any = {}, actor = "admin") {
+  const req: any = { session: { userId: actor }, query: { templateId: "1", version: "1" },
+    params: { employeeId: "1" }, body };
+  const res: any = { statusCode: 200, setHeader: vi.fn(),
+    status(code: number) { this.statusCode = code; return this; },
+    json(value: any) { this.body = value; return this; } };
+  const handlers = routes.find(r => r.method === method && r.path === "/api/admin/employee-template-pilot/:employeeId").handlers;
+  let index = 0;
+  const next = async () => { if (handlers[index]) await handlers[index++](req, res, next); };
+  await next(); return res;
+}
+async function pilotConfirmation() {
+  const preview = await invokePilot();
+  expect(preview.statusCode).toBe(200);
+  return { templateId: 1, version: 1, branchId: "A", reason: "Explicit bounded pilot",
+    expectedComparisonRevision: preview.body.expectedComparisonRevision, acknowledgeChanges: true };
+}
+describe("phase6 actual admin comparison/application routes with strict offline IO", () => {
+  it("compares readonly actual before/after, with contextual source evidence", async () => {
+    const original = structuredClone(state);
+    const preview = await invokePilot();
+    expect(preview.statusCode).toBe(200);
+    expect(preview.body.canApply).toBe(true);
+    expect(preview.body.scope.branchId).toBe("A");
+    expect(preview.body.differences.additions).toEqual([{ module: "cashier_journal", actions: ["create"] }]);
+    expect(state).toEqual(original);
+    expect(runtime.invalidate).not.toHaveBeenCalled();
+  });
+  it.each(["get", "post"])("requires actual admin for %s pilot", async method => {
+    const body = await pilotConfirmation();
+    expect((await invokePilot(method, body, "ops")).statusCode).toBe(403);
+  });
+  it("shares phase4 base/assignment transaction and writes distinct reviewed evidence", async () => {
+    const body = await pilotConfirmation();
+    const applied = await invokePilot("post", body);
+    expect(applied.statusCode).toBe(200);
+    expect(state.permissions).toEqual([{ module: "cashier_journal", actions: ["create", "view"] }]);
+    expect(state.audit.map((row: any) => row.action)).toEqual(["permissions_update", "template_assignment_update", "pilot_apply"]);
+    const evidence = JSON.parse(state.audit.at(-1).details);
+    expect(evidence.before.sources).toHaveLength(1);
+    expect(evidence.after.effectivePermissions).toEqual([{ module: "cashier_journal", actions: ["create", "view"] }]);
+    expect(evidence.reason).toBe(body.reason);
+    expect(lockStatements.some(s => s.includes("user_permission_source_modes"))).toBe(true);
+  });
+  it("preserves independent deny/extras in both prediction and actual application", async () => {
+    await createAddition({ ...additionBody, action: "view", allow: false });
+    const body = await pilotConfirmation();
+    const extra = structuredClone(state.extraRows), metadata = structuredClone(state.additionMetadata);
+    const result = await invokePilot("post", body);
+    expect(result.statusCode).toBe(200);
+    expect(result.body.comparison.before.effectivePermissions).toEqual([]);
+    expect(result.body.comparison.after.effectivePermissions).toEqual([{ module: "cashier_journal", actions: ["create"] }]);
+    expect(result.body.comparison.differences.retainedDenies).toHaveLength(1);
+    expect(state.extraRows).toEqual(extra); expect(state.additionMetadata).toEqual(metadata);
+  });
+  it("keeps delivery intrinsic authority separate from an explicitly empty stored base", async () => {
+    state.permissions = [];
+    state.users[1].jobTitle = "delivery";
+    const preview = await invokePilot();
+    expect(preview.body.currentBase).toEqual([]);
+    expect(preview.body.before.effectivePermissions).toEqual([{ module: "delivery_tasks", actions: ["edit", "view"] }]);
+    expect(preview.body.before.sources.filter((s: any) => s.source === "intrinsic")).toHaveLength(2);
+    expect(preview.body.blockedReasons.some((b: any) => b.code === "INTRINSIC_AUTHORITY")).toBe(true);
+    expect(preview.body.after).toBeNull();
+  });
+  it.each(["roles", "overrides", "privilege", "branch", "job", "inactive", "unlinked"])(
+    "reports exact blocked/unknown comparison for %s and never applies", async kind => {
+      if (kind === "roles") state.roles = true;
+      if (kind === "overrides") state.overrides = true;
+      if (kind === "privilege") state.users[1].role = "admin";
+      if (kind === "branch") state.users[1].branchId = "B";
+      if (kind === "job") state.users[1].jobTitle = "delivery";
+      if (kind === "inactive") state.users[1].isActive = "inactive";
+      if (kind === "unlinked") state.employee.linkedUserId = null;
+      const original = structuredClone(state);
+      const preview = await invokePilot();
+      expect(preview.statusCode).toBe(200);
+      expect(preview.body.canApply).toBe(false);
+      expect(preview.body.comparisonStatus).toBe("unknown");
+      expect(preview.body.after).toBeNull(); expect(preview.body.differences).toBeNull();
+      expect(preview.body.blockedReasons.length).toBeGreaterThan(0);
+      expect((await invokePilot("post", { templateId: 1, version: 1, branchId: "A", reason: "Cannot bypass",
+        acknowledgeChanges: true, expectedComparisonRevision: preview.body.expectedComparisonRevision })).body.code).toBe("PILOT_BLOCKED");
+      expect(state).toEqual(original);
+    });
+  it.each(["permissions", "policy", "template", "account", "extras"])("rejects changed %s confirmation atomically", async kind => {
+    const body = await pilotConfirmation();
+    if (kind === "permissions") state.permissions = [];
+    if (kind === "policy") state.enabled = false;
+    if (kind === "template") state.version = 2;
+    if (kind === "account") state.employee.jobTitle = "worker";
+    if (kind === "extras") await createAddition();
+    const before = structuredClone(state);
+    expect((await invokePilot("post", body)).body.code).toBe("COMPARISON_REVISION_CONFLICT");
+    expect(state).toEqual(before);
+  });
+  it("rolls back permissions, binding, extras and audits when pilot audit/session fails", async () => {
+    const body = await pilotConfirmation(), before = structuredClone(state);
+    failAudit = true;
+    expect((await invokePilot("post", body)).statusCode).toBe(500);
+    expect(state).toEqual(before);
+    failAudit = false; runtime.failSessions = true;
+    expect((await invokePilot("post", body)).statusCode).toBe(500);
+    expect(state).toEqual(before);
+  });
+  it("requires an explicit acknowledgment and rejects automatic bulk/hidden-role input", async () => {
+    const body = await pilotConfirmation();
+    for (const fields of [{ acknowledgeChanges: false }, { employeeIds: [1,2] }, { role: "admin" }])
+      expect((await invokePilot("post", { ...body, ...fields })).statusCode).toBe(400);
   });
 });

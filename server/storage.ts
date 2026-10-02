@@ -4004,10 +4004,12 @@ export class DatabaseStorage implements IStorage {
   // are now fresh, so neither context nor temporal boundaries can become stale.
   private permissionsCache = new Map<string, { data: UserPermission[], timestamp: number }>();
 
-  async getPermissionDecisionSnapshot(userId: string): Promise<PermissionDecisionSnapshot> {
+  async getPermissionDecisionSnapshot(
+    userId: string, executor?: Pick<typeof db, "select" | "execute">,
+  ): Promise<PermissionDecisionSnapshot> {
     // A fresh coherent read per request. Never use the legacy flat cache for
     // contextual decisions, and never turn a missing migration into inheritance.
-    return db.transaction(async (tx) => {
+    const read = async (tx: Pick<typeof db, "select" | "execute">) => {
       let sourceRows: { sourceMode: "direct" | "inherit" | null }[];
       try {
         sourceRows = await tx.select({ sourceMode: userPermissionSourceModes.sourceMode })
@@ -4045,7 +4047,11 @@ export class DatabaseStorage implements IStorage {
         userId, sourceMode: sourceRows.length ? sourceRows[0].sourceMode : null,
         direct, roles: roleRows, overrides,
       });
-    }, { isolationLevel: "repeatable read", accessMode: "read only" });
+    };
+    // Governance previews/applications must read the exact same resolver input
+    // on their existing transaction, never a separate check-then-write read.
+    return executor ? read(executor)
+      : db.transaction(read, { isolationLevel: "repeatable read", accessMode: "read only" });
   }
 
   async getUserPermissions(userId: string, options?: { bypassCache?: boolean; context?: PermissionContext }): Promise<UserPermission[]> {

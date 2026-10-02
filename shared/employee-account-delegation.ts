@@ -149,6 +149,50 @@ export interface AdminAccountAddition {
   updatedAt: string;
   integrity: "managed" | "changed";
 }
+export interface PilotPermissionSource {
+  module: string;
+  action: string;
+  source: "direct" | "role" | "override_grant" | "override_deny" | "intrinsic";
+  scopeType: string;
+  branchId: string | null;
+  departmentId: number | null;
+  startsAt: string | null;
+  endsAt: string | null;
+  temporalState: "active" | "future" | "expired" | "inactive" | "invalid";
+  allowed: boolean;
+}
+export interface PilotAuthority {
+  sourceMode: "direct" | "inherit" | null;
+  effectivePermissions: DelegatedPermission[];
+  sources: PilotPermissionSource[];
+}
+export interface EmployeeTemplatePilotResponse {
+  employeeId: number;
+  branchId: string;
+  templateId: number;
+  version: number;
+  comparisonStatus: "known" | "unknown";
+  canApply: boolean;
+  blockedReasons: Array<{ code: string; message: string }>;
+  expectedComparisonRevision: string;
+  capturedAt: string;
+  nextDecisionBoundary: string | null;
+  scope: { kind: "employee_branch"; branchId: string; limitations: string[] };
+  /** Contextual, effective base tuples only; intrinsic role/job authority and
+   * independent overlays are shown separately in before/after.sources. */
+  currentBase: DelegatedPermission[];
+  proposedBase: DelegatedPermission[] | null;
+  before: PilotAuthority | null;
+  after: PilotAuthority | null;
+  differences: null | {
+    additions: DelegatedPermission[];
+    removals: DelegatedPermission[];
+    retained: DelegatedPermission[];
+    retainedDenies: PilotPermissionSource[];
+  };
+  extras: AdminAccountAddition[];
+  assignment: EmployeeTemplateAssignment | null;
+}
 export interface AdminAccountAdditionsResponse {
   employeeId: number;
   branchId: string;

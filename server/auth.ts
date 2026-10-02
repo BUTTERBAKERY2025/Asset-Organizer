@@ -1469,7 +1469,7 @@ async function getRequestPermissionSnapshot(req: any, userId: string): Promise<P
   return snapshot;
 }
 
-function intrinsicPermissionGranted(
+export function intrinsicPermissionGranted(
   user: any, snapshot: PermissionDecisionSnapshot, module: string, action: string, method: string,
 ): boolean {
   const direct = user.role === "warehouse_keeper" || user.role === "branch_manager" ? directSnapshotRows(snapshot) : [];
@@ -1493,7 +1493,7 @@ function intrinsicPermissionGranted(
   return false;
 }
 
-function contextualActionAllowed(
+export function contextualActionAllowed(
   req: any, snapshot: PermissionDecisionSnapshot, module: string, action: string, context: PermissionContext,
 ): boolean {
   const user = req.currentUser;
