@@ -20,3 +20,9 @@ Do not infer permission-label aliases from similar UI names, especially a broad 
 **Why:** A historical deny label can differ from endpoint guard modules. Automatically applying it across all report-producing modules would expand its meaning and may block unrelated authorized work.
 
 **How to apply:** Separate tuple/source correctness from policy-name coverage. Document proposed mappings and obtain policy approval before changing their meaning; aggregate inventory alone is not per-account HTTP evidence.
+
+كل تقرير لابد أن يكون له صفة توضّح نوعه، مثل تقارير المبيعات وتقارير الإنتاج.
+
+**Why:** المستخدم أوضح هذا التوجيه عندما لم يفهم الاختيار بين منع «التقارير» المركزية ومنع جميع تقارير الأقسام؛ لم يختر أحد الخيارين.
+
+**How to apply:** سمِّ التقارير والصلاحيات بحسب مجالها عند إعداد المطابقة. هذا توجيه للتصنيف والتسمية، وليس موافقة على توسيع المنع العام القديم أو تغيير الحسابات.
