@@ -14,3 +14,9 @@ Intentional empty direct replacement is not a request to inherit, manufacture pe
 **Why:** Synthesizing omission-denies while switching to direct mode prevented later explicit restoration; erasing denies on checkbox changes undid independent restrictions.
 
 **How to apply:** Persist source mode in the same transaction as every replacement, including delegated paths. Preserve independent overrides. Legacy accounts must not be bulk-assigned a source mode. Keep migration 050 and compatibility review as explicit deployment prerequisites; old-code rollback can revive empty-direct inheritance.
+
+Do not infer permission-label aliases from similar UI names, especially a broad historical label such as reports.
+
+**Why:** A historical deny label can differ from endpoint guard modules. Automatically applying it across all report-producing modules would expand its meaning and may block unrelated authorized work.
+
+**How to apply:** Separate tuple/source correctness from policy-name coverage. Document proposed mappings and obtain policy approval before changing their meaning; aggregate inventory alone is not per-account HTTP evidence.

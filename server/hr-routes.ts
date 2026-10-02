@@ -157,6 +157,17 @@ async function hrDocumentCreateContext(req: any) {
   return { kind: "resource" as const, branchId: row?.branchId ?? "__unresolved_hr_employee__" };
 }
 
+async function hrEvaluationResourceContext(req: any) {
+  const id = Number(req.params.id);
+  if (!Number.isSafeInteger(id) || id <= 0) {
+    return { kind: "resource" as const, branchId: "__unresolved_hr_evaluation__" };
+  }
+  const [row] = await db.select({ branchId: employeeEvaluations.branchId })
+    .from(employeeEvaluations).where(eq(employeeEvaluations.id, id)).limit(1);
+  // Evaluations retain their persisted branch, even after an employee transfer.
+  return { kind: "resource" as const, branchId: row?.branchId ?? "__unresolved_hr_evaluation__" };
+}
+
 function applyBranchScope<T extends { branchId: any }>(table: T, branchIds: string[] | null) {
   if (branchIds === null) return undefined;
   if (branchIds.length === 0) return sql`false`;
@@ -273,7 +284,7 @@ export function registerHrRoutes(app: Express) {
   });
 
   // إحصائيات الوثائق (للوحة HR)
-  app.get("/api/hr/documents/stats", isAuthenticated, requirePermission("hr_documents"), async (req, res) => {
+  app.get("/api/hr/documents/stats", isAuthenticated, requirePermission("hr_documents", "view", hrDocumentCollectionContext), async (req, res) => {
     try {
       const requestedBranchId = req.query.branchId as string | undefined;
       const { branchIds, hasAccess } = getBranchScope(req, requestedBranchId);
@@ -4667,16 +4678,18 @@ export function registerHrRoutes(app: Express) {
     return Math.round((weighted / totalWeight) * 100) / 100;
   }
 
-  app.get("/api/hr/evaluations", isAuthenticated, requirePermission("hr_evaluations"), async (req, res) => {
+  app.get("/api/hr/evaluations", isAuthenticated, requirePermission("hr_evaluations", "view", hrDocumentCollectionContext), async (req, res) => {
     try {
-      const { branchIds } = getBranchScope(req);
+      const requestedBranchId = req.query.branchId as string | undefined;
+      const { branchIds, hasAccess } = getBranchScope(req, requestedBranchId);
+      if (!hasAccess) return res.status(403).json({ error: "ليس لديك صلاحية للوصول لهذا الفرع" });
       const conds: any[] = [];
       const scopeCond = applyBranchScope(employeeEvaluations, branchIds);
       if (scopeCond !== undefined) conds.push(scopeCond);
       const employeeId = req.query.employeeId ? parseInt(req.query.employeeId as string, 10) : null;
       if (employeeId) conds.push(eq(employeeEvaluations.branchEmployeeId, employeeId));
       if (req.query.status) conds.push(eq(employeeEvaluations.status, req.query.status as string));
-      if (req.query.branchId) conds.push(eq(employeeEvaluations.branchId, req.query.branchId as string));
+      if (requestedBranchId && requestedBranchId !== "all") conds.push(eq(employeeEvaluations.branchId, requestedBranchId));
       if (req.query.periodType) conds.push(eq(employeeEvaluations.periodType, req.query.periodType as string));
 
       const rows = await db
@@ -4699,7 +4712,7 @@ export function registerHrRoutes(app: Express) {
     }
   });
 
-  app.post("/api/hr/evaluations", isAuthenticated, requirePermission("hr_evaluations", "create"), async (req, res) => {
+  app.post("/api/hr/evaluations", isAuthenticated, requirePermission("hr_evaluations", "create", hrDocumentCreateContext), async (req, res) => {
     try {
       const parsed = insertEmployeeEvaluationSchema.safeParse(req.body);
       if (!parsed.success) return res.status(400).json({ error: "بيانات غير صالحة", details: parsed.error.flatten() });
@@ -4710,8 +4723,8 @@ export function registerHrRoutes(app: Express) {
       const [emp] = await db.select().from(branchEmployees).where(eq(branchEmployees.id, data.branchEmployeeId)).limit(1);
       if (!emp) return res.status(404).json({ error: "الموظف غير موجود" });
       if (emp.branchId !== data.branchId) return res.status(400).json({ error: "الموظف لا يتبع هذا الفرع" });
-      const f = getEffectiveBranchFilter(req);
-      if (f.branchIds !== null && !f.branchIds.includes(data.branchId)) {
+      const f = getBranchScope(req);
+      if (f.branchIds !== null && !f.branchIds.includes(emp.branchId)) {
         return res.status(403).json({ error: "لا تملك صلاحية على هذا الفرع" });
       }
 
@@ -4719,6 +4732,7 @@ export function registerHrRoutes(app: Express) {
       const overallScore = computeOverallScore(data.criteria as any);
       const [row] = await db.insert(employeeEvaluations).values({
         ...data,
+        branchId: emp.branchId,
         overallScore,
         status: "draft",
         evaluatorId: user?.id || null,
@@ -4734,13 +4748,13 @@ export function registerHrRoutes(app: Express) {
     }
   });
 
-  app.patch("/api/hr/evaluations/:id", isAuthenticated, requirePermission("hr_evaluations", "edit"), async (req, res) => {
+  app.patch("/api/hr/evaluations/:id", isAuthenticated, requirePermission("hr_evaluations", "edit", hrEvaluationResourceContext), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       const [existing] = await db.select().from(employeeEvaluations).where(eq(employeeEvaluations.id, id)).limit(1);
       if (!existing) return res.status(404).json({ error: "التقييم غير موجود" });
       if (existing.status === "approved") return res.status(423).json({ error: "التقييم معتمد ولا يمكن تعديله" });
-      const f = getEffectiveBranchFilter(req);
+      const f = getBranchScope(req);
       if (f.branchIds !== null && !f.branchIds.includes(existing.branchId)) {
         return res.status(403).json({ error: "لا تملك صلاحية على هذا الفرع" });
       }
@@ -4782,7 +4796,7 @@ export function registerHrRoutes(app: Express) {
   });
 
   // الاعتماد النهائي — action "approve" (لا تمنحه HR_SPECIALIST_PERMISSIONS)
-  app.post("/api/hr/evaluations/:id/approve", isAuthenticated, requirePermission("hr_evaluations", "approve"), async (req, res) => {
+  app.post("/api/hr/evaluations/:id/approve", isAuthenticated, requirePermission("hr_evaluations", "approve", hrEvaluationResourceContext), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       const user = (req as any).currentUser;
@@ -4791,7 +4805,7 @@ export function registerHrRoutes(app: Express) {
       if (existing.status !== "submitted") {
         return res.status(409).json({ error: existing.status === "approved" ? "التقييم معتمد مسبقاً" : "يجب إرسال التقييم للاعتماد أولاً" });
       }
-      const f = getEffectiveBranchFilter(req);
+      const f = getBranchScope(req);
       if (f.branchIds !== null && !f.branchIds.includes(existing.branchId)) {
         return res.status(403).json({ error: "لا تملك صلاحية على هذا الفرع" });
       }
@@ -4813,13 +4827,13 @@ export function registerHrRoutes(app: Express) {
     }
   });
 
-  app.delete("/api/hr/evaluations/:id", isAuthenticated, requirePermission("hr_evaluations", "delete"), async (req, res) => {
+  app.delete("/api/hr/evaluations/:id", isAuthenticated, requirePermission("hr_evaluations", "delete", hrEvaluationResourceContext), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       const [existing] = await db.select().from(employeeEvaluations).where(eq(employeeEvaluations.id, id)).limit(1);
       if (!existing) return res.status(404).json({ error: "التقييم غير موجود" });
       if (existing.status === "approved") return res.status(423).json({ error: "التقييم معتمد ولا يمكن حذفه" });
-      const f = getEffectiveBranchFilter(req);
+      const f = getBranchScope(req);
       if (f.branchIds !== null && !f.branchIds.includes(existing.branchId)) {
         return res.status(403).json({ error: "لا تملك صلاحية على هذا الفرع" });
       }
