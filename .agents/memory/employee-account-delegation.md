@@ -74,3 +74,9 @@ The user approved explicit per-account base-permission modes: role inheritance o
 **Why:** The user selected explicit modes to resolve conflicting permission-source behavior without silently merging existing access.
 
 **How to apply:** Do not choose or migrate existing accounts' modes automatically. Present impact before changes and review employee self-service rights separately from operational permissions.
+
+The user approved three shared governance rules: job-title or department changes do not automatically grant permissions; each grant stays bound to its action, scope and validity period; new template versions require a diff preview and explicit approval before application to existing accounts, preserving independent additions and denies.
+
+**Why:** The user explicitly selected all three rules during policy approval.
+
+**How to apply:** Keep organizational edits separate from approved security assignments, never extend action grants merely through broader viewing access, and never use template edits to silently rewrite current accounts. Review legacy behavior changes before application.
