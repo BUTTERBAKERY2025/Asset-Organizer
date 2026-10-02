@@ -44,3 +44,9 @@ Administrators select individual employees independently for each operations man
 **Why:** The user explicitly chose “اختيار مستقل لكل مدير تشغيل” rather than a shared employee list.
 
 **How to apply:** Require both explicit employee selection and current branch-management authority for every account-management action. Roster visibility is broader than this authority. Removing delegation must not silently disable the employee's account or revoke their own access.
+
+The user states that the system serves multiple functions and departments, not just operations, and expects additional departments. They want to build on existing authorization, correct security flaws and maintain coherent, secure, expandable governance rather than a separate operations-only permission system. The proposed job matrix was not approved.
+
+**Why:** The user is concerned that parallel authorization mechanisms would introduce conflicts and vulnerabilities as sectors and departments expand.
+
+**How to apply:** Treat job templates as an assignment convenience within the existing shared authorization model. Preserve cross-department requirements and explain compatibility and migration effects before proposing broad changes; do not treat the earlier job matrix as approved permissions.
