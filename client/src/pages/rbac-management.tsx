@@ -21,6 +21,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { MODULE_LABELS as SHARED_MODULE_LABELS, ALL_ACTION_LABELS, ACTION_CATEGORIES, getGroupedModules } from "@shared/schema";
 import { Search, Eye } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { JobTemplateDrafts } from "@/components/security/job-template-drafts";
 
 interface Department {
   id: number;
@@ -635,14 +636,16 @@ export default function RBACManagementPage() {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-          <TabsList className={`grid w-full grid-cols-2 sm:grid-cols-6 ${SECURITY_TABS_LIST}`}>
+          <TabsList className={`grid w-full grid-cols-2 ${isAdmin ? "sm:grid-cols-7" : "sm:grid-cols-6"} ${SECURITY_TABS_LIST}`}>
             <TabsTrigger value="users" className={SECURITY_TAB_TRIGGER} data-testid="tab-users">المستخدمين</TabsTrigger>
             <TabsTrigger value="roles" className={SECURITY_TAB_TRIGGER} data-testid="tab-roles">الأدوار</TabsTrigger>
             <TabsTrigger value="departments" className={SECURITY_TAB_TRIGGER} data-testid="tab-departments">الأقسام</TabsTrigger>
             <TabsTrigger value="permissions" className={SECURITY_TAB_TRIGGER} data-testid="tab-permissions">الصلاحيات</TabsTrigger>
             <TabsTrigger value="effective" className={SECURITY_TAB_TRIGGER} data-testid="tab-effective">الصلاحيات الفعلية</TabsTrigger>
             <TabsTrigger value="audit" className={SECURITY_TAB_TRIGGER} data-testid="tab-audit">سجل التدقيق</TabsTrigger>
+            {isAdmin && <TabsTrigger value="job-drafts" className={SECURITY_TAB_TRIGGER} data-testid="tab-job-drafts">مسودات القوالب</TabsTrigger>}
           </TabsList>
+          {isAdmin && <TabsContent value="job-drafts"><JobTemplateDrafts /></TabsContent>}
 
           <TabsContent value="users" className="space-y-4">
             <Card>

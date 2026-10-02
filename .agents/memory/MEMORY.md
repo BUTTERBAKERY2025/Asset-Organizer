@@ -91,3 +91,4 @@
 - [Employee account delegation](employee-account-delegation.md) — user-approved admin allowlist, employee linkage and explicit branch scope govern operations account management.
 - [Authorization rollout roadmap](authorization-roadmap.md) — six-stage matrix-to-pilot sequence; individual security fixes and test infrastructure are not the template rollout.
 - [Contextual permission boundary](contextual-permission-boundary.md) — action/scope tuples, explicit-empty source, route context opt-in and manual migration prerequisite; navigation is not authority.
+- [Isolated browser origin](isolated-browser-origin.md) — temporary UI/API test proxies must preserve browser-facing Host and stay running; do not weaken CSRF for test setup.

@@ -1,0 +1,8 @@
+.job-drafts { --draft-accent: 174 46% 30%; }
+.job-drafts .draft-notice { border-inline-start: 3px solid hsl(var(--draft-accent)); background: hsl(var(--draft-accent) / .06); }
+.job-drafts .draft-workspace { display: grid; gap: 1.25rem; align-items: start; }
+.job-drafts .draft-module { border: 1px solid hsl(var(--border)); border-radius: .65rem; padding: .85rem; }
+.job-drafts .draft-module:has([data-state="checked"]) { background: hsl(var(--draft-accent) / .05); border-color: hsl(var(--draft-accent) / .3); }
+.job-drafts .draft-version { font-variant-numeric: tabular-nums; }
+.job-drafts .draft-diff { overflow-wrap: anywhere; }
+@media (min-width: 1024px) { .job-drafts .draft-workspace { grid-template-columns: minmax(240px, .8fr) minmax(0, 2fr); } }

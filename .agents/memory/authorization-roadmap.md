@@ -8,3 +8,9 @@ The user supplied this sequence: approve the job/action/scope/assigner matrix; f
 **Why:** The user asked to assess actual progress against these six stages, rather than treat individual fixes or test infrastructure as completion of the template rollout.
 
 **How to apply:** Use docs/operational-job-template-matrix.md and docs/governance/phase1-inventory-and-policy.md as starting evidence, not proof of matrix approval. Report implementation separately from approved policy and verified deployment. Do not change existing employee accounts or permissions in bulk. Library dependency remediation remains a separate parallel track, not a replacement for the six stages.
+
+Start template work as versioned drafts, separate from legacy templates that can already be applied to accounts. Proposed scope and assignment authority are review metadata, not effective authorization.
+
+**Why:** The user authorized beginning draft preparation while the job matrix was still unapproved, with no activation or changes to existing employee permissions.
+
+**How to apply:** Never interpret saving a draft/version or generating proposals as policy approval. Add explicit version approval before operations-manager assignment; bind future assignments to that approved version and server-side scope checks.

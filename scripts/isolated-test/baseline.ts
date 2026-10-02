@@ -25,6 +25,7 @@ export const selectedMigrations = [
   "044_advanced_request_coverage.sql",
   "049_production_recipe_output_only.sql",
   "050_permission_source_mode.sql",
+  "051_job_permission_template_drafts.sql",
 ] as const;
 
 export const releaseGuards = [

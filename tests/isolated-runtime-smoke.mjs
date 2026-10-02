@@ -5,6 +5,7 @@ import pg from "pg";
 import guard from "../scripts/isolated-test/target.cjs";
 import { runPermissionScopeSmoke } from "./isolated-runtime-permission-scopes.mjs";
 import { runHrScopeSmoke } from "./isolated-runtime-hr-scope.mjs";
+import { runJobTemplateSmoke } from "./isolated-runtime-job-templates.mjs";
 
 const target = guard.assertRuntime();
 const origin = `http://127.0.0.1:${target.appPort}`;
@@ -141,9 +142,10 @@ try {
   // existing runner's disposable fixtures, after the original baseline checks.
   await runPermissionScopeSmoke({ client, request, admin, editor, check });
   await runHrScopeSmoke({ client, request, admin, editor, check });
-  console.log(`Isolated HTTP smoke passed: ${count} real authenticated admin/delegation/G01/G02/G03/G04/G05/HR_SCOPE assertions.`);
+  await runJobTemplateSmoke({ client, request, admin, editor, manager, employee: reactivated, check });
+  console.log(`Isolated HTTP smoke passed: ${count} real authenticated admin/delegation/G01/G02/G03/G04/G05/HR_SCOPE/JT assertions.`);
 } catch (error) {
-  console.error(`Isolated HTTP smoke failed [${guard.safeReason(error)}]: ${/^SMOKE_|^G0[12345]_|^DELEGATION_|^HR_SCOPE_/.test(error.message) ? error.message : "see guarded runtime diagnostics"}`);
+  console.error(`Isolated HTTP smoke failed [${guard.safeReason(error)}]: ${/^SMOKE_|^G0[12345]_|^DELEGATION_|^HR_SCOPE_|^JT_/.test(error.message) ? error.message : "see guarded runtime diagnostics"}`);
   process.exitCode = 1;
 } finally {
   await client.end().catch(() => {});

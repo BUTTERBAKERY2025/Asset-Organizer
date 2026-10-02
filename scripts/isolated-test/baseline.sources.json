@@ -11,5 +11,6 @@
   "migrations/advanced_production_explicit_execution.sql": "320d975b0dda27fd1f6ca45daee2da4c5cf917b0a7c45e3daf238c05945e42dc",
   "migrations/044_advanced_request_coverage.sql": "27c3e85d622dca470ae2cc639b07e316e72917a84467301e7254a284d7821b40",
   "migrations/049_production_recipe_output_only.sql": "759f324900afdf42a814511c6c7905071887c4d0bb1f214fae2eeabb364c0731",
-  "migrations/050_permission_source_mode.sql": "630f6af1dbf7c1f19b6307d39aa664d0ffef41046073ea04d31d40308223510d"
+  "migrations/050_permission_source_mode.sql": "630f6af1dbf7c1f19b6307d39aa664d0ffef41046073ea04d31d40308223510d",
+  "migrations/051_job_permission_template_drafts.sql": "dd265bc1b8dcb19e92d169b13a25b0a2a9b78d8afe225f1738529946b826924c"
 }

@@ -219,6 +219,7 @@ import { z } from "zod";
 import { registerKitchenRoutingRoutes, kitchenActionAllowed, getKitchenRouting, getKitchenRoutingBatch, routingActor, routingPersonEligible } from "./central-kitchen-routing";
 import { setupAuth, isAuthenticated, requirePermission, requireAnyPermission, getActiveBranchFilter, requireBranchAccess, canAccessBranch, isUserAdmin, getAllowedBranchIds, getEffectiveBranchFilter, getWarehouseKeeperEffectivePermissions, getBranchManagerEffectivePermissions, invalidateAuthCache, HR_MANAGER_MODULES, HR_SPECIALIST_PERMISSIONS, FINANCIAL_MANAGER_PERMISSIONS, OPERATIONS_MANAGER_PERMISSIONS, BRANCH_MANAGER_INTRINSIC_PERMISSIONS, hasCrossBranchHrReadAccess, filterRoleDeniedPermissions } from "./auth";
 import { registerEmployeeAccountDelegation } from "./employee-account-delegation";
+import { registerJobPermissionTemplateDraftRoutes } from "./job-permission-template-routes";
 import { registerBranchStockDesk, workforcePermission, operationalRoster, operationalAttendance } from "./branch-delegated-operations";
 import { comparisonBranchIds, comparisonDate, comparisonEvidence, comparisonRange, buildCanonicalComparisons, COMPARISON_REASON_PREFIX, COMPARISON_UNAVAILABLE } from "./production-comparison-evidence";
 import { authRateLimiter, biometricRateLimiter, uploadRateLimiter, apiRateLimiter, validateFileUpload, sanitizeFilename, trackLoginAttempt } from "./security";
@@ -363,6 +364,7 @@ export async function registerRoutes(
   await setupAuth(app);
   app.use(["/api/uploads/file", "/uploads", "/api/documents/file"], noStoreProtectedUpload);
   registerEmployeeAccountDelegation(app);
+  registerJobPermissionTemplateDraftRoutes(app);
   registerBranchStockDesk(app);
   registerRecipeExceptionRoutes(app);
   registerProductionRecipeModeRoutes(app);
