@@ -2,13 +2,15 @@ import { useEffect, useState } from "react";
 import { useIsMutating, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation, useSearch } from "wouter";
 import { AlertTriangle, ArrowRight, KeyRound, Lock, RefreshCw, Search, ShieldCheck, Unlock, UserCheck } from "lucide-react";
-import type { DelegatedEmployeeAccount, EmployeeAccountsResponse } from "@shared/employee-account-delegation";
+import type { DelegatedEmployeeAccount, EmployeeAccountsResponse } from "@/lib/employee-account-types";
+import { employeeManagementExplanation } from "@/lib/employee-account-types";
 import { Layout } from "@/components/layout";
 import { AccessDeniedPage } from "@/components/protected-route";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { EmployeeAccountDialog, type EmployeeAccountDialogMode } from "@/components/operations-center/employee-account-dialog";
 import { EmployeeAccountPolicyEditor } from "@/components/operations-center/employee-account-policy";
+import { EmployeeAccountManagerSelectionEditor } from "@/components/operations-center/employee-account-manager-selection";
 import { useAuth } from "@/hooks/useAuth";
 import { canManageEmployeeAccounts, constrainDelegatedPermissions, employeeAccountErrorMessage, employeeAccountScope, EMPLOYEE_ACCOUNTS_ENDPOINT, requestEmployeeAccount } from "@/lib/employee-account-delegation";
 
@@ -49,12 +51,12 @@ function EmployeeAccountsWorkspace({ actorId, actorRole, authScope }: { actorId:
     client.removeQueries({ queryKey: key, exact: true });
   }, [client, actorId, authScope]);
   const data = !directory.isError && !directory.isPaused && directory.isFetchedAfterMount ? directory.data : undefined;
-  const branches = Array.from(new Map((data?.employees ?? []).map(employee => [employee.branchId, { id: employee.branchId, name: employee.branchName }])).values());
+  const branches = data?.branches ?? [];
   const validBranch = !branchId || branches.some(branch => branch.id === branchId);
   // Fresh server scope/policy changes unmount any open credential or action dialog.
   const dialogScope = JSON.stringify([authScope, branchId, branches.map(branch => branch.id).sort(), data?.policy, data?.availablePermissions]);
   const currentEmployee = data?.employees.find(employee => employee.employeeId === dialog?.employee.employeeId);
-  const dialogEligible = !!dialog && !!currentEmployee && currentEmployee.branchId === dialog.employee.branchId
+  const dialogEligible = !!dialog && !!currentEmployee && currentEmployee.management?.allowed === true && currentEmployee.branchId === dialog.employee.branchId
     && currentEmployee.employeeName === dialog.employee.employeeName
     && (dialog.mode === "create" || JSON.stringify(currentEmployee.account) === JSON.stringify(dialog.employee.account));
   useEffect(() => { setDialog(null); }, [dialogScope, directory.isError]);
@@ -69,11 +71,14 @@ function EmployeeAccountsWorkspace({ actorId, actorRole, authScope }: { actorId:
     navigate(`/operations-employee-accounts${next.size ? `?${next}` : ""}`, { replace: true });
   };
   const scopedEmployees = validBranch ? (data?.employees ?? []).filter(employee => !branchId || employee.branchId === branchId) : [];
-  const linked = scopedEmployees.filter(employee => employee.account);
-  const eligible = scopedEmployees.filter(employee => !employee.account);
+  const linked = scopedEmployees.filter(employee => employee.hasAccount);
+  const eligible = scopedEmployees.filter(employee => !employee.hasAccount);
   const rows = (filter === "linked" ? linked : eligible).filter(employee =>
     `${employee.employeeName} ${employee.branchName} ${employee.account?.username ?? ""}`.toLocaleLowerCase().includes(term.trim().toLocaleLowerCase()));
-  const open = (employee: DelegatedEmployeeAccount, mode: EmployeeAccountDialogMode) => setDialog({ employee, mode, scope: dialogScope });
+  const open = (employee: DelegatedEmployeeAccount, mode: EmployeeAccountDialogMode) => {
+    if (!employee.management?.allowed || directory.isFetching || (mode === "create" ? employee.hasAccount : !employee.account)) return;
+    setDialog({ employee, mode, scope: dialogScope });
+  };
   const delegationEnabled = !!data?.policy.enabled && constrainDelegatedPermissions(data.availablePermissions, data.policy.permissions).length > 0;
   return <Layout><main dir="rtl" className="page-container mx-auto max-w-[1550px] space-y-4 pb-8" data-testid="operations-employee-accounts-page">
     <header className="border-b border-[#e7def0] pb-3 pt-2">
@@ -94,7 +99,7 @@ function EmployeeAccountsWorkspace({ actorId, actorRole, authScope }: { actorId:
       <AlertTriangle className="mx-auto mb-2 h-6 w-6 text-destructive" /><p className="text-sm text-destructive">{employeeAccountErrorMessage(directory.error)}</p>
       <p className="mt-1 text-xs text-muted-foreground">لم نعرض بيانات أو صلاحيات قديمة.</p><Button variant="outline" className="mt-3 min-h-11" onClick={refresh}>إعادة المحاولة</Button>
     </div> : !data ? <div role="status" className="space-y-3 rounded-xl border bg-card p-5"><div className="h-5 w-44 animate-pulse rounded bg-muted" /><div className="h-28 animate-pulse rounded-lg bg-muted" /><span className="sr-only">جار التحقق من الموظفين والسياسة</span></div> : <>
-      {policyOpen && actorRole === "admin" && <div id="employee-account-policy"><EmployeeAccountPolicyEditor key={JSON.stringify([authScope, data.policy, data.availablePermissions])} directory={data} refresh={refresh} /></div>}
+      {policyOpen && actorRole === "admin" && <div id="employee-account-policy" className="space-y-4"><EmployeeAccountPolicyEditor key={JSON.stringify([authScope, data.policy, data.availablePermissions])} directory={data} refresh={refresh} /><EmployeeAccountManagerSelectionEditor key={authScope} refresh={refresh} /></div>}
       <div className={`flex items-start gap-2 rounded-lg border p-3 text-xs leading-6 ${delegationEnabled ? "border-violet-200 bg-violet-50/60 text-violet-900" : "border-amber-200 bg-amber-50 text-amber-900"}`}>
         <ShieldCheck className="mt-1 h-4 w-4 shrink-0" /><p>{delegationEnabled ? "التفويض معتمد. اختر موظفًا موجودًا ثم قالبًا وظيفيًا أو صلاحيات مخصصة ضمن القائمة المعتمدة. الحسابات ذات الصلاحيات الواقعة خارج قائمة ضُيّقت لاحقًا تسمح بالتخفيض فقط." : "التفويض معطّل أو لم تُعتمد صلاحيات بعد. الإنشاء وإعادة الفتح غير متاحين؛ يبقى عرض الحسابات وتجميدها وتخفيض صلاحياتها متاحًا."}{" "}تعطيل السياسة أو تضييقها لا يسحب تلقائيًا وصول الحسابات الحالية. لتغيير وصولها، خفّض صلاحياتها أو جمّدها صراحةً.</p>
       </div>
@@ -119,20 +124,22 @@ function EmployeeAccountsWorkspace({ actorId, actorRole, authScope }: { actorId:
           : <div className="space-y-2">{rows.map(employee => <article key={employee.employeeId} className="flex flex-col gap-3 rounded-lg border border-border bg-background p-3 sm:flex-row sm:items-center" data-testid={`employee-account-${employee.employeeId}`}>
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2"><h2 className="text-sm font-bold text-[#302840]">{employee.employeeName}</h2>
-                <span className={`rounded-full px-2 py-1 text-[10px] font-bold ${!employee.account ? "bg-violet-100 text-violet-800" : employee.account.isActive === "active" ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}`}>{!employee.account ? "دون حساب" : employee.account.isActive === "active" ? "نشط" : "مجمّد"}</span></div>
+                <span className={`rounded-full px-2 py-1 text-[10px] font-bold ${!employee.hasAccount ? "bg-violet-100 text-violet-800" : employee.management?.allowed ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}`}>{!employee.hasAccount ? "بلا حساب" : employee.management?.allowed && employee.account ? "حساب قابل للإدارة" : "حساب محمي — يتطلب مسؤول النظام"}</span>
+                {employee.account && <span className="text-[11px] text-muted-foreground">{employee.account.isActive === "active" ? "نشط" : "مجمّد"}</span>}</div>
               <p className="mt-1 text-xs text-muted-foreground">{employee.branchName}{employee.account && <> · <bdi className="font-mono">{employee.account.username ?? "اسم المستخدم غير متاح"}</bdi></>}</p>
               {employee.account?.isActive === "inactive" && !employee.account.canReactivate && <p className="mt-1 text-[11px] text-amber-800">غير مؤهل لإعادة الفتح وفق السياسة الحالية.</p>}
+              {!employee.management?.allowed && <p className="mt-1 text-[11px] text-amber-800">{employeeManagementExplanation(employee.management?.reason ?? "not_selected")}</p>}
             </div>
-            <div className="flex flex-wrap gap-2">
-              {!employee.account ? <Button className="min-h-11 gap-2" disabled={!delegationEnabled || directory.isFetching} onClick={() => open(employee, "create")}><KeyRound className="h-4 w-4" />اختيار الموظف</Button> : <>
+            {employee.management?.allowed && <div className="flex flex-wrap gap-2">
+              {!employee.hasAccount ? <Button className="min-h-11 gap-2" disabled={!delegationEnabled || directory.isFetching} onClick={() => open(employee, "create")}><KeyRound className="h-4 w-4" />اختيار الموظف</Button> : employee.account && <>
                 <Button variant="outline" className="min-h-11 gap-2" disabled={directory.isFetching} onClick={() => open(employee, "permissions")}><ShieldCheck className="h-4 w-4" />الصلاحيات</Button>
                 {employee.account.isActive === "active" ? <Button variant="outline" className="min-h-11 gap-2 text-amber-800" disabled={directory.isFetching} onClick={() => open(employee, "freeze")}><Lock className="h-4 w-4" />تجميد</Button>
                   : <Button variant="outline" className="min-h-11 gap-2" disabled={!delegationEnabled || !employee.account.canReactivate || directory.isFetching} onClick={() => open(employee, "reopen")}><Unlock className="h-4 w-4" />إعادة الفتح</Button>}
               </>}
-            </div>
+            </div>}
           </article>)}</div>}
       </section>
-      {dialog && dialogEligible && dialog.scope === dialogScope && <EmployeeAccountDialog key={`${dialogScope}:${dialog.employee.employeeId}:${dialog.mode}`} employee={dialog.employee} mode={dialog.mode} directory={data} close={() => setDialog(null)} refresh={refresh} />}
+      {dialog && dialogEligible && currentEmployee && dialog.scope === dialogScope && <EmployeeAccountDialog key={`${dialogScope}:${dialog.employee.employeeId}:${dialog.mode}`} employee={currentEmployee} mode={dialog.mode} directory={data} close={() => setDialog(null)} refresh={refresh} />}
     </>}
   </main></Layout>;
 }

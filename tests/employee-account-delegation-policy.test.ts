@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
    actorMayManage, availableGeneratedUsername, branchMayManage, createAccountInput, DEFAULT_POLICY, delegationTemplates,
   generatedCredentials, isLegacyAccountPath, permissionsInput, policyInput,
-  statusInput, targetMayManage, validatePermissions,
+  statusInput, targetMayManage, validatePermissions, managerSelectionInput,
 } from "../server/employee-account-delegation-policy";
 import { EMPLOYEE_ACCOUNT_SAFE_PERMISSIONS } from "../shared/employee-account-delegation";
 
@@ -70,6 +70,17 @@ describe("employee account delegation security policy", () => {
     expect(permissionsInput.safeParse({ permissions: [] }).success).toBe(true);
     expect(validatePermissions([{ module: "cashier_journal", actions: ["create"] }], EMPLOYEE_ACCOUNT_SAFE_PERMISSIONS, false))
       .toEqual([{ module: "cashier_journal", actions: ["create"] }]);
+  });
+  it("accepts only the strict administrator employee-selection contract", () => {
+    expect(managerSelectionInput.parse({ employeeIds: [], revision: "fresh-revision" }))
+      .toEqual({ employeeIds: [], revision: "fresh-revision" });
+    expect(managerSelectionInput.safeParse({ employeeIds: [1, 25], revision: "fresh-revision" }).success).toBe(true);
+    for (const employeeIds of [["1"], [0], [-1], [1.5], [Number.MAX_SAFE_INTEGER + 1]]) {
+      expect(managerSelectionInput.safeParse({ employeeIds, revision: "fresh-revision" }).success).toBe(false);
+    }
+    expect(managerSelectionInput.safeParse({ employeeIds: [] }).success).toBe(false);
+    expect(managerSelectionInput.safeParse({ employeeIds: [], revision: "" }).success).toBe(false);
+    expect(managerSelectionInput.safeParse({ employeeIds: [], revision: "fresh", role: "admin" }).success).toBe(false);
   });
   it("offers expanded presets only from the supplied approved subset, not automatically", () => {
     const expanded = [
@@ -142,5 +153,8 @@ describe("employee account delegation security policy", () => {
     expect(isLegacyAccountPath("/api/branch-employees/1", "PUT", { linkedUserId: "admin" })).toBe(true);
     expect(isLegacyAccountPath("/api/operations/employee-accounts/1", "POST")).toBe(false);
     expect(isLegacyAccountPath("/api/auth/me", "GET")).toBe(false);
+    expect(isLegacyAccountPath("/api/admin/employee-account-managers", "GET")).toBe(false);
+    expect(isLegacyAccountPath("/api/admin/employee-account-managers/ops", "GET")).toBe(false);
+    expect(isLegacyAccountPath("/api/admin/employee-account-managers/ops", "PUT")).toBe(false);
   });
 });

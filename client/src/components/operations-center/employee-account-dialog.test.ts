@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { createRequire } from "node:module";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { EmployeeAccountsResponse, DelegatedEmployeeAccount } from "@shared/employee-account-delegation";
+import type { EmployeeAccountsResponse, DelegatedEmployeeAccount } from "@/lib/employee-account-types";
 import { EmployeeAccountDialog } from "./employee-account-dialog";
 import { EmployeeAccountPolicyEditor } from "./employee-account-policy";
 
@@ -14,8 +14,9 @@ vi.mock("@/components/ui/dialog", () => {
   return { Dialog: dialog, DialogContent: element, DialogHeader: element, DialogTitle: element, DialogDescription: element, DialogFooter: element };
 });
 
-const employee: DelegatedEmployeeAccount = { employeeId: 19, employeeName: "موظف اختبار", branchId: "a", branchName: "فرع اختبار", account: null };
+const employee: DelegatedEmployeeAccount = { employeeId: 19, employeeName: "موظف اختبار", branchId: "a", branchName: "فرع اختبار", hasAccount: false, management: { allowed: true, reason: "allowed" }, account: null };
 const directory: EmployeeAccountsResponse = {
+  branches: [{ id: "a", name: "فرع اختبار" }],
   employees: [employee],
   policy: { enabled: true, permissions: [{ module: "cashier_journal", actions: ["view"] }] },
   // Admin catalog is wider than policy: the dialog must NOT expand grants.
@@ -48,6 +49,14 @@ async function chooseCashier() {
 }
 
 describe("employee account dialog without browser or persistent secrets", () => {
+  it("blocks direct creation when a protected account exists even with redacted account details", async () => {
+    vi.stubGlobal("fetch", vi.fn());
+    await mount("create", { ...employee, hasAccount: true, account: null, management: { allowed: false, reason: "protected_account" } });
+    await chooseCashier();
+    expect(button("توليد وإنشاء الحساب").props.disabled).toBe(true);
+    await act(async () => button("توليد وإنشاء الحساب").props.onClick());
+    expect(fetch).not.toHaveBeenCalled();
+  });
   it("starts with a read-only employee, no credential preview, and one explicit create button", async () => {
     await mount();
     expect(renderer.root.findByProps({ id: "delegated-employee-name" }).props.readOnly).toBe(true);

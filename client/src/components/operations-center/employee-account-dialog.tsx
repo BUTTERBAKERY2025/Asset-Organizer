@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Copy, KeyRound, Loader2, Lock, ShieldCheck, Unlock } from "lucide-react";
-import type { DelegatedEmployeeAccount, DelegatedPermission, EmployeeAccountCreatedResponse, EmployeeAccountsResponse } from "@shared/employee-account-delegation";
+import type { DelegatedPermission, EmployeeAccountCreatedResponse } from "@shared/employee-account-delegation";
+import type { DelegatedEmployeeAccount, EmployeeAccountsResponse } from "@/lib/employee-account-types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -54,9 +55,14 @@ export function EmployeeAccountDialog({ employee, mode, directory, close, refres
   const missingView = hasMissingViewPermission(selectedPermissions);
   const emptyNewGrant = mode === "create" && selectedPermissions.length === 0;
   const statusMode = mode === "freeze" || mode === "reopen";
+  const actionAllowed = employee.management?.allowed === true && (mode === "create" ? !employee.hasAccount : !!employee.account);
   const title = mode === "create" ? "إنشاء حساب موظف" : mode === "permissions" ? "تعديل صلاحيات الحساب" : mode === "freeze" ? "تجميد حساب الموظف" : "إعادة فتح حساب الموظف";
   const act = async () => {
     if (pending || completed) return;
+    if (!actionAllowed) {
+      setError("لم تعد إدارة حساب هذا الموظف متاحة. حدّث الدليل للتحقق من التفويض.");
+      return;
+    }
     if (!statusMode && (missingView || emptyNewGrant || (mode === "create" && !canGrant))) {
       setError(emptyNewGrant ? "اختر صلاحية واحدة على الأقل قبل إنشاء الحساب." : "كل إجراء يتطلب صلاحية العرض المعتمدة للوحدة نفسها.");
       return;
@@ -162,7 +168,7 @@ export function EmployeeAccountDialog({ employee, mode, directory, close, refres
         {error && <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-xs leading-6 text-destructive">{error}</p>}
       </div>
       <DialogFooter className="gap-2 sm:gap-2">
-        {!credentials && <Button type="button" className="min-h-11 gap-2" variant={mode === "freeze" ? "destructive" : "default"} disabled={pending || completed || (statusMode ? mode === "reopen" && (!canGrant || !employee.account?.canReactivate) : missingView || emptyNewGrant || (mode === "create" && !canGrant))} onClick={act}>
+        {!credentials && <Button type="button" className="min-h-11 gap-2" variant={mode === "freeze" ? "destructive" : "default"} disabled={!actionAllowed || pending || completed || (statusMode ? mode === "reopen" && (!canGrant || !employee.account?.canReactivate) : missingView || emptyNewGrant || (mode === "create" && !canGrant))} onClick={act}>
           {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : mode === "freeze" ? <Lock className="h-4 w-4" /> : mode === "reopen" ? <Unlock className="h-4 w-4" /> : <KeyRound className="h-4 w-4" />}
           {pending ? "جار التنفيذ…" : mode === "create" ? "توليد وإنشاء الحساب" : mode === "permissions" ? reductionOnly ? "حفظ تخفيض الصلاحيات" : "حفظ الصلاحيات" : mode === "freeze" ? "تأكيد التجميد" : "تأكيد إعادة الفتح"}
         </Button>}

@@ -13,7 +13,7 @@ The delegation policy is prospective: disabling or narrowing it stops new grants
 
 **Why:** Hiding accounts on policy withdrawal prevented managers from performing emergency suspension. Silent bulk revocation would be a different, destructive policy that the user did not request.
 
-**How to apply:** Explain this distinction in policy controls. Allow safety suspension and reduction-only edits while disabled, without relaxing branch or protected-account checks.
+**How to apply:** Explain this distinction in policy controls. Allow safety suspension and reduction-only edits while the permission policy is disabled only if the manager still has individual employee delegation; do not relax branch or protected-account checks.
 
 Session revocation must cover authentication already in progress, not just session IDs that already exist.
 
@@ -38,3 +38,9 @@ The directory should show all active employees in authorized branches, separated
 **Why:** The user explicitly requested active employees only and separate linked/unlinked tabs, while retaining protected-account restrictions.
 
 **How to apply:** Separate basic roster visibility from account-management authority; never expose protected account details merely to explain that management is blocked.
+
+Administrators select individual employees independently for each operations manager, in addition to setting the allowed permission ceiling.
+
+**Why:** The user explicitly chose “اختيار مستقل لكل مدير تشغيل” rather than a shared employee list.
+
+**How to apply:** Require both explicit employee selection and current branch-management authority for every account-management action. Roster visibility is broader than this authority. Removing delegation must not silently disable the employee's account or revoke their own access.

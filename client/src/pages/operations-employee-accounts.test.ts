@@ -2,7 +2,7 @@ import { createElement } from "react";
 import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { EmployeeAccountsResponse } from "@shared/employee-account-delegation";
+import type { EmployeeAccountsResponse } from "@/lib/employee-account-types";
 import OperationsEmployeeAccountsPage from "./operations-employee-accounts";
 
 const { act, create } = createRequire(import.meta.url)("react-test-renderer");
@@ -38,12 +38,13 @@ vi.mock("@/components/ui/dialog", () => {
 });
 
 const data: EmployeeAccountsResponse = {
+  branches: [{ id: "a", name: "فرع أ" }, { id: "empty", name: "فرع بلا موظفين" }],
   policy: { enabled: true, permissions: [{ module: "cashier_journal", actions: ["view"] }] },
   availablePermissions: [{ module: "cashier_journal", actions: ["view"] }],
   templates: [],
   employees: [
-    { employeeId: 1, employeeName: "موظف مؤهل", branchId: "a", branchName: "فرع أ", account: null },
-    { employeeId: 2, employeeName: "موظف بحساب مجمد", branchId: "a", branchName: "فرع أ", account: { id: "unit-account", username: "unit-disabled", isActive: "inactive", permissions: [], canReactivate: true } },
+    { employeeId: 1, employeeName: "موظف مؤهل", branchId: "a", branchName: "فرع أ", hasAccount: false, management: { allowed: true, reason: "allowed" }, account: null },
+    { employeeId: 2, employeeName: "موظف بحساب مجمد", branchId: "a", branchName: "فرع أ", hasAccount: true, management: { allowed: true, reason: "allowed" }, account: { id: "unit-account", username: "unit-disabled", isActive: "inactive", permissions: [], canReactivate: true } },
   ],
 };
 let renderer: any;
@@ -74,6 +75,61 @@ afterEach(async () => {
 });
 
 describe("operations employee account page", () => {
+  it("classifies protected accounts as linked, hides all actions and retains empty authorized branches", async () => {
+    mocks.state.data = { ...data, employees: [{ ...data.employees[1], account: null, management: { allowed: false, reason: "protected_account" } }] };
+    await mount();
+    expect(renderer.root.findAllByProps({ "data-testid": "employee-account-2" })).toHaveLength(1);
+    expect(JSON.stringify(renderer.toJSON())).toContain("حساب محمي — يتطلب مسؤول النظام");
+    expect(JSON.stringify(renderer.toJSON())).toContain("فرع بلا موظفين");
+    expect(button("الصلاحيات")).toBeUndefined();
+    expect(button("إعادة الفتح")).toBeUndefined();
+    await act(async () => button("موظفون دون حساب").props.onClick());
+    expect(renderer.root.findAllByProps({ "data-testid": "employee-account-2" })).toHaveLength(0);
+    expect(button("اختيار الموظف")).toBeUndefined();
+  });
+
+  it.each(["not_selected", "read_only_branch"])("hides actions on %s and closes a stale open dialog immediately", async reason => {
+    await mount();
+    await act(async () => button("الصلاحيات").props.onClick());
+    expect(button("حفظ الصلاحيات")).toBeTruthy();
+    mocks.state.data = { ...data, employees: [{ ...data.employees[1], account: null, management: { allowed: false, reason } }] };
+    await renderAgain();
+    expect(button("حفظ الصلاحيات")).toBeUndefined();
+    expect(button("الصلاحيات")).toBeUndefined();
+    expect(JSON.stringify(renderer.toJSON())).toContain(reason === "not_selected" ? "لم يفوضك مسؤول النظام" : "للقراءة فقط");
+  });
+
+  it("closes a modal if the active roster no longer contains its employee", async () => {
+    await mount();
+    await act(async () => button("الصلاحيات").props.onClick());
+    mocks.state.data = { ...data, employees: [] };
+    await renderAgain();
+    expect(button("حفظ الصلاحيات")).toBeUndefined();
+  });
+
+  it("fails closed when individual management approval is absent", async () => {
+    mocks.state.data = { ...data, employees: [{ ...data.employees[0], management: undefined }] };
+    await mount();
+    await act(async () => button("موظفون دون حساب").props.onClick());
+    expect(JSON.stringify(renderer.toJSON())).toContain("لم يفوضك مسؤول النظام");
+    expect(button("اختيار الموظف")).toBeUndefined();
+  });
+
+  it("retains the one-time handoff on its own successful create refresh but clears it on revoked selection", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ employee: data.employees[0], credentials: { username: "unit-user", password: "handoff-secret" } }))));
+    await mount();
+    await act(async () => button("موظفون دون حساب").props.onClick());
+    await act(async () => button("اختيار الموظف").props.onClick());
+    await act(async () => renderer.root.findAllByType("input").find((node: any) => node.props.type === "checkbox").props.onChange({ target: { checked: true } }));
+    await act(async () => button("توليد وإنشاء الحساب").props.onClick());
+    const created = { ...data.employees[0], hasAccount: true, account: data.employees[1].account };
+    mocks.state.data = { ...data, employees: [created] };
+    await renderAgain();
+    expect(JSON.stringify(renderer.toJSON())).toContain("handoff-secret");
+    mocks.state.data = { ...data, employees: [{ ...created, account: null, management: { allowed: false, reason: "not_selected" } }] };
+    await renderAgain();
+    expect(JSON.stringify(renderer.toJSON())).not.toContain("handoff-secret");
+  });
   it("shows an explicit offline state instead of an indefinite loading skeleton or stale accounts", async () => {
     mocks.state = { data, isError: false, isFetchedAfterMount: false, isFetching: false, isPaused: true };
     await mount();

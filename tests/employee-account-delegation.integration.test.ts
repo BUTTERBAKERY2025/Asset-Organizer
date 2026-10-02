@@ -38,12 +38,15 @@ registerEmployeeAccountDelegation(app);
 const base = "/api/operations/employee-accounts";
 const permissions = [{ module: "cashier_journal", actions: ["view", "create"] }];
 const policyKey = "employee_account_delegation.policy.v1";
+const managerKey = (id = "ops") => `employee_account_delegation.manager.${id}.v1`;
 
 async function invoke(method: string, suffix = "", body: unknown = {}, actor = "ops", options: any = {}) {
-  const path = suffix === "policy" ? "/api/admin/employee-account-policy" : `${base}${suffix}`;
+  const path = suffix === "policy" ? "/api/admin/employee-account-policy"
+    : suffix === "managers" ? "/api/admin/employee-account-managers"
+    : suffix === "selection" ? "/api/admin/employee-account-managers/:managerId" : `${base}${suffix}`;
   const handlers = routes.find(r => r.method === method && r.path === path)?.handlers;
   if (!handlers) throw Error(`Unknown route ${method} ${path}`);
-  const req: any = { session: { userId: actor }, body, params: { employeeId: "1" },
+  const req: any = { session: { userId: actor }, body, params: { employeeId: "1", managerId: "ops" },
     method: method.toUpperCase(), path, ...options };
   const response: any = { statusCode: 200, headers: {}, status(code: number) { this.statusCode = code; return this; },
     json(value: any) { this.body = value; return this; },
@@ -69,6 +72,12 @@ describe("employee account delegation atomic PostgreSQL API", () => {
   }
   async function id() {
     return (await query("SELECT linked_user_id FROM branch_employees WHERE id=1")).rows[0].linked_user_id;
+  }
+  async function select(employeeIds: number[], managerId = "ops", revision?: string) {
+    const current = await invoke("get", "selection", {}, "admin", { params: { managerId } });
+    expect(current.statusCode).toBe(200);
+    return invoke("put", "selection", { employeeIds, revision: revision ?? current.body.revision },
+      "admin", { params: { managerId } });
   }
   beforeAll(async () => {
     // Explicit local-only namespace, independent sequences, never public-table
@@ -126,6 +135,11 @@ describe("employee account delegation atomic PostgreSQL API", () => {
         VALUES ('a','موظف مسجل',9000,'secret-id','secret-bank'),('b','خارج النطاق',1,'x','y'),
         ('main_warehouse','المركز الرئيسي',1,'x','y');
     `);
+    // Existing write scenarios explicitly start with an administrator-selected
+    // employee. Missing-selection behavior is tested separately below.
+    await query("INSERT INTO portal_settings(key,value) VALUES ($1,$2)", [
+      managerKey(), JSON.stringify({ revision: "fixture", selections: [{ employeeId: 1, branchId: "a", linkedUserId: null }] }),
+    ]);
   });
   afterAll(async () => {
     vi.restoreAllMocks();
@@ -144,7 +158,9 @@ describe("employee account delegation atomic PostgreSQL API", () => {
     expect((await invoke("put", "policy", { enabled: true, permissions })).statusCode).toBe(403);
     expect((await configure()).statusCode).toBe(200);
     result = await invoke("get");
-    expect(result.body.employees).toEqual([{ employeeId: 1, employeeName: "موظف مسجل", branchId: "a", branchName: "الفرع أ", account: null }]);
+    expect(result.body.employees).toEqual([{ employeeId: 1, employeeName: "موظف مسجل", branchId: "a", branchName: "الفرع أ",
+      hasAccount: false, management: { allowed: true, reason: "allowed" }, account: null }]);
+    expect(result.body.branches).toEqual([{ id: "a", name: "الفرع أ" }]);
     expect(JSON.stringify(result.body)).not.toMatch(/salary|iqama|bank|secret-|9000/);
     expect(result.headers["Cache-Control"]).toContain("no-store");
   });
@@ -171,19 +187,26 @@ describe("employee account delegation atomic PostgreSQL API", () => {
       UPDATE users SET is_active='frozen' WHERE id='scale-4';
       INSERT INTO user_permissions(user_id,module,actions) VALUES ('scale-5','users',ARRAY['view']);
     `);
+    const eligible = (await invoke("get", "selection", {}, "admin")).body.employees
+      .filter((e: any) => e.eligible).map((e: any) => e.employeeId);
+    expect((await select(eligible)).statusCode).toBe(200);
     runtime.queries = [];
     const result = await invoke("get");
     expect(result.statusCode).toBe(200);
-    expect(result.body.employees).toHaveLength(796);
+    expect(result.body.employees).toHaveLength(821);
     expect(result.body.employees.filter((e: any) => e.account)).toHaveLength(395);
     expect(runtime.queries.length).toBe(smallCount);
-    expect(runtime.queries.length).toBeLessThanOrEqual(24);
+    expect(runtime.queries.length).toBeLessThanOrEqual(30);
     expect(runtime.queries.join("\n")).not.toMatch(/lock table|password|first_name|profile_image|select \*/i);
     expect(runtime.queries.join("\n")).toMatch(/repeatable read read only/i);
     expect(JSON.stringify(result.body)).not.toMatch(/sensitive-hash|scale-(?:[1-5]|40[1-9]|41\d|420)"/);
     // No cache: a subsequent write is visible on the very next request.
     await query("UPDATE users SET role='admin' WHERE id='scale-6'");
-    expect((await invoke("get")).body.employees).toHaveLength(795);
+    const refreshed = (await invoke("get")).body.employees;
+    expect(refreshed).toHaveLength(821);
+    expect(refreshed.find((e: any) => e.employeeName === "linked-6")).toMatchObject({
+      hasAccount: true, account: null, management: { allowed: false, reason: "protected_account" },
+    });
   });
   it("matches locked mutation DTOs for owned suspension, admin refreeze and policy withdrawal", async () => {
     await configure();
@@ -314,7 +337,9 @@ describe("employee account delegation atomic PostgreSQL API", () => {
   it("does not use read-only branch access as delegation authority", async () => {
     await configure();
     await query("UPDATE user_branch_access SET access_level='view_only' WHERE user_id='ops'");
-    expect((await invoke("get")).body.employees).toEqual([]);
+    expect((await invoke("get")).body.employees).toMatchObject([
+      { employeeId: 1, account: null, management: { allowed: false, reason: "read_only_branch" } },
+    ]);
     expect((await invoke("post", "/:employeeId", { permissions })).body.code).toBe("BRANCH_FORBIDDEN");
   });
   it.each(["admin", "branch_manager", "operations_manager", "business_owner", "hr_manager", "financial_manager"])(
@@ -322,7 +347,9 @@ describe("employee account delegation atomic PostgreSQL API", () => {
       await configure();
       const created = await create();
       await query("UPDATE users SET role=$1 WHERE id=$2", [role, created.body.employee.account.id]);
-      expect((await invoke("get")).body.employees).toEqual([]);
+       expect((await invoke("get")).body.employees).toMatchObject([
+         { employeeId: 1, hasAccount: true, account: null, management: { allowed: false, reason: "protected_account" } },
+       ]);
       expect((await invoke("put", "/:employeeId/permissions", { permissions: [] })).body.code).toBe("PROTECTED_ACCOUNT");
       expect((await invoke("patch", "/:employeeId/status", { isActive: "inactive" })).statusCode).toBe(403);
     });
@@ -330,7 +357,9 @@ describe("employee account delegation atomic PostgreSQL API", () => {
     await configure(); await create();
     await query(`INSERT INTO ${table}(user_id) VALUES ($1)`, [await id()]);
     expect((await invoke("put", "/:employeeId/permissions", { permissions: [] })).body.code).toBe("ELEVATED_ACCOUNT");
-    expect((await invoke("get")).body.employees).toEqual([]);
+    expect((await invoke("get")).body.employees).toMatchObject([
+      { employeeId: 1, hasAccount: true, account: null, management: { allowed: false, reason: "protected_account" } },
+    ]);
   });
   it("protects self, multi-branch/global accounts and elevated direct permissions", async () => {
     await configure();
@@ -436,7 +465,9 @@ describe("employee account delegation atomic PostgreSQL API", () => {
     await configure(); await create(); await configure(false);
     const target = await id();
     await query("UPDATE users SET role='admin' WHERE id=$1", [target]);
-    expect((await invoke("get")).body.employees).toEqual([]);
+    expect((await invoke("get")).body.employees).toMatchObject([
+      { employeeId: 1, hasAccount: true, account: null, management: { allowed: false, reason: "protected_account" } },
+    ]);
     expect((await invoke("patch", "/:employeeId/status", { isActive: "inactive" })).body.code).toBe("PROTECTED_ACCOUNT");
     await query("UPDATE users SET role='employee' WHERE id=$1", [target]);
     await query("INSERT INTO user_assignments(user_id) VALUES ($1)", [target]);
@@ -457,7 +488,7 @@ describe("employee account delegation atomic PostgreSQL API", () => {
     expect((await query("SELECT count(*)::int AS n FROM users")).rows[0].n).toBe(3);
     expect((await query("SELECT count(*)::int AS n FROM system_audit_logs WHERE action='account_create'")).rows[0].n).toBe(1);
   });
-  it.each(["employee_move", "grant_revocation", "policy_revocation", "target_elevation", "actor_demotion"])(
+   it.each(["employee_move", "grant_revocation", "individual_revocation", "policy_revocation", "target_elevation", "actor_demotion"])(
     "rechecks %s after a concurrent legacy transaction commits", async race => {
       await configure(); await create();
       const target = await id();
@@ -466,6 +497,7 @@ describe("employee account delegation atomic PostgreSQL API", () => {
         await concurrent.query("BEGIN");
         if (race === "employee_move") await concurrent.query("UPDATE branch_employees SET branch_id='b' WHERE id=1");
         if (race === "grant_revocation") await concurrent.query("DELETE FROM user_branch_access WHERE user_id='ops'");
+         if (race === "individual_revocation") await concurrent.query("DELETE FROM portal_settings WHERE key=$1", [managerKey()]);
         if (race === "policy_revocation") await concurrent.query("UPDATE portal_settings SET value=$1 WHERE key=$2",
           [JSON.stringify({ enabled: false, permissions: [] }), policyKey]);
         if (race === "target_elevation") await concurrent.query("INSERT INTO user_assignments(user_id) VALUES ($1)", [target]);
@@ -495,5 +527,177 @@ describe("employee account delegation atomic PostgreSQL API", () => {
         expect(next).not.toHaveBeenCalled();
       }
     }
+  });
+  it("missing individual selection grants nothing while showing the complete active branch roster", async () => {
+    await configure();
+    await query("DELETE FROM portal_settings WHERE key=$1", [managerKey()]);
+    await query(`INSERT INTO user_branch_access(user_id,branch_id,access_level) VALUES ('ops','b','view_only');
+      INSERT INTO branches VALUES ('empty','فرع بلا موظفين');
+      INSERT INTO user_branch_access(user_id,branch_id,access_level) VALUES ('ops','empty','view_only');
+      INSERT INTO branch_employees(branch_id,employee_name,status) VALUES ('a','موظف غير نشط','inactive');`);
+    const listed = await invoke("get");
+    expect(listed.body.employees.map((e: any) => e.employeeId).sort()).toEqual([1, 2]);
+    expect(listed.body.branches.map((b: any) => b.id).sort()).toEqual(["a", "b", "empty"]);
+    expect(listed.body.employees.find((e: any) => e.employeeId === 1).management)
+      .toEqual({ allowed: false, reason: "not_selected" });
+    expect(listed.body.employees.find((e: any) => e.employeeId === 2).management.reason).toBe("read_only_branch");
+    expect((await invoke("post", "/:employeeId", { permissions })).body.code).toBe("EMPLOYEE_NOT_SELECTED");
+    // Admin bypasses employee selection, never the protected-account checks.
+    expect((await invoke("post", "/:employeeId", { permissions }, "admin")).statusCode).toBe(201);
+    expect((await invoke("get")).body.employees.find((e: any) => e.employeeId === 1))
+      .toMatchObject({ hasAccount: true, account: null, management: { reason: "not_selected" } });
+  });
+  it("keeps selections independent per manager and saving has no employee-account/session side effects", async () => {
+    await configure(); await create();
+    const target = await id();
+    await query(`INSERT INTO users(id,role,first_name,last_name) VALUES ('ops2','operations_manager','مدير','ثانٍ');
+      INSERT INTO user_branch_access(user_id,branch_id) VALUES ('ops2','a');
+      INSERT INTO user_branch_access(user_id,branch_id,access_level) VALUES ('ops2','b','view_only');`);
+    await query("INSERT INTO sessions VALUES ('employee-session',$1,now()+interval '1 hour')", [
+      JSON.stringify({ userId: target, cookie: {} }),
+    ]);
+    const beforeAccount = (await query("SELECT * FROM users WHERE id=$1", [target])).rows[0];
+    const beforePermissions = (await query("SELECT * FROM user_permissions WHERE user_id=$1", [target])).rows;
+    expect((await invoke("get", "", {}, "ops2")).body.employees.find((e: any) => e.employeeId === 1))
+      .toMatchObject({ hasAccount: true, account: null, management: { reason: "not_selected" } });
+    expect((await invoke("patch", "/:employeeId/status", { isActive: "inactive" }, "ops2")).body.code)
+      .toBe("EMPLOYEE_NOT_SELECTED");
+    expect((await select([1], "ops2")).statusCode).toBe(200);
+    expect((await select([], "ops")).statusCode).toBe(200);
+    expect((await invoke("get", "", {}, "ops2")).body.employees.find((e: any) => e.employeeId === 1).management.allowed).toBe(true);
+    expect((await invoke("get")).body.employees[0].management.reason).toBe("not_selected");
+    expect((await query("SELECT * FROM users WHERE id=$1", [target])).rows[0]).toEqual(beforeAccount);
+    expect((await query("SELECT * FROM user_permissions WHERE user_id=$1", [target])).rows).toEqual(beforePermissions);
+    expect((await query("SELECT sess FROM sessions WHERE sid='employee-session'")).rows[0].sess.userId).toBe(target);
+    const managers = (await invoke("get", "managers", {}, "admin")).body.managers;
+    expect(managers.find((m: any) => m.id === "ops2")).toEqual({
+      id: "ops2", name: "مدير ثانٍ", branches: [
+        { id: "a", name: "الفرع أ", canManage: true }, { id: "b", name: "الفرع ب", canManage: false },
+      ],
+    });
+    expect(JSON.stringify(managers)).not.toMatch(/username|password|permissions/);
+  });
+  it("individual withdrawal blocks even safety reductions/freezing, unlike disabled permission policy", async () => {
+    await configure(); await create(); await configure(false);
+    expect((await invoke("put", "/:employeeId/permissions", { permissions: [] })).statusCode).toBe(200);
+    expect((await select([])).statusCode).toBe(200);
+    for (const [method, suffix, body] of [
+      ["put", "/:employeeId/permissions", { permissions: [] }],
+      ["patch", "/:employeeId/status", { isActive: "inactive" }],
+    ] as const) {
+      expect((await invoke(method, suffix, body)).body.code).toBe("EMPLOYEE_NOT_SELECTED");
+    }
+    expect((await query("SELECT is_active FROM users WHERE id=$1", [await id()])).rows[0].is_active).toBe("active");
+    expect((await invoke("get")).body.employees[0]).toMatchObject({
+      hasAccount: true, account: null, management: { reason: "not_selected" },
+    });
+  });
+  it("rejects duplicate, forged, protected, inactive, HQ and read-only employee selections", async () => {
+    await configure(); await create();
+    await query("UPDATE users SET role='admin',username='private-protected-name' WHERE id=$1", [await id()]);
+    await query(`INSERT INTO user_branch_access(user_id,branch_id,access_level) VALUES ('ops','b','view_only');
+      INSERT INTO branch_employees(branch_id,employee_name,status) VALUES ('a','غير نشط','inactive');`);
+    const current = (await invoke("get", "selection", {}, "admin")).body;
+    expect(current.selectedEmployeeIds).toEqual([]);
+    expect(current.employees.find((e: any) => e.employeeId === 1))
+      .toMatchObject({ hasAccount: true, eligible: false, reason: "protected_account" });
+    expect(current.employees.find((e: any) => e.employeeId === 2))
+      .toMatchObject({ eligible: false, reason: "read_only_branch" });
+    expect(JSON.stringify(current)).not.toMatch(/private-protected-name|username|permissions|linkedUserId/);
+    expect(JSON.stringify((await invoke("get")).body)).not.toContain("private-protected-name");
+    for (const employeeIds of [[1], [2], [3], [4], [999]]) {
+      expect((await select(employeeIds)).statusCode).toBe(403);
+    }
+    expect((await select([1, 1])).statusCode).toBe(400);
+    for (const body of [
+      { employeeIds: ["1"], revision: current.revision },
+      { employeeIds: [1] },
+      { employeeIds: [], revision: current.revision, managerId: "ops2" },
+    ]) expect((await invoke("put", "selection", body, "admin")).statusCode).toBe(400);
+    expect((await select([])).statusCode).toBe(200);
+  });
+  it("hides stale selections after branch transfer, never carries them to new targets, and prunes on save", async () => {
+    await configure(); await create();
+    const oldRevision = (await invoke("get", "selection", {}, "admin")).body.revision;
+    await query("UPDATE branch_employees SET branch_id='b' WHERE id=1");
+    expect((await invoke("get", "selection", {}, "admin")).body.selectedEmployeeIds).toEqual([]);
+    expect((await select([], "ops", oldRevision)).statusCode).toBe(409);
+    expect((await select([])).statusCode).toBe(200);
+    const stored = JSON.parse((await query("SELECT value FROM portal_settings WHERE key=$1", [managerKey()])).rows[0].value);
+    expect(stored.selections).toEqual([]);
+    await query("UPDATE branch_employees SET branch_id='a' WHERE id=1");
+    expect((await select([1])).statusCode).toBe(200);
+    const original = await id();
+    await query(`INSERT INTO users(id,username,role,branch_id) VALUES ('replacement','replacement-user','employee','a');
+      UPDATE branch_employees SET linked_user_id='replacement' WHERE id=1;`);
+    expect((await invoke("get")).body.employees[0]).toMatchObject({ hasAccount: true, account: null, management: { reason: "not_selected" } });
+    expect((await invoke("patch", "/:employeeId/status", { isActive: "inactive" })).body.code).toBe("EMPLOYEE_NOT_SELECTED");
+    expect((await query("SELECT is_active FROM users WHERE id=$1", [original])).rows[0].is_active).toBe("active");
+    expect((await invoke("get", "selection", {}, "admin")).body.selectedEmployeeIds).toEqual([]);
+  });
+  it("transfer to another currently authorized branch still requires new individual approval", async () => {
+    await configure();
+    await query(`INSERT INTO user_branch_access(user_id,branch_id) VALUES ('ops','b');
+      UPDATE branch_employees SET branch_id='b' WHERE id=1;`);
+    expect((await invoke("get")).body.employees.find((e: any) => e.employeeId === 1).management.reason).toBe("not_selected");
+    expect((await invoke("post", "/:employeeId", { permissions })).body.code).toBe("EMPLOYEE_NOT_SELECTED");
+    expect((await select([1])).statusCode).toBe(200);
+    expect((await invoke("post", "/:employeeId", { permissions })).statusCode).toBe(201);
+  });
+  it("allows clearing grants of demoted/inactive managers without exposing former employee scope", async () => {
+    await configure();
+    await query("UPDATE users SET role='employee' WHERE id='ops'");
+    expect((await invoke("get", "managers", {}, "admin")).body.managers).toEqual([]);
+    const detail = (await invoke("get", "selection", {}, "admin")).body;
+    expect(detail).toMatchObject({ managerId: "ops", employees: [], selectedEmployeeIds: [] });
+    expect((await select([1])).statusCode).toBe(403);
+    expect((await select([])).statusCode).toBe(200);
+    await query("UPDATE users SET role='operations_manager',is_active='inactive' WHERE id='ops'");
+    expect((await invoke("get", "selection", {}, "admin")).body.employees).toEqual([]);
+    expect((await select([])).statusCode).toBe(200);
+  });
+  it("admin endpoints re-read the actor and cannot be accessed by ops with forged users permissions", async () => {
+    await configure();
+    await query("INSERT INTO user_permissions(user_id,module,actions) VALUES ('ops','users',ARRAY['view','create','edit'])");
+    const revision = (await invoke("get", "selection", {}, "admin")).body.revision;
+    for (const [method, suffix, body] of [
+      ["get", "managers", {}], ["get", "selection", {}],
+      ["put", "selection", { employeeIds: [], revision }],
+    ] as const) expect((await invoke(method, suffix, body, "ops")).statusCode).toBe(403);
+    await query("UPDATE users SET role='employee' WHERE id='admin'");
+    expect((await invoke("get", "managers", {}, "admin")).statusCode).toBe(403);
+    expect((await invoke("get", "selection", {}, "admin")).statusCode).toBe(403);
+    expect((await invoke("put", "selection", { employeeIds: [], revision }, "admin")).statusCode).toBe(403);
+    await query("UPDATE users SET role='admin',is_active='inactive' WHERE id='admin'");
+    expect((await invoke("get", "selection", {}, "admin")).statusCode).toBe(403);
+  });
+  it("serializes concurrent administrator selections with an optimistic 409 and minimal no-secret audit", async () => {
+    const revision = (await invoke("get", "selection", {}, "admin")).body.revision;
+    const responses = await Promise.all([
+      invoke("put", "selection", { employeeIds: [], revision }, "admin"),
+      invoke("put", "selection", { employeeIds: [1], revision }, "admin"),
+    ]);
+    expect(responses.map(r => r.statusCode).sort()).toEqual([200, 409]);
+    const winner = responses.find(r => r.statusCode === 200)!;
+    expect((await invoke("get", "selection", {}, "admin")).body).toEqual(winner.body);
+    const logs = (await query("SELECT action,details,target_id FROM system_audit_logs")).rows;
+    expect(logs).toHaveLength(1);
+    expect(logs[0].action).toBe("manager_selection_update");
+    expect(logs[0].target_id).toBe("ops");
+    expect(JSON.stringify(logs)).not.toMatch(/username|password|secret-|permissions|salary|iqama|bank/);
+  });
+  it("selection save locks block concurrent legacy elevation before authoritative eligibility reads", async () => {
+    await configure(); await create();
+    const revision = (await invoke("get", "selection", {}, "admin")).body.revision;
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query("UPDATE users SET role='admin' WHERE id=$1", [await id()]);
+      const pending = invoke("put", "selection", { employeeIds: [1], revision }, "admin");
+      await new Promise(resolve => setTimeout(resolve, 60));
+      await client.query("COMMIT");
+      expect((await pending).statusCode).toBe(409);
+      expect((await select([1])).statusCode).toBe(403);
+    } finally { await client.query("ROLLBACK"); client.release(); }
   });
 });

@@ -20,6 +20,10 @@ export const permissionsInput = z.object({ permissions: z.array(permission).max(
 export const createAccountInput = permissionsInput.extend({ permissions: z.array(permission).min(1).max(30) }).strict();
 export const policyInput = permissionsInput.extend({ enabled: z.boolean() }).strict();
 export const statusInput = z.object({ isActive: z.enum(["active", "inactive"]) }).strict();
+export const managerSelectionInput = z.object({
+  employeeIds: z.array(z.number().int().positive().safe()).max(10000),
+  revision: z.string().min(1).max(128),
+}).strict();
 
 export function permissionsWithin(requested: DelegatedPermission[], allowed: DelegatedPermission[]) {
   return requested.every(p => p.actions.every(a => allowed.some(c => c.module === p.module && c.actions.includes(a))));

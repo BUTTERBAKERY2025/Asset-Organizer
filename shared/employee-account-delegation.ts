@@ -7,8 +7,10 @@ export interface DelegatedPermission {
 export interface EmployeeAccountPolicy {
   /** Prospective authority: disabling/narrowing does not silently revoke existing
    * account access. Directory and suspension remain available. Permission
-   * reductions into the current ceiling remain allowed; creation/reactivation
-   * require enabled approval. Explicitly reduce or suspend existing accounts.
+   * reductions into the current ceiling remain allowed for individually selected
+   * employees in writable branches; creation/reactivation require enabled approval.
+   * Withdrawing employee selection stops every manager mutation without changing
+   * the employee account itself. Explicitly reduce or suspend existing accounts.
    */
   enabled: boolean;
   permissions: DelegatedPermission[];
@@ -19,6 +21,14 @@ export interface DelegatedEmployeeAccount {
   employeeName: string;
   branchId: string;
   branchName: string;
+  hasAccount: boolean;
+  /** Roster visibility never implies account-management authority. Account
+   * details are omitted unless allowed; protected linked rows still haveAccount.
+   */
+  management: {
+    allowed: boolean;
+    reason: "allowed" | "not_selected" | "read_only_branch" | "protected_account";
+  };
   account: null | {
     id: string;
     username: string | null;
@@ -36,6 +46,7 @@ export interface EmployeeAccountTemplate {
 
 /** GET /api/operations/employee-accounts (admin or operations_manager). */
 export interface EmployeeAccountsResponse {
+  branches: Array<{ id: string; name: string }>;
   employees: DelegatedEmployeeAccount[];
   policy: EmployeeAccountPolicy;
   templates: EmployeeAccountTemplate[];
@@ -43,6 +54,34 @@ export interface EmployeeAccountsResponse {
    * these are reduction-only choices, not permission to grant new access.
    */
   availablePermissions: DelegatedPermission[];
+}
+
+export interface EmployeeAccountManagersResponse {
+  managers: Array<{
+    id: string;
+    name: string;
+    branches: Array<{ id: string; name: string; canManage: boolean }>;
+  }>;
+}
+
+export interface EmployeeAccountManagerSelectionResponse {
+  managerId: string;
+  revision: string;
+  employees: Array<{
+    employeeId: number;
+    employeeName: string;
+    branchId: string;
+    branchName: string;
+    hasAccount: boolean;
+    eligible: boolean;
+    reason: "allowed" | "read_only_branch" | "protected_account";
+  }>;
+  selectedEmployeeIds: number[];
+}
+
+export interface EmployeeAccountManagerSelectionInput {
+  employeeIds: number[];
+  revision: string;
 }
 
 /** POST .../:employeeId and PUT .../:employeeId/permissions. Strict: no other fields. */
