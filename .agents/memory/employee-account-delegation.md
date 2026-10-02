@@ -7,7 +7,7 @@ Operations managers may administer employee-linked accounts only within their ex
 
 **Why:** The user explicitly chose administrator-approved permissions, and requires employee linkage before any account can be created. General user-administration authority would defeat this boundary.
 
-**How to apply:** Preserve employee linkage, branch scoping, protected-account exclusions and server-generated noneditable credentials across all entry points, including legacy APIs. Keep display names tied to the employee record; compact usernames must not weaken generated passwords.
+**How to apply:** Preserve employee linkage, branch scoping, exclusion of protected accounts from management and server-generated noneditable credentials across all entry points, including legacy APIs. Keep display names tied to the employee record; compact usernames must not weaken generated passwords.
 
 The delegation policy is prospective: disabling or narrowing it stops new grants, not existing employee access. Keep eligible accounts visible for suspension and reduction of permissions; require explicit action to remove existing access.
 
@@ -32,3 +32,9 @@ The user approved expanding delegation to branch requests and shipment receipt, 
 **Why:** These are the operational duties the user explicitly chose when asked which additional employee permissions are needed.
 
 **How to apply:** Offer narrowly scoped operational capabilities within the administrator-approved ceiling; do not grant broad inventory, financial, HR personnel, or global administration access merely to expose these workflows.
+
+The directory should show all active employees in authorized branches, separated into linked-account and no-account tabs. Protected accounts must not hide the basic employee row: label it “حساب محمي — يتطلب مسؤول النظام”; distinguish “بلا حساب” and “حساب قابل للإدارة”.
+
+**Why:** The user explicitly requested active employees only and separate linked/unlinked tabs, while retaining protected-account restrictions.
+
+**How to apply:** Separate basic roster visibility from account-management authority; never expose protected account details merely to explain that management is blocked.
