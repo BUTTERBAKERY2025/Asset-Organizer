@@ -50,3 +50,9 @@ The user states that the system serves multiple functions and departments, not j
 **Why:** The user is concerned that parallel authorization mechanisms would introduce conflicts and vulnerabilities as sectors and departments expand.
 
 **How to apply:** Treat job templates as an assignment convenience within the existing shared authorization model. Preserve cross-department requirements and explain compatibility and migration effects before proposing broad changes; do not treat the earlier job matrix as approved permissions.
+
+The user emphasizes that the system is live and has users; integrated governance work must preserve ongoing operations.
+
+**Why:** The user explicitly requested extreme care because people currently use the system.
+
+**How to apply:** Keep inventory read-only, distinguish external database evidence from verified live-runtime evidence, and require reviewed impact before changing existing access. Do not turn an inventory request into an account migration or service restart.
