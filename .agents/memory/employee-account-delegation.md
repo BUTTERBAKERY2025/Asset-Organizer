@@ -61,7 +61,7 @@ For non-admin accounts, the user approved that an explicit, currently applicable
 
 **Why:** The user selected this rule while approving the shared organization-wide governance policy.
 
-**How to apply:** Include direct permissions, templates, assigned roles and automatic grants. Admin and emergency-access policy remain undecided. Policy approval is not permission to change current accounts; review impact before implementation.
+**How to apply:** Include direct permissions, templates, assigned roles and automatic grants for non-admin accounts. The user subsequently directed preserving admin's existing full access without new policy restrictions for now, and deferred emergency-access policy. Policy approval is not permission to change current accounts; review impact before implementation.
 
 Across all departments, the user approved granting authority for the administrator and explicitly bounded delegates. The administrator defines delegatable permissions, manageable accounts and scope; possessing a permission does not authorize granting it, and delegates cannot expand their own authority.
 
@@ -91,4 +91,10 @@ The user approved rejecting permission, role and delegation changes when a durab
 
 **Why:** Authority changes must not succeed without reliable traceability.
 
-**How to apply:** Reject the affected change rather than stopping the whole application. Emergency security suspension remains a separate, unapproved policy; retention duration and audit access/review ownership still need specification before implementation.
+**How to apply:** Reject the affected change rather than stopping the whole application, subject to the user's subsequent instruction not to impose new policy restrictions on admin now. Emergency security suspension was explicitly deferred; retention duration and audit access/review ownership still need specification before implementation.
+
+The user directed: «الادمن عنده كل شيء لا يخضع الان ل اي سياسه» and deferred both a new admin policy and the proposed emergency-suspension mechanism.
+
+**Why:** The user requires keeping the existing full admin authority unchanged for now.
+
+**How to apply:** Do not impose the newly approved governance restrictions on admin or implement the deferred recovery/emergency proposals. Preserve existing behavior; this is not authorization to remove existing safeguards or add new bypasses. Do not treat the deferral as approval of the recommended admin constraints.
