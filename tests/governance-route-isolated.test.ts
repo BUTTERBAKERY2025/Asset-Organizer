@@ -2,8 +2,10 @@ import { readFileSync } from "node:fs";
 import { createContext, Script } from "node:vm";
 import ts from "typescript";
 import { describe, expect, it, vi } from "vitest";
+import { z } from "zod";
 
-// Characterization, NOT security acceptance: KNOWN GAP cases pass when reproduced.
+// Regression tests: formerly unsafe assignment and permission writes must now
+// fail without mutation, while authorized admin controls remain functional.
 // No server module is imported. Execute original AST-selected declarations and
 // complete registrations in a restricted VM: no app bootstrap, env, timers, SQL,
 // Clerk, session verification, or network. isAuthenticated is explicitly bypassed
@@ -122,18 +124,19 @@ function fixture(owner = "other", targetRole = "employee", targetBranch = "branc
   const inherited = [{ module: "settings", action: "view", permissionId: 901 }];
   const audits: unknown[][] = [];
   const overrides = new Map<string, { permissionId: number; deny: boolean }[]>();
-  // Storage contract doubles only, not authorization or route logic. Assignment
-  // update/delete by ID and unrestricted partial fields match inspected storage.ts.
+   // Storage contract doubles only, not authorization or route logic. Assignment
+   // mutations match on ID AND expected owner; extracted storage is tested separately.
   // Atomic permission persistence is simulated, not a test of SQL/audit durability.
   const storage = strictObject("storage", {
-    updateUserAssignment: vi.fn(async (id: number, changes: Record<string, unknown>) => {
+    updateUserAssignment: vi.fn(async (id: number, userId: string, changes: Record<string, unknown>) => {
       const row = assignments.get(id);
-      if (!row) return undefined;
+      if (!row || row.userId !== userId) return undefined;
       const changed = { ...row, ...changes };
       assignments.set(id, changed);
       return changed;
     }),
-    deleteUserAssignment: vi.fn(async (id: number) => assignments.delete(id)),
+    deleteUserAssignment: vi.fn(async (id: number, userId: string) =>
+      assignments.get(id)?.userId === userId && assignments.delete(id)),
     getInheritedPermissions: vi.fn(async (id: string) => {
       if (!accounts.has(id)) return forbidden(`unknown target ${id}`);
       return structuredClone(inherited);
@@ -161,7 +164,7 @@ function fixture(owner = "other", targetRole = "employee", targetBranch = "branc
   const blocked = strictObject("I/O", {});
   const context = createContext({
     app: strictObject("app", { patch: capture("patch"), delete: capture("delete"), put: capture("put") }),
-    storage, db: blocked, pool: blocked, process: blocked,
+    storage, z, db: blocked, pool: blocked, process: blocked,
     fetch: () => forbidden("fetch"), require: () => forbidden("require"),
     setTimeout: () => forbidden("setTimeout"), setInterval: () => forbidden("setInterval"),
     console: strictObject("console", {
@@ -211,10 +214,11 @@ function fixture(owner = "other", targetRole = "employee", targetBranch = "branc
 }
 
 describe("isolated registered RBAC assignment routes (pre-authenticated fixtures)", () => {
+  const admin = { ...actor, role: "admin" };
   for (const method of ["patch", "delete"]) {
-    it(`${method}: legitimate other-user ownership succeeds with users:edit`, async () => {
+    it(`${method}: legitimate admin other-user ownership succeeds without explicit grants`, async () => {
       const f = fixture();
-      const res = await f.request(method);
+      const res = await f.request(method, { user: admin, grants: [] });
       expect(res.statusCode).toBe(method === "patch" ? 200 : 204);
       if (method === "patch") expect(f.assignments.get(41)).toEqual({
         id: 41, userId: "other", roleId: 9, branchId: "branch-a", isActive: true,
@@ -243,19 +247,50 @@ describe("isolated registered RBAC assignment routes (pre-authenticated fixtures
       expect(f.assignments.get(41)?.roleId).toBe(method === "patch" ? 9 : undefined);
     });
 
-    it.each(["editor", "third"])(`${method}: KNOWN GAP mismatched other-user URL mutates assignment owned by %s`, async owner => {
+    it.each(["editor", "third"])(`${method}: mismatched admin URL cannot mutate assignment owned by %s`, async owner => {
       const f = fixture(owner);
-      const res = await f.request(method, { pathUser: "other" });
-      expect(res.statusCode).toBe(method === "patch" ? 200 : 204);
+      const before = structuredClone(f.assignments.get(41));
+      const res = await f.request(method, { pathUser: "other", user: admin, grants: [] });
+      expect(res.statusCode).toBe(404);
+      expect(res.body).toEqual({ error: "التعيين غير موجود" });
+      expect(f.assignments.get(41)).toEqual(before);
       if (method === "patch") {
-        expect(f.assignments.get(41)?.userId).toBe(owner);
-        expect(f.assignments.get(41)?.roleId).toBe(9);
-        expect(res.body).toEqual(f.assignments.get(41));
-        expect(f.storage.updateUserAssignment).toHaveBeenCalledExactlyOnceWith(41, { roleId: 9 });
+        expect(f.storage.updateUserAssignment).toHaveBeenCalledExactlyOnceWith(41, "other", { roleId: 9 });
       } else {
-        expect(f.assignments.has(41)).toBe(false);
-        expect(f.storage.deleteUserAssignment).toHaveBeenCalledExactlyOnceWith(41);
+        expect(f.storage.deleteUserAssignment).toHaveBeenCalledExactlyOnceWith(41, "other");
       }
+    });
+
+    it(`${method}: users:edit alone cannot administer other-user assignments`, async () => {
+      const f = fixture();
+      const before = structuredClone(f.assignments.get(41));
+      const res = await f.request(method);
+      expect(res.statusCode).toBe(403);
+      expect(res.body).toEqual({ error: "إدارة الصلاحيات العامة لمسؤول النظام فقط؛ استخدم مسار التفويض المعتمد" });
+      expect(f.assignments.get(41)).toEqual(before);
+      expect(f.storage.updateUserAssignment).not.toHaveBeenCalled();
+      expect(f.storage.deleteUserAssignment).not.toHaveBeenCalled();
+    });
+
+    it.each(["", "0", "-1", "1.5", "41junk", " 41", "+41", "041", "4e1", "2147483648", "9007199254740993"])(
+      `${method}: invalid assignment ID %j is rejected before storage`, async assignmentId => {
+        const f = fixture();
+        const before = structuredClone(f.assignments.get(41));
+        const res = await f.request(method, { assignmentId, user: admin });
+        expect(res.statusCode).toBe(400);
+        expect(f.assignments.get(41)).toEqual(before);
+        expect(f.storage.updateUserAssignment).not.toHaveBeenCalled();
+        expect(f.storage.deleteUserAssignment).not.toHaveBeenCalled();
+      },
+    );
+
+    it.each(["", " ", " other "])(`${method}: invalid URL owner %j is rejected`, async pathUser => {
+      const f = fixture();
+      const res = await f.request(method, { pathUser, user: admin });
+      expect(res.statusCode).toBe(400);
+      expect(f.assignments.get(41)?.roleId).toBe(5);
+      expect(f.storage.updateUserAssignment).not.toHaveBeenCalled();
+      expect(f.storage.deleteUserAssignment).not.toHaveBeenCalled();
     });
 
     it.each([
@@ -274,13 +309,41 @@ describe("isolated registered RBAC assignment routes (pre-authenticated fixtures
     );
   }
 
-  it.each(["editor", "third"])("PATCH: KNOWN GAP body userId reassigns matched other-user assignment to %s", async userId => {
+  it.each(["editor", "third", "other"])("PATCH: admin body userId %s is rejected without reassignment", async userId => {
     const f = fixture();
-    const res = await f.request("patch", { body: { userId, roleId: 9 } });
+    const before = structuredClone(f.assignments.get(41));
+    const res = await f.request("patch", { body: { userId, roleId: 9 }, user: admin });
+    expect(res.statusCode).toBe(400);
+    expect(f.assignments.get(41)).toEqual(before);
+    expect(f.storage.updateUserAssignment).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { id: 42, roleId: 9 }, { createdAt: "2026-01-01", roleId: 9 },
+    { updatedAt: "2026-01-01", roleId: 9 }, { unexpected: true }, {},
+    { roleId: "9" }, { roleId: 0 }, { roleId: 2147483648 }, { roleId: 1.5 },
+    { departmentId: -1 }, { branchId: "" }, { scopeType: "unknown" },
+    { isPrimary: "true" }, { isActive: null }, { startDate: "invalid" },
+    { endDate: 123 }, [], "invalid",
+  ])("PATCH: invalid or non-whitelisted body %j never reaches storage", async body => {
+    const f = fixture();
+    const before = structuredClone(f.assignments.get(41));
+    const res = await f.request("patch", { body, user: admin });
+    expect(res.statusCode).toBe(400);
+    expect(f.assignments.get(41)).toEqual(before);
+    expect(f.storage.updateUserAssignment).not.toHaveBeenCalled();
+  });
+
+  it("PATCH: admin can update all mutable fields with dates normalized for storage", async () => {
+    const f = fixture();
+    const body = { roleId: 9, branchId: null, departmentId: 3, scopeType: "department",
+      isPrimary: false, isActive: false, startDate: "2026-10-01T00:00:00Z", endDate: null };
+    const res = await f.request("patch", { body, user: admin });
     expect(res.statusCode).toBe(200);
-    expect(res.body).toEqual({ id: 41, userId, roleId: 9, branchId: "branch-a", isActive: true });
-    expect(f.assignments.get(41)).toEqual(res.body);
-    expect(f.storage.updateUserAssignment).toHaveBeenCalledExactlyOnceWith(41, { userId, roleId: 9 });
+    expect(f.storage.updateUserAssignment).toHaveBeenCalledExactlyOnceWith(
+      41, "other", { ...body, startDate: new Date(body.startDate) },
+    );
+    expect(f.assignments.get(41)?.userId).toBe("other");
   });
 
   it("PATCH: tampered body cannot bypass own-URL non-admin denial", async () => {
@@ -291,32 +354,34 @@ describe("isolated registered RBAC assignment routes (pre-authenticated fixtures
     expect(f.storage.updateUserAssignment).not.toHaveBeenCalled();
   });
 
-  it("DELETE: body userId is ignored; matched other-user deletion uses only assignment ID", async () => {
+  it("DELETE: body userId is ignored; admin deletion uses assignment ID and URL owner", async () => {
     const f = fixture();
-    const res = await f.request("delete", { body: { userId: "editor" } });
+    const res = await f.request("delete", { body: { userId: "editor" }, user: admin });
     expect(res.statusCode).toBe(204);
     expect(f.assignments.has(41)).toBe(false);
-    expect(f.storage.deleteUserAssignment).toHaveBeenCalledExactlyOnceWith(41);
+    expect(f.storage.deleteUserAssignment).toHaveBeenCalledExactlyOnceWith(41, "other");
   });
 
   it("PATCH: absent assignment returns 404 without creating a row", async () => {
     const f = fixture();
-    const res = await f.request("patch", { assignmentId: "999" });
+    const res = await f.request("patch", { assignmentId: "999", user: admin });
     expect(res.statusCode).toBe(404);
     expect(res.body).toEqual({ error: "التعيين غير موجود" });
     expect(f.assignments.has(999)).toBe(false);
     expect(f.assignments.get(41)?.roleId).toBe(5);
   });
 
-  it("DELETE: absent assignment still returns 204 (storage contract characterization)", async () => {
+  it("DELETE: absent assignment returns 404 without mutation", async () => {
     const f = fixture();
-    const res = await f.request("delete", { assignmentId: "999" });
-    expect(res.statusCode).toBe(204);
+    const res = await f.request("delete", { assignmentId: "999", user: admin });
+    expect(res.statusCode).toBe(404);
+    expect(res.body).toEqual({ error: "التعيين غير موجود" });
     expect(f.assignments.get(41)?.roleId).toBe(5);
   });
 });
 
 describe("isolated PUT user permissions: generic users:edit is not a delegation ceiling", () => {
+  const admin = { ...actor, role: "admin" };
   it.each([
     ["ordinary other account", "employee", "branch-a"],
     ["admin account", "admin", "branch-a"],
@@ -324,21 +389,20 @@ describe("isolated PUT user permissions: generic users:edit is not a delegation 
     ["shareholder account", "shareholder", "branch-a"],
     ["out-of-branch employee", "employee", "branch-b"],
     ["out-of-branch admin", "admin", "branch-b"],
-  ])("KNOWN GAP users:edit-only employee grants unheld privileged actions to %s", async (_label, role, branch) => {
+  ])("users:edit-only employee cannot grant unheld privileged actions to %s", async (_label, role, branch) => {
     const f = fixture("other", role, branch);
     const before = structuredClone(f.accounts);
+    const beforePermissions = structuredClone(f.permissions);
     const res = await f.request("put");
-    expect(res.statusCode).toBe(200);
-    expect(res.body).toEqual(privileged);
-    expect(f.permissions.get("other")).toEqual(privileged);
+    expect(res.statusCode).toBe(403);
+    expect(res.body).toEqual({ error: "إدارة الصلاحيات العامة لمسؤول النظام فقط؛ استخدم مسار التفويض المعتمد /api/operations/employee-accounts/:employeeId/permissions" });
+    expect(f.permissions).toEqual(beforePermissions);
     expect(f.permissions.has("editor")).toBe(false);
     expect(f.accounts).toEqual(before);
-    expect(f.storage.getInheritedPermissions).toHaveBeenCalledExactlyOnceWith("other");
-    expect(f.storage.updateUserPermissionsWithAudit).toHaveBeenCalledExactlyOnceWith(
-      "other", privileged, "editor", null, [{ permissionId: 901, deny: true }],
-    );
-    expect(f.overrides.get("other")).toEqual([{ permissionId: 901, deny: true }]);
-    expect(f.audits).toEqual([["other", privileged, "editor", null, [{ permissionId: 901, deny: true }]]]);
+    expect(f.storage.getInheritedPermissions).not.toHaveBeenCalled();
+    expect(f.storage.updateUserPermissionsWithAudit).not.toHaveBeenCalled();
+    expect(f.overrides.size).toBe(0);
+    expect(f.audits).toEqual([]);
   });
 
   it.each([
@@ -385,7 +449,7 @@ describe("isolated PUT user permissions: generic users:edit is not a delegation 
   it("legitimate lower-privilege grant persists and keeps requested inherited permission", async () => {
     const f = fixture();
     const grants = [{ module: "settings", actions: ["view"] }];
-    const res = await f.request("put", { body: { permissions: grants, templateApplied: "fixture-template" } });
+    const res = await f.request("put", { user: admin, grants: [], body: { permissions: grants, templateApplied: "fixture-template" } });
     expect(res.statusCode).toBe(200);
     expect(res.body).toEqual(grants);
     expect(f.permissions.get("other")).toEqual(grants);
@@ -394,7 +458,7 @@ describe("isolated PUT user permissions: generic users:edit is not a delegation 
 
   it("non-array permission input is rejected without persistence", async () => {
     const f = fixture();
-    const res = await f.request("put", { body: { permissions: { module: "users" } } });
+    const res = await f.request("put", { user: admin, body: { permissions: { module: "users" } } });
     expect(res.statusCode).toBe(400);
     expect(res.body).toEqual({ error: "Invalid permissions format" });
     expect(f.storage.getInheritedPermissions).not.toHaveBeenCalled();
@@ -403,7 +467,7 @@ describe("isolated PUT user permissions: generic users:edit is not a delegation 
 
   it("module/action vocabulary validation filters invalid entries, not delegation authority", async () => {
     const f = fixture();
-    const res = await f.request("put", { body: { permissions: [
+    const res = await f.request("put", { user: admin, body: { permissions: [
       { module: "not_a_real_module", actions: ["edit"] },
       { module: "users", actions: ["not_a_real_action", "delete"] },
       { module: "settings", actions: "edit" },

@@ -6,7 +6,7 @@ import { createPasswordLoginRateLimiter } from "./password-login-limiter";
 import { storage } from "./storage";
 import { createOwnerApiLockdown, isOwnerRequestAllowed, isOwnerSessionValid } from "./owner-security";
 import { db, pool } from "./db";
-import { systemAuditLogs, ROLE_PERMISSION_TEMPLATES, JOB_ROLE_PERMISSION_TEMPLATES, userPermissions, userPermissionOverrides, permissions as permissionDefinitions } from "@shared/schema";
+import { systemAuditLogs, MODULE_ACTIONS, ROLE_PERMISSION_TEMPLATES, JOB_ROLE_PERMISSION_TEMPLATES, userPermissions, userPermissionOverrides, permissions as permissionDefinitions } from "@shared/schema";
 import { and, eq, or, isNull, gt } from "drizzle-orm";
 import { isLoginBlocked, trackLoginAttempt } from "./security";
 import {
@@ -91,10 +91,8 @@ export const HR_MANAGER_MODULES: ReadonlySet<string> = new Set([
 // employee transfers, NO org structure. Action-aware so sensitive modules stay
 // scoped (e.g. employee_reports = view+export only).
 // Cross-branch READ is granted separately via hasCrossBranchHrReadAccess.
-// NOTE: many HR routes call requirePermission(module) WITHOUT an action arg
-// (action === undefined). For those, presence of the module in this map grants
-// access. Routes that DO pass an action (e.g. branch_employees create/edit/delete)
-// are enforced against the listed actions, so view-only modules stay view-only.
+// Omitted actions are inferred from the HTTP method before consulting this map;
+// module presence alone must never authorize writes to a view-only module.
 export const HR_SPECIALIST_PERMISSIONS: Record<string, string[]> = {
   hr_management: ["view"],
   // "approve" مطلوب لمسار اعتماد/رفض طلبات الإجازة (يُقيَّد إضافياً بسلسلة
@@ -1374,16 +1372,21 @@ export const requirePermission = (module: string, action?: string): RequestHandl
     if (user.role === "admin") {
       return next();
     }
+    // Resolve once before every role grant/restriction and the explicit fallback.
+    // Unknown methods require edit; read/export POST routes must specify "view".
+    const effectiveAction = action ?? ({
+      GET: "view", HEAD: "view", OPTIONS: "view", POST: "create",
+      PUT: "edit", PATCH: "edit", DELETE: "delete",
+    } as Record<string, string>)[req.method] ?? "edit";
     if (user.role === "warehouse_keeper") {
-      const required = action ?? ({ GET: "view", HEAD: "view", OPTIONS: "view", POST: "create", PATCH: "edit", PUT: "edit", DELETE: "delete" } as Record<string, string>)[req.method] ?? "edit";
       const allowed = (req as any).authPermissions ?? await getWarehouseKeeperEffectivePermissions(user.id, await storage.getUserPermissions(user.id, { bypassCache: true }));
-      return allowed.some((p: any) => p.module === module && p.actions.includes(required))
+      return allowed.some((p: any) => p.module === module && p.actions.includes(effectiveAction))
         ? next() : res.status(403).json({ message: "غير مسموح - صلاحية أمين المستودعات محدودة بالمستودع الرئيسي" });
     }
     
     // SECURITY: Attendance clerk has ONLY attendance_check permissions
     if (user.role === "attendance_clerk") {
-      if (module === "attendance_check" && action != null && ["view", "create", "edit"].includes(action)) {
+      if (module === "attendance_check" && ["view", "create", "edit"].includes(effectiveAction)) {
         
         return next();
       }
@@ -1394,7 +1397,7 @@ export const requirePermission = (module: string, action?: string): RequestHandl
         userId: user.id,
         userName: user.username,
         module,
-        action,
+        action: effectiveAction,
         attemptedResource: req.originalUrl,
         ipAddress: req.ip || req.headers['x-forwarded-for'] as string,
         userAgent: req.headers['user-agent'],
@@ -1404,21 +1407,19 @@ export const requirePermission = (module: string, action?: string): RequestHandl
     
     // Viewer can only view
     if (user.role === "viewer") {
-      if (action !== "view") {
+      if (effectiveAction !== "view") {
         return res.status(403).json({ message: "غير مسموح - المشاهد يمكنه العرض فقط" });
       }
     }
 
-    const deliveryAction = action ?? ({
-      GET: "view", HEAD: "view", OPTIONS: "view", POST: "create",
-      PUT: "edit", PATCH: "edit", DELETE: "delete",
-    } as Record<string, string>)[req.method] ?? "edit";
-    if (deliveryEmployeeActions(user, module).includes(deliveryAction)) return next();
+    if (deliveryEmployeeActions(user, module).includes(effectiveAction)) return next();
     
-    // HR Manager role: auto-grants access to all HR modules across all branches.
+    // HR Manager has no ROLE_PERMISSION_TEMPLATES entry. Its existing permission
+    // responses grant MODULE_ACTIONS on this set, not arbitrary action strings.
     // Strictly scoped to HR — financial, inventory, sales, etc. still go through
     // the standard permission check below and remain branch-isolated.
-    if (user.role === "hr_manager" && HR_MANAGER_MODULES.has(module)) {
+    if (user.role === "hr_manager" && HR_MANAGER_MODULES.has(module)
+      && (MODULE_ACTIONS as readonly string[]).includes(effectiveAction)) {
       return next();
     }
 
@@ -1427,15 +1428,16 @@ export const requirePermission = (module: string, action?: string): RequestHandl
     // admin can still grant extra modules to an individual specialist).
     if (user.role === "hr_specialist") {
       const allowed = HR_SPECIALIST_PERMISSIONS[module];
-      if (allowed && (action == null || allowed.includes(action))) {
+      if (allowed?.includes(effectiveAction)) {
         return next();
       }
     }
 
     if (user.role === "production_development_manager") {
       const allowed = PRODUCTION_DEVELOPMENT_MANAGER_PERMISSIONS[module];
-      const methodActions: Record<string, string> = { GET: "view", HEAD: "view", OPTIONS: "view", POST: "create", PATCH: "edit", PUT: "edit", DELETE: "delete" };
-      const requiredAction = action ?? methodActions[req.method] ?? "delete";
+      // Preserve this role's stricter historical unknown-method auto-grant.
+      const knownMethod = ["GET", "HEAD", "OPTIONS", "POST", "PUT", "PATCH", "DELETE"].includes(req.method);
+      const requiredAction = action ?? (knownMethod ? effectiveAction : "delete");
       if (allowed?.includes(requiredAction)) return next();
     }
 
@@ -1444,7 +1446,7 @@ export const requirePermission = (module: string, action?: string): RequestHandl
     // not in the map fall through to the standard explicit-permission check below.
     if (user.role === "financial_manager") {
       const allowed = financialManagerActionsFor(module);
-      if (allowed && (action == null || allowed.includes(action))) {
+      if (allowed?.includes(effectiveAction)) {
         return next();
       }
     }
@@ -1458,15 +1460,11 @@ export const requirePermission = (module: string, action?: string): RequestHandl
       if (isRoleModuleDenied(user.role, module)) {
         return res.status(403).json({ error: "استخدم صلاحيات موارد التشغيل المحددة" });
       }
-      const required = action ?? ({
-        GET: "view", HEAD: "view", OPTIONS: "view", POST: "create",
-        PATCH: "edit", PUT: "edit", DELETE: "delete",
-      } as Record<string, string>)[req.method] ?? "edit";
-      if ((await operationsPermissionDenials(req)).has(`${module}:${required}`)) {
+      if ((await operationsPermissionDenials(req)).has(`${module}:${effectiveAction}`)) {
         return res.status(403).json({ error: "تم سحب صلاحية هذا الإجراء" });
       }
       const allowed = operationsManagerActionsFor(module);
-      if (allowed && (action == null || allowed.includes(action))) {
+      if (allowed?.includes(effectiveAction)) {
         return next();
       }
     }
@@ -1509,15 +1507,6 @@ export const requirePermission = (module: string, action?: string): RequestHandl
       actionsArray = rawActions.replace(/[{}]/g, '').split(',').map((a: string) => a.trim());
     }
     
-    // When routes call requirePermission(module) without an explicit action,
-    // infer a safe action from the HTTP method so module presence alone can
-    // NEVER grant write access (GET→view, POST→create, PUT/PATCH→edit,
-    // DELETE→delete; unknown methods default to the strictest common action).
-    const METHOD_ACTION: Record<string, string> = {
-      GET: "view", HEAD: "view", OPTIONS: "view",
-      POST: "create", PUT: "edit", PATCH: "edit", DELETE: "delete",
-    };
-    const effectiveAction = action ?? METHOD_ACTION[req.method] ?? "edit";
     if (!actionsArray.includes(effectiveAction)) {
       return res.status(403).json({ message: `غير مسموح - ليس لديك صلاحية ${effectiveAction} على هذه الوحدة` });
     }
@@ -1574,8 +1563,9 @@ export const requireAnyPermission = (module: string, actions: string[]): Request
 
     if (actions.some((action) => deliveryEmployeeActions(user, module).includes(action))) return next();
     
-    // HR Manager auto-grants HR modules (shared constant w/ requirePermission)
-    if (user.role === "hr_manager" && HR_MANAGER_MODULES.has(module)) {
+    // Same finite HR-manager action breadth as requirePermission.
+    if (user.role === "hr_manager" && HR_MANAGER_MODULES.has(module)
+      && actions.some(a => (MODULE_ACTIONS as readonly string[]).includes(a))) {
       return next();
     }
 

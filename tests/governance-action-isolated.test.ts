@@ -1,6 +1,5 @@
 /**
- * Characterization probes, NOT passing security acceptance tests.
- * KNOWN GAP assertions deliberately describe current unsafe behavior.
+ * Isolated G03 security regressions, not live security certification.
  * Only the permission middleware and AST-extracted HR route execute.
  * Authentication/session establishment is outside this synthetic request harness.
  * No server bootstrap, real storage, database, network or production accounts.
@@ -12,12 +11,17 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 const io = vi.hoisted(() => ({
   unexpected: vi.fn((): never => { throw new Error("Unexpected external I/O in isolated governance probe"); }),
+  auditWrite: vi.fn(async () => undefined),
 }));
 vi.mock("../server/storage", () => ({
   storage: new Proxy({}, { get: () => io.unexpected }),
 }));
 vi.mock("../server/db", () => ({
-  db: new Proxy({}, { get: () => io.unexpected }),
+  db: new Proxy({}, { get: (_target, key) => key === "insert"
+    ? (table: unknown) => {
+      expect(table).toBe(systemAuditLogs);
+      return { values: io.auditWrite };
+    } : io.unexpected }),
   pool: new Proxy({}, { get: () => io.unexpected }),
 }));
 vi.mock("../server/security", () => ({
@@ -29,10 +33,11 @@ vi.mock("../server/shareholder-security", () => ({
 }));
 
 import {
-  requirePermission, getEffectiveBranchFilter, hasCrossBranchHrReadAccess,
-  HR_SPECIALIST_PERMISSIONS, FINANCIAL_MANAGER_PERMISSIONS,
+  requirePermission, requireAnyPermission, getEffectiveBranchFilter, hasCrossBranchHrReadAccess,
+  HR_MANAGER_MODULES, HR_SPECIALIST_PERMISSIONS, FINANCIAL_MANAGER_PERMISSIONS,
+  OPERATIONS_MANAGER_PERMISSIONS,
 } from "../server/auth";
-import { employeeDocuments, branchEmployees } from "../shared/schema";
+import { employeeDocuments, branchEmployees, systemAuditLogs, MODULE_ACTIONS, ROLE_PERMISSION_TEMPLATES } from "../shared/schema";
 
 let blockSockets: ReturnType<typeof vi.spyOn>;
 beforeAll(() => {
@@ -50,6 +55,7 @@ function request(role: string, method: string, module = "employee_reports", acti
     method, currentUser: { id: "synthetic-actor", role, branchId: "test-branch-a" },
     authPermissions: [{ module, actions }],
     userBranchAccess: [{ branchId: "test-branch-a", accessLevel: "full" }],
+    operationsPermissionDenials: new Set<string>(),
     session: {}, params: { id: "71" }, query: {}, body: {},
     headers: {}, originalUrl: "/isolated-probe",
   };
@@ -66,8 +72,14 @@ async function gate(req: any, module: string, action?: string) {
   await requirePermission(module, action)(req, res, next);
   return { passed: next.mock.calls.length === 1, status: res.statusCode };
 }
+async function anyGate(req: any, module: string, actions: string[]) {
+  const res = response();
+  const next = vi.fn();
+  await requireAnyPermission(module, actions)(req, res, next);
+  return { passed: next.mock.calls.length === 1, status: res.statusCode };
+}
 
-describe("isolated action inference — characterization, not security certification", () => {
+describe("isolated action inference — G03 security regressions", () => {
   it.each(["POST", "PUT", "PATCH", "DELETE"])(
     "CONTROL: ordinary view-only employee is denied %s with omitted action", async method => {
       expect(await gate(request("employee", method), "employee_reports"))
@@ -81,14 +93,15 @@ describe("isolated action inference — characterization, not security certifica
   for (const [role, intrinsic] of [
     ["hr_specialist", HR_SPECIALIST_PERMISSIONS],
     ["financial_manager", FINANCIAL_MANAGER_PERMISSIONS],
+    ["operations_manager", OPERATIONS_MANAGER_PERMISSIONS],
   ] as const) {
     it.each([
       ["POST", "create"], ["PUT", "edit"], ["PATCH", "edit"], ["DELETE", "delete"],
-    ])(`KNOWN GAP: ${role} passes %s without action but rejects explicit %s`, async (method, action) => {
+    ])(`${role} rejects %s both without action and with explicit %s`, async (method, action) => {
       expect(intrinsic.employee_reports).toContain("view");
       expect(intrinsic.employee_reports).not.toContain(action);
       const req = request(role, method);
-      expect(await gate(req, "employee_reports")).toEqual({ passed: true, status: 200 });
+      expect(await gate(req, "employee_reports")).toEqual({ passed: false, status: 403 });
       expect(await gate(req, "employee_reports", action)).toEqual({ passed: false, status: 403 });
     });
   }
@@ -99,6 +112,110 @@ describe("isolated action inference — characterization, not security certifica
   it("CONTROL: no authenticated identity returns 401", async () => {
     const req = { ...request("employee", "GET"), currentUser: undefined };
     expect(await gate(req, "employee_reports")).toEqual({ passed: false, status: 401 });
+  });
+});
+
+describe("role/action matrix with mocked I/O only", () => {
+  const methods = [
+    ["GET", "view"], ["HEAD", "view"], ["OPTIONS", "view"], ["POST", "create"],
+    ["PUT", "edit"], ["PATCH", "edit"], ["DELETE", "delete"], ["UNKNOWN", "edit"],
+  ] as const;
+
+  // Financial and operations maps are template-backed; neither HR role has a
+  // shared template. Specialist uses its narrower map; manager responses expose
+  // all MODULE_ACTIONS on HR_MANAGER_MODULES, which must remain legitimate.
+  for (const role of ["financial_manager", "operations_manager"] as const) {
+    for (const { module, actions } of ROLE_PERMISSION_TEMPLATES[role]) {
+      it.each(methods)(`${role}/${module} %s matches template action %s`, async (method, action) => {
+        const req = request(role, method, module, []);
+        const expected = actions.includes(action as any)
+          ? { passed: true, status: 200 } : { passed: false, status: 403 };
+        expect(await gate(req, module)).toEqual(expected);
+        expect(await gate(req, module, action)).toEqual(expected);
+        expect(await anyGate(req, module, [action])).toEqual(expected);
+      });
+    }
+  }
+  for (const [module, actions] of Object.entries(HR_SPECIALIST_PERMISSIONS)) {
+    it.each(methods)(`hr_specialist/${module} %s matches local action %s`, async (method, action) => {
+      const req = request("hr_specialist", method, module, []);
+      const expected = actions.includes(action)
+        ? { passed: true, status: 200 } : { passed: false, status: 403 };
+      expect(await gate(req, module)).toEqual(expected);
+      expect(await gate(req, module, action)).toEqual(expected);
+      expect(await anyGate(req, module, [action])).toEqual(expected);
+    });
+  }
+  it("HR manager keeps finite legitimate HR breadth and rejects unknown actions", async () => {
+    expect(ROLE_PERMISSION_TEMPLATES.hr_manager).toBeUndefined();
+    expect(ROLE_PERMISSION_TEMPLATES.hr_specialist).toBeUndefined();
+    for (const module of HR_MANAGER_MODULES) {
+      for (const [method] of methods) {
+        expect(await gate(request("hr_manager", method, module, []), module))
+          .toEqual({ passed: true, status: 200 });
+      }
+      for (const action of MODULE_ACTIONS) {
+        const req = request("hr_manager", "POST", module, []);
+        expect(await gate(req, module, action)).toEqual({ passed: true, status: 200 });
+        expect(await anyGate(req, module, [action])).toEqual({ passed: true, status: 200 });
+      }
+      const req = request("hr_manager", "POST", module, []);
+      expect(await gate(req, module, "unknown-action")).toEqual({ passed: false, status: 403 });
+      expect(await anyGate(req, module, ["unknown-action"])).toEqual({ passed: false, status: 403 });
+    }
+    expect(await gate(request("hr_manager", "GET", "inventory", []), "inventory"))
+      .toEqual({ passed: false, status: 403 });
+  });
+  it.each(["GET", "HEAD", "OPTIONS"])("viewer and attendance clerk retain legitimate %s reads", async method => {
+    expect(await gate(request("viewer", method), "employee_reports")).toEqual({ passed: true, status: 200 });
+    expect(await gate(request("attendance_clerk", method, "attendance_check", []), "attendance_check"))
+      .toEqual({ passed: true, status: 200 });
+  });
+  it.each(["POST", "PUT", "PATCH", "DELETE", "UNKNOWN"])("viewer remains read-only for %s despite broad grants", async method => {
+    expect(await gate(request("viewer", method, "employee_reports", [...MODULE_ACTIONS]), "employee_reports"))
+      .toEqual({ passed: false, status: 403 });
+  });
+  it("clerk remains confined to attendance_check and cannot delete", async () => {
+    for (const method of ["POST", "PUT", "PATCH"]) {
+      expect(await gate(request("attendance_clerk", method, "attendance_check", []), "attendance_check"))
+        .toEqual({ passed: true, status: 200 });
+    }
+    expect(await gate(request("attendance_clerk", "DELETE", "attendance_check", [...MODULE_ACTIONS]), "attendance_check"))
+      .toEqual({ passed: false, status: 403 });
+    expect(await gate(request("attendance_clerk", "GET", "hr_documents", [...MODULE_ACTIONS]), "hr_documents"))
+      .toEqual({ passed: false, status: 403 });
+    expect(await anyGate(request("attendance_clerk", "GET", "hr_documents", [...MODULE_ACTIONS]), "hr_documents", ["view"]))
+      .toEqual({ passed: false, status: 403 });
+  });
+  it("operations hard denies and explicit action denials still beat broad grants", async () => {
+    for (const module of ["hr_management", "salary_closing", "hr_onboarding", "hr_job_offers", "employee_transfers"]) {
+      const req = request("operations_manager", "GET", module, [...MODULE_ACTIONS]);
+      expect(await gate(req, module)).toEqual({ passed: false, status: 403 });
+      expect(await anyGate(req, module, ["view", "edit"])).toEqual({ passed: false, status: 403 });
+    }
+    const req = request("operations_manager", "PATCH", "operations", [...MODULE_ACTIONS]);
+    req.operationsPermissionDenials.add("operations:edit");
+    expect(await gate(req, "operations")).toEqual({ passed: false, status: 403 });
+    expect(await gate(req, "operations", "edit")).toEqual({ passed: false, status: 403 });
+    expect(await anyGate(req, "operations", ["edit"])).toEqual({ passed: false, status: 403 });
+    expect(await anyGate(req, "operations", ["edit", "view"])).toEqual({ passed: true, status: 200 });
+  });
+  it("intrinsic maps remain grants, not new caps on individually authorized extras", async () => {
+    for (const role of ["hr_specialist", "financial_manager", "operations_manager"]) {
+      const req = request(role, "DELETE", "employee_reports", ["delete"]);
+      expect(await gate(req, "employee_reports")).toEqual({ passed: true, status: 200 });
+    }
+  });
+  it("explicit view still supports semantic read POSTs and admin retains full bypass", async () => {
+    for (const role of ["employee", "hr_specialist", "financial_manager", "operations_manager", "viewer"]) {
+      expect(await gate(request(role, "POST"), "employee_reports", "view"))
+        .toEqual({ passed: true, status: 200 });
+    }
+    const req = request("admin", "DELETE", "salary_closing", []);
+    req.operationsPermissionDenials.add("salary_closing:delete");
+    expect(await gate(req, "salary_closing")).toEqual({ passed: true, status: 200 });
+    expect(await gate(req, "salary_closing", "unknown-action")).toEqual({ passed: true, status: 200 });
+    expect(await anyGate(req, "salary_closing", [])).toEqual({ passed: true, status: 200 });
   });
 });
 
@@ -186,18 +303,17 @@ function documentDeleteFixture(documentBranch = "test-branch-a") {
 }
 
 describe("real document DELETE handler with real permission and branch helpers, in-memory data only", () => {
-  it("KNOWN GAP: HR specialist without delete removes an in-scope synthetic document", async () => {
+  it("HR specialist without delete cannot remove an in-scope synthetic document", async () => {
     expect(HR_SPECIALIST_PERMISSIONS.hr_documents).not.toContain("delete");
     const fixture = documentDeleteFixture();
     const res = await fixture.run(request("hr_specialist", "DELETE", "hr_documents"));
-    expect(res.statusCode).toBe(200);
-    expect(res.payload).toEqual({ success: true });
-    expect(fixture.document).toBeUndefined();
-    expect(fixture.writes).toEqual([71]);
+    expect(res.statusCode).toBe(403);
+    expect(fixture.document).toEqual({ id: 71, branchEmployeeId: 17, name: "Synthetic document only" });
+    expect(fixture.writes).toEqual([]);
   });
-  it("CONTROL: the same specialist cannot remove a document in another branch", async () => {
+  it("CONTROL: explicit delete does not permit an ordinary user to remove another branch's document", async () => {
     const fixture = documentDeleteFixture("test-branch-b");
-    const res = await fixture.run(request("hr_specialist", "DELETE", "hr_documents"));
+    const res = await fixture.run(request("employee", "DELETE", "hr_documents", ["delete"]));
     expect(res.statusCode).toBe(403);
     expect(fixture.document?.id).toBe(71);
     expect(fixture.writes).toEqual([]);

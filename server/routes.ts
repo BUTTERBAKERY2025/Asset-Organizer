@@ -828,6 +828,12 @@ export async function registerRoutes(
   app.post("/api/users", isAuthenticated, requirePermission("users", "create"), async (req, res) => {
     try {
       const { username, password, firstName, lastName, role, jobTitle, branchId, branchIds } = req.body;
+      // Generic account creation is not an approved authority/branch delegation.
+      if (getCurrentUser(req).role !== "admin"
+        && ((!["employee", "viewer"].includes(role || "viewer"))
+          || jobTitle != null || branchId != null || branchIds !== undefined)) {
+        return res.status(403).json({ error: "إدارة الصلاحيات العامة لمسؤول النظام فقط؛ استخدم مسار التفويض المعتمد /api/operations/employee-accounts/:employeeId/permissions" });
+      }
       if (jobTitle !== undefined && jobTitle !== null
         && !JOB_TITLES.includes(jobTitle as typeof JOB_TITLES[number])) {
         return res.status(400).json({ error: "مسمى وظيفي غير صالح" });
@@ -961,7 +967,16 @@ export async function registerRoutes(
       const { firstName, lastName, username, role, jobTitle, password, branchId, branchIds, isActive } = req.body;
       const updateData: any = {};
       const currentUser = getCurrentUser(req);
+      // These fields change effective authority or account control, not a profile.
+      // Check before any storage reads; ordinary name/profile edits stay available.
+      if (currentUser.role !== "admin"
+        && [role, jobTitle, password, branchId, branchIds, isActive].some(value => value !== undefined)) {
+        return res.status(403).json({ error: "إدارة الصلاحيات العامة لمسؤول النظام فقط؛ استخدم مسار التفويض المعتمد /api/operations/employee-accounts/:employeeId/permissions" });
+      }
       const accountToEdit = await storage.getUser(req.params.id);
+      if (accountToEdit?.role === "admin" && currentUser.role !== "admin") {
+        return res.status(403).json({ error: "فقط المسؤولين يمكنهم تعديل حساب مسؤول النظام" });
+      }
       if (accountToEdit?.role === "business_owner" && currentUser.role !== "admin") {
         return res.status(403).json({ error: "فقط المسؤولين يمكنهم تعديل حساب الأونر" });
       }
@@ -1268,6 +1283,9 @@ export async function registerRoutes(
       if (currentUser.id === targetUserId && currentUser.role !== "admin") {
         return res.status(403).json({ error: "لا يمكنك تعديل صلاحياتك الخاصة" });
       }
+      if (currentUser.role !== "admin") {
+        return res.status(403).json({ error: "إدارة الصلاحيات العامة لمسؤول النظام فقط؛ استخدم مسار التفويض المعتمد /api/operations/employee-accounts/:employeeId/permissions" });
+      }
       
       if (!Array.isArray(permissions)) {
         return res.status(400).json({ error: "Invalid permissions format" });
@@ -1348,6 +1366,9 @@ export async function registerRoutes(
 
   app.post("/api/users/:id/permission-override", isAuthenticated, requirePermission("users", "edit"), async (req, res) => {
     try {
+      if (getCurrentUser(req).role !== "admin") {
+        return res.status(403).json({ error: "إدارة الصلاحيات العامة لمسؤول النظام فقط؛ استخدم مسار التفويض المعتمد /api/operations/employee-accounts/:employeeId/permissions" });
+      }
       const { permissionId, allow, reason } = req.body;
       const currentUser = getCurrentUser(req);
       const targetUserId = req.params.id;
@@ -1392,6 +1413,9 @@ export async function registerRoutes(
 
   app.delete("/api/users/:id/permission-override/:permissionId", isAuthenticated, requirePermission("users", "edit"), async (req, res) => {
     try {
+      if (getCurrentUser(req).role !== "admin") {
+        return res.status(403).json({ error: "إدارة الصلاحيات العامة لمسؤول النظام فقط؛ استخدم مسار التفويض المعتمد /api/operations/employee-accounts/:employeeId/permissions" });
+      }
       const currentUser = getCurrentUser(req);
       const targetUserId = req.params.id;
       const permissionId = parseInt(req.params.permissionId, 10);
@@ -23734,6 +23758,9 @@ export async function registerRoutes(
 
   app.post("/api/rbac/roles", isAuthenticated, requirePermission("users", "create"), async (req, res) => {
     try {
+      if (getCurrentUser(req).role !== "admin") {
+        return res.status(403).json({ error: "إدارة الصلاحيات العامة لمسؤول النظام فقط؛ استخدم مسار التفويض المعتمد /api/operations/employee-accounts/:employeeId/permissions" });
+      }
       const { name, slug, description, hierarchyLevel, inheritsFromRoleId, isSystemDefault } = req.body;
       if (!name || !slug) {
         return res.status(400).json({ error: "الاسم والمعرف مطلوبان" });
@@ -23755,6 +23782,9 @@ export async function registerRoutes(
 
   app.patch("/api/rbac/roles/:id", isAuthenticated, requirePermission("users", "edit"), async (req, res) => {
     try {
+      if (getCurrentUser(req).role !== "admin") {
+        return res.status(403).json({ error: "إدارة الصلاحيات العامة لمسؤول النظام فقط؛ استخدم مسار التفويض المعتمد /api/operations/employee-accounts/:employeeId/permissions" });
+      }
       const id = parseInt(req.params.id);
       const role = await storage.updateRole(id, req.body);
       if (!role) {
@@ -23770,6 +23800,9 @@ export async function registerRoutes(
   // Role Permissions
   app.post("/api/rbac/roles/:roleId/permissions", isAuthenticated, requirePermission("users", "edit"), async (req, res) => {
     try {
+      if (getCurrentUser(req).role !== "admin") {
+        return res.status(403).json({ error: "إدارة الصلاحيات العامة لمسؤول النظام فقط؛ استخدم مسار التفويض المعتمد /api/operations/employee-accounts/:employeeId/permissions" });
+      }
       const roleId = parseInt(req.params.roleId);
       const { permissionId, scope } = req.body;
       if (!permissionId) {
@@ -23785,6 +23818,9 @@ export async function registerRoutes(
 
   app.delete("/api/rbac/roles/:roleId/permissions/:permissionId", isAuthenticated, requirePermission("users", "edit"), async (req, res) => {
     try {
+      if (getCurrentUser(req).role !== "admin") {
+        return res.status(403).json({ error: "إدارة الصلاحيات العامة لمسؤول النظام فقط؛ استخدم مسار التفويض المعتمد /api/operations/employee-accounts/:employeeId/permissions" });
+      }
       const roleId = parseInt(req.params.roleId);
       const permissionId = parseInt(req.params.permissionId);
       await storage.removeRolePermission(roleId, permissionId);
@@ -23840,6 +23876,9 @@ export async function registerRoutes(
 
   app.post("/api/rbac/users/:userId/assignments", isAuthenticated, requirePermission("users", "edit"), async (req, res) => {
     try {
+      if (getCurrentUser(req).role !== "admin") {
+        return res.status(403).json({ error: "إدارة الصلاحيات العامة لمسؤول النظام فقط؛ استخدم مسار التفويض المعتمد /api/operations/employee-accounts/:employeeId/permissions" });
+      }
       const currentUser = getCurrentUser(req);
       const userId = req.params.userId;
       const { roleId, branchId, departmentId, scopeType, isPrimary, startDate, endDate } = req.body;
@@ -23909,9 +23948,35 @@ export async function registerRoutes(
       if (currentUser.id === userId && currentUser.role !== "admin") {
         return res.status(403).json({ error: "لا يمكنك تعديل تعييناتك الخاصة" });
       }
+      if (currentUser.role !== "admin") {
+        return res.status(403).json({ error: "إدارة الصلاحيات العامة لمسؤول النظام فقط؛ استخدم مسار التفويض المعتمد" });
+      }
       
-      const assignmentId = parseInt(req.params.assignmentId);
-      const assignment = await storage.updateUserAssignment(assignmentId, req.body);
+      const rawId = req.params.assignmentId;
+      const assignmentId = Number(rawId);
+      if (!/^[1-9]\d*$/.test(rawId) || !Number.isSafeInteger(assignmentId) || assignmentId > 2147483647
+        || typeof userId !== "string" || !userId.trim() || userId !== userId.trim()) {
+        return res.status(400).json({ error: "معرف التعيين أو المستخدم غير صالح" });
+      }
+
+      // Reject identity/owner fields (including id and userId), rather than mass-assigning the body.
+      const nullableDate = z.string().min(1).refine(value => Number.isFinite(Date.parse(value)))
+        .transform(value => new Date(value)).nullable();
+      const parsed = z.object({
+        roleId: z.number().int().positive().max(2147483647).optional(),
+        branchId: z.string().min(1).refine(value => value === value.trim() && !!value.trim()).nullable().optional(),
+        departmentId: z.number().int().positive().max(2147483647).nullable().optional(),
+        scopeType: z.enum(["global", "branch", "department"]).optional(),
+        isPrimary: z.boolean().optional(),
+        isActive: z.boolean().optional(),
+        startDate: nullableDate.optional(),
+        endDate: nullableDate.optional(),
+      }).strict().refine(value => Object.keys(value).length > 0).safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: "حقول تحديث التعيين غير صالحة" });
+      }
+      // Ownership is part of the atomic storage mutation, not a pre-read check.
+      const assignment = await storage.updateUserAssignment(assignmentId, userId, parsed.data);
       if (!assignment) {
         return res.status(404).json({ error: "التعيين غير موجود" });
       }
@@ -23931,9 +23996,20 @@ export async function registerRoutes(
       if (currentUser.id === userId && currentUser.role !== "admin") {
         return res.status(403).json({ error: "لا يمكنك حذف تعييناتك الخاصة" });
       }
+      if (currentUser.role !== "admin") {
+        return res.status(403).json({ error: "إدارة الصلاحيات العامة لمسؤول النظام فقط؛ استخدم مسار التفويض المعتمد" });
+      }
       
-      const assignmentId = parseInt(req.params.assignmentId);
-      await storage.deleteUserAssignment(assignmentId);
+      const rawId = req.params.assignmentId;
+      const assignmentId = Number(rawId);
+      if (!/^[1-9]\d*$/.test(rawId) || !Number.isSafeInteger(assignmentId) || assignmentId > 2147483647
+        || typeof userId !== "string" || !userId.trim() || userId !== userId.trim()) {
+        return res.status(400).json({ error: "معرف التعيين أو المستخدم غير صالح" });
+      }
+      const deleted = await storage.deleteUserAssignment(assignmentId, userId);
+      if (!deleted) {
+        return res.status(404).json({ error: "التعيين غير موجود" });
+      }
       res.status(204).send();
     } catch (error) {
       console.error("Error deleting user assignment:", error);
@@ -23965,6 +24041,9 @@ export async function registerRoutes(
 
   app.post("/api/rbac/users/:userId/overrides", isAuthenticated, requirePermission("users", "edit"), async (req, res) => {
     try {
+      if (getCurrentUser(req).role !== "admin") {
+        return res.status(403).json({ error: "إدارة الصلاحيات العامة لمسؤول النظام فقط؛ استخدم مسار التفويض المعتمد /api/operations/employee-accounts/:employeeId/permissions" });
+      }
       const currentUser = getCurrentUser(req);
       const userId = req.params.userId;
       const { permissionId, allow, reason, expiresAt } = req.body;
@@ -24014,6 +24093,9 @@ export async function registerRoutes(
 
   app.delete("/api/rbac/users/:userId/overrides/:overrideId", isAuthenticated, requirePermission("users", "edit"), async (req, res) => {
     try {
+      if (getCurrentUser(req).role !== "admin") {
+        return res.status(403).json({ error: "إدارة الصلاحيات العامة لمسؤول النظام فقط؛ استخدم مسار التفويض المعتمد /api/operations/employee-accounts/:employeeId/permissions" });
+      }
       const currentUser = getCurrentUser(req);
       const userId = req.params.userId;
       
@@ -24085,6 +24167,9 @@ export async function registerRoutes(
 
   app.post("/api/rbac/users/:userId/branches", isAuthenticated, requirePermission("users", "edit"), async (req, res) => {
     try {
+      if (getCurrentUser(req).role !== "admin") {
+        return res.status(403).json({ error: "إدارة الصلاحيات العامة لمسؤول النظام فقط؛ استخدم مسار التفويض المعتمد /api/operations/employee-accounts/:employeeId/permissions" });
+      }
       const currentUser = getCurrentUser(req);
       const userId = req.params.userId;
       const { branchId, isDefault, accessLevel } = req.body;
@@ -24115,6 +24200,9 @@ export async function registerRoutes(
 
   app.delete("/api/rbac/users/:userId/branches/:branchId", isAuthenticated, requirePermission("users", "edit"), async (req, res) => {
     try {
+      if (getCurrentUser(req).role !== "admin") {
+        return res.status(403).json({ error: "إدارة الصلاحيات العامة لمسؤول النظام فقط؛ استخدم مسار التفويض المعتمد /api/operations/employee-accounts/:employeeId/permissions" });
+      }
       const currentUser = getCurrentUser(req);
       const userId = req.params.userId;
       const branchId = req.params.branchId;
@@ -24135,6 +24223,9 @@ export async function registerRoutes(
 
   app.patch("/api/rbac/users/:userId/branches/:branchId/default", isAuthenticated, requirePermission("users", "edit"), async (req, res) => {
     try {
+      if (getCurrentUser(req).role !== "admin") {
+        return res.status(403).json({ error: "إدارة الصلاحيات العامة لمسؤول النظام فقط؛ استخدم مسار التفويض المعتمد /api/operations/employee-accounts/:employeeId/permissions" });
+      }
       const currentUser = getCurrentUser(req);
       const userId = req.params.userId;
       const branchId = req.params.branchId;
@@ -24617,6 +24708,9 @@ export async function registerRoutes(
   // Create role template
   app.post("/api/rbac/role-templates", isAuthenticated, requirePermission("rbac_management", "create"), async (req, res) => {
     try {
+      if (getCurrentUser(req).role !== "admin") {
+        return res.status(403).json({ error: "إدارة الصلاحيات العامة لمسؤول النظام فقط؛ استخدم مسار التفويض المعتمد /api/operations/employee-accounts/:employeeId/permissions" });
+      }
       const currentUser = getCurrentUser(req);
       
       // Validate using Zod schema
@@ -24663,6 +24757,9 @@ export async function registerRoutes(
   // Update role template
   app.patch("/api/rbac/role-templates/:id", isAuthenticated, requirePermission("rbac_management", "edit"), async (req, res) => {
     try {
+      if (getCurrentUser(req).role !== "admin") {
+        return res.status(403).json({ error: "إدارة الصلاحيات العامة لمسؤول النظام فقط؛ استخدم مسار التفويض المعتمد /api/operations/employee-accounts/:employeeId/permissions" });
+      }
       const id = parseInt(req.params.id);
       
       // Validate using Zod schema
@@ -24709,6 +24806,9 @@ export async function registerRoutes(
   // Delete role template
   app.delete("/api/rbac/role-templates/:id", isAuthenticated, requirePermission("rbac_management", "delete"), async (req, res) => {
     try {
+      if (getCurrentUser(req).role !== "admin") {
+        return res.status(403).json({ error: "إدارة الصلاحيات العامة لمسؤول النظام فقط؛ استخدم مسار التفويض المعتمد /api/operations/employee-accounts/:employeeId/permissions" });
+      }
       const currentUser = getCurrentUser(req);
       const id = parseInt(req.params.id);
       
@@ -24738,6 +24838,9 @@ export async function registerRoutes(
   // Apply role template to a role
   app.post("/api/rbac/roles/:roleId/apply-template/:templateId", isAuthenticated, requirePermission("rbac_management", "edit"), async (req, res) => {
     try {
+      if (getCurrentUser(req).role !== "admin") {
+        return res.status(403).json({ error: "إدارة الصلاحيات العامة لمسؤول النظام فقط؛ استخدم مسار التفويض المعتمد /api/operations/employee-accounts/:employeeId/permissions" });
+      }
       const currentUser = getCurrentUser(req);
       const roleId = parseInt(req.params.roleId);
       const templateId = parseInt(req.params.templateId);

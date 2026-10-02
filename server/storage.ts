@@ -779,6 +779,10 @@ export interface PermissionWithSource {
   permissionId?: number;
 }
 
+export type UserAssignmentUpdate = Partial<Pick<InsertUserAssignment,
+  "roleId" | "branchId" | "departmentId" | "scopeType" | "isPrimary" | "isActive" | "startDate" | "endDate"
+>>;
+
 export interface IStorage {
   // Users
   getUser(id: string): Promise<User | undefined>;
@@ -790,6 +794,10 @@ export interface IStorage {
   getUsersByIds(ids: string[]): Promise<User[]>;
   updateUserRole(id: string, role: string): Promise<User | undefined>;
   verifyPassword(username: string, password: string): Promise<User | null>;
+
+  // Assignment mutations must always include the expected owner.
+  updateUserAssignment(id: number, userId: string, assignment: UserAssignmentUpdate): Promise<UserAssignment | undefined>;
+  deleteUserAssignment(id: number, userId: string): Promise<boolean>;
   
   // Branches
   getAllBranches(): Promise<Branch[]>;
@@ -9244,29 +9252,40 @@ export class DatabaseStorage implements IStorage {
     return created;
   }
 
-  async updateUserAssignment(id: number, assignment: Partial<InsertUserAssignment>): Promise<UserAssignment | undefined> {
-    // Get the assignment to find userId before update
-    const [existing] = await db.select().from(userAssignments).where(eq(userAssignments.id, id));
-    const [updated] = await db.update(userAssignments).set({ ...assignment, updatedAt: new Date() }).where(eq(userAssignments.id, id)).returning();
-    // Invalidate permissions cache for both old and new user if changed
-    if (existing) {
-      this.invalidatePermissionsCache(existing.userId);
+  async updateUserAssignment(id: number, userId: string, assignment: UserAssignmentUpdate): Promise<UserAssignment | undefined> {
+    if (!Number.isSafeInteger(id) || id <= 0 || id > 2147483647
+      || typeof userId !== "string" || !userId.trim() || userId !== userId.trim()) {
+      throw new Error("Invalid assignment identity");
     }
-    if (updated && assignment.userId && assignment.userId !== existing?.userId) {
-      this.invalidatePermissionsCache(assignment.userId);
+    const allowedFields = ["roleId", "branchId", "departmentId", "scopeType", "isPrimary", "isActive", "startDate", "endDate"];
+    if (!assignment || typeof assignment !== "object" || Array.isArray(assignment)
+      || Object.keys(assignment).length === 0 || Object.keys(assignment).some(key => !allowedFields.includes(key))) {
+      throw new Error("Invalid assignment update fields");
+    }
+    const changes = Object.fromEntries(allowedFields
+      .filter(key => Object.prototype.hasOwnProperty.call(assignment, key))
+      .map(key => [key, assignment[key as keyof UserAssignmentUpdate]]));
+    const [updated] = await db.update(userAssignments).set({ ...changes, updatedAt: new Date() }).where(
+      and(eq(userAssignments.id, id), eq(userAssignments.userId, userId))
+    ).returning();
+    if (updated) {
+      this.invalidatePermissionsCache(updated.userId);
     }
     return updated;
   }
 
-  async deleteUserAssignment(id: number): Promise<boolean> {
-    // Get the assignment to find userId before delete
-    const [existing] = await db.select().from(userAssignments).where(eq(userAssignments.id, id));
-    await db.delete(userAssignments).where(eq(userAssignments.id, id));
-    // Invalidate permissions cache - role removal affects user permissions
-    if (existing) {
-      this.invalidatePermissionsCache(existing.userId);
+  async deleteUserAssignment(id: number, userId: string): Promise<boolean> {
+    if (!Number.isSafeInteger(id) || id <= 0 || id > 2147483647
+      || typeof userId !== "string" || !userId.trim() || userId !== userId.trim()) {
+      throw new Error("Invalid assignment identity");
     }
-    return true;
+    const [deleted] = await db.delete(userAssignments).where(
+      and(eq(userAssignments.id, id), eq(userAssignments.userId, userId))
+    ).returning();
+    if (deleted) {
+      this.invalidatePermissionsCache(deleted.userId);
+    }
+    return !!deleted;
   }
 
   // User Permission Overrides

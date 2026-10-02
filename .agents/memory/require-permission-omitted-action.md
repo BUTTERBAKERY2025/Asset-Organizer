@@ -1,13 +1,13 @@
 ---
 name: requirePermission omitted-action semantics
-description: How single-arg requirePermission(module) calls are authorized for explicit-permission users
+description: Omitted actions must be inferred before intrinsic role grants and explicit permissions.
 ---
 
-Many routes call `requirePermission(module)` with no action. Role-map branches (hr_manager, hr_specialist, financial_manager) intentionally grant on module presence when action is omitted. For the explicit user_permissions path, the omitted action is inferred from the HTTP method (GET/HEAD/OPTIONS→view, POST→create, PUT/PATCH→edit, DELETE→delete, unknown→edit).
+Many routes call `requirePermission(module)` with no action. Infer the action from the HTTP method before evaluating role-map shortcuts as well as explicit permissions. Module presence must not authorize an action absent from the role's allowed actions. Preserve the administrator's existing full access.
 
-**Why:** Granting on bare module presence over-grants writes to view-only users (broken access control, caught in review 2026-07). Hard-denying every omitted-action call (the old accidental behavior via `includes(undefined)`) silently blocked explicit-perm users from all single-arg routes.
+**Why:** Granting on bare module presence over-grants writes to view-only users; isolated tests also demonstrated a specialist deleting a document despite lacking delete. Hard-denying every omitted-action call instead silently blocks legitimate reads.
 
-**How to apply:** Never change the explicit-permission fallback to "module presence = access". If a POST route is semantically a read/export, pass an explicit action (e.g. `requirePermission("x", "view")`) instead of relying on inference. Regression matrix: user with module + actions=["view"] must pass GET and get 403 on POST/PUT/PATCH/DELETE.
+**How to apply:** Never restore "module presence = access" in either intrinsic grants or the explicit fallback. If a POST route is semantically a read/export, pass an explicit action (e.g. `requirePermission("x", "view")`). Test role-map users as well as direct-grant users: view-only must pass GET and get 403 on writes, with legitimate write grants preserved.
 
 Custom fresh-permission resolvers must preserve hard role restrictions before evaluating persisted grants, including in assignee eligibility.
 
