@@ -28,6 +28,21 @@ export const appendTemplateVersionSchema = z.object({
   changeReason: z.string().trim().min(1).max(2000),
 }).strict();
 
+export const approveTemplateVersionSchema = z.object({
+  version: z.number().int().positive().max(2147483647),
+  expectedLatestVersion: z.number().int().positive().max(2147483647),
+  reason: z.string().trim().min(1).max(2000),
+  reviewed: z.literal(true),
+  acknowledgeEmptyPermissions: z.literal(true).optional(),
+}).strict();
+export type ApproveTemplateVersionInput = z.infer<typeof approveTemplateVersionSchema>;
+export interface TemplateApproval {
+  version: number;
+  reason: string;
+  approvedAt: string;
+  approvedBy: string;
+}
+
 export type TemplateContent = z.infer<typeof templateContentSchema>;
 export interface TemplateVersion {
   version: number;
@@ -37,7 +52,7 @@ export interface TemplateVersion {
   createdBy: string;
   status: "draft";
 }
-export interface TemplateDetail { id: number; versions: TemplateVersion[] }
+export interface TemplateDetail { id: number; versions: TemplateVersion[]; approvals: TemplateApproval[] }
 export interface TemplateSummary {
   id: number;
   key: string;
@@ -46,6 +61,7 @@ export interface TemplateSummary {
   scopeType: TemplateContent["scopeType"];
   permissionCount: number;
   status: "draft";
+  latestVersionApproved?: boolean;
 }
 
 const managerReview = "صلاحيات الإدارة غير محسومة وتحتاج مراجعة واعتمادًا منفصلًا. القائمة الفارغة ليست تحديدًا لصلاحيات الدور الفعلية ولا تمنح أي سلطة.";

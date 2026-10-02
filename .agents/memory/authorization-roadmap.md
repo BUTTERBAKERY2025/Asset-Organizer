@@ -14,3 +14,9 @@ Start template work as versioned drafts, separate from legacy templates that can
 **Why:** The user authorized beginning draft preparation while the job matrix was still unapproved, with no activation or changes to existing employee permissions.
 
 **How to apply:** Never interpret saving a draft/version or generating proposals as policy approval. Add explicit version approval before operations-manager assignment; bind future assignments to that approved version and server-side scope checks.
+
+Version approval certifies reviewed template content, not employee authority. Approving an empty template does not revoke intrinsic role grants or self-service access.
+
+**Why:** The authorized next step was explicit admin review without applying templates to employees; these are distinct transitions.
+
+**How to apply:** Preserve prior approval history when adding an unapproved version. Phase-four assignment must recheck employee eligibility, branch scope and the allowed permission ceiling even when a version is approved.

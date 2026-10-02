@@ -1,6 +1,6 @@
 import type { Express, RequestHandler } from "express";
 import { z, ZodError } from "zod";
-import { JOB_TEMPLATE_MODULES, JOB_TEMPLATE_PROPOSALS, createTemplateDraftSchema, appendTemplateVersionSchema } from "../shared/job-permission-templates";
+import { JOB_TEMPLATE_MODULES, JOB_TEMPLATE_PROPOSALS, createTemplateDraftSchema, appendTemplateVersionSchema, approveTemplateVersionSchema } from "../shared/job-permission-templates";
 import { isAuthenticated, requireRole } from "./auth";
 import { pool } from "./db";
 import { JobPermissionTemplateStorage, JobTemplateDraftError } from "./job-permission-template-storage";
@@ -18,8 +18,11 @@ export function registerJobPermissionTemplateDraftRoutes(
         return void res.status(error.status).json({ error: error.code, message: error.message });
       if (error instanceof ZodError)
         return void res.status(400).json({ error: "invalid_request", message: error.message });
-      if ((error as { code?: string })?.code === "42P01")
-        return void res.status(503).json({ error: "migration_required", message: "Manual migration 051_job_permission_template_drafts.sql is required" });
+      if ((error as { code?: string })?.code === "42P01") {
+        const migration = (error as Error).message.includes("job_permission_template_approvals")
+          ? "052_job_permission_template_approvals.sql" : "051_job_permission_template_drafts.sql";
+        return void res.status(503).json({ error: "migration_required", message: `Manual migration ${migration} is required` });
+      }
       if ((error as { code?: string })?.code === "23505")
         return void res.status(409).json({ error: "key_conflict", message: "Template key or version already exists" });
       console.error("[job-template-drafts] Request failed", error);
@@ -47,5 +50,10 @@ export function registerJobPermissionTemplateDraftRoutes(
     const id = idSchema.parse(req.params.id);
     const body = appendTemplateVersionSchema.parse(req.body);
     res.status(201).json(await service.append(id, body, (req as any).currentUser.id));
+  }));
+  app.post(`${base}/:id/approvals`, ...guards, wrap(async (req, res) => {
+    const id = idSchema.parse(req.params.id);
+    const body = approveTemplateVersionSchema.parse(req.body);
+    res.status(201).json(await service.approve(id, body, (req as any).currentUser.id));
   }));
 }

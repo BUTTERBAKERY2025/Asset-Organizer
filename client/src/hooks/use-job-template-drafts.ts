@@ -1,8 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
-import type { TemplateContent, TemplateVersion, TemplateSummary, TemplateDetail } from "@shared/job-permission-templates";
+import type { TemplateContent, TemplateVersion, TemplateSummary, TemplateDetail, TemplateApproval, ApproveTemplateVersionInput } from "@shared/job-permission-templates";
 export type { TemplateContent, TemplateVersion, TemplateSummary };
 
+export type ApprovalRecord = TemplateApproval;
+export type ApprovalDetail = TemplateDetail;
+export type ApprovalRequest = ApproveTemplateVersionInput;
 export interface DraftCatalog {
   modules: { id: TemplateContent["permissions"][number]["module"]; label: string; actions: TemplateContent["permissions"][number]["actions"] }[];
   proposals: TemplateContent[];
@@ -26,7 +29,7 @@ export function useJobTemplateDrafts(userId: string, selectedId: number | null) 
   });
   const detail = useQuery({
     ...options, queryKey: detailKey, enabled: !!userId && !!selectedId,
-    queryFn: ({ signal }) => read<TemplateDetail>(`${base}/${selectedId}`, signal),
+    queryFn: ({ signal }) => read<ApprovalDetail>(`${base}/${selectedId}`, signal),
   });
   const save = useMutation({
     retry: false,
@@ -49,5 +52,14 @@ export function useJobTemplateDrafts(userId: string, selectedId: number | null) 
     mutationFn: async () => (await apiRequest("POST", `${base}/seed-proposals`, {})).json(),
     onSuccess: () => { void client.invalidateQueries({ queryKey: listKey }); },
   });
-  return { catalog, list, detail, save, seed };
+  const approve = useMutation({
+    retry: false,
+    mutationFn: async (input: { id: number; data: ApprovalRequest }): Promise<ApprovalDetail> =>
+      (await apiRequest("POST", `${base}/${input.id}/approvals`, input.data)).json(),
+    onSuccess: (approved) => {
+      client.setQueryData([`${base}/${approved.id}`, { adminId: userId }], approved);
+      void client.invalidateQueries({ queryKey: listKey });
+    },
+  });
+  return { catalog, list, detail, save, seed, approve };
 }

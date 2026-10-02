@@ -18,6 +18,7 @@ import { getHttpStatus } from "@/lib/queryClient";
 import { permissionDiff } from "@/lib/job-template-draft-diff";
 import { ALL_ACTION_LABELS } from "@shared/schema";
 import { templateContentSchema, appendTemplateVersionSchema } from "@shared/job-permission-templates";
+import { JobTemplateApproval } from "@/components/security/job-template-approval";
 import "./job-template-drafts.css";
 
 const scopes: Record<TemplateContent["scopeType"], string> = {
@@ -33,7 +34,7 @@ function ErrorNotice({ error, retry }: { error: unknown; retry?: () => void }) {
   const migration = status === 503 && error instanceof Error && /migration_required/i.test(error.message);
   const keyConflict = status === 409 && error instanceof Error && /key_conflict/i.test(error.message);
   return <Alert variant="destructive" role="alert"><AlertDescription className="space-y-2">
-    <p>{migration ? "يلزم ترحيل قاعدة البيانات (migration_required). القوالب غير متاحة حاليًا؛ هذه ليست قائمة فارغة. اطلب من مسؤول النشر إكمال الترحيل."
+    <p>{migration ? "يلزم ترحيل قاعدة البيانات للقوالب أو سجل الاعتماد (051 / 052، migration_required). البيانات غير متاحة حاليًا؛ هذه ليست قائمة فارغة. اطلب من مسؤول النشر إكمال الترحيل المطلوب."
       : status === 403 ? "هذه المسودات متاحة لمسؤول النظام فقط."
       : keyConflict ? "المفتاح مستخدم لقالب آخر. احتُفظ بمحتوى المسودة؛ اختر مفتاحًا مختلفًا ثم أعد الحفظ."
       : status === 409 ? "يوجد إصدار أحدث. احتُفظ بتعديلاتك غير المحفوظة. حدّث مرجع المقارنة ثم راجع الفروقات قبل إعادة الحفظ."
@@ -66,9 +67,9 @@ function AdminDraftWorkspace({ userId }: { userId: string }) {
   const { toast } = useToast();
   const { catalog, list, detail, seed } = resources;
   const changeSelection = (id: number | null, content: TemplateContent | null) => {
-    if (resources.save.isPending) return;
+    if (resources.save.isPending || resources.approve.isPending) return;
     if (dirty && !window.confirm("لديك تعديلات غير محفوظة. هل تريد تركها؟")) return;
-    setSelectedId(id); setNewContent(content); setDirty(false); setEditorKey(key => key + 1); resources.save.reset();
+    setSelectedId(id); setNewContent(content); setDirty(false); setEditorKey(key => key + 1); resources.save.reset(); resources.approve.reset();
   };
   const saved = () => {
     setDirty(false); setSelectedId(null); setNewContent(null);
@@ -80,14 +81,14 @@ function AdminDraftWorkspace({ userId }: { userId: string }) {
   return <div className="job-drafts space-y-5" dir="rtl" data-testid="job-template-drafts">
     <div className="draft-notice rounded-lg p-4 flex gap-3">
       <ShieldCheck className="h-5 w-5 shrink-0 text-teal-700 dark:text-teal-300" />
-      <div className="space-y-1"><h2 className="font-semibold">مساحة مراجعة، وليست سياسة مفعّلة</h2>
-        <p className="text-sm text-muted-foreground">كل إصدار مسودة غير معتمدة. لا اعتماد، ولا إسناد للموظفين، ولا تعديل للأدوار الحالية أو الصلاحيات الفعلية من هنا.</p></div>
+      <div className="space-y-1"><h2 className="font-semibold">مراجعة واعتماد، دون تطبيق على الموظفين</h2>
+        <p className="text-sm text-muted-foreground">يمكن للمسؤول اعتماد أحدث إصدار محفوظ بعد مراجعة صريحة. الاعتماد لا يسند القالب للموظفين ولا يعدّل الأدوار الحالية أو الصلاحيات الفعلية.</p></div>
     </div>
     <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
       <div><h2 className="text-xl font-bold">القوالب الوظيفية · مسودات بإصدارات</h2><p className="text-sm text-muted-foreground">تعريف مستقل عن المسمى الوظيفي والدور الأمني.</p></div>
       <div className="flex flex-wrap gap-2">
-        <Button variant="outline" disabled={seed.isPending || resources.save.isPending || !!list.error || !!catalog.error || catalog.isLoading || list.isLoading} onClick={() => setSeedOpen(true)} data-testid="seed-job-proposals">إضافة المقترحات التسعة</Button>
-        <Button disabled={resources.save.isPending || !!catalog.error || !!list.error || catalog.isLoading || list.isLoading} onClick={() => changeSelection(null, blank())} data-testid="new-job-draft"><Plus className="h-4 w-4 me-2" />مسودة جديدة</Button>
+        <Button variant="outline" disabled={seed.isPending || resources.save.isPending || resources.approve.isPending || !!list.error || !!catalog.error || catalog.isLoading || list.isLoading} onClick={() => setSeedOpen(true)} data-testid="seed-job-proposals">إضافة المقترحات التسعة</Button>
+        <Button disabled={resources.save.isPending || resources.approve.isPending || !!catalog.error || !!list.error || catalog.isLoading || list.isLoading} onClick={() => changeSelection(null, blank())} data-testid="new-job-draft"><Plus className="h-4 w-4 me-2" />مسودة جديدة</Button>
       </div>
     </div>
     {catalog.error && <ErrorNotice error={catalog.error} retry={() => { void catalog.refetch(); }} />}
@@ -98,8 +99,8 @@ function AdminDraftWorkspace({ userId }: { userId: string }) {
         <CardContent className="space-y-3">
           <div className="relative"><Search className="absolute end-3 top-3 h-4 w-4 text-muted-foreground" /><Input value={search} onChange={event => setSearch(event.target.value)} placeholder="بحث بالاسم أو المفتاح" aria-label="بحث في المسودات" className="pe-9" /></div>
           {items.length === 0 ? <div className="rounded-lg border border-dashed p-5 text-center space-y-2"><FileClock className="h-7 w-7 mx-auto text-muted-foreground" /><p className="text-sm">{list.data.length ? "لا نتائج تطابق البحث." : "لم تُنشأ مسودات بعد."}</p><p className="text-xs text-muted-foreground">ابدأ بقالب فارغ أو أضف المقترحات صراحة؛ لن تُضاف تلقائيًا.</p></div>
-            : items.map(item => <button type="button" key={item.id} disabled={resources.save.isPending} onClick={() => changeSelection(item.id, null)} aria-pressed={selectedId === item.id} className={`w-full text-start rounded-lg border p-3 space-y-2 transition-colors hover:bg-muted/60 ${selectedId === item.id ? "border-primary bg-primary/5" : ""}`} data-testid={`job-draft-${item.id}`}>
-              <span className="flex items-start justify-between gap-2"><span className="font-medium">{item.name}</span><Badge variant="outline">مسودة</Badge></span>
+            : items.map(item => <button type="button" key={item.id} disabled={resources.save.isPending || resources.approve.isPending} onClick={() => changeSelection(item.id, null)} aria-pressed={selectedId === item.id} className={`w-full text-start rounded-lg border p-3 space-y-2 transition-colors hover:bg-muted/60 ${selectedId === item.id ? "border-primary bg-primary/5" : ""}`} data-testid={`job-draft-${item.id}`}>
+              <span className="flex items-start justify-between gap-2"><span className="font-medium">{item.name}</span><Badge variant="outline">{item.latestVersionApproved ? "أحدث إصدار معتمد" : "مسودة غير معتمدة"}</Badge></span>
               <span className="block text-xs text-muted-foreground">{scopes[item.scopeType]} · {item.permissionCount} صلاحية · إصدار {item.latestVersion}</span>
               <span className="block text-xs text-muted-foreground" dir="ltr">{item.key}</span>
             </button>)}
@@ -113,9 +114,9 @@ function AdminDraftWorkspace({ userId }: { userId: string }) {
       </div>
     </div>}
     <Dialog open={seedOpen} onOpenChange={value => { if (!seed.isPending) setSeedOpen(value); }}>
-      <DialogContent dir="rtl"><DialogHeader><DialogTitle>إضافة المقترحات للمراجعة؟</DialogTitle><DialogDescription>سيُحفظ أساس المسميات التشغيلية التسعة كمسودات غير معتمدة. الطلب قابل للتكرار دون إنشاء نسخ مكررة. لا يمنح أي موظف صلاحيات.</DialogDescription></DialogHeader>
+      <DialogContent dir="rtl"><DialogHeader><DialogTitle>إضافة المقترحات للمراجعة؟</DialogTitle><DialogDescription>المقترحات الجديدة تُحفظ كمسودات غير معتمدة. الطلب قابل للتكرار دون إنشاء نسخ مكررة أو تغيير اعتمادات القوالب القائمة. لا يمنح أي موظف صلاحيات.</DialogDescription></DialogHeader>
         {seed.error && <ErrorNotice error={seed.error} />}
-        <DialogFooter className="gap-2"><Button variant="outline" disabled={seed.isPending} onClick={() => setSeedOpen(false)}>إلغاء</Button><Button disabled={seed.isPending} onClick={() => seed.mutate(undefined, { onSuccess: () => { setSeedOpen(false); toast({ title: "المقترحات جاهزة للمراجعة", description: "جميع القوالب ما زالت مسودات غير معتمدة." }); } })}>{seed.isPending ? "جارٍ حفظ المقترحات…" : "إضافة كمسودات فقط"}</Button></DialogFooter>
+        <DialogFooter className="gap-2"><Button variant="outline" disabled={seed.isPending} onClick={() => setSeedOpen(false)}>إلغاء</Button><Button disabled={seed.isPending} onClick={() => seed.mutate(undefined, { onSuccess: () => { setSeedOpen(false); toast({ title: "المقترحات جاهزة للمراجعة", description: "لم يُسجّل أي اعتماد تلقائي ولم تتغير صلاحيات الموظفين." }); } })}>{seed.isPending ? "جارٍ حفظ المقترحات…" : "إضافة كمسودات فقط"}</Button></DialogFooter>
       </DialogContent>
     </Dialog>
   </div>;
@@ -151,7 +152,7 @@ function DraftEditor({ initial, versions, catalog, resources, onDirty, onSaved, 
   const shown = version?.content ?? content;
   const before = versions.find(item => String(item.version) === compare);
   const diff = before ? permissionDiff(before.content, shown) : null;
-  const pending = resources.save.isPending;
+  const pending = resources.save.isPending || resources.approve.isPending;
   const unavailable = !!resources.catalog.error || !!resources.list.error || (!isNew && !!resources.detail.error);
   const update = <K extends keyof TemplateContent>(key: K, value: TemplateContent[K]) => {
     workDirty.current = true;
@@ -187,7 +188,7 @@ function DraftEditor({ initial, versions, catalog, resources, onDirty, onSaved, 
     return `${catalog.modules.find(item => item.id === module)?.label ?? module} · ${ALL_ACTION_LABELS[action] ?? action}`;
   };
   return <Card data-testid="job-draft-editor">
-    <CardHeader className="space-y-3"><div className="flex justify-between gap-2"><CardTitle className="text-lg">{isNew ? "إنشاء مسودة" : content.name}</CardTitle><Badge variant="outline">غير معتمد</Badge></div>
+    <CardHeader className="space-y-3"><div className="flex justify-between gap-2"><CardTitle className="text-lg">{isNew ? "إنشاء مسودة" : content.name}</CardTitle><Badge variant="outline">{version && resources.detail.data?.approvals?.some(item => item.version === version.version) ? "إصدار معتمد" : "نسخة غير معتمدة"}</Badge></div>
       <CardDescription>{isNew ? "الإنشاء يحفظ الإصدار الأول فقط." : `مرجع الحفظ: الإصدار ${expected}. كل حفظ يضيف إصدارًا جديدًا.`}</CardDescription>
       {!isNew && <div className="space-y-2"><Label htmlFor="draft-view">سجل الإصدارات</Label><Select value={view} onValueChange={setView} disabled={pending}><SelectTrigger id="draft-view"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="edit">تحرير نسخة عمل · حفظ إصدار جديد</SelectItem>{versions.map(item => <SelectItem key={item.version} value={String(item.version)}>الإصدار {item.version} · قراءة فقط</SelectItem>)}</SelectContent></Select></div>}
       {version && <div className="text-xs text-muted-foreground space-y-1"><p>أُنشئ {new Date(version.createdAt).toLocaleString("ar-SA", { timeZone: "Asia/Riyadh" })} (توقيت السعودية) · بواسطة {version.createdBy}</p><p>سبب التغيير: {version.changeReason || "إنشاء المسودة"}</p><p>هذه نسخة تاريخية للقراءة فقط. تعديلات نسخة العمل محفوظة محليًا أثناء استعراضها.</p></div>}
@@ -223,6 +224,7 @@ function DraftEditor({ initial, versions, catalog, resources, onDirty, onSaved, 
           {before && before.content.assignmentAuthority !== shown.assignmentAuthority && <p>تغيّرت جهة الإسناد المقترحة.</p>}
         </div>}
       </section>}
+      {!isNew && <JobTemplateApproval version={version ?? null} latestVersion={versions[0].version} resources={resources} catalog={catalog} onReviewLatest={number => setView(String(number))} />}
       {!readOnly && !isNew && <div className="space-y-2"><Label htmlFor="draft-reason">سبب إنشاء الإصدار الجديد (مطلوب)</Label><Textarea id="draft-reason" maxLength={2000} disabled={pending} value={reason} onChange={event => { workDirty.current = true; setReason(event.target.value); onDirty(); }} placeholder="ما الذي تغيّر، ولماذا؟" /></div>}
       {validation && <Alert variant="destructive"><AlertDescription>{validation}</AlertDescription></Alert>}
       {resources.save.error && <ErrorNotice error={resources.save.error} />}

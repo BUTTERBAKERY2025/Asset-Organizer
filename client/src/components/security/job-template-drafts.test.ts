@@ -40,6 +40,7 @@ let seeded = false;
 let stale = false;
 let migration = false;
 let refreshFailure = false;
+let approvalMigration = false;
 let renderer: any;
 let client: QueryClient;
 const text = (node: any): string => typeof node === "string" ? node : (node.children ?? []).map(text).join("");
@@ -53,14 +54,18 @@ const history = async (value: string) => {
     node.findAllByType("option").some((option: any) => option.props.value === "edit"));
   await act(async () => select.props.onChange({ target: { value } }));
 };
+const checkApproval = async (label = "راجعت كامل محتوى الإصدار المحفوظ", checked = true) => {
+  const checkbox = renderer.root.findAllByType("input").find((node: any) => node.props["aria-label"] === label);
+  await act(async () => checkbox.props.onChange({ target: { checked } }));
+};
 async function mount() {
   client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 }, mutations: { retry: false } } });
   await act(async () => { renderer = create(createElement(QueryClientProvider, { client }, createElement(JobTemplateDrafts))); });
   await settle();
 }
 beforeEach(() => {
-  auth.admin = true; seeded = false; stale = false; migration = false; refreshFailure = false;
-  detail = { id: 7, versions: [
+  auth.admin = true; seeded = false; stale = false; migration = false; refreshFailure = false; approvalMigration = false;
+  detail = { id: 7, approvals: [], versions: [
     { version: 1, content: { ...proposal, permissions: [] }, status: "draft", changeReason: "البداية", createdAt: "2026-10-02T09:00:00Z", createdBy: "admin-test" },
     { version: 2, content: proposal, status: "draft", changeReason: "إضافة اليومية", createdAt: "2026-10-02T10:00:00Z", createdBy: "admin-test" },
   ] };
@@ -70,7 +75,7 @@ beforeEach(() => {
     if (method === "GET" && url === `${base}/catalog`) return { json: async () => ({ modules: [{ id: "cashier_journal", label: "يوميات الكاشير", actions: ["view", "create"] }], proposals: JOB_TEMPLATE_PROPOSALS }) } as Response;
     if (method === "GET" && url === base) return { json: async () => {
       const latest = detail.versions[detail.versions.length - 1];
-      return seeded ? [{ id: 7, key: latest.content.key, name: latest.content.name, latestVersion: latest.version, scopeType: latest.content.scopeType, permissionCount: latest.content.permissions.reduce((sum, item) => sum + item.actions.length, 0), status: "draft" }] : [];
+      return seeded ? [{ id: 7, key: latest.content.key, name: latest.content.name, latestVersion: latest.version, scopeType: latest.content.scopeType, permissionCount: latest.content.permissions.reduce((sum, item) => sum + item.actions.length, 0), status: "draft", latestVersionApproved: detail.approvals.some(item => item.version === latest.version) }] : [];
     } } as Response;
     if (method === "GET" && url === `${base}/7`) {
       if (refreshFailure) throw new HttpError(503, JSON.stringify({ error: "migration_required" }));
@@ -78,12 +83,23 @@ beforeEach(() => {
     }
     if (method === "POST" && url === `${base}/7/versions` && stale) throw new HttpError(409, JSON.stringify({ error: "stale_version" }));
     if (method === "POST" && url === `${base}/seed-proposals`) seeded = true;
+    if (method === "POST" && url === `${base}/7/approvals`) {
+      if (approvalMigration) throw new HttpError(503, JSON.stringify({ error: "migration_required", message: "052_job_permission_template_approvals.sql" }));
+      const input = body as { version: number; expectedLatestVersion: number; reason: string; reviewed: boolean; acknowledgeEmptyPermissions?: boolean };
+      const latest = detail.versions[detail.versions.length - 1];
+      if (input.version !== latest.version || input.expectedLatestVersion !== latest.version) throw new HttpError(409, "stale_version");
+      if (detail.approvals.some(item => item.version === input.version)) throw new HttpError(409, "already_approved");
+      if (!input.reviewed || !input.reason.trim()) throw new HttpError(400, "invalid_request");
+      if (latest.content.permissions.every(item => item.actions.length === 0) && !input.acknowledgeEmptyPermissions) throw new HttpError(400, "empty_permissions_acknowledgement_required");
+      detail = { ...detail, approvals: [...detail.approvals, { version: input.version, reason: input.reason.trim(), approvedAt: "2026-10-02T12:00:00Z", approvedBy: "admin-reviewer" }] };
+      return { json: async () => detail } as Response;
+    }
     if (method === "POST" && (url === base || url === `${base}/7/versions`)) {
       const input = body as { content: typeof proposal; expectedLatestVersion?: number; changeReason?: string };
       const latest = detail.versions[detail.versions.length - 1];
       if (url !== base && input.expectedLatestVersion !== latest.version) throw new HttpError(409, "stale_version");
       const version = { version: url === base ? 1 : latest.version + 1, content: input.content, status: "draft" as const, changeReason: input.changeReason ?? "إنشاء", createdAt: "2026-10-02T11:00:00Z", createdBy: "admin-test" };
-      detail = { id: 7, versions: url === base ? [version] : [...detail.versions, version] };
+      detail = { id: 7, approvals: url === base ? [] : detail.approvals, versions: url === base ? [version] : [...detail.versions, version] };
       seeded = true;
       return { json: async () => detail } as Response;
     }
@@ -216,5 +232,128 @@ describe("draft-only job templates frontend", () => {
   it("diffs module/action pairs, ignores order, and supports removal to empty", () => {
     expect(permissionDiff(proposal, { ...proposal, permissions: [] })).toEqual({ added: [], removed: ["cashier_journal:create", "cashier_journal:view"] });
     expect(permissionDiff(proposal, { ...proposal, permissions: [{ module: "cashier_journal", actions: ["create", "view"] }] })).toEqual({ added: [], removed: [] });
+  });
+  it("requires explicit persisted-version review, reason and checkbox; never approves an unsaved work copy", async () => {
+    seeded = true; await mount(); await click("job-draft-7");
+    await edit("draft-description", "وصف غير محفوظ يجب ألا يعتمد");
+    expect(testId("approve-job-template-version")).toBeUndefined();
+    await click("review-latest-job-version");
+    const review = renderer.root.findByProps({ "data-testid": "approval-persisted-content" });
+    expect(text(review)).toContain(proposal.description);
+    expect(text(review)).toContain(proposal.reviewNotes);
+    expect(text(review)).toContain("فرع معين");
+    expect(text(review)).toContain("مدير التشغيل المفوض أو المسؤول");
+    expect(text(review)).not.toContain("وصف غير محفوظ يجب ألا يعتمد");
+    expect(testId("approve-job-template-version").props.disabled).toBe(true);
+    await checkApproval();
+    expect(testId("approve-job-template-version").props.disabled).toBe(true);
+    await edit("job-approval-reason", "مراجعة كاملة لليومية");
+    expect(testId("approve-job-template-version").props.disabled).toBe(false);
+    await click("approve-job-template-version");
+    expect(apiRequest).toHaveBeenCalledWith("POST", `${base}/7/approvals`, {
+      version: 2, expectedLatestVersion: 2, reason: "مراجعة كاملة لليومية", reviewed: true,
+    });
+    expect(text(renderer.toJSON())).toContain("اعتماد مسجل لهذا الإصدار");
+    expect(text(renderer.toJSON())).toContain("admin-reviewer");
+    expect(text(testId("job-draft-7"))).toContain("أحدث إصدار معتمد");
+    await history("edit");
+    expect(input("draft-description").props.value).toBe("وصف غير محفوظ يجب ألا يعتمد");
+    expect(vi.mocked(apiRequest).mock.calls.filter(([method]) => method === "POST").every(([, url]) => url === `${base}/7/approvals`)).toBe(true);
+  });
+  it("requires a separate acknowledgement for empty permissions before approval", async () => {
+    seeded = true;
+    detail = { ...detail, versions: [detail.versions[0]] };
+    await mount(); await click("job-draft-7"); await click("review-latest-job-version");
+    expect(text(renderer.toJSON())).toContain("الاعتماد لا يزيل صلاحيات الدور التلقائية أو الموروثة");
+    await edit("job-approval-reason", "اعتماد بوابة ذاتية مستقلة"); await checkApproval();
+    expect(testId("approve-job-template-version").props.disabled).toBe(true);
+    await checkApproval("أقر باستقلال صلاحيات الدور والبوابة عن القالب الفارغ");
+    expect(testId("approve-job-template-version").props.disabled).toBe(false);
+    await click("approve-job-template-version");
+    expect(apiRequest).toHaveBeenCalledWith("POST", `${base}/7/approvals`, {
+      version: 1, expectedLatestVersion: 1, reason: "اعتماد بوابة ذاتية مستقلة", reviewed: true, acknowledgeEmptyPermissions: true,
+    });
+  });
+  it("does not expose approval for old unapproved versions or auto-approve on viewing", async () => {
+    seeded = true; await mount(); await click("job-draft-7"); await history("1");
+    expect(testId("approve-job-template-version")).toBeUndefined();
+    expect(text(renderer.toJSON())).toContain("لا يمكن اعتماده الآن");
+    await history("2");
+    expect(testId("approve-job-template-version").props.disabled).toBe(true);
+    expect(vi.mocked(apiRequest).mock.calls.every(([method]) => method === "GET")).toBe(true);
+  });
+  it("stale approval retains reason/work edits but forces successful refresh and new review before any retry", async () => {
+    seeded = true; await mount(); await click("job-draft-7");
+    await edit("draft-description", "تعديل العمل المحفوظ محليًا");
+    await edit("draft-reason", "سبب العمل المحفوظ محليًا");
+    await click("review-latest-job-version");
+    await edit("job-approval-reason", "قرار مراجعة احتُفظ به"); await checkApproval();
+    detail = { ...detail, versions: [...detail.versions, { ...detail.versions[1], version: 3, content: { ...proposal, description: "محتوى محفوظ جديد يحتاج مراجعة" } }] };
+    await click("approve-job-template-version");
+    expect(input("job-approval-reason").props.value).toBe("قرار مراجعة احتُفظ به");
+    expect(testId("approve-job-template-version").props.disabled).toBe(true);
+    const checkbox = () => renderer.root.findAllByType("input").find((node: any) => node.props["aria-label"] === "راجعت كامل محتوى الإصدار المحفوظ");
+    expect(checkbox().props.checked).toBe(false); expect(checkbox().props.disabled).toBe(true);
+    refreshFailure = true; await click("refresh-job-approval-review");
+    expect(input("job-approval-reason").props.value).toBe("قرار مراجعة احتُفظ به");
+    expect(testId("approve-job-template-version").props.disabled).toBe(true);
+    refreshFailure = false; await click("refresh-job-approval-review");
+    expect(text(renderer.root.findByProps({ "data-testid": "approval-persisted-content" }))).toContain("محتوى محفوظ جديد يحتاج مراجعة");
+    expect(input("job-approval-reason").props.value).toBe("قرار مراجعة احتُفظ به");
+    expect(checkbox().props.checked).toBe(false);
+    expect(testId("approve-job-template-version").props.disabled).toBe(true);
+    expect(vi.mocked(apiRequest).mock.calls.filter(([method, url]) => method === "POST" && url.endsWith("/approvals"))).toHaveLength(1);
+    await checkApproval(); await click("approve-job-template-version");
+    expect(apiRequest).toHaveBeenCalledWith("POST", `${base}/7/approvals`, {
+      version: 3, expectedLatestVersion: 3, reason: "قرار مراجعة احتُفظ به", reviewed: true,
+    });
+    await history("edit");
+    expect(input("draft-description").props.value).toBe("تعديل العمل المحفوظ محليًا");
+    expect(input("draft-reason").props.value).toBe("سبب العمل المحفوظ محليًا");
+  });
+  it("already_approved 409 fetches and displays the actual approval instead of retrying", async () => {
+    seeded = true; await mount(); await click("job-draft-7"); await click("review-latest-job-version");
+    await edit("job-approval-reason", "قرار محلي"); await checkApproval();
+    detail = { ...detail, approvals: [{ version: 2, reason: "قرار المسؤول الآخر", approvedBy: "admin-other", approvedAt: "2026-10-02T12:30:00Z" }] };
+    await click("approve-job-template-version"); await settle();
+    expect(text(renderer.toJSON())).toContain("اعتماد مسجل لهذا الإصدار");
+    expect(text(renderer.toJSON())).toContain("قرار المسؤول الآخر");
+    expect(text(renderer.toJSON())).toContain("admin-other");
+    expect(testId("approve-job-template-version")).toBeUndefined();
+    expect(vi.mocked(apiRequest).mock.calls.filter(([method, url]) => method === "POST" && url.endsWith("/approvals"))).toHaveLength(1);
+  });
+  it("retains old approval as history while a newly saved version is unapproved", async () => {
+    seeded = true;
+    detail = { ...detail, approvals: [{ version: 2, reason: "اعتماد سابق", approvedBy: "admin-reviewer", approvedAt: "2026-10-02T12:30:00Z" }] };
+    await mount(); await click("job-draft-7"); await history("2");
+    expect(text(renderer.toJSON())).toContain("اعتماد مسجل لهذا الإصدار");
+    await history("edit"); await edit("draft-description", "محتوى الإصدار الثالث"); await edit("draft-reason", "تغيير بعد الاعتماد");
+    await click("save-job-draft"); await click("job-draft-7"); await click("review-latest-job-version");
+    expect(text(testId("job-draft-7"))).toContain("مسودة غير معتمدة");
+    expect(testId("approve-job-template-version").props.disabled).toBe(true);
+    expect(text(renderer.toJSON())).toContain("اعتماد سابق");
+    expect(detail.approvals).toHaveLength(1);
+    expect(detail.approvals[0].version).toBe(2);
+    await history("2");
+    expect(text(renderer.toJSON())).toContain("اعتماد مسجل لهذا الإصدار");
+  });
+  it("resets human review when switching saved versions, even when returning to the same version", async () => {
+    seeded = true; await mount(); await click("job-draft-7"); await click("review-latest-job-version");
+    await edit("job-approval-reason", "مراجعة صريحة"); await checkApproval();
+    expect(testId("approve-job-template-version").props.disabled).toBe(false);
+    await history("1"); await history("2");
+    expect(input("job-approval-reason").props.value).toBe("مراجعة صريحة");
+    expect(testId("approve-job-template-version").props.disabled).toBe(true);
+  });
+  it("missing migration 052 blocks approval explicitly while retaining reason and working edits", async () => {
+    seeded = true; approvalMigration = true; await mount(); await click("job-draft-7");
+    await edit("draft-description", "عمل غير محفوظ");
+    await click("review-latest-job-version"); await edit("job-approval-reason", "سبب لا يفقد"); await checkApproval();
+    await click("approve-job-template-version");
+    expect(text(renderer.toJSON())).toContain("052 (migration_required)");
+    expect(input("job-approval-reason").props.value).toBe("سبب لا يفقد");
+    expect(detail.approvals).toHaveLength(0);
+    await history("edit");
+    expect(input("draft-description").props.value).toBe("عمل غير محفوظ");
   });
 });

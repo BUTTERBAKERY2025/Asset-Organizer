@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { readFile } from "node:fs/promises";
 import {
-  JOB_TEMPLATE_PROPOSALS, JOB_TEMPLATE_MODULES, templateContentSchema, appendTemplateVersionSchema,
+  JOB_TEMPLATE_PROPOSALS, JOB_TEMPLATE_MODULES, templateContentSchema, appendTemplateVersionSchema, approveTemplateVersionSchema,
 } from "../shared/job-permission-templates";
 import { JobPermissionTemplateStorage } from "../server/job-permission-template-storage";
 
@@ -14,14 +14,14 @@ vi.mock("../server/auth", () => ({
 import { registerJobPermissionTemplateDraftRoutes } from "../server/job-permission-template-routes";
 
 function mockStorage() {
-  let templates: any[] = [], versions: any[] = [], audits: any[] = [];
+  let templates: any[] = [], versions: any[] = [], audits: any[] = [], approvals: any[] = [];
   let snapshot: any;
-  let ready = true, failAudit = false;
+  let ready = true, approvalsReady = true, failAudit = false;
   const query = vi.fn(async (sql: string, args: any[] = []): Promise<any> => {
-    if (sql.includes("to_regclass")) return { rows: [{ ready }] };
-    if (sql === "BEGIN") { snapshot = structuredClone({ templates, versions, audits }); return { rows: [] }; }
+    if (sql.includes("to_regclass")) return { rows: [{ ready, approvals_ready: approvalsReady }] };
+    if (sql === "BEGIN") { snapshot = structuredClone({ templates, versions, audits, approvals }); return { rows: [] }; }
     if (sql === "COMMIT") return { rows: [] };
-    if (sql === "ROLLBACK") { ({ templates, versions, audits } = snapshot); return { rows: [] }; }
+    if (sql === "ROLLBACK") { ({ templates, versions, audits, approvals } = snapshot); return { rows: [] }; }
     if (sql.includes("pg_advisory_xact_lock")) return { rows: [] };
     if (sql.startsWith("SELECT id")) return { rows: templates.filter(t => t.key === args[0]) };
     if (sql.startsWith("SELECT key")) return { rows: templates.filter(t => t.id === args[0]) };
@@ -40,9 +40,17 @@ function mockStorage() {
       if (failAudit) throw new Error("audit unavailable");
       audits.push(args); return { rows: [] };
     }
+    if (sql.includes("INSERT INTO public.job_permission_template_approvals")) {
+      approvals.push({ template_id: args[0], version: args[1], reason: args[2],
+        reviewed: args[3], acknowledge_empty_permissions: args[4], approved_by: args[5],
+        approved_at: "2026-10-02T01:00:00Z" });
+      return { rows: [] };
+    }
+    if (sql.startsWith("SELECT version")) return { rows: approvals.filter(a =>
+      a.template_id === args[0] && (args.length < 2 || a.version === args[1])) };
     if (sql.includes("SELECT DISTINCT")) return { rows: templates.map(t => {
       const v = versions.filter(v => v.template_id === t.id).at(-1);
-      return { ...t, ...v };
+      return { ...t, ...v, latest_version_approved: approvals.some(a => a.template_id === t.id && a.version === v.version) };
     }) };
     if (sql.includes("SELECT v.version")) return { rows: versions.filter(v => v.template_id === args[0]) };
     throw new Error(`Unexpected SQL: ${sql}`);
@@ -52,7 +60,9 @@ function mockStorage() {
   return {
     service: new JobPermissionTemplateStorage(pool as any), query, release,
     state: () => ({ templates, versions, audits }),
+    approvals: () => approvals,
     missingMigration: () => { ready = false; },
+    missingApprovalMigration: () => { approvalsReady = false; },
     failAudit: () => { failAudit = true; },
   };
 }
@@ -134,6 +144,79 @@ describe("transactional dedicated draft storage (mock database)", () => {
   });
 });
 
+describe("explicit immutable content approvals (mock database)", () => {
+  const approval = { version: 1, expectedLatestVersion: 1, reason: "Reviewed selected content only", reviewed: true };
+  it.each([
+    { reason: " " }, { reviewed: false }, { reviewed: undefined }, { version: 0 },
+    { expectedLatestVersion: 0 }, { activate: true }, { acknowledgeEmptyPermissions: false },
+  ])("rejects missing review, reason and authority fields: %j", patch => {
+    expect(approveTemplateVersionSchema.safeParse({ ...approval, ...patch }).success).toBe(false);
+  });
+  it("approves only explicitly, preserving draft content and recording exact actor/history", async () => {
+    const mock = mockStorage();
+    const first = await mock.service.create(JOB_TEMPLATE_PROPOSALS[4], "creator");
+    expect(first.approvals).toEqual([]);
+    expect((await mock.service.list())[0].latestVersionApproved).toBe(false);
+    const approved = await mock.service.approve(first.id, approval, "reviewer");
+    expect(approved.versions).toEqual(first.versions);
+    expect(approved.approvals).toEqual([{ version: 1, reason: approval.reason,
+      approvedAt: "2026-10-02T01:00:00.000Z", approvedBy: "reviewer" }]);
+    expect((await mock.service.list())[0]).toMatchObject({ status: "draft", latestVersionApproved: true });
+    expect(JSON.parse(mock.state().audits.at(-1)[4])).toMatchObject({ effectiveAuthority: false, reviewed: true, version: 1 });
+    await expect(mock.service.approve(first.id, approval, "other")).rejects.toMatchObject({ status: 409, code: "already_approved" });
+    expect(mock.approvals()).toHaveLength(1);
+    expect(mock.state().audits).toHaveLength(2);
+  });
+  it("requires explicit empty acknowledgement including modules with zero actions", async () => {
+    const mock = mockStorage();
+    const content = { ...JOB_TEMPLATE_PROPOSALS[0], permissions: [{ module: "branch_stock" as const, actions: [] }] };
+    const first = await mock.service.create(content, "admin");
+    await expect(mock.service.approve(first.id, approval, "admin")).rejects.toMatchObject({
+      status: 400, code: "empty_permissions_acknowledgement_required",
+    });
+    expect(mock.approvals()).toEqual([]);
+    expect((await mock.service.approve(first.id, { ...approval, acknowledgeEmptyPermissions: true }, "admin")).approvals).toHaveLength(1);
+  });
+  it("new versions start unapproved, preserve history and reject old/stale selections", async () => {
+    const mock = mockStorage(), content = JOB_TEMPLATE_PROPOSALS[4];
+    const first = await mock.service.create(content, "admin");
+    const approved = await mock.service.approve(first.id, approval, "admin");
+    const next = await mock.service.append(first.id, { content, expectedLatestVersion: 1, changeReason: "new review" }, "admin");
+    expect(next.approvals).toEqual(approved.approvals);
+    expect((await mock.service.list())[0].latestVersionApproved).toBe(false);
+    for (const patch of [{}, { version: 1, expectedLatestVersion: 2 }, { version: 2, expectedLatestVersion: 1 }])
+      await expect(mock.service.approve(first.id, { ...approval, ...patch }, "admin")).rejects.toMatchObject({ status: 409, code: "stale_version" });
+    expect(mock.state().audits).toHaveLength(3);
+    const detail = await mock.service.approve(first.id, { ...approval, version: 2, expectedLatestVersion: 2 }, "admin");
+    expect(detail.approvals.map(a => a.version)).toEqual([1, 2]);
+  });
+  it("approval audit failure rolls back approval, without changing immutable versions", async () => {
+    const mock = mockStorage();
+    const first = await mock.service.create(JOB_TEMPLATE_PROPOSALS[4], "admin");
+    mock.failAudit();
+    await expect(mock.service.approve(first.id, approval, "admin")).rejects.toThrow("audit unavailable");
+    expect(mock.approvals()).toEqual([]);
+    expect((await mock.service.detail(first.id)).versions).toEqual(first.versions);
+    expect(mock.state().audits).toHaveLength(1);
+  });
+  it("missing052 is an explicit503 for detail, summaries and approval, never empty history", async () => {
+    const mock = mockStorage();
+    const first = await mock.service.create(JOB_TEMPLATE_PROPOSALS[4], "admin");
+    mock.missingApprovalMigration();
+    for (const action of [() => mock.service.detail(first.id), () => mock.service.list(), () => mock.service.approve(first.id, approval, "admin")])
+      await expect(action()).rejects.toMatchObject({ status: 503, code: "migration_required", message: expect.stringContaining("052_job_permission_template_approvals.sql") });
+    expect(mock.approvals()).toEqual([]);
+  });
+  it("prepared052 adds immutable guards/FK with no seeds or existing policy writes", async () => {
+    const sql = await readFile("migrations/052_job_permission_template_approvals.sql", "utf8");
+    expect(sql).toContain("BEFORE INSERT OR UPDATE OR DELETE");
+    expect(sql).toContain("PRIMARY KEY (template_id, version)");
+    expect(sql).toContain("REFERENCES public.job_permission_template_draft_versions(template_id, version)");
+    expect(sql).toContain("FOR UPDATE");
+    expect(sql).not.toMatch(/INSERT INTO|UPDATE public\.|role_templates|user_permissions/);
+  });
+});
+
 describe("admin-only route contract", () => {
   function routes() {
     const registered: any[] = [];
@@ -153,16 +236,28 @@ describe("admin-only route contract", () => {
     }
     return res;
   }
-  it("registers only six draft routes and denies module-only/nonadmin users on all", async () => {
+  it("registers only seven content-review routes and denies module-only/nonadmin users on all", async () => {
     const { registered, mock } = routes();
-    expect(registered).toHaveLength(6);
-    expect(registered.every(r => !/activate|approve|assign|delete/.test(r.path))).toBe(true);
+    expect(registered).toHaveLength(7);
+    expect(registered.every(r => !/activate|assign|delete/.test(r.path))).toBe(true);
     for (const route of registered) {
       expect((await invoke(route)).statusCode).toBe(401);
       for (const role of ["operations_manager", "branch_manager", "employee", "viewer"])
         expect((await invoke(route, { id: "nonadmin", role, permissions: ["users", "rbac"] })).statusCode).toBe(403);
     }
     expect(mock.query).not.toHaveBeenCalled();
+  });
+  it("admin approval201 returns detail; repeated409 and missing052503 are explicit", async () => {
+    const { registered, mock } = routes(), admin = { id: "admin", role: "admin" };
+    const first = await mock.service.create(JOB_TEMPLATE_PROPOSALS[4], "admin");
+    const route = registered.find(r => r.path.endsWith("/:id/approvals"));
+    const body = { version: 1, expectedLatestVersion: 1, reason: "review", reviewed: true };
+    const params = { id: String(first.id) };
+    expect(await invoke(route, admin, body, params)).toMatchObject({ statusCode: 201, body: { approvals: [{ version: 1 }] } });
+    expect(await invoke(route, admin, body, params)).toMatchObject({ statusCode: 409, body: { error: "already_approved" } });
+    expect((await invoke(route, admin, { ...body, reviewed: false }, params)).statusCode).toBe(400);
+    mock.missingApprovalMigration();
+    expect(await invoke(route, admin, body, params)).toMatchObject({ statusCode: 503, body: { error: "migration_required", message: expect.stringContaining("052_") } });
   });
   it("catalog checks readiness; admin create returns 201 detail; invalid payload is 400", async () => {
     const { registered, mock } = routes(), admin = { id: "admin", role: "admin" };
