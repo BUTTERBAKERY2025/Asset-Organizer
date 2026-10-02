@@ -68,3 +68,9 @@ Across all departments, the user approved granting authority for the administrat
 **Why:** The user selected bounded delegation as the shared organization-wide policy.
 
 **How to apply:** Preserve the existing operations-specific safeguards. This approves the principle, not new delegates or changes to current delegations; review those separately before applying it.
+
+The user approved explicit per-account base-permission modes: role inheritance or direct-only permissions. Approved additions and explicit denies stay separate from the base; an empty direct-only list must not restore inheritance.
+
+**Why:** The user selected explicit modes to resolve conflicting permission-source behavior without silently merging existing access.
+
+**How to apply:** Do not choose or migrate existing accounts' modes automatically. Present impact before changes and review employee self-service rights separately from operational permissions.
