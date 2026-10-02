@@ -80,3 +80,15 @@ The user approved three shared governance rules: job-title or department changes
 **Why:** The user explicitly selected all three rules during policy approval.
 
 **How to apply:** Keep organizational edits separate from approved security assignments, never extend action grants merely through broader viewing access, and never use template edits to silently rewrite current accounts. Review legacy behavior changes before application.
+
+The user approved preventing self-approval and separating financial disbursement authority from HR editing, with transaction-specific separation and explicitly approved, recorded exceptions. Transfer or termination requires an HR/admin-coordinated, dated access review and removal/retention plan, with explicit decisions for other assignments and self-service access.
+
+**Why:** The user approved these shared governance principles, not live transaction or account changes.
+
+**How to apply:** Define the transaction responsibility matrix, approvers and employee transition plans before implementation; do not infer automatic blanket revocation.
+
+The user approved rejecting permission, role and delegation changes when a durable audit record of actor, change, time and reason cannot be saved.
+
+**Why:** Authority changes must not succeed without reliable traceability.
+
+**How to apply:** Reject the affected change rather than stopping the whole application. Emergency security suspension remains a separate, unapproved policy; retention duration and audit access/review ownership still need specification before implementation.
