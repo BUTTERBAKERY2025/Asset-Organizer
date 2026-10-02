@@ -143,12 +143,13 @@ export default function TransferRequestsPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { user } = useAuth();
+  const permissions = usePermissions();
   const isKeeper = user?.role === "warehouse_keeper";
-  const isBranchManager = user?.role === "branch_manager";
+  const isBranchManager = user?.role === "branch_manager"
+    || (["employee", "viewer"].includes(user?.role ?? "") && permissions.canView("branch_supply"));
   const transferModule = isBranchManager ? "branch_supply" : "warehouse";
   const { branches, isLoading: branchesLoading, userBranchId, canSelectBranch } = useBranches();
   const operationalBranchId = isKeeper ? "main_warehouse" : userBranchId;
-  const permissions = usePermissions();
   const { canView, canCreate, canEdit, isLoading: permissionsLoading } = permissions;
   const search = useSearch();
   const kitchenRawMode = !isBranchManager && new URLSearchParams(search).get("kitchenRaw") === "1";

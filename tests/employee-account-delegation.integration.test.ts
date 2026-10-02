@@ -26,6 +26,7 @@ vi.mock("../server/auth", () => ({
 }));
 
 import { registerEmployeeAccountDelegation } from "../server/employee-account-delegation";
+import * as delegationPolicy from "../server/employee-account-delegation-policy";
 import { storage } from "../server/storage";
 
 const routes: any[] = [];
@@ -247,6 +248,8 @@ describe("employee account delegation atomic PostgreSQL API", () => {
     expect(account.first_name).toBe("موظف مسجل");
     expect(account.branch_id).toBe("a");
     expect(account.password).not.toBe(created.body.credentials.password);
+    expect(created.body.credentials.username).toHaveLength(8);
+    expect(created.body.credentials.password).toHaveLength(12);
     expect(await bcrypt.compare(created.body.credentials.password, account.password)).toBe(true);
     expect((await query("SELECT branch_id FROM user_branch_access WHERE user_id=$1", [account.id])).rows).toEqual([{ branch_id: "a" }]);
     const logs = JSON.stringify((await query("SELECT * FROM system_audit_logs")).rows);
@@ -262,6 +265,39 @@ describe("employee account delegation atomic PostgreSQL API", () => {
     expect((await invoke("post", "/:employeeId", { permissions, [key]: "admin" })).statusCode).toBe(400);
     expect(await id()).toBeNull();
     expect((await query("SELECT count(*)::int AS n FROM users")).rows[0].n).toBe(2);
+  });
+  it("rejects empty creation and action-only grants without writes, while retaining empty revocation", async () => {
+    await configure();
+    expect((await invoke("post", "/:employeeId", { permissions: [] })).statusCode).toBe(400);
+    expect((await invoke("post", "/:employeeId", { permissions: [{ module: "cashier_journal", actions: ["create"] }] })).body.code).toBe("VIEW_REQUIRED");
+    expect(await id()).toBeNull();
+    expect((await query("SELECT count(*)::int AS n FROM users")).rows[0].n).toBe(2);
+    await create();
+    expect((await invoke("put", "/:employeeId/permissions", { permissions: [] })).statusCode).toBe(200);
+  });
+  it("recovers a username collision under the table lock and returns only the committed name", async () => {
+    await configure();
+    await query("INSERT INTO users(id,username,role,branch_id) VALUES ('collision','Abc234xy','viewer','b')");
+    vi.spyOn(delegationPolicy, "generatedCredentials").mockReturnValue({ username: "Abc234xy", password: "AbcdefGH2345" });
+    const created = await create();
+    expect(created.body.credentials.username).not.toBe("Abc234xy");
+    expect(created.body.credentials.username).toHaveLength(8);
+    const account = (await query("SELECT username,password FROM users WHERE id=$1", [await id()])).rows[0];
+    expect(account.username).toBe(created.body.credentials.username);
+    expect(await bcrypt.compare(created.body.credentials.password, account.password)).toBe(true);
+    expect((await query("SELECT username FROM users WHERE id='collision'")).rows[0].username).toBe("Abc234xy");
+  });
+  it("keeps a legacy action-only policy readable for safety suspension and complete reduction", async () => {
+    await configure();
+    await create();
+    await query("UPDATE portal_settings SET value=$1 WHERE key=$2", [
+      JSON.stringify({ enabled: false, permissions: [{ module: "cashier_journal", actions: ["create"] }] }), policyKey,
+    ]);
+    const listed = await invoke("get");
+    expect(listed.statusCode).toBe(200);
+    expect(listed.body.employees).toHaveLength(1);
+    expect((await invoke("patch", "/:employeeId/status", { isActive: "inactive" })).statusCode).toBe(200);
+    expect((await invoke("put", "/:employeeId/permissions", { permissions: [] })).statusCode).toBe(200);
   });
   it("rejects missing/inactive employees, HQ, default branches, and forged privileged permissions", async () => {
     await configure();

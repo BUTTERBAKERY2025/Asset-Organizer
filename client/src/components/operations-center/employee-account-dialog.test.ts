@@ -9,7 +9,9 @@ const { act, create } = createRequire(import.meta.url)("react-test-renderer");
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 vi.mock("@/components/ui/dialog", () => {
   const element = ({ children }: { children: React.ReactNode }) => createElement("section", null, children);
-  return { Dialog: element, DialogContent: element, DialogHeader: element, DialogTitle: element, DialogDescription: element, DialogFooter: element };
+  const dialog = ({ children, onOpenChange }: { children: React.ReactNode; onOpenChange: (open: boolean) => void }) =>
+    createElement("section", { "data-testid": "test-dialog", onOpenChange }, children);
+  return { Dialog: dialog, DialogContent: element, DialogHeader: element, DialogTitle: element, DialogDescription: element, DialogFooter: element };
 });
 
 const employee: DelegatedEmployeeAccount = { employeeId: 19, employeeName: "موظف اختبار", branchId: "a", branchName: "فرع اختبار", account: null };
@@ -41,6 +43,9 @@ async function mount(mode: "create" | "permissions" | "freeze" | "reopen" = "cre
   await act(async () => { renderer = create(createElement(EmployeeAccountDialog, { employee: row, mode, directory: data, close, refresh })); });
   return { close, refresh };
 }
+async function chooseCashier() {
+  await act(async () => renderer.root.findByProps({ id: "delegated-template" }).props.onChange({ target: { value: "cashier" } }));
+}
 
 describe("employee account dialog without browser or persistent secrets", () => {
   it("starts with a read-only employee, no credential preview, and one explicit create button", async () => {
@@ -48,6 +53,7 @@ describe("employee account dialog without browser or persistent secrets", () => 
     expect(renderer.root.findByProps({ id: "delegated-employee-name" }).props.readOnly).toBe(true);
     expect(renderer.root.findAllByProps({ "data-testid": "generated-password" })).toHaveLength(0);
     expect(button("توليد وإنشاء الحساب")).toBeTruthy();
+    expect(button("توليد وإنشاء الحساب").props.disabled).toBe(true);
     const permissions = renderer.root.findAllByType("input").filter((node: any) => node.props.type === "checkbox");
     expect(permissions).toHaveLength(1);
     expect(permissions[0].props["aria-label"]).not.toContain("إنشاء");
@@ -68,6 +74,11 @@ describe("employee account dialog without browser or persistent secrets", () => 
     await act(async () => renderer.root.findByProps({ "aria-label": "نسخ كلمة المرور" }).props.onClick());
     expect(navigator.clipboard.writeText).toHaveBeenCalledWith("unit-password");
     expect(refresh).toHaveBeenCalled();
+    expect(button("حفظت البيانات").props.disabled).toBe(true);
+    await act(async () => renderer.root.findByProps({ "data-testid": "test-dialog" }).props.onOpenChange(false));
+    expect(close).not.toHaveBeenCalled();
+    expect(renderer.root.findByProps({ "data-testid": "generated-password" }).children).toEqual(["unit-password"]);
+    await act(async () => renderer.root.findAllByType("input").find((node: any) => node.props.type === "checkbox").props.onChange({ target: { checked: true } }));
     await act(async () => button("حفظت البيانات").props.onClick());
     expect(close).toHaveBeenCalledOnce();
     expect(renderer.root.findAllByProps({ "data-testid": "generated-password" })).toHaveLength(0);
@@ -77,6 +88,7 @@ describe("employee account dialog without browser or persistent secrets", () => 
     let resolve!: (response: Response) => void;
     vi.stubGlobal("fetch", vi.fn().mockImplementation(() => new Promise<Response>(done => { resolve = done; })));
     const { close } = await mount();
+    await chooseCashier();
     let pending!: Promise<void>;
     await act(async () => { pending = button("توليد وإنشاء الحساب").props.onClick(); });
     await act(async () => button("إلغاء").props.onClick());
@@ -92,6 +104,7 @@ describe("employee account dialog without browser or persistent secrets", () => 
     vi.stubGlobal("window", { isSecureContext: false });
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ employee, credentials: { username: "unit-user", password: "unit-password" } }))));
     await mount();
+    await chooseCashier();
     await act(async () => button("توليد وإنشاء الحساب").props.onClick());
     await act(async () => renderer.root.findByProps({ "aria-label": "نسخ كلمة المرور" }).props.onClick());
     expect(JSON.stringify(renderer.toJSON())).toContain("تعذر النسخ الآمن");
@@ -110,6 +123,7 @@ describe("employee account dialog without browser or persistent secrets", () => 
   it("shows backend errors without hiding them and blocks creation when unapproved", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: "الموظف مرتبط بحساب بالفعل" }), { status: 409 })));
     await mount();
+    await chooseCashier();
     await act(async () => button("توليد وإنشاء الحساب").props.onClick());
     expect(JSON.stringify(renderer.toJSON())).toContain("الموظف مرتبط بحساب بالفعل (409)");
     await act(async () => renderer.unmount());
@@ -121,6 +135,34 @@ describe("employee account dialog without browser or persistent secrets", () => 
   it("does not reactivate a protected/ineligible account", async () => {
     await mount("reopen", { ...employee, account: { id: "unit-account", username: "unit-user", isActive: "inactive", permissions: [], canReactivate: false } });
     expect(button("تأكيد إعادة الفتح").props.disabled).toBe(true);
+  });
+
+  it("prevents even a direct submit handler from creating an empty grant", async () => {
+    const fetch = vi.fn();
+    vi.stubGlobal("fetch", fetch);
+    await mount();
+    await act(async () => button("توليد وإنشاء الحساب").props.onClick());
+    expect(fetch).not.toHaveBeenCalled();
+    expect(JSON.stringify(renderer.toJSON())).toContain("اختر صلاحية واحدة على الأقل");
+  });
+
+  it("adds view automatically for actions and removes actions when view is unchecked", async () => {
+    await mount("create", employee, { ...directory, policy: { enabled: true, permissions: directory.availablePermissions } });
+    const checkboxes = () => renderer.root.findAllByType("input").filter((node: any) => node.props.type === "checkbox");
+    await act(async () => checkboxes()[1].props.onChange({ target: { checked: true } }));
+    expect(checkboxes().map((node: any) => node.props.checked)).toEqual([true, true]);
+    await act(async () => checkboxes()[0].props.onChange({ target: { checked: false } }));
+    expect(checkboxes().map((node: any) => node.props.checked)).toEqual([false, false]);
+    expect(button("توليد وإنشاء الحساب").props.disabled).toBe(true);
+  });
+
+  it("never adds view outside the approved ceiling and disables unusable actions", async () => {
+    const data = { ...directory, policy: { enabled: true, permissions: [{ module: "cashier_journal", actions: ["create"] }] } };
+    await mount("create", employee, data);
+    expect(renderer.root.findAllByType("input").find((node: any) => node.props.type === "checkbox").props.disabled).toBe(true);
+    await chooseCashier();
+    expect(button("توليد وإنشاء الحساب").props.disabled).toBe(true);
+    expect(JSON.stringify(renderer.toJSON())).toContain("تتطلب الإجراءات المختارة");
   });
 
   it("can revoke all approved direct permissions through the exact permissions PUT", async () => {

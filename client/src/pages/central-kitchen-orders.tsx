@@ -205,7 +205,7 @@ export function kitchenDetailAccess(order: Pick<KitchenOrder, "allowedActions" |
 export function kitchenDetailMatchesBranch(order: Pick<KitchenOrder, "requestBranchId" | "centralKitchenId">,
   branchId: string | null, role?: string) {
   return !!branchId && (order.requestBranchId === branchId
-    || (role !== "branch_manager" && order.centralKitchenId === branchId));
+    || (!["branch_manager", "employee", "viewer"].includes(role ?? "") && order.centralKitchenId === branchId));
 }
 export const KITCHEN_DEFAULT_SORT = "newest" as const;
 export function kitchenOrderPreview(order: Pick<KitchenOrder, "items" | "requestBranchName" | "requestBranchId" | "centralKitchenName" | "centralKitchenId" | "status">) {
@@ -239,6 +239,9 @@ export default function CentralKitchenOrdersPage() {
     && (new URLSearchParams(window.location.search).getAll("branchId").length !== 1
       || !branches.some(branch => branch.id === linkedBranchId));
   const { canView, canCreate, canEdit, canApprove, canExport, hasPermission } = usePermissions();
+  const supplyModule = user?.role === "branch_manager"
+    || (["employee", "viewer"].includes(user?.role ?? "") && canView("branch_supply"))
+      ? "branch_supply" : "warehouse";
   const operationsView = isKitchenOperationsPresentation(user, canApprove("central_kitchen_orders"));
   const [desktop, setDesktop] = useState(() => typeof window !== "undefined" && window.matchMedia("(min-width: 1536px)").matches);
   useEffect(() => {
@@ -801,10 +804,10 @@ export default function CentralKitchenOrdersPage() {
         current="kitchen"
         branchId={supplyBranchId}
         canKitchen={canView("central_kitchen_orders")}
-        canWarehouse={canView(user?.role === "branch_manager" ? "branch_supply" : "warehouse")}
+        canWarehouse={canView(supplyModule)}
         compact
         onKitchenRequest={canCreate("central_kitchen_orders") ? () => void openCreate() : undefined}
-        onWarehouseRequest={canCreate(user?.role === "branch_manager" ? "branch_supply" : "warehouse") && supplyBranchId
+        onWarehouseRequest={canCreate(supplyModule) && supplyBranchId
           ? () => navigateSupply(branchSupplyUrl("warehouse", supplyBranchId, true)) : undefined}
       />}
       {operationsView ? <details className="rounded-xl border border-border bg-card px-3" data-testid="kitchen-operations-schedule">

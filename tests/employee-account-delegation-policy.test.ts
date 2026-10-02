@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  actorMayManage, branchMayManage, DEFAULT_POLICY, delegationTemplates,
+   actorMayManage, availableGeneratedUsername, branchMayManage, createAccountInput, DEFAULT_POLICY, delegationTemplates,
   generatedCredentials, isLegacyAccountPath, permissionsInput, policyInput,
   statusInput, targetMayManage, validatePermissions,
 } from "../server/employee-account-delegation-policy";
@@ -61,6 +61,28 @@ describe("employee account delegation security policy", () => {
     for (const template of templates) expect(validatePermissions(template.permissions)).toEqual(
       [...template.permissions].sort((a,b) => a.module.localeCompare(b.module)).map(p => ({ ...p, actions: [...p.actions].sort() })));
     expect(delegationTemplates(safe)).toEqual([{ id: "cashier", name: "كاشير", permissions: safe }]);
+    expect(templates.find(template => template.id === "quality_inspector")?.name).toBe("مراقبة الجودة");
+  });
+  it("requires view for operational actions but allows explicit empty revocation", () => {
+    expect(() => validatePermissions([{ module: "cashier_journal", actions: ["create"] }])).toThrow(/العرض/);
+    expect(validatePermissions([])).toEqual([]);
+    expect(createAccountInput.safeParse({ permissions: [] }).success).toBe(false);
+    expect(permissionsInput.safeParse({ permissions: [] }).success).toBe(true);
+    expect(validatePermissions([{ module: "cashier_journal", actions: ["create"] }], EMPLOYEE_ACCOUNT_SAFE_PERMISSIONS, false))
+      .toEqual([{ module: "cashier_journal", actions: ["create"] }]);
+  });
+  it("offers expanded presets only from the supplied approved subset, not automatically", () => {
+    const expanded = [
+      { module: "branch_supply", actions: ["view", "create"] },
+      { module: "central_kitchen_orders", actions: ["view"] },
+      { module: "branch_stock", actions: ["view", "edit"] },
+      { module: "branch_workforce", actions: ["view"] },
+    ];
+    const presets = delegationTemplates(expanded);
+    expect(presets.map(preset => preset.id)).toEqual(["branch_requests", "branch_stock", "branch_workforce"]);
+    expect(presets[0].permissions).toEqual(expanded.slice(0, 2));
+    expect(delegationTemplates([{ module: "branch_stock", actions: ["view"] }]))
+      .toEqual([{ id: "branch_stock", name: "مخزون الفرع والجرد", permissions: [{ module: "branch_stock", actions: ["view"] }] }]);
   });
   it.each(["username", "password", "role", "branchId", "linkedUserId", "firstName", "template", "userId"])(
     "rejects client-supplied %s", key => {
@@ -73,13 +95,34 @@ describe("employee account delegation security policy", () => {
     expect(new Set(credentials.map(c => c.username)).size).toBe(500);
     expect(new Set(credentials.map(c => c.password)).size).toBe(500);
     for (const c of credentials) {
-      expect(c.username).toMatch(/^e[0-9a-f]{14}$/);
-      expect(c.password.length).toBeGreaterThanOrEqual(32);
+      expect(c.username).toMatch(/^[ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789]{8}$/);
+      expect(c.password).toMatch(/^[ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789]{12}$/);
       expect(c.password).toMatch(/[A-Z]/);
       expect(c.password).toMatch(/[a-z]/);
       expect(c.password).toMatch(/\d/);
-      expect(c.password).toContain("!");
+      expect(c.password).not.toMatch(/[ILOilo01!]/);
     }
+    expect(new Set(credentials.map(c => c.password.slice(0, 3))).size).toBeGreaterThan(450);
+  });
+  it("checks a generated username without changing an available initial choice", async () => {
+    const checked: string[] = [];
+    expect(await availableGeneratedUsername("Abc234xy", async username => {
+      checked.push(username); return false;
+    })).toBe("Abc234xy");
+    expect(checked).toEqual(["Abc234xy"]);
+  });
+  it("retries username collisions with bounded cryptographic candidates", async () => {
+    const checked: string[] = [];
+    const result = await availableGeneratedUsername("Abc234xy", async username => {
+      checked.push(username); return checked.length < 3;
+    });
+    expect(checked).toHaveLength(3);
+    expect(result).toBe(checked[2]);
+    expect(result).toHaveLength(8);
+    let attempts = 0;
+    await expect(availableGeneratedUsername("Abc234xy", async () => { attempts++; return true; }))
+      .rejects.toMatchObject({ status: 503, code: "USERNAME_GENERATION_EXHAUSTED" });
+    expect(attempts).toBe(5);
   });
   it.each([
     "/api/operations-employees", "/api/operations-employees/x/reapply-permissions",

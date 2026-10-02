@@ -179,7 +179,7 @@ export async function kitchenActionAllowed(tx: RoutingExecutor, userId: string, 
   const actor = await routingActor(tx, userId);
   // A requesting-branch manager is never a source-side approver/operator,
   // even when a custom permission includes approve or edit.
-  if (actor?.role === "branch_manager" && !receiving) return false;
+  if (["branch_manager", "employee", "viewer"].includes(actor?.role ?? "") && !receiving) return false;
   if (!actor || !routingPersonEligible(actor, action === "approve" ? "approve" : "edit")) return false;
   // Administration may intervene, but a revoked action is never restored by role.
   if (actor.role === "admin") return true;

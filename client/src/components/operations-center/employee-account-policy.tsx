@@ -3,7 +3,7 @@ import { Loader2, ShieldCheck } from "lucide-react";
 import type { EmployeeAccountPolicy as Policy, EmployeeAccountsResponse } from "@shared/employee-account-delegation";
 import { Button } from "@/components/ui/button";
 import { EmployeeAccountPermissions } from "./employee-account-permissions";
-import { constrainDelegatedPermissions, createEmployeeAccountCommandGuard, EMPLOYEE_ACCOUNT_POLICY_ENDPOINT, employeeAccountErrorMessage, requestEmployeeAccount } from "@/lib/employee-account-delegation";
+import { constrainDelegatedPermissions, createEmployeeAccountCommandGuard, EMPLOYEE_ACCOUNT_POLICY_ENDPOINT, employeeAccountErrorMessage, hasMissingViewPermission, requestEmployeeAccount } from "@/lib/employee-account-delegation";
 
 export function EmployeeAccountPolicyEditor({ directory, refresh }: { directory: EmployeeAccountsResponse; refresh: () => void }) {
   const [enabled, setEnabled] = useState(directory.policy.enabled);
@@ -16,6 +16,10 @@ export function EmployeeAccountPolicyEditor({ directory, refresh }: { directory:
   useEffect(() => () => { guard.invalidate(); controller.current?.abort(); }, [guard]);
   const save = async () => {
     if (pending) return;
+    if (hasMissingViewPermission(permissions) || (enabled && !permissions.length)) {
+      setError("اختر صلاحيات معتمدة مع العرض لكل وحدة قبل تفعيل التفويض.");
+      return;
+    }
     const token = guard.capture();
     const request = new AbortController();
     controller.current = request;
@@ -48,7 +52,7 @@ export function EmployeeAccountPolicyEditor({ directory, refresh }: { directory:
     <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs leading-6 text-amber-900">تعطيل السياسة أو تضييقها لا يسحب تلقائيًا وصول الحسابات الحالية. السياسة تحدّد التفويض اللاحق فقط؛ لإيقاف وصول حساب قائم جمّده أو خفّض صلاحياته صراحةً. يبقى عرض الحسابات والتجميد والتخفيض متاحًا، بينما يتطلب الإنشاء وإعادة الفتح سياسة مفعّلة.</p>
     {error && <p role="alert" className="text-xs leading-6 text-destructive">{error}</p>}
     {saved && <p role="status" className="text-xs text-emerald-700">تم حفظ السياسة من الخادم.</p>}
-    <Button type="button" className="min-h-11 gap-2" disabled={pending || (enabled && !permissions.length)} onClick={save}>
+    <Button type="button" className="min-h-11 gap-2" disabled={pending || hasMissingViewPermission(permissions) || (enabled && !permissions.length)} onClick={save}>
       {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
       {pending ? "جار حفظ السياسة…" : enabled ? "اعتماد وحفظ السياسة" : "حفظ السياسة مع تعطيل التفويض"}
     </Button>

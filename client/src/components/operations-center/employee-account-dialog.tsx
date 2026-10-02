@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { EmployeeAccountPermissions } from "./employee-account-permissions";
-import { constrainDelegatedPermissions, createEmployeeAccountCommandGuard, EMPLOYEE_ACCOUNTS_ENDPOINT, employeeAccountErrorMessage, hasUnapprovedPermissions, requestEmployeeAccount } from "@/lib/employee-account-delegation";
+import { constrainDelegatedPermissions, createEmployeeAccountCommandGuard, EMPLOYEE_ACCOUNTS_ENDPOINT, employeeAccountErrorMessage, hasMissingViewPermission, hasUnapprovedPermissions, requestEmployeeAccount } from "@/lib/employee-account-delegation";
 
 export type EmployeeAccountDialogMode = "create" | "permissions" | "freeze" | "reopen";
 
@@ -30,6 +30,7 @@ export function EmployeeAccountDialog({ employee, mode, directory, close, refres
   const [error, setError] = useState("");
   const [copied, setCopied] = useState("");
   const [completed, setCompleted] = useState(false);
+  const [handoffSaved, setHandoffSaved] = useState(false);
   const guard = useRef(createEmployeeAccountCommandGuard()).current;
   const request = useRef<AbortController | null>(null);
   useEffect(() => () => {
@@ -37,6 +38,10 @@ export function EmployeeAccountDialog({ employee, mode, directory, close, refres
     request.current?.abort();
   }, [guard]);
   const dismiss = () => {
+    if (credentials && !handoffSaved) {
+      setError("أكد حفظ بيانات الدخول بطريقة آمنة قبل إغلاق العرض الوحيد.");
+      return;
+    }
     guard.invalidate();
     request.current?.abort();
     setCredentials(null);
@@ -45,10 +50,17 @@ export function EmployeeAccountDialog({ employee, mode, directory, close, refres
     if (pending) refresh();
   };
   const canGrant = directory.policy.enabled && approved.length > 0;
+  const selectedPermissions = constrainDelegatedPermissions(permissions, available);
+  const missingView = hasMissingViewPermission(selectedPermissions);
+  const emptyNewGrant = mode === "create" && selectedPermissions.length === 0;
   const statusMode = mode === "freeze" || mode === "reopen";
   const title = mode === "create" ? "إنشاء حساب موظف" : mode === "permissions" ? "تعديل صلاحيات الحساب" : mode === "freeze" ? "تجميد حساب الموظف" : "إعادة فتح حساب الموظف";
   const act = async () => {
     if (pending || completed) return;
+    if (!statusMode && (missingView || emptyNewGrant || (mode === "create" && !canGrant))) {
+      setError(emptyNewGrant ? "اختر صلاحية واحدة على الأقل قبل إنشاء الحساب." : "كل إجراء يتطلب صلاحية العرض المعتمدة للوحدة نفسها.");
+      return;
+    }
     const token = guard.capture();
     const controller = new AbortController();
     request.current = controller;
@@ -118,12 +130,16 @@ export function EmployeeAccountDialog({ employee, mode, directory, close, refres
             </div>
           </div>)}
           {copied && <p role="status" className="text-xs text-emerald-800">{copied}</p>}
+          <label className="flex min-h-11 cursor-pointer items-center gap-2 text-xs font-bold text-emerald-900">
+            <input type="checkbox" className="h-4 w-4 accent-emerald-700" checked={handoffSaved} onChange={event => { setHandoffSaved(event.target.checked); setError(""); }} />
+            حفظت بيانات الدخول بطريقة آمنة لتسليمها للموظف المعني
+          </label>
         </section> : statusMode ? <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm leading-7">
           <p className="font-bold">{mode === "freeze" ? "هل تؤكد تجميد الحساب؟" : "هل تؤكد إعادة فتح الحساب؟"}</p>
           <p>{mode === "freeze" ? "سيتوقف دخول الموظف بهذا الحساب، دون حذف الموظف أو حسابه. يمكنك إعادة فتحه لاحقًا إذا استوفى شروط التفويض." : "سيتمكن الموظف من تسجيل الدخول مجددًا بصلاحيات الحساب المعتمدة. لن يتم توليد كلمة مرور جديدة."}</p>
           {mode === "reopen" && !employee.account?.canReactivate && <p role="alert" className="text-destructive">هذا الحساب غير مؤهل لإعادة الفتح. راجع السياسة وصلاحيات الحساب أولًا.</p>}
         </div> : <>
-          {mode === "create" && <p className="rounded-lg border border-violet-200 bg-violet-50/60 p-3 text-xs leading-6 text-violet-900">يولّد الخادم اسم مستخدم قصيرًا وكلمة مرور قوية عند الإنشاء الفعلي فقط. بيانات الدخول غير قابلة للتعديل، ولا توجد خطوة إنشاء منفصلة عن الموظف.</p>}
+          {mode === "create" && <p className="rounded-lg border border-violet-200 bg-violet-50/60 p-3 text-xs leading-6 text-violet-900">يولّد الخادم اسم مستخدم من 8 أحرف وكلمة مرور من 12 حرفًا تضم أحرفًا كبيرة وصغيرة وأرقامًا دون رموز ملتبسة، عند الإنشاء الفعلي فقط. بيانات الدخول غير قابلة للتعديل، وتظهر كلمة المرور مرة واحدة للتسليم الآمن.</p>}
           {mode === "create" && !canGrant && <p role="alert" className="text-xs text-destructive">التفويض غير مفعّل أو لا توجد صلاحيات معتمدة. تواصل مع مدير النظام.</p>}
           {reductionOnly && <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs leading-6 text-amber-900">التعديل هنا للتخفيض فقط، دون إضافة صلاحيات جديدة. يمكنك الاحتفاظ بالصلاحيات الحالية الواقعة ضمن القائمة المعتمدة أو إزالة بعضها. حفظ قائمة فارغة يسحب جميع الصلاحيات المباشرة؛ لإيقاف الدخول تمامًا جمّد الحساب. تعطيل السياسة لا يسحب تلقائيًا وصول الحسابات الحالية.</p>}
           {hasUnapprovedPermissions(employee.account?.permissions ?? [], approved) && <p className="text-xs leading-6 text-amber-800">توجد صلاحيات سابقة خارج القائمة الحالية. سيزيل الحفظ تلك الصلاحيات، وسيقتصر على الصلاحيات الحالية المعتمدة المختارة أدناه.</p>}
@@ -139,16 +155,18 @@ export function EmployeeAccountDialog({ employee, mode, directory, close, refres
           <EmployeeAccountPermissions available={available} selected={permissions} onChange={next => { setTemplate("custom"); setPermissions(next); }} disabled={pending || (mode === "create" && !canGrant)}
             legend={reductionOnly ? "صلاحيات حالية يمكن الاحتفاظ بها" : undefined}
             emptyMessage={mode === "permissions" ? "لا توجد صلاحيات حالية ضمن القائمة المعتمدة. يمكنك حفظ القائمة الفارغة لسحب جميع الصلاحيات المباشرة من الحساب." : undefined} />
+          {emptyNewGrant && canGrant && <p className="text-xs text-muted-foreground">اختر قالبًا أو صلاحية واحدة على الأقل؛ لا يُنشأ حساب جديد دون صلاحيات.</p>}
+          {missingView && <p role="alert" className="text-xs text-destructive">تتطلب الإجراءات المختارة صلاحية العرض المعتمدة للوحدة نفسها. أضف العرض إن كان متاحًا، أو أزل إجراءات الوحدة قبل الحفظ.</p>}
           <p className="text-[11px] leading-5 text-muted-foreground">القوالب والصلاحيات محصورة بما اعتمده مدير النظام. لا تمنح هذه الصفحة إدارة المستخدمين أو صلاحيات إدارية عامة.</p>
         </>}
         {error && <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-xs leading-6 text-destructive">{error}</p>}
       </div>
       <DialogFooter className="gap-2 sm:gap-2">
-        {!credentials && <Button type="button" className="min-h-11 gap-2" variant={mode === "freeze" ? "destructive" : "default"} disabled={pending || completed || (statusMode ? mode === "reopen" && (!canGrant || !employee.account?.canReactivate) : mode === "create" && !canGrant)} onClick={act}>
+        {!credentials && <Button type="button" className="min-h-11 gap-2" variant={mode === "freeze" ? "destructive" : "default"} disabled={pending || completed || (statusMode ? mode === "reopen" && (!canGrant || !employee.account?.canReactivate) : missingView || emptyNewGrant || (mode === "create" && !canGrant))} onClick={act}>
           {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : mode === "freeze" ? <Lock className="h-4 w-4" /> : mode === "reopen" ? <Unlock className="h-4 w-4" /> : <KeyRound className="h-4 w-4" />}
           {pending ? "جار التنفيذ…" : mode === "create" ? "توليد وإنشاء الحساب" : mode === "permissions" ? reductionOnly ? "حفظ تخفيض الصلاحيات" : "حفظ الصلاحيات" : mode === "freeze" ? "تأكيد التجميد" : "تأكيد إعادة الفتح"}
         </Button>}
-        <Button type="button" variant="outline" className="min-h-11" onClick={dismiss}>{credentials ? "حفظت البيانات · إغلاق" : "إلغاء"}</Button>
+        <Button type="button" variant="outline" className="min-h-11" disabled={Boolean(credentials && !handoffSaved)} onClick={dismiss}>{credentials ? "حفظت البيانات · إغلاق" : "إلغاء"}</Button>
       </DialogFooter>
     </DialogContent>
   </Dialog>;

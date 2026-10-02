@@ -15,7 +15,7 @@ import { db } from "./db";
 import { storage } from "./storage";
 import { isAuthenticated, invalidateAuthCache } from "./auth";
 import {
-  actorMayManage, branchMayManage, DEFAULT_POLICY, DelegationError, deny,
+  actorMayManage, availableGeneratedUsername, branchMayManage, createAccountInput, DEFAULT_POLICY, DelegationError, deny,
   delegationTemplates, effectiveDelegatedPermissions, generatedCredentials, isLegacyAccountPath, permissionsInput,
   permissionsWithin, policyInput, statusInput, targetMayManage, validatePermissions,
 } from "./employee-account-delegation-policy";
@@ -56,7 +56,9 @@ async function policy(tx: Tx): Promise<EmployeeAccountPolicy> {
   if (!row) return { ...DEFAULT_POLICY, permissions: [] };
   try {
     const parsed = policyInput.parse(JSON.parse(row.value));
-    return { ...parsed, permissions: validatePermissions(parsed.permissions) };
+    // Previously approved action-only ceilings must remain readable for safety
+    // suspension/reduction. New policy saves and grants require view explicitly.
+    return { ...parsed, permissions: validatePermissions(parsed.permissions, EMPLOYEE_ACCOUNT_SAFE_PERMISSIONS, false) };
   } catch {
     // Corrupt configuration is never treated as permissive or silently replaced.
     throw new DelegationError(503, "INVALID_POLICY", "سياسة التفويض غير صالحة؛ يرجى مراجعة مسؤول النظام");
@@ -296,7 +298,8 @@ export function registerEmployeeAccountDelegation(app: Express) {
 
   const mutate = (mode: "create" | "permissions" | "status"): RequestHandler => endpoint(async (req, res) => {
     const id = employeeId(req.params.employeeId);
-    const input = mode === "status" ? statusInput.parse(req.body) : permissionsInput.parse(req.body);
+    const input = mode === "status" ? statusInput.parse(req.body)
+      : mode === "create" ? createAccountInput.parse(req.body) : permissionsInput.parse(req.body);
     // Expensive CSPRNG/hash outside the lock; no credential or user is persisted
     // unless every authoritative check succeeds inside the transaction.
     const credentials = mode === "create" ? generatedCredentials() : null;
@@ -319,6 +322,10 @@ export function registerEmployeeAccountDelegation(app: Express) {
         // title-dependent auth behavior (delivery) is explicitly ceiling-checked.
         const jobTitle = employee.jobTitle === "delivery" ? "delivery" : null;
         enforceIntrinsicSelection(jobTitle, selected!);
+        credentials!.username = await availableGeneratedUsername(credentials!.username, async username => {
+          const [existing] = await tx.select({ id: users.id }).from(users).where(eq(users.username, username)).limit(1);
+          return Boolean(existing);
+        });
         const [account] = await tx.insert(users).values({
           username: credentials!.username, password: passwordHash!,
           firstName: employee.employeeName, lastName: null, role: "employee",

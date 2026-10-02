@@ -2,6 +2,7 @@ import session from "express-session";
 import type { Express, RequestHandler } from "express";
 import connectPg from "connect-pg-simple";
 import rateLimit from "express-rate-limit";
+import { createPasswordLoginRateLimiter } from "./password-login-limiter";
 import { storage } from "./storage";
 import { createOwnerApiLockdown, isOwnerRequestAllowed, isOwnerSessionValid } from "./owner-security";
 import { db, pool } from "./db";
@@ -498,7 +499,9 @@ function establishSession(
   });
 }
 
-export const loginRateLimiter = rateLimit({
+export const loginRateLimiter = createPasswordLoginRateLimiter();
+
+const otpRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 5,
   message: { error: "تم تجاوز عدد محاولات تسجيل الدخول. يرجى المحاولة بعد 15 دقيقة." },
@@ -799,7 +802,7 @@ export async function setupAuth(app: Express) {
   });
 
   // المرحلة 5: التحقق من رمز OTP لإكمال دخول المساهم
-  app.post("/api/auth/verify-otp", loginRateLimiter, async (req, res) => {
+  app.post("/api/auth/verify-otp", otpRateLimiter, async (req, res) => {
     res.set({ 'Cache-Control': 'no-store, no-cache, must-revalidate', 'Pragma': 'no-cache' });
     try {
       const pending = req.session.pendingTwoFactor;
@@ -844,7 +847,7 @@ export async function setupAuth(app: Express) {
   });
 
   // المرحلة 5: إعادة إرسال رمز OTP (مع ضوابط التكرار)
-  app.post("/api/auth/resend-otp", loginRateLimiter, async (req, res) => {
+  app.post("/api/auth/resend-otp", otpRateLimiter, async (req, res) => {
     res.set({ 'Cache-Control': 'no-store, no-cache, must-revalidate', 'Pragma': 'no-cache' });
     try {
       const pending = req.session.pendingTwoFactor;

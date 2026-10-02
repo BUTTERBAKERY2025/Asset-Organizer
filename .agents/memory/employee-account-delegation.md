@@ -20,3 +20,15 @@ Session revocation must cover authentication already in progress, not just sessi
 **Why:** Password verification can finish before a reset but issue a new session afterward; deleting or marking existing sessions alone does not stop this race.
 
 **How to apply:** Carry the pre-verification revocation generation through password and OTP authentication, check it at issuance and on authenticated requests, and test paused authentication overlapping revocation.
+
+Employee accounts are used daily by workers, so automatically generated usernames and passwords must be practical to type; the user explicitly rejected long random credentials while requiring generation to remain automatic.
+
+**Why:** The user expects long credentials to cause repeated daily sign-in difficulties for workers.
+
+**How to apply:** Use compact cryptographically generated credentials with unambiguous characters, retain secure password hashing and rate limiting, and do not silently change existing account credentials.
+
+The user approved expanding delegation to branch requests and shipment receipt, branch stock and stocktaking, and attendance and schedules. Production was not selected.
+
+**Why:** These are the operational duties the user explicitly chose when asked which additional employee permissions are needed.
+
+**How to apply:** Offer narrowly scoped operational capabilities within the administrator-approved ceiling; do not grant broad inventory, financial, HR personnel, or global administration access merely to expose these workflows.

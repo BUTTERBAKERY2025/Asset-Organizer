@@ -113,10 +113,11 @@ describe("branch manager requester and recipient permissions", () => {
 
    it("uses the canonical server branch list for manager supply operations", () => {
     const branchHook = readFileSync(new URL("../client/src/hooks/useBranches.ts", import.meta.url), "utf8");
-    expect(branchHook).toContain('user?.role === "branch_manager"');
+    expect(branchHook).toContain('["branch_manager", "operations_manager"].includes(user?.role || "")');
      expect(branchHook).not.toContain("branch.id === primaryBranchId");
     expect(branchHook).toContain("visibleBranchesForUser(assignedBranches, user?.role, user?.branchId)");
     const kitchen = readFileSync(new URL("../client/src/pages/central-kitchen-orders.tsx", import.meta.url), "utf8");
-    expect(kitchen).toContain('canWarehouse={canView(user?.role === "branch_manager" ? "branch_supply" : "warehouse")}');
+    expect(kitchen).toContain('const supplyModule = user?.role === "branch_manager"');
+    expect(kitchen).toContain('canWarehouse={canView(supplyModule)}');
   });
 });

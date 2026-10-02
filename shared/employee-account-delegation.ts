@@ -73,6 +73,10 @@ export const EMPLOYEE_ACCOUNT_SAFE_PERMISSIONS: DelegatedPermission[] = [
   { module: "maintenance", actions: ["view", "create", "edit"] },
   { module: "branch_complaints", actions: ["view", "create", "edit"] },
   { module: "delivery_tasks", actions: ["view", "edit"] },
+  { module: "branch_supply", actions: ["view", "create", "edit"] },
+  { module: "central_kitchen_orders", actions: ["view", "create", "edit"] },
+  { module: "branch_stock", actions: ["view", "edit"] },
+  { module: "branch_workforce", actions: ["view", "create", "edit"] },
 ];
 
 // Intentionally excluded: users/RBAC/security/settings, HR/payroll/attendance
@@ -81,3 +85,6 @@ export const EMPLOYEE_ACCOUNT_SAFE_PERMISSIONS: DelegatedPermission[] = [
 // production (mixed legacy/global source routes), warehouse, finance, approvals,
 // deletion, exports and every unknown module. Expanding this ceiling requires
 // reviewing *all* consumers of the module, not trusting its display label.
+// branch_supply/central_kitchen_orders include physical receiving only at the
+// destination (kitchen assigned-receiver rules still apply). branch_stock and
+// branch_workforce are dedicated desks, not aliases for inventory/shifts/HR.

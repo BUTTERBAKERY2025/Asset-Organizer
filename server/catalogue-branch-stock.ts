@@ -1,5 +1,5 @@
 import { and, eq, sql } from "drizzle-orm";
-import { branchStock, warehouseItems, type BranchStock } from "@shared/schema";
+import { branchStock, warehouseItems, systemAuditLogs, type BranchStock } from "@shared/schema";
 import { isNewCatalogReferenceAllowed } from "@shared/catalog-activity";
 import type { db } from "./db";
 
@@ -18,6 +18,7 @@ export async function updateCatalogueBranchStock(
   quantity: number,
   dailyConsumption?: number,
   userId?: string,
+  count?: { expectedQuantity: number },
 ): Promise<BranchStock> {
   if (!Number.isInteger(itemId) || itemId <= 0) throw new InactiveBranchStockReferenceError();
   return database.transaction(async (tx) => {
@@ -30,6 +31,7 @@ export async function updateCatalogueBranchStock(
       .where(and(eq(branchStock.branchId, branchId), eq(branchStock.itemId, itemId)))
       .for("update");
     if (existing) {
+      if (count && Number(existing.currentQuantity) !== count.expectedQuantity) throw new Error("STALE_COUNT");
       // Editing an established historical association does not create a link.
       const [updated] = await tx.update(branchStock).set({
         currentQuantity: quantity,
@@ -41,8 +43,14 @@ export async function updateCatalogueBranchStock(
         sql`${quantity} >= ${branchStock.reservedQuantity}`,
       )).returning();
       if (!updated) throw new Error("لا يمكن خفض مخزون المواد عن الكمية المحجوزة");
+      if (count) await tx.insert(systemAuditLogs).values({
+        userId, branchId, action: "branch_stock_count", module: "branch_stock",
+        entityId: String(existing.id),
+        details: JSON.stringify({ branchId, itemId, before: count.expectedQuantity, after: quantity }),
+      });
       return updated;
     }
+    if (count) throw new Error("STALE_COUNT");
     if (!isNewCatalogReferenceAllowed(item)) throw new InactiveBranchStockReferenceError();
     const [created] = await tx.insert(branchStock).values({
       branchId, itemId, currentQuantity: quantity, dailyConsumption, updatedBy: userId,

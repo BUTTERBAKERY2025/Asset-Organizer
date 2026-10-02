@@ -139,6 +139,9 @@ function requireUser(req: Request) {
   return req.currentUser;
 }
 function managerScope(req: Request, source: SourceRow, action: "view" | "create" | "edit") {
+  // Employee request/receipt grants are not source dispatch authority. Driver
+  // actions are separately bound to the actual assignment via isDriver.
+  if (["employee", "viewer"].includes(req.currentUser?.role ?? "")) return false;
   if (req.currentUser?.role === "branch_manager") {
     return action === "view" && branchDeliveryScope(req.currentUser.branchId, getAllowedBranchIds(req), source).view;
   }

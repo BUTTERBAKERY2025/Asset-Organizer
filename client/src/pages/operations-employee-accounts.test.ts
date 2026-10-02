@@ -143,6 +143,7 @@ describe("operations employee account page", () => {
     await mount();
     await act(async () => button("موظفون دون حساب").props.onClick());
     await act(async () => button("اختيار الموظف").props.onClick());
+    await act(async () => renderer.root.findAllByType("input").find((node: any) => node.props.type === "checkbox").props.onChange({ target: { checked: true } }));
     await act(async () => button("توليد وإنشاء الحساب").props.onClick());
     expect(JSON.stringify(renderer.toJSON())).toContain("unit-secret");
     mocks.user = { ...mocks.user, activeBranchId: "b" };
@@ -161,13 +162,17 @@ describe("operations employee account page", () => {
     await mount();
     await act(async () => button("موظفون دون حساب").props.onClick());
     await act(async () => button("اختيار الموظف").props.onClick());
+    await act(async () => renderer.root.findAllByType("input").find((node: any) => node.props.type === "checkbox").props.onChange({ target: { checked: true } }));
     await act(async () => button("توليد وإنشاء الحساب").props.onClick());
+    expect(JSON.stringify(renderer.toJSON())).toContain("scope-secret");
     mocks.search = "?branchId=a";
     await renderAgain();
     expect(JSON.stringify(renderer.toJSON())).not.toContain("scope-secret");
     await act(async () => button("اختيار الموظف").props.onClick());
+    await act(async () => renderer.root.findAllByType("input").find((node: any) => node.props.type === "checkbox").props.onChange({ target: { checked: true } }));
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ employee: data.employees[0], credentials: { username: "unit-user", password: "policy-secret" } }))));
     await act(async () => button("توليد وإنشاء الحساب").props.onClick());
+    expect(JSON.stringify(renderer.toJSON())).toContain("policy-secret");
     mocks.state = { ...mocks.state, data: { ...data, policy: { enabled: false, permissions: [] } } };
     await renderAgain();
     expect(JSON.stringify(renderer.toJSON())).not.toContain("policy-secret");
@@ -186,7 +191,9 @@ describe("operations employee account page", () => {
     await mount();
     await act(async () => button("موظفون دون حساب").props.onClick());
     await act(async () => button("اختيار الموظف").props.onClick());
+    await act(async () => renderer.root.findAllByType("input").find((node: any) => node.props.type === "checkbox").props.onChange({ target: { checked: true } }));
     await act(async () => button("توليد وإنشاء الحساب").props.onClick());
+    expect(JSON.stringify(renderer.toJSON())).toContain("logout-secret");
     mocks.loggingOut = true;
     await renderAgain();
     expect(JSON.stringify(renderer.toJSON())).not.toContain("logout-secret");

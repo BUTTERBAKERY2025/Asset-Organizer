@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { canManageEmployeeAccounts, constrainDelegatedPermissions, createEmployeeAccountCommandGuard, employeeAccountScope, EmployeeAccountRequestError, hasUnapprovedPermissions, requestEmployeeAccount } from "./employee-account-delegation";
+import { canManageEmployeeAccounts, constrainDelegatedPermissions, createEmployeeAccountCommandGuard, employeeAccountScope, EmployeeAccountRequestError, hasMissingViewPermission, hasUnapprovedPermissions, requestEmployeeAccount, toggleDelegatedPermission } from "./employee-account-delegation";
 import { getCachedData, setCachedData, shouldPersist } from "./persistentCache";
 
 afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers(); });
@@ -66,6 +66,20 @@ describe("narrow employee account frontend security", () => {
     const result = constrainDelegatedPermissions(approved, approved);
     result[0].actions.push("edit");
     expect(JSON.stringify(approved)).toBe(before);
+  });
+
+  it("enforces view dependencies without mutating input or exceeding approval", () => {
+    const actionOnly = [{ module: "cashier_journal", actions: ["create"] }];
+    expect(hasMissingViewPermission(actionOnly)).toBe(true);
+    expect(hasMissingViewPermission([])).toBe(false);
+    const selected = toggleDelegatedPermission([], approved, "cashier_journal", "create", true);
+    expect(selected).toEqual(approved);
+    expect(toggleDelegatedPermission(selected, approved, "cashier_journal", "create", true)).toEqual(approved);
+    expect(toggleDelegatedPermission(selected, approved, "cashier_journal", "view", false)).toEqual([]);
+    expect(toggleDelegatedPermission([], actionOnly, "cashier_journal", "create", true)).toEqual([]);
+    expect(selected).toEqual(approved);
+    expect(toggleDelegatedPermission(selected, approved, "cashier_journal", "create", false))
+      .toEqual([{ module: "cashier_journal", actions: ["view"] }]);
   });
 
   it("keys actor and scope separately, including membership and active branch changes", () => {

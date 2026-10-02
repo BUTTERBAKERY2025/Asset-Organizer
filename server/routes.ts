@@ -217,6 +217,7 @@ import { z } from "zod";
 import { registerKitchenRoutingRoutes, kitchenActionAllowed, getKitchenRouting, getKitchenRoutingBatch, routingActor, routingPersonEligible } from "./central-kitchen-routing";
 import { setupAuth, isAuthenticated, requirePermission, requireAnyPermission, getActiveBranchFilter, requireBranchAccess, canAccessBranch, isUserAdmin, getAllowedBranchIds, getEffectiveBranchFilter, getWarehouseKeeperEffectivePermissions, getBranchManagerEffectivePermissions, invalidateAuthCache, HR_MANAGER_MODULES, HR_SPECIALIST_PERMISSIONS, FINANCIAL_MANAGER_PERMISSIONS, OPERATIONS_MANAGER_PERMISSIONS, BRANCH_MANAGER_INTRINSIC_PERMISSIONS, hasCrossBranchHrReadAccess, filterRoleDeniedPermissions } from "./auth";
 import { registerEmployeeAccountDelegation } from "./employee-account-delegation";
+import { registerBranchStockDesk, workforcePermission, operationalRoster, operationalAttendance } from "./branch-delegated-operations";
 import { comparisonBranchIds, comparisonDate, comparisonEvidence, comparisonRange, buildCanonicalComparisons, COMPARISON_REASON_PREFIX, COMPARISON_UNAVAILABLE } from "./production-comparison-evidence";
 import { authRateLimiter, biometricRateLimiter, uploadRateLimiter, apiRateLimiter, validateFileUpload, sanitizeFilename, trackLoginAttempt } from "./security";
 import { registerGovernanceRoutes } from "./governance-routes";
@@ -359,6 +360,7 @@ export async function registerRoutes(
   // Setup authentication
   await setupAuth(app);
   registerEmployeeAccountDelegation(app);
+  registerBranchStockDesk(app);
   registerRecipeExceptionRoutes(app);
   registerProductionRecipeModeRoutes(app);
   // قفل حساب المراجع الخارجي: مقصور على /api/audit/* و /api/auth/* فقط
@@ -8061,6 +8063,9 @@ export async function registerRoutes(
           const [order] = await tx.select().from(centralKitchenOrders)
             .where(eq(centralKitchenOrders.id, id.data)).for("update");
           if (!order) throw new CentralKitchenLiveError("الطلب غير موجود", 404);
+          if (["employee", "viewer"].includes(actor.role)
+            && (order.requestBranchId !== actor.branchId || order.requestBranchId === "main_warehouse"))
+            throw new CentralKitchenLiveError("الطلب خارج نطاق الفرع", 403);
           if (!(await canAccessBranch(req, order.requestBranchId)))
             throw new CentralKitchenLiveError("التعديل والإلغاء للفرع الطالب فقط", 403);
           const currentActor = await routingActor(tx, actor.id);
@@ -8228,7 +8233,9 @@ export async function registerRoutes(
     centralKitchenId: string;
   }): Promise<boolean> => {
     if (isUserAdmin(req)) return true;
-    if (req.currentUser?.role === "branch_manager")
+    if (["employee", "viewer"].includes(req.currentUser?.role ?? "")
+      && (order.requestBranchId === "main_warehouse" || order.requestBranchId !== req.currentUser?.branchId)) return false;
+    if (["branch_manager", "employee", "viewer"].includes(req.currentUser?.role ?? ""))
       return await canAccessBranch(req, order.requestBranchId);
     return (await canAccessBranch(req, order.requestBranchId))
       || (await canAccessBranch(req, order.centralKitchenId));
@@ -8251,8 +8258,9 @@ export async function registerRoutes(
           return res.status(403).json({ error: "غير مصرح بالوصول لهذا الفرع" });
         }
         const conditions: SQL[] = [];
-        if (req.currentUser?.role === "branch_manager") {
-          const authorized = getAllowedBranchIds(req) ?? [];
+        if (["branch_manager", "employee", "viewer"].includes(req.currentUser?.role ?? "")) {
+          const authorized = (getAllowedBranchIds(req) ?? []).filter(id =>
+            !["employee", "viewer"].includes(req.currentUser?.role ?? "") || (id === req.currentUser?.branchId && id !== "main_warehouse"));
           if (!authorized.length) return res.status(403).json({ error: "لا يوجد فرع طالب مفوض" });
           conditions.push(inArray(centralKitchenOrders.requestBranchId, authorized));
         }
@@ -8454,8 +8462,9 @@ export async function registerRoutes(
           gte(centralKitchenOrders.createdAt, window.start),
           lt(centralKitchenOrders.createdAt, window.end),
         ];
-        if (req.currentUser?.role === "branch_manager") {
-          const authorized = getAllowedBranchIds(req) ?? [];
+        if (["branch_manager", "employee", "viewer"].includes(req.currentUser?.role ?? "")) {
+          const authorized = (getAllowedBranchIds(req) ?? []).filter(id =>
+            !["employee", "viewer"].includes(req.currentUser?.role ?? "") || (id === req.currentUser?.branchId && id !== "main_warehouse"));
           if (!authorized.length) return res.status(403).json({ error: "لا يوجد فرع طالب مفوض" });
           conditions.push(inArray(centralKitchenOrders.requestBranchId, authorized));
         }
@@ -8572,6 +8581,8 @@ export async function registerRoutes(
     isAuthenticated,
     requirePermission("central_kitchen_orders", "view"),
     async (req, res) => {
+      if (["employee", "viewer"].includes(req.currentUser?.role ?? ""))
+        return res.status(403).json({ error: "توفر مخزون المطبخ ليس ضمن صلاحية الفرع الطالب" });
       const parsed = z.object({
         kitchenId: z.string().trim().min(1).max(255),
         productId: z.coerce.number().int().positive().optional(),
@@ -8655,6 +8666,8 @@ export async function registerRoutes(
     isAuthenticated,
     requirePermission("central_kitchen_orders", "view"),
     async (req, res) => {
+      if (["employee", "viewer"].includes(req.currentUser?.role ?? ""))
+        return res.status(403).json({ error: "عمليات المطبخ ليست ضمن صلاحية الفرع الطالب" });
       try {
       const parsed = z.object({ kitchenId: z.string().trim().min(1).max(255) }).strict().safeParse(req.query);
       if (!parsed.success) return res.status(400).json({ error: "معرف المطبخ غير صالح" });
@@ -9165,7 +9178,9 @@ export async function registerRoutes(
       const payloadFingerprint = createCentralKitchenPayloadFingerprint(payload);
       try {
         // The requesting branch must be authorized at submission time.
-        if (!(await canAccessBranch(req, payload.requestBranchId))) {
+        if (!(await canAccessBranch(req, payload.requestBranchId))
+          || (["employee", "viewer"].includes(user.role)
+            && (payload.requestBranchId !== user.branchId || payload.requestBranchId === "main_warehouse"))) {
           return res.status(403).json({ error: "ليس لديك صلاحية لإنشاء طلب لهذا الفرع" });
         }
         const orderDay = saudiDate();
@@ -28437,7 +28452,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/employee-schedules/bulk", isAuthenticated, requirePermission("shifts", "create"), async (req, res) => {
+  app.post("/api/employee-schedules/bulk", isAuthenticated, workforcePermission("shifts", "create"), async (req, res) => {
     try {
       const { schedules } = req.body;
       if (!Array.isArray(schedules)) {
@@ -30208,7 +30223,7 @@ export async function registerRoutes(
   });
 
   // Check-in employee by manager or attendance clerk
-  app.post("/api/attendance/check-in-employee", isAuthenticated, requirePermission("attendance_check", "create"), async (req, res) => {
+  app.post("/api/attendance/check-in-employee", isAuthenticated, workforcePermission("attendance_check", "create"), async (req, res) => {
     try {
 
       const { employeeId, branchId, signature, scheduleId, scheduledStartTime, scheduledEndTime, employeeName, userLatitude, userLongitude, attendanceDate, biometricVerified } = req.body;
@@ -30331,7 +30346,7 @@ export async function registerRoutes(
         }
       }
       
-      res.status(201).json({ ...record, biometricVerified: serverBiometricVerified });
+      res.status(201).json(res.locals.branchWorkforce ? operationalAttendance(record) : { ...record, biometricVerified: serverBiometricVerified });
     } catch (error: any) {
       console.error("[Check-in] Unexpected error:", error?.message || error, error?.stack);
       res.status(500).json({ error: "فشل في تسجيل الحضور" });
@@ -30339,7 +30354,7 @@ export async function registerRoutes(
   });
 
   // Check-out employee by manager or attendance clerk
-  app.post("/api/attendance/check-out-employee", isAuthenticated, requirePermission("attendance_check", "edit"), async (req, res) => {
+  app.post("/api/attendance/check-out-employee", isAuthenticated, workforcePermission("attendance_check", "edit"), async (req, res) => {
     try {
       const { employeeId, scheduleId, signature, attendanceDate, biometricVerified } = req.body;
       
@@ -30402,6 +30417,8 @@ export async function registerRoutes(
       if (!existingRecord) {
         return res.status(404).json({ error: "لم يتم تسجيل حضور هذا الموظف في هذا التاريخ" });
       }
+      if (res.locals.branchWorkforce && existingRecord.branchId !== req.currentUser?.branchId)
+        return res.status(403).json({ error: "سجل الحضور خارج نطاق الفرع المفوض" });
       
       if (existingRecord.actualCheckOut) {
         return res.status(400).json({ error: "تم تسجيل انصراف هذا الموظف بالفعل اليوم" });
@@ -30460,7 +30477,7 @@ export async function registerRoutes(
         }
       }
       
-      res.json({ ...record, biometricVerified: serverBiometricVerified });
+      res.json(res.locals.branchWorkforce ? operationalAttendance(record) : { ...record, biometricVerified: serverBiometricVerified });
     } catch (error: any) {
       console.error("[Check-out] Unexpected error:", error?.message || error, error?.stack);
       res.status(500).json({ error: "فشل في تسجيل الانصراف" });
@@ -33356,7 +33373,7 @@ export async function registerRoutes(
   });
 
   // Shift management bundle - combines multiple queries into one
-  app.get("/api/shift-management/bundle", isAuthenticated, requirePermission("shifts", "view"), async (req, res) => {
+  app.get("/api/shift-management/bundle", isAuthenticated, workforcePermission("shifts", "view"), async (req, res) => {
     try {
       const branchId = req.query.branchId as string;
       const startDate = req.query.startDate as string;
@@ -33373,22 +33390,26 @@ export async function registerRoutes(
         }
       }
 
+      const bundleReadFailure = (error: unknown) => {
+        if (res.locals.branchWorkforce) throw error;
+        return [];
+      };
       const [shiftProfiles, allBranchEmployees, schedules, attendance, weeklyLock, approvedLeaves] = await Promise.all([
-        storage.getBranchShiftProfiles(branchId).catch(() => []),
-        storage.getBranchEmployeesByBranch(branchId).catch(() => []),
+        storage.getBranchShiftProfiles(branchId).catch(bundleReadFailure),
+        storage.getBranchEmployeesByBranch(branchId).catch(bundleReadFailure),
         (startDate && endDate)
-          ? storage.getEmployeeSchedulesByBranchAndDateRange(branchId, startDate, endDate).catch(() => [])
+          ? storage.getEmployeeSchedulesByBranchAndDateRange(branchId, startDate, endDate).catch(bundleReadFailure)
           : Promise.resolve([]),
         (startDate && endDate)
-          ? storage.getAllAttendanceRecords({ branchId, startDate, endDate }).catch(() => [])
+          ? storage.getAllAttendanceRecords({ branchId, startDate, endDate }).catch(bundleReadFailure)
           : Promise.resolve([]),
         (startDate)
           ? db.select().from(weeklyScheduleLocks).where(
               and(
                 eq(weeklyScheduleLocks.branchId, branchId),
-                eq(weeklyScheduleLocks.weekStartDate, startDate)
+                eq(weeklyScheduleLocks.weekStartDate, res.locals.branchWorkforce ? getScheduleWeekStart(startDate) || startDate : startDate)
               )
-            ).catch(() => [])
+            ).catch(bundleReadFailure)
           : Promise.resolve([]),
         // Approved leaves overlapping this range: shown in the grid as locked
         // "إجازة معتمدة" days (never editable, never counted as weekly rest).
@@ -33406,7 +33427,7 @@ export async function registerRoutes(
                 lte(leaveRequests.startDate, endDate),
                 gte(leaveRequests.endDate, startDate),
               )
-            ).catch(() => [])
+            ).catch(bundleReadFailure)
           : Promise.resolve([]),
       ]);
 
@@ -33434,6 +33455,20 @@ export async function registerRoutes(
       // نسخة حالة الجدول: يستخدمها العميل لاكتشاف تعارض التعديل المزدوج عند الحفظ
       const scheduleVersion = computeScheduleStateVersion(schedules as any[]);
 
+      if (res.locals.branchWorkforce) {
+        res.set("Cache-Control", "private, no-store");
+        return res.json({
+          employees: employees.map(operationalRoster),
+          schedules: schedules.map((s: any) => ({
+            id: s.id, employeeId: s.employeeId, branchEmployeeId: s.branchEmployeeId,
+            branchId: s.branchId, scheduleDate: s.scheduleDate, startTime: s.startTime,
+            endTime: s.endTime, isOff: s.isOff, shiftType: s.shiftType, status: s.status,
+          })),
+          attendance: attendance.map(operationalAttendance),
+          weeklyLock: weeklyLock.map(l => ({ id: l.id, weekStartDate: l.weekStartDate })), scheduleVersion,
+          approvedLeaves: approvedLeaves.map(l => ({ branchEmployeeId: l.branchEmployeeId, startDate: l.startDate, endDate: l.endDate })),
+        });
+      }
       res.json({ shiftProfiles, employees, schedules, attendance, weeklyLock, approvedLeaves, scheduleVersion });
     } catch (error) {
       console.error("Error fetching shift management bundle:", error);
@@ -36791,13 +36826,16 @@ export async function registerRoutes(
 
   const mainWarehouseBranchId = "main_warehouse";
   const isWarehouseKeeper = (req: any) => req.currentUser?.role === "warehouse_keeper";
-  const isBranchSupplyManager = (req: any) => req.currentUser?.role === "branch_manager";
+  const isBranchSupplyManager = (req: any) => req.currentUser?.role === "branch_manager"
+    || (["employee", "viewer"].includes(req.currentUser?.role ?? "")
+      && req.authPermissions?.some((p: any) => p.module === "branch_supply"));
   // Branch requests use their own module, never a broad warehouse grant.
   const transferPermission = (action: "view" | "create" | "edit") =>
     (req: any, res: any, next: any) =>
       requirePermission(isBranchSupplyManager(req) ? "branch_supply" : "warehouse", action)(req, res, next);
   const branchSupplyDestination = async (req: any, branchId: string | null | undefined) =>
     !!branchId && branchId !== mainWarehouseBranchId
+      && (!["employee", "viewer"].includes(req.currentUser?.role ?? "") || branchId === req.currentUser.branchId)
       && (getAllowedBranchIds(req) ?? []).includes(branchId)
       && await canAccessBranch(req, branchId);
   const keeperWarehouseScope = (req: any, branchId: string | null | undefined) =>
@@ -37254,7 +37292,8 @@ export async function registerRoutes(
   app.get("/api/warehouse/material-transfers", isAuthenticated, transferPermission("view"), async (req, res) => {
     try {
       if (isBranchSupplyManager(req)) {
-        const allowed = (getAllowedBranchIds(req) ?? []).filter(id => id !== mainWarehouseBranchId);
+        const allowed = (getAllowedBranchIds(req) ?? []).filter(id => id !== mainWarehouseBranchId
+          && (!["employee", "viewer"].includes(req.currentUser?.role ?? "") || id === req.currentUser?.branchId));
         const requested = req.query.branchId || req.query.destinationBranchId;
         if (typeof requested === "string" && requested !== "all" && !allowed.includes(requested))
           return res.status(403).json({ error: "غير مصرح بالوصول لهذا الفرع" });

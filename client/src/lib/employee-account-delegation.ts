@@ -21,6 +21,25 @@ export function hasUnapprovedPermissions(selected: readonly DelegatedPermission[
     !available.some(row => row.module === permission.module && row.actions.includes(action))));
 }
 
+export function hasMissingViewPermission(selected: readonly DelegatedPermission[]) {
+  return selected.some(row => row.actions.some(action => action !== "view") && !row.actions.includes("view"));
+}
+
+/** Never silently add view beyond approval or retain actions after removing view. */
+export function toggleDelegatedPermission(selected: readonly DelegatedPermission[], available: readonly DelegatedPermission[], module: string, action: string, checked: boolean) {
+  const next = selected.map(row => ({ ...row, actions: [...row.actions] }));
+  let row = next.find(permission => permission.module === module);
+  if (checked) {
+    if (action !== "view" && !available.some(permission => permission.module === module && permission.actions.includes("view")))
+      return constrainDelegatedPermissions(next, available);
+    if (!row) { row = { module, actions: [] }; next.push(row); }
+    row.actions = Array.from(new Set([...row.actions, action, ...(action !== "view" ? ["view"] : [])]));
+  } else if (row) {
+    row.actions = action === "view" ? [] : row.actions.filter(value => value !== action);
+  }
+  return constrainDelegatedPermissions(next, available);
+}
+
 export function employeeAccountScope(user: {
   id: string; role: string; branchId?: string | null; activeBranchId?: string | null;
   allowedBranches?: { branchId: string; accessLevel?: string }[];

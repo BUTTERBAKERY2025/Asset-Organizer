@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { randomBytes } from "node:crypto";
+import { randomInt } from "node:crypto";
 import {
   EMPLOYEE_ACCOUNT_SAFE_PERMISSIONS,
   type DelegatedPermission, type EmployeeAccountPolicy, type EmployeeAccountTemplate,
@@ -17,13 +17,14 @@ const permission = z.object({
   actions: z.array(z.string().min(1).max(40)).min(1).max(10),
 }).strict();
 export const permissionsInput = z.object({ permissions: z.array(permission).max(30) }).strict();
+export const createAccountInput = permissionsInput.extend({ permissions: z.array(permission).min(1).max(30) }).strict();
 export const policyInput = permissionsInput.extend({ enabled: z.boolean() }).strict();
 export const statusInput = z.object({ isActive: z.enum(["active", "inactive"]) }).strict();
 
 export function permissionsWithin(requested: DelegatedPermission[], allowed: DelegatedPermission[]) {
   return requested.every(p => p.actions.every(a => allowed.some(c => c.module === p.module && c.actions.includes(a))));
 }
-export function validatePermissions(requested: DelegatedPermission[], allowed = EMPLOYEE_ACCOUNT_SAFE_PERMISSIONS) {
+export function validatePermissions(requested: DelegatedPermission[], allowed = EMPLOYEE_ACCOUNT_SAFE_PERMISSIONS, requireView = true) {
   const modules = new Set<string>();
   for (const p of requested) {
     if (modules.has(p.module) || new Set(p.actions).size !== p.actions.length)
@@ -32,6 +33,8 @@ export function validatePermissions(requested: DelegatedPermission[], allowed = 
   }
   if (!permissionsWithin(requested, EMPLOYEE_ACCOUNT_SAFE_PERMISSIONS) || !permissionsWithin(requested, allowed))
     deny("PERMISSION_NOT_APPROVED", "الصلاحيات المطلوبة غير معتمدة للتفويض");
+  if (requireView && requested.some(p => p.actions.some(action => action !== "view") && !p.actions.includes("view")))
+    throw new DelegationError(400, "VIEW_REQUIRED", "اختر صلاحية العرض مع إجراءات الوحدة حتى يتمكن الموظف من استخدامها");
   return requested.map(p => ({ module: p.module, actions: [...p.actions].sort() })).sort((a, b) => a.module.localeCompare(b.module));
 }
 export const DEFAULT_POLICY: EmployeeAccountPolicy = { enabled: false, permissions: [] };
@@ -72,19 +75,38 @@ export function effectiveDelegatedPermissions(target: { role: string; jobTitle?:
     ? [...direct, { module: "delivery_tasks", actions: ["view", "edit"] }] : direct;
 }
 
+// No visually ambiguous I/L/O/i/l/o/0/1, fixed prefix, modulo bias or Math.random.
+const CREDENTIAL_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
+function randomCredential(length: number) {
+  return Array.from({ length }, () => CREDENTIAL_ALPHABET[randomInt(CREDENTIAL_ALPHABET.length)]).join("");
+}
+export function generatedUsername() { return randomCredential(8); }
 export function generatedCredentials() {
-  return {
-    username: `e${randomBytes(7).toString("hex")}`,
-    password: `Aa9!${randomBytes(24).toString("base64url")}`,
-  };
+  let password: string;
+  // Reject whole candidates: every valid 12-character string is equally likely.
+  do { password = randomCredential(12); }
+  while (!/[A-Z]/.test(password) || !/[a-z]/.test(password) || !/[2-9]/.test(password));
+  return { username: generatedUsername(), password };
+}
+/** Called under the users table lock, so the existence check cannot race a writer. */
+export async function availableGeneratedUsername(initial: string, exists: (username: string) => Promise<boolean>) {
+  let username = initial;
+  for (let attempt = 0; attempt < 5; attempt++) {
+    if (!await exists(username)) return username;
+    if (attempt < 4) username = generatedUsername();
+  }
+  throw new DelegationError(503, "USERNAME_GENERATION_EXHAUSTED", "تعذر توليد اسم مستخدم متاح؛ لم يُنشأ الحساب. حاول مجددًا");
 }
 export function delegationTemplates(allowed: DelegatedPermission[]): EmployeeAccountTemplate[] {
   const definitions = [
     { id: "cashier", name: "كاشير", modules: ["cashier_journal"] },
-    { id: "quality_inspector", name: "إنتاج ومراقبة الجودة", modules: ["quality_control"] },
+    { id: "quality_inspector", name: "مراقبة الجودة", modules: ["quality_control"] },
     { id: "maintenance", name: "فني صيانة", modules: ["maintenance"] },
     { id: "branch_service", name: "خدمة الفرع", modules: ["branch_complaints"] },
     { id: "delivery", name: "التوصيل", modules: ["delivery_tasks"] },
+    { id: "branch_requests", name: "طلبات توريد الفرع والمطبخ", modules: ["branch_supply", "central_kitchen_orders"] },
+    { id: "branch_stock", name: "مخزون الفرع والجرد", modules: ["branch_stock"] },
+    { id: "branch_workforce", name: "حضور الفرع وجدولة الدوام", modules: ["branch_workforce"] },
   ];
   return definitions.map(({ id, name, modules }) => ({
     id, name, permissions: allowed.filter(p => modules.includes(p.module)).map(p => ({ ...p, actions: [...p.actions] })),

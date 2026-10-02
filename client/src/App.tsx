@@ -27,6 +27,7 @@ import NotFound from "@/pages/not-found";
 import LoginPage from "@/pages/login";
 import OperationsHRPage from "@/pages/operations-hr";
 import OperationsEmployeeAccountsPage from "@/pages/operations-employee-accounts";
+import CentralKitchenOrdersPage from "@/pages/central-kitchen-orders";
 import { makeLazy, startAggressivePreload, prefetchAdjacentPages } from "@/lib/pagePreloader";
 import { installAutoReconnectOnVisibility, ensurePrinterConnection, getSavedPrinter, isPrinterConnected } from "@/lib/thermal-printer";
 
@@ -37,6 +38,8 @@ const BranchComplaintsPage = makeLazy("branch-complaints");
 const DriverDeliveriesPage = makeLazy("driver-deliveries");
 const DashboardPage = makeLazy("dashboard");
 const InventoryPage = makeLazy("inventory");
+const BranchStockDeskPage = makeLazy("branch-stock-desk");
+const BranchWorkforcePage = makeLazy("branch-workforce");
 const ManagePage = makeLazy("manage");
 const BranchesPage = makeLazy("branches");
 const MaintenancePage = makeLazy("maintenance");
@@ -89,7 +92,6 @@ const IncentivesManagementPage = makeLazy("incentives-management");
 const SalesAnalyticsPage = makeLazy("sales-analytics");
 const DisplayBarWastePage = makeLazy("display-bar-waste");
 const AdvancedProductionOrdersPage = makeLazy("advanced-production-orders");
-const CentralKitchenOrdersPage = makeLazy("central-kitchen-orders");
 const CentralKitchenDemandReportPage = makeLazy("central-kitchen-demand-report");
 const CentralKitchenRecipesPage = makeLazy("central-kitchen-recipes");
 const AdvancedProductionOrderFormPage = makeLazy("advanced-production-order-form");
@@ -422,6 +424,8 @@ const Router = React.memo(function Router() {
       <Route path="/terminated-employees">{() => <ModulePage component={TerminatedEmployeesPage} module="branch_employees" />}</Route>
       <Route path="/organizational-structure">{() => <ModulePage component={OrganizationalStructurePage} module="organizational_structure" />}</Route>
       <Route path="/attendance-dashboard">{() => <ModulePage component={AttendanceDashboardPage} module="shifts" />}</Route>
+      <Route path="/branch-stock-desk">{() => <ModulePage component={BranchStockDeskPage} module="branch_stock" />}</Route>
+      <Route path="/branch-workforce">{() => <ModulePage component={BranchWorkforcePage} module="branch_workforce" />}</Route>
       <Route path="/shift-management">{() => <ModulePage component={ShiftManagementPage} module="shifts" />}</Route>
       <Route path="/attendance-check">{() => <ModulePage component={AttendanceCheckPage} module="attendance_check" />}</Route>
       <Route path="/employee-attendance-report">{() => <ModulePage component={EmployeeAttendanceReportPage} module="attendance" />}</Route>

@@ -39,6 +39,11 @@ const currentUserId = (req: Request) => {
 };
 
 async function scoped(req: Request, commitment: { requestBranchId: string; centralKitchenId: string }) {
+  if (["employee", "viewer"].includes(req.currentUser?.role ?? "")) {
+    return commitment.requestBranchId !== "main_warehouse"
+      && commitment.requestBranchId === req.currentUser?.branchId
+      && await canAccessBranch(req, commitment.requestBranchId);
+  }
   return await canAccessBranch(req, commitment.requestBranchId)
     || await canAccessBranch(req, commitment.centralKitchenId);
 }
@@ -52,6 +57,10 @@ async function reportRows(req: Request, q: {
 }) {
   const allowed = getAllowedBranchIds(req);
   const conditions = [
+    ["employee", "viewer"].includes(req.currentUser?.role ?? "")
+      ? eq(centralKitchenDemandCommitments.requestBranchId,
+        allowed?.includes(req.currentUser?.branchId ?? "") && req.currentUser?.branchId !== "main_warehouse"
+          ? req.currentUser!.branchId! : "__none__") : undefined,
     allowed === null ? undefined : or(
       inArray(centralKitchenDemandCommitments.requestBranchId, allowed.length ? allowed : ["__none__"]),
       inArray(centralKitchenDemandCommitments.centralKitchenId, allowed.length ? allowed : ["__none__"]),
@@ -193,6 +202,11 @@ export function registerCentralKitchenDemandRoutes(app: Express) {
       ...(parsed.data.orderId ? [eq(centralKitchenOrders.id, parsed.data.orderId)] : []),
     ];
     const allowed = getAllowedBranchIds(req);
+    if (["employee", "viewer"].includes(req.currentUser?.role ?? "")) conditions.push(
+      eq(centralKitchenOrders.requestBranchId,
+        allowed?.includes(req.currentUser?.branchId ?? "") && req.currentUser?.branchId !== "main_warehouse"
+          ? req.currentUser!.branchId! : "__none__"),
+    );
     if (allowed !== null) conditions.push(or(
       inArray(centralKitchenOrders.requestBranchId, allowed.length ? allowed : ["__none__"]),
       inArray(centralKitchenOrders.centralKitchenId, allowed.length ? allowed : ["__none__"]),
