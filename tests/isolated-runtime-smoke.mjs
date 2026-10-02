@@ -8,6 +8,7 @@ import { runHrScopeSmoke } from "./isolated-runtime-hr-scope.mjs";
 import { runJobTemplateSmoke } from "./isolated-runtime-job-templates.mjs";
 import { runJobTemplateApprovalSmoke } from "./isolated-runtime-job-template-approvals.mjs";
 import { runTemplateAssignmentSmoke } from "./isolated-runtime-template-assignment.mjs";
+import { runAdminAdditionsSmoke } from "./isolated-runtime-admin-additions.mjs";
 
 const target = guard.assertRuntime();
 const origin = `http://127.0.0.1:${target.appPort}`;
@@ -166,9 +167,10 @@ try {
   await runJobTemplateSmoke({ client, request, admin, editor, manager, employee: reactivated, check });
   await runJobTemplateApprovalSmoke({ client, request, admin, editor, manager, employee: reactivated, check });
   await runTemplateAssignmentSmoke({ client, request, admin, editor, manager, employee: reactivated, loginCredentials, check });
-  console.log(`Isolated HTTP smoke passed: ${count} real authenticated admin/delegation/G01/G02/G03/G04/G05/HR_SCOPE/JT/JTA/TA assertions.`);
+  await runAdminAdditionsSmoke({ client, request, admin, manager, employee: reactivated, loginCredentials, check });
+  console.log(`Isolated HTTP smoke passed: ${count} real authenticated admin/delegation/G01/G02/G03/G04/G05/HR_SCOPE/JT/JTA/TA/AA assertions.`);
 } catch (error) {
-  console.error(`Isolated HTTP smoke failed [${guard.safeReason(error)}]: ${/^SMOKE_|^G0[12345]_|^DELEGATION_|^HR_SCOPE_|^JT_|^JTA_|^TA_/.test(error.message) ? error.message : "see guarded runtime diagnostics"}`);
+  console.error(`Isolated HTTP smoke failed [${guard.safeReason(error)}]: ${/^SMOKE_|^G0[12345]_|^DELEGATION_|^HR_SCOPE_|^JT_|^JTA_|^TA_|^AA_/.test(error.message) ? error.message : "see guarded runtime diagnostics"}`);
   process.exitCode = 1;
 } finally {
   await client.end().catch(() => {});

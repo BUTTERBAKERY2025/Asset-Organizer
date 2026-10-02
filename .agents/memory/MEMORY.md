@@ -92,3 +92,5 @@
 - [Authorization rollout roadmap](authorization-roadmap.md) — six-stage matrix-to-pilot sequence; individual security fixes and test infrastructure are not the template rollout.
 - [Contextual permission boundary](contextual-permission-boundary.md) — action/scope tuples, explicit-empty source, route context opt-in and manual migration prerequisite; navigation is not authority.
 - [Isolated browser origin](isolated-browser-origin.md) — temporary UI/API test proxies must preserve browser-facing Host and stay running; do not weaken CSRF for test setup.
+- [Database test attestation](isolated-test-attestation.md) — a temporary schema is not an isolated target; every writing test must require owned-cluster proof before writes.
+- [Permission timestamp decoding](permission-timestamp-decoding.md) — raw SQL must use schema date decoders, or process time zones make intact additions appear tampered.

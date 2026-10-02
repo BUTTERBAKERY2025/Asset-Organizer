@@ -3,6 +3,7 @@ import bcrypt from "bcrypt";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import guard from "../scripts/isolated-test/target.cjs";
 
 const runtime = vi.hoisted(() => ({ db: null as any, pool: null as any, queries: [] as string[] }));
 vi.mock("../server/db", () => ({
@@ -32,7 +33,7 @@ import { storage } from "../server/storage";
 const routes: any[] = [];
 const middleware: any[] = [];
 const app: any = { use: (fn: any) => middleware.push(fn) };
-for (const method of ["get", "put", "post", "patch"])
+for (const method of ["get", "put", "post", "patch", "delete"])
   app[method] = (path: string, ...handlers: any[]) => routes.push({ method, path, handlers });
 registerEmployeeAccountDelegation(app);
 const base = "/api/operations/employee-accounts";
@@ -57,7 +58,7 @@ async function invoke(method: string, suffix = "", body: unknown = {}, actor = "
   return response;
 }
 
-describe("employee account delegation atomic PostgreSQL API", () => {
+describe.skipIf(!process.env.ISOLATED_TEST_REGISTRY)("employee account delegation atomic PostgreSQL API", () => {
   let root: pg.Pool;
   let pool: pg.Pool;
   const schema = `delegation_test_${randomUUID().replace(/-/g, "")}`;
@@ -80,14 +81,14 @@ describe("employee account delegation atomic PostgreSQL API", () => {
       "admin", { params: { managerId } });
   }
   beforeAll(async () => {
-    // Explicit local-only namespace, independent sequences, never public-table
-    // writes. A multi-connection pool lets these tests exercise actual PG locks.
-    const url = new URL(process.env.DATABASE_URL || "postgres://invalid/");
-    if (url.hostname !== "helium" || url.pathname !== "/heliumdb")
-      throw Error("Delegation integration tests require local heliumdb; remote writes refused");
-    root = new pg.Pool({ connectionString: process.env.DATABASE_URL, max: 1 });
+    // A local hostname alone is NOT proof of a disposable database. The
+    // registered runtime owner must attest its exact target before any writes.
+    const target = guard.assertRuntime();
+    root = new pg.Pool({ connectionString: target.url, max: 1 });
+    const proof = await root.connect();
+    try { await guard.proveDatabase(proof, target); } finally { proof.release(); }
     await root.query(`CREATE SCHEMA "${schema}"`);
-    pool = new pg.Pool({ connectionString: process.env.DATABASE_URL, max: 6, options: `-c search_path=${schema}` });
+    pool = new pg.Pool({ connectionString: target.url, max: 6, options: `-c search_path=${schema}` });
     runtime.pool = pool;
     runtime.db = drizzle(pool, { logger: { logQuery: (text: string) => runtime.queries.push(text) } });
     await query(`

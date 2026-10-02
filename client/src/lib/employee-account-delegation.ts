@@ -67,7 +67,7 @@ export class EmployeeAccountRequestError extends Error {
 
 /** No query/mutation cache, request deduplication, logging, or storage of responses. */
 export async function requestEmployeeAccount<T>(url: string, options: {
-  method?: "GET" | "POST" | "PUT" | "PATCH"; body?: unknown; signal?: AbortSignal;
+  method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE"; body?: unknown; signal?: AbortSignal;
 } = {}): Promise<T> {
   const controller = new AbortController();
   const cancel = () => controller.abort(options.signal?.reason);

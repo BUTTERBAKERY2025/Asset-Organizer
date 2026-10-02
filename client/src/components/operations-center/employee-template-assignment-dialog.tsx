@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { EmployeeAccountCredentials } from "./employee-account-credentials";
+import { EmployeeAccountAdditionsReadOnly } from "./employee-account-additions-list";
 
 const moduleLabel = (module: string) => MODULE_LABELS[module as keyof typeof MODULE_LABELS] ?? module;
 const actionLabel = (action: string) => ACTION_LABELS[action as keyof typeof ACTION_LABELS] ?? action;
@@ -179,22 +180,23 @@ export function EmployeeTemplateAssignmentDialog({ employee, mode, directory, cl
             <p className="text-[11px] leading-5 text-muted-foreground">النطاق مقيد بفرع الموظف المحفوظ على الخادم. لا ينقل هذا الإجراء الموظف إلى فرع آخر.</p>
             {selection && !selected && <p role="alert" className="text-xs text-destructive">لم يعد الإصدار المختار مؤهلًا أو معتمدًا. اختر إصدارًا متاحًا وراجع فرقًا جديدًا؛ لم نغيّر اختيارك تلقائيًا.</p>}
             {snapshot?.assignment && <p className="rounded-lg border bg-muted/20 p-3 text-xs leading-6">الإسناد الحالي: قالب #{snapshot.assignment.templateId} · إصدار {snapshot.assignment.version} · {employee.branchName}. لا يعني اعتماد إصدار أحدث إعادة تطبيقه تلقائيًا.</p>}
-            {selected && !invalidPreview && <section className="space-y-3 rounded-xl border border-violet-200 bg-violet-50/30 p-3" aria-label="فرق الصلاحيات قبل وبعد">
+            {selected && !invalidPreview && <section className="space-y-3 rounded-xl border border-violet-200 bg-violet-50/30 p-3" aria-label="فرق القالب الأساسي قبل وبعد">
               <div className="flex flex-wrap items-start justify-between gap-2"><div><h3 className="text-sm font-bold text-violet-900">{selected.name} · الإصدار {selected.version}</h3><p className="mt-1 text-[11px] text-muted-foreground">نطاق المحتوى: {scopeLabels[selected.scopeType]} · فرع التنفيذ: {branches.find(branch => branch.id === branchId)?.name ?? "لم يُختر بعد"}</p></div>
                 <p className="text-xs"><span className="text-emerald-800">إضافة {counts.added}</span> · <span className="text-amber-800">إزالة {counts.removed}</span></p></div>
-              <div className="grid grid-cols-2 gap-3 border-b border-violet-200 pb-2 text-xs font-bold"><span>قبل · صلاحيات الحساب الحالية</span><span>بعد · محتوى الإصدار المعتمد</span></div>
+              <div className="grid grid-cols-2 gap-3 border-b border-violet-200 pb-2 text-xs font-bold"><span>قبل · صلاحيات الأساس الحالية</span><span>بعد · محتوى القالب الأساسي المعتمد</span></div>
               {!diff.length ? <p className="text-xs leading-6">لا توجد صلاحيات تشغيلية مباشرة قبل الإسناد أو بعده. بوابة الموظف الذاتية مستقلة عن هذا القالب.</p> : diff.map(row => <div key={row.module} className="rounded-lg border border-violet-100 bg-background p-3">
                 <h4 className="mb-2 text-xs font-bold">{moduleLabel(row.module)}</h4>
                 <div className="grid grid-cols-2 gap-3 text-xs leading-6"><p>{actionsLabel(row.before)}</p><p>{actionsLabel(row.after)}</p></div>
                 {(row.added.length > 0 || row.removed.length > 0) && <p className="mt-2 border-t pt-2 text-[11px] leading-6">{row.added.length > 0 && <span className="block text-emerald-800">سيُضاف: {actionsLabel(row.added)}</span>}{row.removed.length > 0 && <span className="block text-amber-800">سيُزال: {actionsLabel(row.removed)}</span>}</p>}
               </div>)}
-              <p className="text-[11px] leading-6 text-muted-foreground">يستبدل الإسناد الصلاحيات المباشرة فقط، ولا يدمجها أو يعدّل أدوار الأمن أو الاستثناءات. الحسابات ذات الاستثناءات أو إسنادات النظام القديم والأدوار غير المدعومة تبقى محمية.</p>
+              <p className="text-[11px] leading-6 text-muted-foreground">هذا فرق الأساس فقط. يستبدل الإسناد صلاحيات الأساس ولا يدمج الإضافات أو يغيّر منحها ومنعها ومددها. الاستثناءات القديمة أو المتغيرة والإضافات خارج السقف وإسنادات النظام القديم والأدوار غير المدعومة تُبقي الحساب محميًا؛ الخادم يقرر الأهلية.</p>
             </section>}
+            {snapshot && !invalidPreview && <EmployeeAccountAdditionsReadOnly additions={snapshot.additions} branchName={employee.branchName} />}
             {employee.account?.isActive === "inactive" && <p className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs leading-6 text-amber-900"><AlertTriangle className="mt-1 h-4 w-4 shrink-0" />الحساب مجمّد. إسناد القالب لا يعيد فتحه أو يولّد كلمة مرور جديدة؛ إعادة الفتح إجراء مستقل.</p>}
             <div><label htmlFor="employee-template-reason" className="mb-1 block text-xs font-bold">سبب الإسناد · مطلوب لسجل المراجعة</label><Input id="employee-template-reason" maxLength={2000} value={reason} disabled={pending} onChange={event => { setReason(event.target.value); setConfirmed(false); }} className="min-h-11" placeholder="مثال: اعتماد مهام الموظف في الفرع" /></div>
             <label className={`flex min-h-11 items-start gap-2 rounded-lg border p-3 text-xs leading-6 ${previewReady ? "border-violet-200 bg-violet-50/40" : "text-muted-foreground"}`}>
               <input id="employee-template-confirm" type="checkbox" className="mt-1.5 h-4 w-4 shrink-0 accent-violet-700" checked={confirmed} disabled={!previewReady || pending} onChange={event => setConfirmed(event.target.checked)} />
-              راجعت الموظف والقالب والإصدار والفرع والفرق قبل وبعد، وأؤكد تطبيق هذا التغيير على حساب هذا الموظف فقط.
+              راجعت الموظف والقالب والإصدار والفرع وفرق الأساس قبل وبعد والإضافات المستقلة التي تبقى محفوظة، وأؤكد تطبيق تغيير الأساس على حساب هذا الموظف فقط.
             </label>
           </>}
           <Button type="button" variant="outline" className="min-h-11 gap-2" disabled={pending || review.loading} onClick={reload}><RefreshCw className="h-4 w-4" />{invalidPreview ? "تحديث المعاينة والقوالب وإعادة المراجعة" : review.error ? "إعادة المحاولة" : "تحديث المعاينة والقوالب"}</Button>

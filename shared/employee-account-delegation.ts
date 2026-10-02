@@ -127,6 +127,39 @@ export interface EmployeeTemplateAssignmentResponse {
   assignment: EmployeeTemplateAssignment | null;
   currentPermissions: DelegatedPermission[];
   expectedAssignmentRevision: string;
+  /** Read-only independent additions; currentPermissions is BASE only. */
+  additions: AdminAccountAddition[];
+}
+export interface AdminAccountAddition {
+  id: number;
+  module: string;
+  action: string;
+  allow: boolean;
+  scopeType: "global" | "branch";
+  branchId: string | null;
+  /** Non-null only if a legacy writer changed a managed row into an
+   * unsupported department scope; such a row remains ops-protected. */
+  departmentId?: number | null;
+  startsAt: string | null;
+  endsAt: string | null;
+  reason: string;
+  revision: string;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+  integrity: "managed" | "changed";
+}
+export interface AdminAccountAdditionsResponse {
+  employeeId: number;
+  branchId: string;
+  userId: string;
+  additions: AdminAccountAddition[];
+  capabilities: {
+    globalModules: DelegatedPermission[];
+    branchModules: DelegatedPermission[];
+    unsupportedScopes: string[];
+    globalScopeLabel: string;
+  };
 }
 export interface EmployeeJobTemplateSummary {
   templateId: number;

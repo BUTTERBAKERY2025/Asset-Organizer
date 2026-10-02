@@ -28,6 +28,7 @@ export const selectedMigrations = [
   "051_job_permission_template_drafts.sql",
   "052_job_permission_template_approvals.sql",
   "053_employee_template_assignments.sql",
+  "054_employee_account_additions.sql",
 ] as const;
 
 export const releaseGuards = [

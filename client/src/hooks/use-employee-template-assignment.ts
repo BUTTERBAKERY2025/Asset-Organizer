@@ -26,6 +26,10 @@ export function useEmployeeTemplateAssignment(employeeId: number) {
       if (generation.current !== token) return;
       if (snapshot.employeeId !== employeeId || typeof snapshot.expectedAssignmentRevision !== "string" || !snapshot.expectedAssignmentRevision)
         throw new Error("Invalid employee assignment snapshot");
+      if (!Array.isArray(snapshot.additions)) {
+        setError("استجابة المعاينة لا تتضمن سجل الإضافات المستقلة المطلوب. حدّث الخدمة وأعد تحميل المعاينة؛ لم نعرض قائمة فارغة بديلة.");
+        return;
+      }
       setData({ templates: catalog.templates, snapshot });
     } catch (cause) {
       if (generation.current === token) setError(employeeTemplateError(cause));

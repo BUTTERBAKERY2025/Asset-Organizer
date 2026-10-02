@@ -6,6 +6,7 @@ import { ZodError, z } from "zod";
 import {
   branchEmployees, branches, users, userBranchAccess, userPermissions,
   userAssignments, userPermissionOverrides, userPermissionSourceModes, portalSettings, systemAuditLogs,
+  permissions as permissionCatalog,
 } from "@shared/schema";
 import {
   EMPLOYEE_ACCOUNT_SAFE_PERMISSIONS, type DelegatedEmployeeAccount,
@@ -14,6 +15,11 @@ import {
   type EmployeeTemplateAssignment, type EmployeeTemplateAssignmentResponse, type EmployeeJobTemplateSummary,
 } from "@shared/employee-account-delegation";
 import { assignmentSnapshotRevision, eligibleTemplatePermissions, templateAssignmentInput } from "./employee-template-assignment-policy";
+import {
+  ADDITION_CAPABILITIES, additionInput, additionUpdateInput, additionDeleteInput,
+  additionDTO, additionFingerprint, additionIsDelegationSafe, requireAdditionsStorage,
+  readManagedAdditions, validateAddition, type AdditionRecord,
+} from "./employee-account-additions-policy";
 import { HQ_BRANCH_ID } from "@shared/employee-organization";
 import { db } from "./db";
 import { storage } from "./storage";
@@ -134,11 +140,14 @@ async function accountState(tx: Tx, actor: Actor, employee: Employee, approved: 
   const assignments = await tx.select({ id: userAssignments.id }).from(userAssignments).where(eq(userAssignments.userId, account.id));
   const overrides = await tx.select({ id: userPermissionOverrides.id }).from(userPermissionOverrides).where(eq(userPermissionOverrides.userId, account.id));
   const direct = await tx.select({ module: userPermissions.module, actions: userPermissions.actions }).from(userPermissions).where(eq(userPermissions.userId, account.id));
-  targetMayManage(actor.id, account, employee.branchId, access.map(g => g.branchId), assignments.length, overrides.length, direct, approved);
+  const additions = overrides.length ? await readManagedAdditions(tx, [account.id]) : [];
+  const safeAdditionIds = new Set(additions.filter(row => additionIsDelegationSafe(row, employee, approved)).map(row => row.id));
+  targetMayManage(actor.id, account, employee.branchId, access.map(g => g.branchId), assignments.length,
+    overrides.filter(row => !safeAdditionIds.has(row.id)).length, direct, approved);
   if (!["active", "inactive"].includes(account.isActive ?? ""))
     deny("PROTECTED_ACCOUNT", "حالة الحساب تتطلب مراجعة مسؤول النظام");
   return {
-    account, permissions: direct,
+    account, permissions: direct, additions,
     canReactivate: approved.enabled
       && permissionsWithin(effectiveDelegatedPermissions(account, direct), approved.permissions)
       && (actor.role === "admin" || await suspensionOwned(tx, account, employee)),
@@ -240,8 +249,10 @@ async function templateAssignmentSnapshot(tx: Tx, employee: Employee, state: Awa
     assignment, assignmentUserId: stored?.userId ?? null,
     direct: state?.permissions.map(p => ({ module: p.module, actions: [...p.actions].sort() }))
       .sort((a,b) => a.module.localeCompare(b.module)) ?? [],
+    additions: state?.additions ?? [],
   }, currentPermissions);
-  return { employeeId: employee.id, branchId: employee.branchId, assignment, currentPermissions, expectedAssignmentRevision };
+  return { employeeId: employee.id, branchId: employee.branchId, assignment, currentPermissions,
+    expectedAssignmentRevision, additions: (state?.additions ?? []).map(additionDTO) };
 }
 async function resolveAssignmentTemplate(tx: Tx, templateId: number, version: number, approved: EmployeeAccountPolicy, jobTitle: string | null, role: string) {
   // Shared with append/approval writers and their DB triggers. Hold parent row
@@ -274,6 +285,20 @@ async function saveTemplateAssignment(tx: Tx, actor: Actor, employee: Employee, 
       revision = EXCLUDED.revision, assigned_at = EXCLUDED.assigned_at,
       assigned_by = EXCLUDED.assigned_by, reason = EXCLUDED.reason`);
   return assignment;
+}
+async function adminAdditionEmployee(tx: Tx, actorId: string, id: number) {
+  const { actor } = await actorState(tx, actorId, true);
+  const [employee] = await tx.select(employeeProjection).from(branchEmployees).where(eq(branchEmployees.id, id));
+  if (!employee) throw new DelegationError(404, "EMPLOYEE_NOT_FOUND", "الموظف غير موجود");
+  if (!employee.linkedUserId) throw new DelegationError(404, "ACCOUNT_NOT_LINKED", "الموظف غير مرتبط بحساب");
+  const [account] = await tx.select(accountProjection).from(users).where(eq(users.id, employee.linkedUserId));
+  if (!account) throw new DelegationError(404, "ACCOUNT_NOT_LINKED", "رابط حساب الموظف غير صالح");
+  return { actor, employee, account };
+}
+function additionId(value: string) {
+  const id = employeeId(value);
+  if (id > 2147483647) throw new DelegationError(400, "INVALID_INPUT", "معرف الإضافة غير صالح");
+  return id;
 }
 const endpoint = (work: RequestHandler, operation = "account_write"): RequestHandler => async (req, res, next) => {
   const started = performance.now();
@@ -324,8 +349,10 @@ async function roster(
   const assignments = await tx.selectDistinct({ userId: userAssignments.userId }).from(userAssignments)
     .where(inArray(userAssignments.userId, linked));
   await budget();
-  const overrides = await tx.selectDistinct({ userId: userPermissionOverrides.userId }).from(userPermissionOverrides)
+  const overrides = await tx.select({ id: userPermissionOverrides.id, userId: userPermissionOverrides.userId }).from(userPermissionOverrides)
     .where(inArray(userPermissionOverrides.userId, linked));
+  await budget();
+  const managedAdditions = overrides.length ? await readManagedAdditions(tx, Array.from(new Set(overrides.map(o => o.userId)))) : [];
   await budget();
   const direct = await tx.select({ userId: userPermissions.userId, module: userPermissions.module, actions: userPermissions.actions })
     .from(userPermissions).where(inArray(userPermissions.userId, linked));
@@ -335,8 +362,17 @@ async function roster(
       .from(branchEmployees).where(scope)));
   const byAccount = new Map(accounts.map(a => [a.id, a]));
   const assigned = new Set(assignments.map(a => a.userId));
-  const overridden = new Set(overrides.map(a => a.userId));
   const markerValues = new Map(markers.map(m => [m.key, m.value]));
+  const additionsByUser = new Map<string, AdditionRecord[]>();
+  for (const row of managedAdditions) {
+    const list = additionsByUser.get(row.overrideUserId) ?? [];
+    list.push(row); additionsByUser.set(row.overrideUserId, list);
+  }
+  const overridesByUser = new Map<string, number[]>();
+  for (const row of overrides) {
+    const list = overridesByUser.get(row.userId) ?? [];
+    list.push(row.id); overridesByUser.set(row.userId, list);
+  }
   const grantsByUser = new Map<string, string[]>();
   for (const g of access) {
     const list = grantsByUser.get(g.userId) ?? [];
@@ -356,8 +392,10 @@ async function roster(
         const target = byAccount.get(employee.linkedUserId);
         if (!target) deny("INVALID_LINK", "رابط حساب الموظف غير صالح");
         const permissions = permissionsByUser.get(target.id) ?? [];
+        const safeAdditionIds = new Set((additionsByUser.get(target.id) ?? []).filter(row => additionIsDelegationSafe(row, employee, approved)).map(row => row.id));
+        const unknownOverrides = (overridesByUser.get(target.id) ?? []).filter(id => !safeAdditionIds.has(id)).length;
         targetMayManage(actor.id, target, employee.branchId, grantsByUser.get(target.id) ?? [],
-          Number(assigned.has(target.id)), Number(overridden.has(target.id)), permissions, approved);
+          Number(assigned.has(target.id)), unknownOverrides, permissions, approved);
         if (!["active", "inactive"].includes(target.isActive ?? ""))
           deny("PROTECTED_ACCOUNT", "حالة الحساب تتطلب مراجعة مسؤول النظام");
         account = { id: target.id, username: target.username, isActive: target.isActive as "active" | "inactive",
@@ -489,6 +527,99 @@ export function registerEmployeeAccountDelegation(app: Express) {
     res.json(result);
   }, "employee_template_assignment_snapshot"));
 
+  app.get("/api/admin/employee-account-additions/:employeeId", isAuthenticated, endpoint(async (req, res) => {
+    const id = employeeId(req.params.employeeId);
+    const result = await db.transaction(async tx => {
+      await readBudget(performance.now() + 10_000, tx)();
+      const { employee, account } = await adminAdditionEmployee(tx, req.session.userId!, id);
+      await requireAdditionsStorage(tx);
+      const records = await readManagedAdditions(tx, [account.id], true);
+      return { employeeId: employee.id, branchId: employee.branchId, userId: account.id,
+        additions: records.filter(row => row.employeeId === employee.id && row.userId === account.id
+          && row.overrideUserId === account.id).map(additionDTO), capabilities: ADDITION_CAPABILITIES };
+    }, { isolationLevel: "repeatable read", accessMode: "read only" });
+    res.json(result);
+  }, "employee_account_additions_read"));
+
+  const mutateAddition = (mode: "create" | "update" | "delete"): RequestHandler => endpoint(async (req, res) => {
+    const id = employeeId(req.params.employeeId);
+    const rowId = mode === "create" ? null : additionId(req.params.id);
+    const input = mode === "create" ? additionInput.parse(req.body)
+      : mode === "update" ? additionUpdateInput.parse(req.body) : additionDeleteInput.parse(req.body);
+    const result = await db.transaction(async tx => {
+      await lockDelegationState(tx);
+      const { actor, employee, account } = await adminAdditionEmployee(tx, req.session.userId!, id);
+      await requireAdditionsStorage(tx);
+      await tx.execute(sql`LOCK TABLE public.employee_account_additions, public.permissions IN SHARE ROW EXCLUSIVE MODE`);
+      const records = await readManagedAdditions(tx, [account.id], true);
+      const before = rowId === null ? null : records.find(row => row.id === rowId
+        && row.employeeId === employee.id && row.userId === account.id && row.overrideUserId === account.id);
+      if (rowId !== null && !before)
+        throw new DelegationError(404, "ADDITION_NOT_FOUND", "الإضافة غير موجودة أو لا تخص الموظف وحسابه المرتبط");
+      if ("expectedRevision" in input && before!.revision !== input.expectedRevision)
+        throw new DelegationError(409, "ADDITION_REVISION_CONFLICT", "تغيرت الإضافة؛ حدّث القائمة وراجع التغيير");
+      if (mode === "delete") {
+        await storage.invalidateAllUserSessions(account.id, tx);
+        // Delete provenance first; never erase an unknown legacy override.
+        await tx.execute(sql`DELETE FROM public.employee_account_additions
+          WHERE override_id = ${rowId} AND employee_id = ${employee.id} AND user_id = ${account.id}`);
+        await tx.delete(userPermissionOverrides).where(and(eq(userPermissionOverrides.id, rowId!),
+          eq(userPermissionOverrides.userId, account.id)));
+        await audit(tx, actor, "addition_delete", employee,
+          { reason: input.reason, before: additionDTO(before!), beforeOverride: additionFingerprint(before!), after: null }, account.id);
+        return { userId: account.id, response: { deleted: true, id: rowId } };
+      }
+      if (!("module" in input)) throw new DelegationError(400, "INVALID_INPUT", "بيانات الإضافة غير صالحة");
+      validateAddition(input, employee.branchId);
+      let [permission] = await tx.select({ id: permissionCatalog.id }).from(permissionCatalog)
+        .where(and(eq(permissionCatalog.module, input.module), eq(permissionCatalog.action, input.action)))
+        .orderBy(permissionCatalog.id).limit(1);
+      if (!permission) {
+        [permission] = await tx.insert(permissionCatalog).values({
+          module: input.module, action: input.action, name: `${input.module}:${input.action}`,
+        }).returning({ id: permissionCatalog.id });
+      }
+      const values = {
+        userId: account.id, permissionId: permission.id, allow: input.allow,
+        branchId: input.scopeType === "branch" ? input.branchId! : null, departmentId: null,
+        startsAt: input.startsAt ? new Date(input.startsAt) : null,
+        expiresAt: input.endsAt ? new Date(input.endsAt) : null,
+        reason: input.reason, grantedBy: actor.id, updatedAt: new Date(),
+      };
+      await storage.invalidateAllUserSessions(account.id, tx);
+      const [override] = mode === "create" ? await tx.insert(userPermissionOverrides).values(values).returning()
+        : await tx.update(userPermissionOverrides).set(values)
+          .where(and(eq(userPermissionOverrides.id, rowId!), eq(userPermissionOverrides.userId, account.id))).returning();
+      const changedAt = new Date().toISOString();
+      const record: AdditionRecord = {
+        id: override.id, employeeId: employee.id, userId: account.id, employeeBranchId: employee.branchId,
+        revision: randomUUID(), snapshot: null, createdBy: before?.createdBy ?? actor.id,
+        createdAt: before?.createdAt ?? changedAt, updatedAt: changedAt, overrideUserId: account.id,
+        permissionId: permission.id, module: input.module, action: input.action, allow: override.allow,
+        branchId: override.branchId, departmentId: override.departmentId, startsAt: override.startsAt,
+        endsAt: override.expiresAt, reason: override.reason, grantedBy: override.grantedBy,
+        overrideCreatedAt: override.createdAt, overrideUpdatedAt: override.updatedAt,
+      };
+      record.snapshot = additionFingerprint(record);
+      await tx.execute(sql`INSERT INTO public.employee_account_additions
+        (override_id,employee_id,user_id,employee_branch_id,revision,snapshot,created_by,created_at,updated_at)
+        VALUES (${record.id},${employee.id},${account.id},${employee.branchId},${record.revision}::uuid,
+          ${JSON.stringify(record.snapshot)}::jsonb,${record.createdBy},${record.createdAt}::timestamptz,${record.updatedAt}::timestamptz)
+        ON CONFLICT (override_id) DO UPDATE SET employee_id = EXCLUDED.employee_id,
+          user_id = EXCLUDED.user_id, employee_branch_id = EXCLUDED.employee_branch_id,
+          revision = EXCLUDED.revision, snapshot = EXCLUDED.snapshot, updated_at = EXCLUDED.updated_at`);
+      await audit(tx, actor, mode === "create" ? "addition_create" : "addition_update", employee,
+        { reason: input.reason, before: before ? additionDTO(before) : null,
+          beforeOverride: before ? additionFingerprint(before) : null, after: additionDTO(record) }, account.id);
+      return { userId: account.id, response: { addition: additionDTO(record) } };
+    });
+    invalidateAuthCache(result.userId);
+    res.status(mode === "create" ? 201 : 200).json(result.response);
+  }, `employee_account_addition_${mode}`);
+  app.post("/api/admin/employee-account-additions/:employeeId", isAuthenticated, mutateAddition("create"));
+  app.patch("/api/admin/employee-account-additions/:employeeId/:id", isAuthenticated, mutateAddition("update"));
+  app.delete("/api/admin/employee-account-additions/:employeeId/:id", isAuthenticated, mutateAddition("delete"));
+
   app.get("/api/operations/employee-accounts", isAuthenticated, endpoint(async (req, res) => {
     const deadline = performance.now() + 10_000;
     const result = await db.transaction(async tx => {
@@ -618,6 +749,12 @@ export function registerEmployeeAccountDelegation(app: Express) {
         await tx.execute(sql`LOCK TABLE public.employee_job_template_assignments,
           public.user_permission_source_modes IN SHARE ROW EXCLUSIVE MODE`);
       }
+      // Every ops override classification must remain stable through the write.
+      // Unknown/privileged extras still fail targetMayManage; safe managed extras
+      // are never rewritten by base operations.
+      const additionReady = await tx.execute(sql`SELECT to_regclass('public.employee_account_additions') IS NOT NULL AS ready`);
+      if ((additionReady.rows[0] as any)?.ready)
+        await tx.execute(sql`LOCK TABLE public.employee_account_additions, public.permissions IN SHARE ROW EXCLUSIVE MODE`);
       const { actor, grants } = await actorState(tx, req.session.userId!);
       if (actor.role === "operations_manager" && mode === "create")
         deny("APPROVED_TEMPLATE_REQUIRED", "إنشاء حساب الموظف يتطلب اختيار إصدار قالب معتمد");

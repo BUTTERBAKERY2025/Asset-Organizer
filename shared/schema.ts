@@ -4492,6 +4492,7 @@ export const userPermissionOverrides = pgTable("user_permission_overrides", {
   departmentId: integer("department_id").references(() => departments.id, { onDelete: "set null" }),
   reason: text("reason"), // سبب التجاوز
   grantedBy: varchar("granted_by").references(() => users.id),
+  startsAt: timestamp("starts_at"), // Optional inclusive start; existing resolver enforces it.
   expiresAt: timestamp("expires_at"), // صلاحية مؤقتة
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),

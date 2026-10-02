@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getTableName } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
+import { additionFingerprint } from "../server/employee-account-additions-policy";
 
 const runtime = vi.hoisted(() => ({ transaction: null as any, invalidate: vi.fn(), failSessions: false }));
 vi.mock("../server/db", () => ({ db: { transaction: (...args: any[]) => runtime.transaction(...args) } }));
@@ -18,7 +19,7 @@ import { registerEmployeeAccountDelegation } from "../server/employee-account-de
 
 const routes: any[] = [];
 const app: any = { use: vi.fn() };
-for (const method of ["get", "post", "put", "patch"])
+for (const method of ["get", "post", "put", "patch", "delete"])
   app[method] = (path: string, ...handlers: any[]) => routes.push({ method, path, handlers });
 registerEmployeeAccountDelegation(app);
 const dialect = new PgDialect();
@@ -33,7 +34,30 @@ function txFor(data: any) {
     execute: async (query: any) => {
       const { sql, params } = dialect.sqlToQuery(query);
       if (sql.includes("LOCK TABLE")) lockStatements.push(sql);
+      if (sql.includes("to_regclass('public.employee_account_additions')")) return { rows: [{ ready: data.additionsReady }] };
       if (sql.includes("to_regclass")) return { rows: [{ ready: data.ready }] };
+      if (sql.includes("SELECT m.override_id")) {
+        const rows = data.additionMetadata.flatMap((meta: any) => {
+          const row = data.extraRows.find((o: any) => o.id === meta.id);
+          const permission = row && data.catalog.find((p: any) => p.id === row.permissionId);
+          if (!row || !permission || !params.includes(row.userId)) return [];
+          return [{ ...meta, overrideUserId: row.userId, permissionId: row.permissionId,
+            module: permission.module, action: permission.action, allow: row.allow,
+            branchId: row.branchId, departmentId: row.departmentId, startsAt: row.startsAt,
+            endsAt: row.expiresAt, reason: row.reason, grantedBy: row.grantedBy,
+            overrideCreatedAt: row.createdAt, overrideUpdatedAt: row.updatedAt }];
+        });
+        return { rows };
+      }
+      if (sql.includes("INSERT INTO public.employee_account_additions")) {
+        const meta = { id: params[0], employeeId: params[1], userId: params[2], employeeBranchId: params[3],
+          revision: params[4], snapshot: JSON.parse(params[5]), createdBy: params[6],
+          createdAt: params[7], updatedAt: params[8] };
+        data.additionMetadata = data.additionMetadata.filter((m: any) => m.id !== meta.id).concat(meta);
+      }
+      if (sql.includes("DELETE FROM public.employee_account_additions")) {
+        data.additionMetadata = data.additionMetadata.filter((m: any) => m.id !== params[0]);
+      }
       if (sql.includes("SELECT id FROM public.job_permission_template_drafts")) return { rows: [{ id: 1 }] };
       if (sql.includes("ORDER BY v.version DESC")) return { rows: [{ version: data.version, content: data.content, approved: data.approved }] };
       if (sql.includes("DELETE FROM public.employee_job_template_assignments")) {
@@ -52,7 +76,7 @@ function txFor(data: any) {
       const builder: any = {
         from: (table: any) => { name = getTableName(table); return builder; },
         where: (value: any) => { predicate = value; return builder; },
-        for: () => builder, limit: () => builder,
+        for: () => builder, limit: () => builder, orderBy: () => builder,
         then: (resolve: any, reject: any) => {
           const params = predicate ? dialect.sqlToQuery(predicate).params : [];
           const id = params[0];
@@ -67,7 +91,10 @@ function txFor(data: any) {
             : name === "user_permissions" ? data.permissions
             : name === "user_permission_source_modes" ? data.source ? [{ mode: data.source }] : []
             : name === "user_assignments" ? data.roles ? [{ id: 1 }] : []
-            : name === "user_permission_overrides" ? data.overrides ? [{ id: 1 }] : [] : [];
+            : name === "user_permission_overrides" ? [
+              ...(data.overrides ? [{ id: 1 }] : []), ...data.extraRows.map((row: any) => ({ id: row.id })),
+            ]
+            : name === "permissions" ? data.catalog.filter((p: any) => p.module === id && p.action === params[1]) : [];
           return Promise.resolve(rows).then(resolve, reject);
         },
       };
@@ -89,17 +116,34 @@ function txFor(data: any) {
           else if (name === "users") {
             const account = { ...values, id: "generated", updatedAt: null };
             data.users.push(account); return [account];
+          } else if (name === "permissions") {
+            const row = { id: 100 + data.catalog.length, ...values };
+            data.catalog.push(row); return [row];
+          } else if (name === "user_permission_overrides") {
+            const row = { id: 1000 + data.extraRows.length, createdAt: new Date(), ...values };
+            data.extraRows.push(row); return [row];
           }
           return [];
         }).then(resolve, reject),
       };
       return builder;
     },
-    delete: (table: any) => ({ where: async () => {
+    delete: (table: any) => ({ where: async (predicate: any) => {
       if (getTableName(table) === "user_permissions") data.permissions = [];
+      if (getTableName(table) === "user_permission_overrides") {
+        const params = dialect.sqlToQuery(predicate).params;
+        data.extraRows = data.extraRows.filter((row: any) => !(row.id === params[0] && row.userId === params[1]));
+      }
     } }),
-    update: (table: any) => ({ set: (values: any) => ({ where: async () => {
-      if (getTableName(table) === "branch_employees") Object.assign(data.employee, values);
+    update: (table: any) => ({ set: (values: any) => ({ where: (predicate: any) => {
+      const run = () => {
+        if (getTableName(table) === "branch_employees") { Object.assign(data.employee, values); return []; }
+        const params = dialect.sqlToQuery(predicate).params;
+        const row = data.extraRows.find((o: any) => o.id === params[0] && o.userId === params[1]);
+        if (row) Object.assign(row, values);
+        return row ? [row] : [];
+      };
+      return { returning: async () => run(), then: (resolve: any, reject: any) => Promise.resolve().then(run).then(resolve, reject) };
     } }) }),
   };
 }
@@ -125,12 +169,14 @@ async function observed() {
 beforeEach(() => {
   runtime.failSessions = false; runtime.invalidate.mockClear(); failAudit = false; lockStatements = [];
   state = { ready: true, enabled: true, selected: true, access: "full", roles: false, overrides: false,
+    additionsReady: true, additionMetadata: [], extraRows: [], catalog: [],
     version: 1, approved: true, source: "direct", assignment: null, audit: [],
     content: { key: "synthetic", name: "Synthetic", description: "", reviewNotes: "",
       assignmentAuthority: "delegated_operations", scopeType: "branch", permissions: perms },
     employee: { id: 1, employeeName: "Synthetic", branchId: "A", linkedUserId: "worker", status: "active", jobTitle: null },
     users: [{ id: "ops", role: "operations_manager", branchId: "A", isActive: "active", jobTitle: null, updatedAt: null },
-      { id: "worker", username: "synthetic", role: "employee", branchId: "A", isActive: "active", jobTitle: null, updatedAt: null }],
+      { id: "worker", username: "synthetic", role: "employee", branchId: "A", isActive: "active", jobTitle: null, updatedAt: null },
+      { id: "admin", role: "admin", branchId: null, isActive: "active", jobTitle: null, updatedAt: null }],
     permissions: [{ module: "cashier_journal", actions: ["view"] }],
   };
   runtime.transaction = async (work: any) => {
@@ -342,5 +388,156 @@ describe("legacy ops paths cannot bypass approved-template grants", () => {
     expect((await invoke("put", "permissions", { permissions: perms })).statusCode).toBe(200);
     expect(state.assignment).toEqual(binding);
     expect(JSON.parse(state.audit.at(-1).details)).not.toHaveProperty("removedTemplateBinding");
+  });
+});
+
+async function invokeAddition(method: string, body: any = {}, id?: number, actor = "admin") {
+  const req: any = { session: { userId: actor }, query: {},
+    params: { employeeId: "1", ...(id === undefined ? {} : { id: String(id) }) }, body };
+  const res: any = { statusCode: 200, setHeader: vi.fn(),
+    status(code: number) { this.statusCode = code; return this; },
+    json(value: any) { this.body = value; return this; } };
+  const path = `/api/admin/employee-account-additions/:employeeId${id === undefined ? "" : "/:id"}`;
+  const handlers = routes.find(r => r.method === method && r.path === path).handlers;
+  let index = 0;
+  const next = async () => { if (handlers[index]) await handlers[index++](req, res, next); };
+  await next();
+  return res;
+}
+const additionBody = { module: "cashier_journal", action: "create", allow: true,
+  scopeType: "global", branchId: null, startsAt: null, endsAt: null, reason: "Explicit independent global addition" };
+async function createAddition(body = additionBody) {
+  const result = await invokeAddition("post", body);
+  expect(result.statusCode).toBe(201);
+  return result.body.addition;
+}
+describe("admin addition CRUD and protected-base integration (actual route/mock IO)", () => {
+  it.each(["get", "post", "patch", "delete"])("requires actual admin for %s additions", async method => {
+    const row = await createAddition();
+    const body = method === "delete" ? { reason: "Removal", expectedRevision: row.revision }
+      : method === "patch" ? { ...additionBody, expectedRevision: row.revision } : additionBody;
+    const result = await invokeAddition(method, body, ["patch", "delete"].includes(method) ? row.id : undefined, "ops");
+    expect(result.statusCode).toBe(403); expect(result.body.code).toBe("DELEGATION_FORBIDDEN");
+  });
+  it("creates only override+provenance and leaves direct base/source/employee/account intact", async () => {
+    const original = { permissions: structuredClone(state.permissions), source: state.source,
+      employee: structuredClone(state.employee), users: structuredClone(state.users) };
+    const addition = await createAddition();
+    expect(addition.integrity).toBe("managed");
+    expect(addition.scopeType).toBe("global");
+    expect(state.permissions).toEqual(original.permissions);
+    expect(state.source).toBe(original.source);
+    expect(state.employee).toEqual(original.employee);
+    expect(state.users).toEqual(original.users);
+    expect((await invokeAddition("get")).body.additions).toEqual([addition]);
+    expect(state.audit.at(-1).action).toBe("addition_create");
+  });
+  it("exposes safe managed additions READ ONLY in manager snapshot, separate from base", async () => {
+    const addition = await createAddition();
+    const preview = await invoke("get", "template-assignment");
+    expect(preview.statusCode).toBe(200);
+    expect(preview.body.currentPermissions).toEqual([{ module: "cashier_journal", actions: ["view"] }]);
+    expect(preview.body.additions).toEqual([addition]);
+    expect(preview.body.additions[0]).not.toHaveProperty("snapshot");
+    expect(preview.body.additions[0]).not.toHaveProperty("password");
+  });
+  it("preserves independent extras/denies/time bounds during explicit base replacement", async () => {
+    await createAddition({ ...additionBody, allow: false, startsAt: "2026-10-01T00:00:00Z", endsAt: "2099-01-01T00:00:00Z" });
+    const input = await observed();
+    state.content = { ...state.content, scopeType: "self", permissions: [] };
+    const extras = structuredClone(state.extraRows);
+    const metadata = structuredClone(state.additionMetadata);
+    expect((await invoke("post", "template-assignment", input)).statusCode).toBe(200);
+    expect(state.permissions).toEqual([]);
+    expect(state.extraRows).toEqual(extras); expect(state.additionMetadata).toEqual(metadata);
+  });
+  it("does not move effective extra grants into the ops-owned direct base", async () => {
+    await createAddition();
+    const result = await invoke("put", "permissions", { permissions: perms });
+    expect(result.statusCode).toBe(403); expect(result.body.code).toBe("REDUCTION_ONLY");
+  });
+  it("invalidates template confirmation on independent addition creation/update/deletion", async () => {
+    const beforeCreate = await observed();
+    const added = await createAddition();
+    expect((await invoke("post", "template-assignment", beforeCreate)).body.code).toBe("ASSIGNMENT_REVISION_CONFLICT");
+    const beforeUpdate = await observed();
+    const updated = await invokeAddition("patch", { ...additionBody, allow: false,
+      startsAt: "2099-01-01T00:00:00Z", expectedRevision: added.revision }, added.id);
+    expect(updated.statusCode).toBe(200);
+    expect((await invoke("post", "template-assignment", beforeUpdate)).body.code).toBe("ASSIGNMENT_REVISION_CONFLICT");
+    const beforeDelete = await observed();
+    expect((await invokeAddition("delete", { reason: "Explicit removal",
+      expectedRevision: updated.body.addition.revision }, added.id)).statusCode).toBe(200);
+    expect((await invoke("post", "template-assignment", beforeDelete)).body.code).toBe("ASSIGNMENT_REVISION_CONFLICT");
+  });
+  it("deletes only owned managed override and preserves independent legacy overrides", async () => {
+    const added = await createAddition(); state.overrides = true;
+    expect((await invokeAddition("delete", { reason: "Remove managed addition", expectedRevision: added.revision }, added.id)).statusCode).toBe(200);
+    expect(state.overrides).toBe(true); expect(state.extraRows).toEqual([]); expect(state.additionMetadata).toEqual([]);
+    expect(state.permissions).toEqual([{ module: "cashier_journal", actions: ["view"] }]);
+    expect((await invokeAddition("delete", { reason: "Cannot adopt legacy", expectedRevision: added.revision }, 1)).statusCode).toBe(404);
+  });
+  it.each(["employee", "user", "link"])("rejects CRUD ownership mismatch in %s", async mismatch => {
+    const added = await createAddition();
+    if (mismatch === "employee") state.additionMetadata[0].employeeId = 2;
+    if (mismatch === "user") state.additionMetadata[0].userId = "other";
+    if (mismatch === "link") {
+      state.users.push({ ...state.users[1], id: "other" }); state.employee.linkedUserId = "other";
+    }
+    const before = structuredClone(state);
+    expect((await invokeAddition("delete", { reason: "Removal", expectedRevision: added.revision }, added.id)).body.code).toBe("ADDITION_NOT_FOUND");
+    expect(state).toEqual(before);
+  });
+  it("detects stale managed revision on PATCH and DELETE", async () => {
+    const added = await createAddition();
+    const update = await invokeAddition("patch", { ...additionBody, allow: false, expectedRevision: added.revision }, added.id);
+    expect(update.statusCode).toBe(200);
+    const before = structuredClone(state);
+    expect((await invokeAddition("patch", { ...additionBody, expectedRevision: added.revision }, added.id)).body.code).toBe("ADDITION_REVISION_CONFLICT");
+    expect((await invokeAddition("delete", { reason: "Removal", expectedRevision: added.revision }, added.id)).body.code).toBe("ADDITION_REVISION_CONFLICT");
+    expect(state).toEqual(before);
+  });
+  it.each([true, false])("keeps privileged managed extras protected (allow=%s) without restricting admin CRUD", async allow => {
+    const added = await createAddition({ ...additionBody, module: "users", action: "view", allow });
+    expect((await invoke("get", "template-assignment")).statusCode).toBe(403);
+    expect((await invokeAddition("get")).body.additions[0].id).toBe(added.id);
+    expect((await invokeAddition("delete", { reason: "Remove privileged extra", expectedRevision: added.revision }, added.id)).statusCode).toBe(200);
+  });
+  it("keeps modified formerly-managed rows protected until explicit admin repair", async () => {
+    const added = await createAddition();
+    state.extraRows[0].allow = false;
+    expect((await invoke("get", "template-assignment")).statusCode).toBe(403);
+    expect((await invokeAddition("get")).body.additions[0].integrity).toBe("changed");
+    expect((await invokeAddition("patch", { ...additionBody, expectedRevision: added.revision }, added.id)).statusCode).toBe(200);
+    expect((await invoke("get", "template-assignment")).statusCode).toBe(200);
+  });
+  it("metadata unavailable cannot classify extras as safe; no-extra ops accounts stay manageable", async () => {
+    const addition = await createAddition(); state.additionsReady = false;
+    expect((await invoke("get", "template-assignment")).statusCode).toBe(403);
+    expect((await invokeAddition("get")).body.code).toBe("migration_required");
+    state.extraRows = []; state.additionMetadata = [];
+    expect((await invoke("get", "template-assignment")).statusCode).toBe(200);
+    expect(addition.id).toBeTruthy();
+  });
+  it.each(["create", "update", "delete"])("rolls back %s addition on audit failure", async mode => {
+    const row = mode === "create" ? null : await createAddition();
+    const before = structuredClone(state); failAudit = true;
+    const body = mode === "delete" ? { reason: "Removal", expectedRevision: row.revision }
+      : mode === "update" ? { ...additionBody, allow: false, expectedRevision: row.revision } : additionBody;
+    expect((await invokeAddition(mode === "create" ? "post" : mode === "update" ? "patch" : "delete",
+      body, row?.id)).statusCode).toBe(500);
+    expect(state).toEqual(before);
+  });
+  it("rolls back all addition/catalog/provenance writes on session invalidation failure", async () => {
+    const before = structuredClone(state); runtime.failSessions = true;
+    expect((await invokeAddition("post", additionBody)).statusCode).toBe(500);
+    expect(state).toEqual(before);
+  });
+  it("rejects branch-scoped operational additions but allows only proved HR scopes on employee branch", async () => {
+    expect((await invokeAddition("post", { ...additionBody, scopeType: "branch", branchId: "A" })).body.code).toBe("UNSUPPORTED_ADDITION_SCOPE");
+    expect((await invokeAddition("post", { ...additionBody, module: "hr_documents", action: "view",
+      scopeType: "branch", branchId: "B" })).body.code).toBe("BRANCH_FORBIDDEN");
+    await createAddition({ ...additionBody, module: "hr_documents", action: "view", scopeType: "branch", branchId: "A" });
+    expect((await invoke("get", "template-assignment")).statusCode).toBe(403);
   });
 });

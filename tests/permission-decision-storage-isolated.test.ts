@@ -27,6 +27,16 @@ const snapshot = (changes: Partial<PermissionDecisionInput> = {}) =>
   normalizePermissionDecisionSnapshot(input(changes), now);
 
 describe("pure shared permission decisions", () => {
+  it("global override start is inclusive in the existing temporal resolver", () => {
+    for (const startDate of [new Date(now + 1), "2099-01-01T00:00:00Z"]) {
+      const s = snapshot({ sourceMode: "direct", direct: [], roles: [],
+        overrides: [override({ branchId: null, allow: true, startDate })] });
+      expect(checkPermissionDecision(s, "orders", "view")).toBe(false);
+      expect(evaluatePermissionDecision(s).every(p => !p.allowed)).toBe(true);
+    }
+    expect(checkPermissionDecision(snapshot({ sourceMode: "direct", direct: [], roles: [],
+      overrides: [override({ branchId: null, allow: true, startDate: new Date(now) })] }), "orders", "view")).toBe(true);
+  });
   it("clones raw direct rows including empty actions without promoting them to effective grants", () => {
     const direct = [{ module: "orders", actions: [] as string[] }, { module: "cash", actions: ["view"] }];
     const s = snapshot({ sourceMode: "inherit", direct });
@@ -163,6 +173,7 @@ function fixture(changes: Partial<PermissionDecisionInput> = {}, metadataMissing
     then: (resolve: (value: any) => void, reject: (error: any) => void) => Promise.resolve().then(run).then(resolve, reject),
   });
   const db: any = {
+    execute: vi.fn(async () => ({ rows: [{ ready: true }] })),
     select: () => ({
       from: (table: any) => {
         const chain = { innerJoin: () => chain, where: async () => structuredClone(rows(table)) };
@@ -213,6 +224,7 @@ function fixture(changes: Partial<PermissionDecisionInput> = {}, metadataMissing
     }),
   };
   const context = createContext({
+    sql: (parts: any, ...values: any[]) => ({ parts, values }),
     ...tables, db, eq: (column: any, value: any) => ({ column, value }), and: (...args: any[]) => args,
     normalizePermissionDecisionSnapshot: (value: PermissionDecisionInput) => normalizePermissionDecisionSnapshot(value, now),
     checkPermissionDecision, evaluatePermissionDecision, isPermissionTupleCurrent,
@@ -227,6 +239,17 @@ function fixture(changes: Partial<PermissionDecisionInput> = {}, metadataMissing
 }
 
 describe("actual storage methods with strict offline doubles", () => {
+  it("flat getUserPermissions and contextual checks both suppress future and expired global extras", async () => {
+    const f = fixture({ sourceMode: "direct", direct: [], roles: [], overrides: [
+      override({ allow: true, branchId: null, startDate: new Date(now + 1) }),
+    ] });
+    expect(await f.storage.getUserPermissions("u")).toEqual([]);
+    expect(await f.storage.userHasPermission("u", "orders", "view", "A")).toBe(false);
+    f.state.denies[0].startDate = new Date(now);
+    expect(await f.storage.getUserPermissions("u")).toEqual([expect.objectContaining({ module: "orders", actions: ["view"] })]);
+    f.state.denies[0].expiresAt = new Date(now);
+    expect(await f.storage.getUserPermissions("u")).toEqual([]);
+  });
   it("snapshot reads coherent request-fresh tuples and explicit metadata", async () => {
     const f = fixture({ overrides: [override()] });
     const first = await f.storage.getPermissionDecisionSnapshot("u");

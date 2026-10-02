@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DelegatedEmployeeAccount, EmployeeAccountsResponse } from "@/lib/employee-account-types";
 import type { ApprovedEmployeeTemplate, EmployeeAssignmentSnapshot } from "@/lib/employee-template-assignment";
 import { employeeTemplateDiff } from "@/lib/employee-template-assignment";
+import type { EmployeeAccountAddition } from "@/lib/employee-account-additions";
 import { EmployeeTemplateAssignmentDialog } from "./employee-template-assignment-dialog";
 
 const { act, create } = createRequire(import.meta.url)("react-test-renderer");
@@ -29,7 +30,14 @@ const template: ApprovedEmployeeTemplate = {
 };
 const snapshot: EmployeeAssignmentSnapshot = {
   employeeId: 19, branchId: "a", assignment: null, currentPermissions: employee.account!.permissions,
+  additions: [],
   expectedAssignmentRevision: "f".repeat(64),
+};
+const independentAddition: EmployeeAccountAddition = {
+  id: 41, module: "maintenance", action: "edit", allow: false, scopeType: "global", branchId: null,
+  startsAt: "2024-03-01T06:00:00Z", endsAt: "2024-03-02T06:00:00Z", reason: "منع مستقل محفوظ",
+  revision: "11111111-1111-4111-8111-111111111111", createdBy: "admin-test",
+  createdAt: "2024-02-28T06:00:00Z", updatedAt: "2024-02-28T06:00:00Z", integrity: "managed",
 };
 let renderer: any;
 let catalog: ApprovedEmployeeTemplate[];
@@ -153,6 +161,16 @@ describe("approved employee template review", () => {
     expect(button("إعادة المحاولة")).toBeTruthy();
     expect(button("تأكيد إسناد الإصدار").props.disabled).toBe(true);
   });
+  it("fails closed when an older service omits the required independent-additions preview instead of showing a false empty list", async () => {
+    fetchMock.mockImplementation((url: string) => Promise.resolve(new Response(JSON.stringify(url.includes("job-templates")
+      ? { templates: catalog }
+      : { employeeId: snapshot.employeeId, branchId: snapshot.branchId, assignment: null, currentPermissions: snapshot.currentPermissions, expectedAssignmentRevision: snapshot.expectedAssignmentRevision }))));
+    await mount();
+    expect(serialized()).toContain("لا تتضمن سجل الإضافات المستقلة");
+    expect(serialized()).not.toContain("لا توجد إضافات مستقلة مُدارة");
+    expect(button("تأكيد إسناد الإصدار").props.disabled).toBe(true);
+    expect(write).not.toHaveBeenCalled();
+  });
   it("explains protected/unsupported roles and preserves backend forbidden errors", async () => {
     fetchMock.mockImplementation(() => Promise.resolve(new Response(JSON.stringify({ error: "إسناد قديم أو استثناء", code: "PROTECTED_ACCOUNT" }), { status: 403 })));
     await mount();
@@ -173,6 +191,48 @@ describe("approved employee template review", () => {
     expect(serialized()).not.toContain("قالب إدارة النظام");
     expect(renderer.root.findByProps({ id: "approved-employee-template" }).props.value).toBe("");
     expect(write).not.toHaveBeenCalled();
+  });
+  it("shows independent denies and expiry separately from BASE, keeps them on template changes and never submits extra modifications", async () => {
+    current = { ...snapshot, additions: [independentAddition] };
+    catalog = [template, { ...template, templateId: 8, version: 1, name: "قالب أساس فارغ", permissions: [] }];
+    await mount();
+    await select();
+    const readonly = () => renderer.root.findByProps({ "data-testid": "employee-additions-readonly" });
+    const preserved = JSON.stringify(readonly().children.map((node: any) => text(node)));
+    expect(text(readonly())).toContain("منع مستقل");
+    expect(text(readonly())).toContain("حتى:");
+    expect(text(readonly())).toContain("منع مستقل محفوظ");
+    expect(readonly().findAllByType("button")).toHaveLength(0);
+    expect(readonly().findAllByType("input")).toHaveLength(0);
+    const base = renderer.root.findByProps({ "aria-label": "فرق القالب الأساسي قبل وبعد" });
+    expect(text(base)).not.toContain("منع مستقل محفوظ");
+    await change("approved-employee-template", "8:1");
+    expect(JSON.stringify(readonly().children.map((node: any) => text(node)))).toBe(preserved);
+    await confirm();
+    await act(async () => button("تأكيد إسناد الإصدار").props.onClick());
+    const body = JSON.parse(write.mock.calls[0][1].body);
+    expect(Object.keys(body).sort()).toEqual(["templateId", "version", "branchId", "reason", "expectedAssignmentRevision"].sort());
+    expect(body.templateId).toBe(8);
+    expect(fetchMock.mock.calls.every(call => call[0].startsWith("/api/operations/employee-accounts/"))).toBe(true);
+  });
+  it("reloads read-only extras and BASE after an extras-bound revision conflict, without editing those extras", async () => {
+    current = { ...snapshot, additions: [independentAddition] };
+    write.mockResolvedValueOnce(new Response(JSON.stringify({ error: "تغيرت الإضافات", code: "ASSIGNMENT_REVISION_CONFLICT" }), { status: 409 }));
+    await mount();
+    await select();
+    await confirm();
+    await act(async () => button("تأكيد إسناد الإصدار").props.onClick());
+    current = { ...snapshot, expectedAssignmentRevision: "a".repeat(64), additions: [{ ...independentAddition, reason: "مراجعة إضافات أحدث", allow: true }] };
+    await act(async () => button("تحديث المعاينة والقوالب").props.onClick());
+    expect(serialized()).toContain("مراجعة إضافات أحدث");
+    expect(serialized()).toContain("منح مستقل");
+    expect(renderer.root.findByProps({ id: "approved-employee-template" }).props.value).toBe("7:3");
+    expect(button("تأكيد إسناد الإصدار").props.disabled).toBe(true);
+    await confirm();
+    await act(async () => button("تأكيد إسناد الإصدار").props.onClick());
+    expect(JSON.parse(write.mock.calls[1][1].body).expectedAssignmentRevision).toBe(current.expectedAssignmentRevision);
+    expect(JSON.parse(write.mock.calls[1][1].body)).not.toHaveProperty("additions");
+    expect(write.mock.calls.every(call => call[0].endsWith("/template-assignment"))).toBe(true);
   });
   it("blocks non-authorized branches and changes to the server's persisted employee branch", async () => {
     await mount();

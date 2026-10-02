@@ -64,7 +64,7 @@ function templateFetch(password = "page-test-secret") {
       ? { employee: data.employees[0], credentials: { username: "unit-user", password } }
       : url.includes("job-templates")
         ? { templates: [{ templateId: 7, version: 3, key: "test", name: "قالب اختبار", scopeType: "branch", permissions: [], approvedAt: "2026-05-05T10:03:00Z" }] }
-        : { employeeId: Number(url.split("/").at(-2)), branchId: "a", assignment: null, currentPermissions: [], expectedAssignmentRevision: "f".repeat(64) },
+        : { employeeId: Number(url.split("/").at(-2)), branchId: "a", assignment: null, currentPermissions: [], additions: [], expectedAssignmentRevision: "f".repeat(64) },
   ))));
 }
 async function confirmCreate() {
@@ -213,6 +213,46 @@ describe("operations employee account page", () => {
     mocks.user = { ...mocks.user, role: "operations_manager" };
     await renderAgain();
     expect(renderer.root.findAllByProps({ "data-testid": "employee-account-policy-editor" })).toHaveLength(0);
+  });
+  it("offers independent-addition editing only to admin on linked employees, without weakening manager protection", async () => {
+    await mount();
+    expect(button("الإضافات المستقلة")).toBeUndefined();
+    mocks.user = { ...mocks.user, role: "admin" };
+    mocks.state.data = { ...data, employees: [{ ...data.employees[1], account: null, management: { allowed: false, reason: "protected_account" } }] };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      employeeId: 2, branchId: "a", userId: "server-linked-user", additions: [],
+      capabilities: { globalModules: [], branchModules: [], unsupportedScopes: ["department", "self", "assigned_tasks"], globalScopeLabel: "عام" },
+    }))));
+    await renderAgain();
+    expect(button("إسناد قالب معتمد")).toBeUndefined();
+    expect(button("الإضافات المستقلة")).toBeTruthy();
+    await act(async () => button("الإضافات المستقلة").props.onClick());
+    expect(fetch).toHaveBeenCalledWith("/api/admin/employee-account-additions/2", expect.objectContaining({ method: "GET" }));
+    expect(button("إضافة مستقلة جديدة")).toBeTruthy();
+    mocks.user = { ...mocks.user, role: "operations_manager" };
+    await renderAgain();
+    expect(button("الإضافات المستقلة")).toBeUndefined();
+    expect(button("إضافة مستقلة جديدة")).toBeUndefined();
+    expect(button("إسناد قالب معتمد")).toBeUndefined();
+  });
+  it("never offers additions for an unlinked employee and retains an admin draft when management protection changes", async () => {
+    mocks.user = { ...mocks.user, role: "admin" };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      employeeId: 2, branchId: "a", userId: "unit-account", additions: [],
+      capabilities: { globalModules: [], branchModules: [], unsupportedScopes: ["department", "self", "assigned_tasks"], globalScopeLabel: "عام" },
+    }))));
+    await mount();
+    await act(async () => button("الإضافات المستقلة").props.onClick());
+    await act(async () => button("إضافة مستقلة جديدة").props.onClick());
+    await act(async () => renderer.root.findByProps({ id: "addition-reason" }).props.onChange({ target: { value: "مراجعة مستقلة" } }));
+    mocks.state.data = { ...data, employees: [{ ...data.employees[1], account: null, management: { allowed: false, reason: "protected_account" } }] };
+    await renderAgain();
+    expect(renderer.root.findByProps({ id: "addition-reason" }).props.value).toBe("مراجعة مستقلة");
+    await act(async () => button("إغلاق").props.onClick());
+    mocks.state.data = data;
+    await renderAgain();
+    await act(async () => button("موظفون دون حساب").props.onClick());
+    expect(button("الإضافات المستقلة")).toBeUndefined();
   });
 
   it("fails closed on stale directory errors and does not silently expand an invalid branch", async () => {

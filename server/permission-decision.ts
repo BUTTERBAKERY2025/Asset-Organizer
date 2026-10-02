@@ -42,6 +42,7 @@ export interface PermissionDecisionInput {
   overrides: {
     module: string; action: string; permissionId: number; allow: boolean;
     branchId: string | null; departmentId: number | null; expiresAt: Date | string | null;
+    startDate?: Date | string | null;
   }[];
 }
 
@@ -67,6 +68,7 @@ export function normalizePermissionDecisionSnapshot(
     scopeType: p.branchId && p.departmentId ? "branch_department"
       : p.branchId ? "branch" : p.departmentId !== null ? "department" : "global",
     branchId: p.branchId, departmentId: p.departmentId, expiresAt: p.expiresAt,
+    startDate: p.startDate ?? null,
     deny: !p.allow, source: p.allow ? "override_grant" as const : "override_deny" as const,
   })));
   return {

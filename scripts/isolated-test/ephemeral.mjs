@@ -131,7 +131,7 @@ try {
     if (action === "--serve") process.exitCode = await launch(["--serve"]);
     else {
       const serving = launch(["--serve"]);
-      process.exitCode = await launch(["--run", "tests/isolated-runtime-smoke.mjs"]);
+       process.exitCode = await launch(["--run", process.argv[3] || "tests/isolated-runtime-smoke.mjs"]);
       for (const child of children) child.kill("SIGTERM");
       await serving;
     }

@@ -4027,10 +4027,17 @@ export class DatabaseStorage implements IStorage {
         .innerJoin(permissions, eq(rolePermissions.permissionId, permissions.id))
         .innerJoin(roles, eq(userAssignments.roleId, roles.id))
         .where(eq(userAssignments.userId, userId));
+      // Manual 054 adds an optional temporal start to the existing override
+      // source. Detect the column, not provenance metadata: dropping metadata
+      // must never turn a future override into an immediate legacy grant.
+      const startColumn = await tx.execute(sql`SELECT EXISTS (
+        SELECT 1 FROM information_schema.columns WHERE table_schema = 'public'
+        AND table_name = 'user_permission_overrides' AND column_name = 'starts_at') AS ready`);
       const overrides = await tx.select({
         module: permissions.module, action: permissions.action, permissionId: permissions.id,
         allow: userPermissionOverrides.allow, branchId: userPermissionOverrides.branchId,
         departmentId: userPermissionOverrides.departmentId, expiresAt: userPermissionOverrides.expiresAt,
+        startDate: (startColumn.rows[0] as any)?.ready ? userPermissionOverrides.startsAt : sql<null>`NULL`,
       }).from(userPermissionOverrides)
         .innerJoin(permissions, eq(userPermissionOverrides.permissionId, permissions.id))
         .where(eq(userPermissionOverrides.userId, userId));

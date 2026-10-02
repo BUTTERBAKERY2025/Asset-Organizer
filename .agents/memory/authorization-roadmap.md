@@ -26,3 +26,9 @@ Operations template-only granting must cover legacy write paths, not just the ne
 **Why:** The old delegated raw-permission endpoints could still grant without approval after the new selector was added. Explicit inheritance also makes stored dormant direct rows an unsafe reference for deciding whether a write is only a reduction.
 
 **How to apply:** Judge reductions against effective authority, keep assignment provenance and audit atomic, and do not relax independent-assignment/override protections before phase five separates admin additions.
+
+Independent extras may relax operations protection only when their provenance is intact and their authority remains within the delegated safe ceiling. Unknown legacy overrides, privileged extras and drifted records stay protected.
+
+**Why:** Separating the base from additions is not permission to let operations manage accounts carrying admin-level authority, or to relabel an old deny as an approved new addition.
+
+**How to apply:** Preserve extras and denies on base changes; advertise scoped additions only where actual resource routes enforce that scope. Record start dates in the runtime authority source, not merely auxiliary provenance.
