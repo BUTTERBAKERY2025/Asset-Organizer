@@ -56,3 +56,9 @@ The user emphasizes that the system is live and has users; integrated governance
 **Why:** The user explicitly requested extreme care because people currently use the system.
 
 **How to apply:** Keep inventory read-only, distinguish external database evidence from verified live-runtime evidence, and require reviewed impact before changing existing access. Do not turn an inventory request into an account migration or service restart.
+
+For non-admin accounts, the user approved that an explicit, currently applicable deny takes precedence over every grant source, within the deny's scope.
+
+**Why:** The user selected this rule while approving the shared organization-wide governance policy.
+
+**How to apply:** Include direct permissions, templates, assigned roles and automatic grants. Admin and emergency-access policy remain undecided. Policy approval is not permission to change current accounts; review impact before implementation.
