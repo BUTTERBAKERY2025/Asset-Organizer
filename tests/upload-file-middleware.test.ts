@@ -12,6 +12,7 @@ vi.mock("../server/shareholder-security", () => ({
 }));
 
 import { canAccessBranch, hasCrossBranchHrReadAccess, requirePermission } from "../server/auth";
+import { storage } from "../server/storage";
 
 async function check(module: string, role: string) {
   const req: any = { currentUser: { id: "u", role, branchId: "A" }, method: "GET", originalUrl: "/api/uploads/file/test" };
@@ -29,9 +30,14 @@ describe("actual module and branch middleware used by upload route", () => {
     expect(hasCrossBranchHrReadAccess({ currentUser: { id: "u", role: "hr_manager" } })).toBe(true);
   });
   it("restricts explicitly branch-limited operations managers, not admins", async () => {
+    vi.mocked(storage.getUserBranchAccess).mockResolvedValueOnce([{ branchId: "A" }] as any);
+    vi.mocked(storage.getUserBranchAccess).mockResolvedValueOnce([{ branchId: "A" }] as any);
     const req: any = { currentUser: { id: "u", role: "operations_manager", branchId: "A" }, userBranchAccess: [{ branchId: "A" }] };
     expect(await canAccessBranch(req, "A")).toBe(true);
     expect(await canAccessBranch(req, "B")).toBe(false);
+    // The default mock now returns no fresh grants: request-local cached A
+    // must not preserve access after revocation.
+    expect(await canAccessBranch(req, "A")).toBe(false);
     expect(await canAccessBranch({ currentUser: { id: "admin", role: "admin" } }, "B")).toBe(true);
   });
 });

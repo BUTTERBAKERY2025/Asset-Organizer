@@ -13,7 +13,7 @@ vi.mock("../server/shareholder-security", () => ({
 import { ROLE_PERMISSION_TEMPLATES, SYSTEM_MODULES } from "../shared/schema";
 import { canAccessBranch, getAllowedBranchIds, requirePermission, requireAnyPermission,
   requireProductWritePermission, PRODUCTION_DEVELOPMENT_MANAGER_PERMISSIONS } from "../server/auth";
-import { routingPermission } from "../server/central-kitchen-routing";
+import { routingPermission, routingPersonEligible } from "../server/central-kitchen-routing";
 import { canReceiveCentralKitchenNotification } from "../server/central-kitchen-notifications";
 
 const role = "production_development_manager";
@@ -84,6 +84,9 @@ describe("production development management without stored permission rows", () 
     }
     const routing = readFileSync("server/central-kitchen-routing.ts", "utf8");
     expect(routing).toContain('eq(users.role, "production_development_manager")');
-    expect(routing).toContain('routingPermission(currentActor.role, currentActor.actions || [], "edit")');
+    expect(routing).toContain('routingPersonEligible(currentActor, "edit")');
+    expect(routingPersonEligible({ id: "fixture-manager", role, actions: [] }, "edit")).toBe(true);
+    expect(routingPersonEligible({ id: "fixture-manager", role, actions: [], _deniedActions: ["edit"] }, "edit")).toBe(false);
+    expect(routingPersonEligible({ id: "fixture-manager", role, actions: ["view"], _hasCustomPermissions: true }, "edit")).toBe(false);
   });
 });
