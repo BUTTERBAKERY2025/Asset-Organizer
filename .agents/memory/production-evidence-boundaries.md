@@ -8,3 +8,9 @@ The custom-domain live service has been hosted on Render with Supabase, while Re
 **Why:** Successful local requests and a healthy Replit deployment did not explain intermittent gateway failures on the external service. A successful mutation can also precede failing refresh requests; testing only the mutation misses that distinction.
 
 **How to apply:** Read the affected production state without changing it, separate mutation completion from subsequent reads and background work, and match runtime evidence to the actual hosting service. Do not describe a defensive change or passing local test as a proven gateway-outage fix.
+
+On 2026-10-02 the user confirmed checking Render settings and that the live site's database matches the Supabase target documented in docs/live-runtime-identity.md.
+
+**Why:** This is owner-confirmed deployment knowledge, not inferable from local code or an MCP connection.
+
+**How to apply:** Treat database identity as owner-confirmed for this review; do not ask the same question again without conflicting evidence. Do not extend that confirmation to the deployed code revision or runtime correctness.
