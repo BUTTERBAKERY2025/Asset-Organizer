@@ -203,7 +203,7 @@ describe("service worker notification safety", () => {
     "/api/my/notifications",
     "/api/warehouse/notifications/unread-count",
   ])("leaves notification API %s network-only", (url) => {
-    const { listeners } = loadWorker();
+    const { listeners, context } = loadWorker();
     const respondWith = vi.fn();
 
     listeners.get("fetch")!({
@@ -215,7 +215,16 @@ describe("service worker notification safety", () => {
       respondWith,
     });
 
-    expect(respondWith).not.toHaveBeenCalled();
+    if (url.startsWith("/api/my/")) {
+      expect(context.fetch).toHaveBeenCalledWith(
+        expect.objectContaining({ url: `https://app.example${url}` }),
+        { cache: "no-store" },
+      );
+      expect(respondWith).toHaveBeenCalledOnce();
+      expect(context.caches.match).not.toHaveBeenCalled();
+    } else {
+      expect(respondWith).not.toHaveBeenCalled();
+    }
   });
 
   it("preserves JS network-error and navigation refresh protections", () => {

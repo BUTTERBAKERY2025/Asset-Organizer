@@ -2,7 +2,9 @@ import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { changeLanguage } from "@/lib/i18n";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, portalQueryOptions } from "@/lib/queryClient";
+import { useAuth } from "@/hooks/useAuth";
+import { portalDocumentLink } from "@/lib/portal-document-link";
 import { syncAppBadge } from "@/lib/app-badge";
 import { useToast } from "@/hooks/use-toast";
 import { Layout } from "@/components/layout";
@@ -95,6 +97,8 @@ export default function MyPortalPage() {
   const isRTL = i18n.language !== "en";
   const dir = isRTL ? "rtl" : "ltr";
   const qc = useQueryClient();
+  const { user } = useAuth();
+  const portalUserId = user?.id;
   const [leaveOpen, setLeaveOpen] = useState(false);
   const [advOpen, setAdvOpen] = useState(false);
   const [signAdvance, setSignAdvance] = useState<any | null>(null);
@@ -154,8 +158,8 @@ export default function MyPortalPage() {
   const [advForm, setAdvForm] = useState({ amount: "", requestedMonth: todayMonth, installments: "1", reason: "" });
 
   const { data: profile, isLoading: profileLoading } = useQuery<Profile>({
-    queryKey: ["/api/my/profile"],
-    queryFn: async () => (await apiRequest("GET", "/api/my/profile")).json(),
+    ...portalQueryOptions("/api/my/profile", portalUserId),
+    queryFn: async ({ signal }) => (await apiRequest("GET", "/api/my/profile", undefined, undefined, { signal })).json(),
   });
 
   const hasEmployee = profile?.hasEmployee;
@@ -164,31 +168,31 @@ export default function MyPortalPage() {
   const photoUrl = emp?.photoUrl as string | undefined;
 
   const { data: leaves = [] } = useQuery<any[]>({
-    queryKey: ["/api/my/leaves"],
+    ...portalQueryOptions("/api/my/leaves", portalUserId),
     queryFn: async () => (await apiRequest("GET", "/api/my/leaves")).json(),
     enabled: !!hasEmployee,
   });
   const { data: leaveBalance } = useQuery<any>({
-    queryKey: ["/api/my/leave-balance"],
+    ...portalQueryOptions("/api/my/leave-balance", portalUserId),
     queryFn: async () => (await apiRequest("GET", "/api/my/leave-balance")).json(),
     enabled: !!hasEmployee,
   });
 
   // تصفيات الإجازات (للتوقيع والإقرار بالاستلام)
   const { data: mySettlements = [] } = useQuery<any[]>({
-    queryKey: ["/api/my/leave-settlements"],
+    ...portalQueryOptions("/api/my/leave-settlements", portalUserId),
     queryFn: async () => (await apiRequest("GET", "/api/my/leave-settlements")).json(),
     enabled: !!hasEmployee,
   });
 
   const { data: advances = [] } = useQuery<any[]>({
-    queryKey: ["/api/my/advance-requests"],
+    ...portalQueryOptions("/api/my/advance-requests", portalUserId),
     queryFn: async () => (await apiRequest("GET", "/api/my/advance-requests")).json(),
     enabled: !!hasEmployee,
   });
 
   const { data: notifData } = useQuery<{ notifications: any[]; unreadCount: number }>({
-    queryKey: ["/api/my/notifications"],
+    ...portalQueryOptions("/api/my/notifications", portalUserId),
     queryFn: async () => (await apiRequest("GET", "/api/my/notifications")).json(),
     enabled: !!hasEmployee,
     refetchInterval: 60000,
@@ -241,8 +245,8 @@ export default function MyPortalPage() {
     allowLeaveRequests: boolean; allowAdvanceRequests: boolean; allowEvaluationAck: boolean;
     maxAdvanceAmount: number; defaultLanguage: string;
   }>({
-    queryKey: ["/api/my/portal-config"],
-    queryFn: async () => (await apiRequest("GET", "/api/my/portal-config")).json(),
+    ...portalQueryOptions("/api/my/portal-config", portalUserId),
+    queryFn: async ({ signal }) => (await apiRequest("GET", "/api/my/portal-config", undefined, undefined, { signal })).json(),
     enabled: !!hasEmployee,
   });
   // Missing flags default to visible (true) so the portal stays usable before config loads.
@@ -272,59 +276,59 @@ export default function MyPortalPage() {
   }, [portalConfig?.defaultLanguage]);
 
   const { data: overview } = useQuery<any>({
-    queryKey: ["/api/my/overview"],
+    ...portalQueryOptions("/api/my/overview", portalUserId),
     queryFn: async () => (await apiRequest("GET", "/api/my/overview")).json(),
     enabled: !!hasEmployee,
   });
 
   const { data: schedule = [] } = useQuery<any[]>({
-    queryKey: ["/api/my/schedule", schedMonth],
+    ...portalQueryOptions("/api/my/schedule", portalUserId, schedMonth),
     queryFn: async () => (await apiRequest("GET", `/api/my/schedule?month=${schedMonth}`)).json(),
     enabled: !!hasEmployee && showSchedule,
   });
 
   const { data: attendance = [] } = useQuery<any[]>({
-    queryKey: ["/api/my/attendance", attMonth],
+    ...portalQueryOptions("/api/my/attendance", portalUserId, attMonth),
     queryFn: async () => (await apiRequest("GET", `/api/my/attendance?month=${attMonth}`)).json(),
     enabled: !!hasEmployee && showAttendance,
   });
 
   const { data: warnings = [] } = useQuery<any[]>({
-    queryKey: ["/api/my/warnings"],
+    ...portalQueryOptions("/api/my/warnings", portalUserId),
     queryFn: async () => (await apiRequest("GET", "/api/my/warnings")).json(),
     enabled: !!hasEmployee && showWarnings,
   });
 
   const { data: docsData } = useQuery<{ documents: any[]; expiry: any }>({
-    queryKey: ["/api/my/documents"],
-    queryFn: async () => (await apiRequest("GET", "/api/my/documents")).json(),
+    ...portalQueryOptions("/api/my/documents", portalUserId),
+    queryFn: async ({ signal }) => (await apiRequest("GET", "/api/my/documents", undefined, undefined, { signal })).json(),
     enabled: !!hasEmployee && showDocuments,
   });
 
   const { data: salary } = useQuery<any>({
-    queryKey: ["/api/my/salary"],
-    queryFn: async () => (await apiRequest("GET", "/api/my/salary")).json(),
+    ...portalQueryOptions("/api/my/salary", portalUserId),
+    queryFn: async ({ signal }) => (await apiRequest("GET", "/api/my/salary", undefined, undefined, { signal })).json(),
     enabled: !!hasEmployee && showSalary,
   });
 
   // قسائم الرواتب المعتمدة (الأشهر المُقفلة)
   const { data: payslips = [] } = useQuery<any[]>({
-    queryKey: ["/api/my/payslips"],
-    queryFn: async () => (await apiRequest("GET", "/api/my/payslips")).json(),
+    ...portalQueryOptions("/api/my/payslips", portalUserId),
+    queryFn: async ({ signal }) => (await apiRequest("GET", "/api/my/payslips", undefined, undefined, { signal })).json(),
     enabled: !!hasEmployee && showSalary,
   });
   const [openPayslip, setOpenPayslip] = useState<string | null>(null);
 
   // تقييمات الأداء المعتمدة
   const { data: myEvaluations = [] } = useQuery<any[]>({
-    queryKey: ["/api/my/evaluations"],
+    ...portalQueryOptions("/api/my/evaluations", portalUserId),
     queryFn: async () => (await apiRequest("GET", "/api/my/evaluations")).json(),
     enabled: !!hasEmployee && showEvaluations,
   });
   // حوافزي — مكافآت الأداء الممنوحة
   const { data: myIncentives = [] } = useQuery<any[]>({
-    queryKey: ["/api/my/incentives"],
-    queryFn: async () => (await apiRequest("GET", "/api/my/incentives")).json(),
+    ...portalQueryOptions("/api/my/incentives", portalUserId),
+    queryFn: async ({ signal }) => (await apiRequest("GET", "/api/my/incentives", undefined, undefined, { signal })).json(),
     enabled: !!hasEmployee && !!portalConfig && showIncentives,
   });
 
@@ -354,7 +358,7 @@ export default function MyPortalPage() {
   const [geoError, setGeoError] = useState<string | null>(null);
 
   const { data: todayStatus } = useQuery<any>({
-    queryKey: ["/api/my/attendance/today"],
+    ...portalQueryOptions("/api/my/attendance/today", portalUserId),
     queryFn: async () => (await apiRequest("GET", "/api/my/attendance/today")).json(),
     enabled: !!hasEmployee && allowSelfCheckin,
   });
@@ -1247,7 +1251,7 @@ export default function MyPortalPage() {
                       </div>
                       <div className="flex items-center gap-2">
                         {d.fileUrl && (
-                          <a href={d.fileUrl} target="_blank" rel="noreferrer" data-testid={`link-document-${d.id}`}>
+                          <a href={portalDocumentLink(d.fileUrl, portalUserId)} target="_blank" rel="noreferrer" data-testid={`link-document-${d.id}`}>
                             <Button size="sm" variant="outline">{t("documents.view")}</Button>
                           </a>
                         )}

@@ -5,6 +5,7 @@ import memoize from "memoizee";
 import { storage } from "./storage";
 import { readEmployeeDocumentMetadata } from "./employee-documents-read";
 import { authenticatedUploadMatchesActor, makeAuthenticatedUploadName, mayDownloadUpload, resolveUploadBindings, validUploadKey, type UploadBinding } from "./upload-file-access";
+import { isDedicatedSocialMediaKey, noStoreProtectedUpload, sendLocalProtectedUpload } from "./protected-upload-response";
 import { ProductionStockPostingError } from "./production-stock-posting";
 import { validateFinishedProductionTarget } from "./finished-production-target";
 import { registerBranchBarHandoffRoutes } from "./branch-bar-handoffs";
@@ -359,6 +360,7 @@ export async function registerRoutes(
 
   // Setup authentication
   await setupAuth(app);
+  app.use(["/api/uploads/file", "/uploads", "/api/documents/file"], noStoreProtectedUpload);
   registerEmployeeAccountDelegation(app);
   registerBranchStockDesk(app);
   registerRecipeExceptionRoutes(app);
@@ -39972,14 +39974,18 @@ export async function registerRoutes(
   });
 
   // Serve general uploaded files (authenticated)
-  app.get("/api/uploads/file/*", isAuthenticated, async (req, res) => {
+  app.get(["/api/uploads/file/*", "/uploads/*"], isAuthenticated, async (req, res) => {
     try {
       const rawPath = req.params[0];
       if (!validUploadKey(rawPath)) {
         return res.status(400).json({ error: "اسم ملف غير صالح" });
       }
-      const filename = rawPath;
-      const proxyUrl = `/api/uploads/file/${filename}`;
+      const local = req.path.startsWith("/uploads/");
+      // Historical document files live under uploads/documents, while their
+      // documents.file_path stores only the filename. Other paths stay exact.
+      const filename = local && rawPath.startsWith("documents/") ? rawPath.slice("documents/".length) : rawPath;
+      const proxyUrl = local ? `/uploads/${rawPath}` : `/api/uploads/file/${filename}`;
+      const localLeaf = local ? rawPath.split("/").pop()! : filename;
       // Resolve references from the actual consumers, not from a caller-
       // controlled folder prefix. Exact equality also supports legacy rows
       // whose stored key still contains slashes.
@@ -39994,10 +40000,11 @@ export async function registerRoutes(
           COALESCE((SELECT v.changed_by FROM document_versions v
             WHERE v.document_id = d.id AND v.file_path = d.file_path
             ORDER BY v.version_number DESC LIMIT 1), d.created_by)
-          FROM documents d WHERE d.file_path = ${filename}
+          FROM documents d WHERE d.file_path = ${filename} OR d.file_path = ${proxyUrl} OR d.file_path = ${localLeaf}
         UNION ALL
         SELECT 'document', d.branch_id, d.owner_id, CASE WHEN d.status = 'deleted' THEN 'deleted' ELSE d.access_level END, v.changed_by
-          FROM document_versions v JOIN documents d ON d.id = v.document_id WHERE v.file_path = ${filename}
+          FROM document_versions v JOIN documents d ON d.id = v.document_id
+          WHERE v.file_path = ${filename} OR v.file_path = ${proxyUrl} OR v.file_path = ${localLeaf}
         UNION ALL
         SELECT 'employee', e.branch_id, e.linked_user_id, NULL::text, NULL::varchar
           FROM branch_employees e WHERE e.photo_url = ${proxyUrl}
@@ -40071,7 +40078,16 @@ export async function registerRoutes(
           FROM influencer_payments p WHERE p.attachment_url = ${proxyUrl}
       `, (query) => db.execute(query) as Promise<{ rows: UploadBinding[] }>,
         (text, params) => pool.query(text, params) as Promise<{ rows: UploadBinding[] }>);
-      const authorized = await mayDownloadUpload(
+      // Preserve the dedicated marketing diskStorage producer and its upload
+      // previews (not yet attached to a social post). These are module assets,
+      // not generic uploads. Any private/resource binding removes this narrow
+      // exception and still requires the normal binding + provenance ACL.
+      let dedicatedSocialAccess = false;
+      if (local && isDedicatedSocialMediaKey(rawPath) && bindings.length === 0 && !isUserAdmin(req)) {
+        await requirePermission("marketing", "view")(req, res, () => { dedicatedSocialAccess = true; });
+        if (!dedicatedSocialAccess) return;
+      }
+      const authorized = dedicatedSocialAccess || await mayDownloadUpload(
         bindings, getCurrentUser(req).id, isUserAdmin(req),
         async (module) => {
           // Use the same intrinsic roles, cached grants and restrictions as
@@ -40093,6 +40109,11 @@ export async function registerRoutes(
       if (!authorized) {
         if (res.headersSent) return;
         return res.status(403).json({ error: "غير مصرح بالوصول إلى الملف" });
+      }
+
+      if (local) {
+        await sendLocalProtectedUpload(rawPath, res);
+        return;
       }
 
       const { downloadFromSupabase, isSupabaseAvailable } = await import("./supabase-storage");
@@ -40166,7 +40187,7 @@ export async function registerRoutes(
         "Content-Type": result.mimeType || "application/octet-stream",
         "Content-Length": buffer.length.toString(),
         "Content-Disposition": "inline",
-        "Cache-Control": "private, max-age=3600",
+        "Cache-Control": "private, no-store",
       });
 
       res.send(buffer);

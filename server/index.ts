@@ -103,22 +103,8 @@ app.use((req, res, next) => {
 });
 app.use('/attached_assets', express.static(path.join(process.cwd(), 'attached_assets')));
 
-// Serve uploads directory - require session authentication and prevent path traversal
-app.use('/uploads', (req, res, next) => {
-  if (!(req as any).session?.userId) {
-    return res.status(401).json({ error: "غير مصرح بالوصول" });
-  }
-  const requestedPath = decodeURIComponent(req.path);
-  if (requestedPath.includes('..') || requestedPath.includes('\0')) {
-    return res.status(400).json({ error: "مسار غير صالح" });
-  }
-  res.setHeader('X-Content-Type-Options', 'nosniff');
-  res.setHeader('Content-Disposition', 'inline');
-  return next();
-}, express.static(path.join(process.cwd(), 'uploads'), {
-  dotfiles: 'deny',
-  index: false,
-}));
+// /uploads is registered after authentication in routes.ts. Never install a
+// static directory handler here: a session alone is not a document file ACL.
 
 // Serve public assets (logo, etc.) for PDF generation
 app.use('/assets', express.static(path.join(process.cwd(), 'public/assets')));

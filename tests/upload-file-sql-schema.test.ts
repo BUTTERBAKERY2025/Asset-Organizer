@@ -4,8 +4,8 @@ import { getTableColumns, getTableName, isTable } from "drizzle-orm";
 import * as schema from "../shared/schema";
 
 const route = readFileSync("server/routes.ts", "utf8");
-const start = route.indexOf('app.get("/api/uploads/file/*"');
-const end = route.indexOf("const authorized = await mayDownloadUpload", start);
+const start = route.indexOf('app.get(["/api/uploads/file/*"');
+const end = route.indexOf("const authorized = dedicatedSocialAccess || await mayDownloadUpload", start);
 const query = route.slice(start, end).split("resolveUploadBindings(sql`")[1]?.split("`, (query)")[0];
 if (!query) throw new Error("upload reference SQL missing");
 const tables = new Map(Object.values(schema).filter(isTable).map(t => [getTableName(t), t]));

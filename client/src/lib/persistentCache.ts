@@ -21,6 +21,10 @@ function isEmployeeAccountSensitiveKey(queryKey: string) {
   return key.startsWith("/api/operations/employee-accounts") || key.startsWith("/api/admin/employee-account-policy");
 }
 
+function isPrivatePortalKey(queryKey: string) {
+  return queryKey.toLowerCase().startsWith("/api/my/");
+}
+
 function getCacheKey(): string {
   return CACHE_PREFIX + (currentUserId || 'anon');
 }
@@ -109,6 +113,7 @@ function persist() {
 }
 
 export function getCachedData(queryKey: string): any | undefined {
+  if (isPrivatePortalKey(queryKey)) return undefined;
   if (isEmployeeAccountSensitiveKey(queryKey)) return undefined;
   if (queryKey.toLowerCase().startsWith('/api/owner/') || queryKey.toLowerCase().startsWith('/api/operations-hr/') || queryKey.toLowerCase().startsWith('/api/operations-center/')) return undefined;
   const store = getStore();
@@ -122,6 +127,7 @@ export function getCachedData(queryKey: string): any | undefined {
 }
 
 export function setCachedData(queryKey: string, data: any, ttlMs: number) {
+  if (isPrivatePortalKey(queryKey)) return;
   if (isEmployeeAccountSensitiveKey(queryKey)) return;
   if (queryKey.toLowerCase().startsWith('/api/owner/') || queryKey.toLowerCase().startsWith('/api/operations-hr/') || queryKey.toLowerCase().startsWith('/api/operations-center/')) return;
   if (queryKey === '/api/auth/me' && data?.role === 'business_owner') return;

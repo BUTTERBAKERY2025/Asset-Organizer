@@ -4,15 +4,16 @@ import { transform } from "esbuild";
 import { sql as drizzleSql } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 import { authenticatedUploadMatchesActor, compatibleUploadBinding, makeAuthenticatedUploadName, mayDownloadUpload, resolveUploadBindings, validUploadKey, type UploadBinding } from "../server/upload-file-access";
+import { isDedicatedSocialMediaKey, noStoreProtectedUpload } from "../server/protected-upload-response";
 
 // Compile the actual registered handler, not a rewritten test implementation.
 // The DB and bucket are substituted; no server or production data is touched.
 const source = readFileSync("server/routes.ts", "utf8");
-const start = source.indexOf('app.get("/api/uploads/file/*", isAuthenticated, async (req, res) => {');
+const start = source.indexOf('app.get(["/api/uploads/file/*", "/uploads/*"], isAuthenticated, async (req, res) => {');
 const end = source.indexOf('\n  // Upload Document File', start);
 if (start < 0 || end < 0) throw new Error("upload route registration missing");
 const expression = source.slice(start, end)
-  .replace(/^app\.get\("\/api\/uploads\/file\/\*", isAuthenticated, /, "")
+  .replace(/^app\.get\(\["\/api\/uploads\/file\/\*", "\/uploads\/\*"\], isAuthenticated, /, "")
   .replace(/\);\s*$/, "")
   .replaceAll('await import("./supabase-storage")', "await Promise.resolve(bucket)");
 const compiled = (await transform(expression, { loader: "ts", target: "es2022" })).code.trim().replace(/;\s*$/, "");
@@ -20,7 +21,7 @@ process.env.SESSION_SECRET = "local-unit-test-key-for-upload-provenance";
 const validKey = makeAuthenticatedUploadName("cashier-journals", "jpg", "owner")
   .replace("/", "_").replace(".jpg", "_1234567890123_abcdef12.jpg");
 
-function dispatch(rows: UploadBinding[], opts: { role?: string; branch?: string; modules?: string[]; legacy?: boolean; key?: string; missingUnrelated?: boolean } = {}) {
+function dispatch(rows: UploadBinding[], opts: { role?: string; branch?: string; modules?: string[]; legacy?: boolean; key?: string; missingUnrelated?: boolean; local?: boolean; userId?: string } = {}) {
   const events: string[] = [];
   const key = opts.key ?? validKey;
   let lastQuery = "";
@@ -53,9 +54,10 @@ function dispatch(rows: UploadBinding[], opts: { role?: string; branch?: string;
   };
   const response: any = {
     code: 200, headersSent: false,
+    headers: {} as Record<string, string>,
     status(code: number) { this.code = code; return this; },
     json(body: unknown) { this.body = body; this.headersSent = true; return this; },
-    set(_headers: unknown) { return this; },
+    set(headers: Record<string, string>) { Object.assign(this.headers, headers); return this; },
     send(body: unknown) { this.body = body; return this; },
   };
   const deps = {
@@ -63,6 +65,11 @@ function dispatch(rows: UploadBinding[], opts: { role?: string; branch?: string;
     resolveUploadBindings: opts.missingUnrelated ? resolveUploadBindings :
       async (query: any, execute: (q: any) => Promise<{rows: UploadBinding[]}>) => (await execute(query)).rows,
     validUploadKey, mayDownloadUpload, compatibleUploadBinding,
+    isDedicatedSocialMediaKey,
+    sendLocalProtectedUpload: async (_key: string, res: any) => {
+      events.push("local");
+      res.send(Buffer.from("verified local document"));
+    },
     getCurrentUser: (req: any) => req.currentUser,
     isUserAdmin: (req: any) => req.currentUser.role === "admin",
     canAccessBranch: async (_req: any, branch: string) => branch === (opts.branch ?? "A"),
@@ -76,7 +83,9 @@ function dispatch(rows: UploadBinding[], opts: { role?: string; branch?: string;
   const handler = Function(...Object.keys(deps), `return (${compiled})`)(...Object.values(deps));
   return {
     execute: async () => {
-      await handler({ params: { 0: key }, currentUser: { id: "owner", role: opts.role ?? "employee" } }, response);
+      const req: any = { path: `${opts.local ? "/uploads/" : "/api/uploads/file/"}${key}`, params: { 0: key }, currentUser: { id: opts.userId ?? "owner", role: opts.role ?? "employee" } };
+      noStoreProtectedUpload(req, response, () => {});
+      await handler(req, response);
       return response;
     },
     events, get query() { return lastQuery; }, get params() { return lastParams; },
@@ -147,6 +156,66 @@ describe("GET /api/uploads/file/* route dispatch", () => {
     });
     expect((await run.execute()).code).toBe(403);
     expect(run.events).toEqual(["database"]);
+  });
+  it("blocks another employee's guessed private document on both actual download routes", async () => {
+    const key = makeAuthenticatedUploadName("doc-", "pdf", "owner")
+      .replace("/", "_").replace(".pdf", "_1234567890123_abcdef12.pdf");
+    const document: UploadBinding = {
+      category: "document", branch_id: "A", owner_id: "owner", upload_actor_id: "owner", status: "private",
+    };
+    for (const local of [false, true]) {
+      const localKey = local ? `documents/${key}` : key;
+      const denied = dispatch([document], { local, key: localKey, userId: "another-employee", modules: ["documents"] });
+      const allowed = dispatch([document], { local, key: localKey, modules: ["documents"] });
+      const deniedResult = await denied.execute();
+      expect(deniedResult.code).toBe(403);
+      expect(denied.events).toEqual(["database"]);
+      const allowedResult = await allowed.execute();
+      expect(allowedResult.code).toBe(200);
+      expect(allowed.events).toEqual(["database", local ? "local" : "bucket"]);
+      for (const result of [deniedResult, allowedResult]) {
+        expect(result.headers["Cache-Control"]).toBe("private, no-store");
+      }
+    }
+  });
+  it("does not launder legacy local HR URLs or unknown files through a session", async () => {
+    for (const run of [
+      dispatch([{ category: "employee_document", owner_id: "owner", branch_id: "A", status: null }], { local: true, key: "hr/private.pdf" }),
+      dispatch([], { local: true, key: "social-media/social-legacy.jpg", modules: ["marketing"] }),
+    ]) {
+      const result = await run.execute();
+      expect(result.code).toBe(403);
+      expect(result.headers["Cache-Control"]).toBe("private, no-store");
+      expect(run.events).toEqual(["database"]);
+    }
+    const admin = dispatch([], { local: true, key: "documents/legacy.pdf", role: "admin" });
+    expect((await admin.execute()).code).toBe(200);
+    expect(admin.events).toEqual(["database", "local"]);
+  });
+  it("preserves dedicated social producer assets only for marketing viewers without private bindings", async () => {
+    const key = "social-media/social-1730000000000-123456789.jpg";
+    const allowed = dispatch([], { local: true, key, modules: ["marketing"] });
+    expect((await allowed.execute()).code).toBe(200);
+    expect(allowed.events).toEqual(["database", "local"]);
+    for (const run of [
+      dispatch([], { local: true, key }),
+      dispatch([], { key, modules: ["marketing"] }),
+      dispatch([], { local: true, key: "social-media/private.pdf", modules: ["marketing"] }),
+      dispatch([], { local: true, key: "other/social-1730000000000-123456789.jpg", modules: ["marketing"] }),
+      dispatch([{ category: "employee_document", owner_id: "other", branch_id: "A", status: null }], { local: true, key, modules: ["marketing"] }),
+      dispatch([{ category: "document", owner_id: "other", branch_id: "A", status: "private" }], { local: true, key, modules: ["marketing", "documents"] }),
+    ]) {
+      const result = await run.execute();
+      expect(result.code).toBe(403);
+      expect(result.headers["Cache-Control"]).toBe("private, no-store");
+      expect(run.events).toEqual(["database"]);
+    }
+  });
+  it("registers no-store before authentication/ACL and removes the early static bypass", () => {
+    expect(source.indexOf('app.use(["/api/uploads/file", "/uploads", "/api/documents/file"], noStoreProtectedUpload)'))
+      .toBeLessThan(source.indexOf("app.use(auditorApiLockdown)"));
+    const index = readFileSync("server/index.ts", "utf8");
+    expect(index).not.toMatch(/app\.use\(['"]\/uploads/);
   });
 });
 

@@ -93,9 +93,31 @@ async function throwIfResNotOk(res: Response) {
 // in practice — Supabase usually 502s long before that on stalls).
 const FETCH_TIMEOUT_MS = 30000;
 
+let authRequestEpoch = 0;
+const sessionRequests = new Set<AbortController>();
+
+export function getAuthRequestEpoch() {
+  return authRequestEpoch;
+}
+
+export function assertAuthRequestEpoch(epoch: number, signal?: AbortSignal | null) {
+  if (epoch !== authRequestEpoch || signal?.aborted) {
+    throw new DOMException("Authentication changed or request cancelled", "AbortError");
+  }
+}
+
+// QueryClient.clear() alone cannot revoke shared fetches or already-returned bodies.
+export function resetAuthRequests() {
+  authRequestEpoch++;
+  inflightRequests.clear();
+  for (const controller of sessionRequests) controller.abort();
+  sessionRequests.clear();
+}
+
 function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs = FETCH_TIMEOUT_MS): Promise<Response> {
   // Respect any AbortSignal the caller passes by chaining it with the internal timeout.
   const controller = new AbortController();
+  sessionRequests.add(controller);
   const externalSignal = options.signal as AbortSignal | undefined;
   const onExternalAbort = () => controller.abort(externalSignal?.reason);
   if (externalSignal) {
@@ -104,6 +126,7 @@ function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs = FE
   }
   const timeoutId = setTimeout(() => controller.abort(new DOMException("Request timed out", "TimeoutError")), timeoutMs);
   return fetch(url, { ...options, signal: controller.signal }).finally(() => {
+    sessionRequests.delete(controller);
     clearTimeout(timeoutId);
     if (externalSignal) externalSignal.removeEventListener("abort", onExternalAbort);
   });
@@ -111,28 +134,48 @@ function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs = FE
 
 const inflightRequests = new Map<string, Promise<{ status: number; statusText: string; headers: Headers; body: ArrayBuffer }>>();
 
+function waitForRequest<T>(request: Promise<T>, signal?: AbortSignal | null): Promise<T> {
+  if (!signal) return request;
+  return new Promise((resolve, reject) => {
+    const onAbort = () => reject(new DOMException("Request cancelled", "AbortError"));
+    if (signal.aborted) return onAbort();
+    signal.addEventListener("abort", onAbort, { once: true });
+    request.then(resolve, reject).finally(() => signal.removeEventListener("abort", onAbort));
+  });
+}
+
 async function deduplicatedFetch(url: string, options?: RequestInit): Promise<Response> {
+  const epoch = authRequestEpoch;
+  assertAuthRequestEpoch(epoch, options?.signal);
   const method = options?.method || "GET";
   if (method !== "GET") {
     return fetchWithTimeout(url, options);
   }
   let entry = inflightRequests.get(url);
   if (!entry) {
-    const fetchPromise = fetchWithTimeout(url, options);
+    // Each consumer owns its cancellation, not the shared network request.
+    const fetchPromise = fetchWithTimeout(url, { ...options, signal: undefined });
     const bodyPromise = fetchPromise.then(async (res) => {
       const body = await res.arrayBuffer();
       return { status: res.status, statusText: res.statusText, headers: res.headers, body };
     }).catch(err => {
-      inflightRequests.delete(url);
+      if (inflightRequests.get(url) === bodyPromise) inflightRequests.delete(url);
       throw err;
     });
     entry = bodyPromise;
     inflightRequests.set(url, entry);
-    bodyPromise.then(() => {
-      setTimeout(() => inflightRequests.delete(url), 50);
+    bodyPromise.then(({ headers }) => {
+      if (/\bno-store\b/i.test(headers.get("cache-control") ?? "")) {
+        if (inflightRequests.get(url) === bodyPromise) inflightRequests.delete(url);
+        return;
+      }
+      setTimeout(() => {
+        if (inflightRequests.get(url) === bodyPromise) inflightRequests.delete(url);
+      }, 50);
     }).catch(() => {});
   }
-  const { status, statusText, headers, body } = await entry;
+  const { status, statusText, headers, body } = await waitForRequest(entry, options?.signal);
+  assertAuthRequestEpoch(epoch, options?.signal);
   return new Response(body.slice(0), { status, statusText, headers });
 }
 
@@ -141,8 +184,12 @@ export async function apiRequest(
   url: string,
   data?: unknown | undefined,
   headers?: Record<string, string>,
+  options?: { signal?: AbortSignal },
 ): Promise<Response> {
+  const epoch = authRequestEpoch;
   const res = await fetchWithTimeout(url, {
+    signal: options?.signal,
+    ...(url.startsWith("/api/my/") ? { cache: "no-store" as const } : {}),
     method,
     headers: {
       ...(data ? { "Content-Type": "application/json" } : {}),
@@ -153,6 +200,16 @@ export async function apiRequest(
   });
 
   await throwIfResNotOk(res);
+  assertAuthRequestEpoch(epoch, options?.signal);
+  // Portal queryFns consume json after apiRequest returns. Check again after body
+  // parsing, including transports that do not honor AbortSignal.
+  const readJson = res.json.bind(res);
+  res.json = async () => {
+    assertAuthRequestEpoch(epoch, options?.signal);
+    const data = await readJson();
+    assertAuthRequestEpoch(epoch, options?.signal);
+    return data;
+  };
   return res;
 }
 
@@ -161,10 +218,13 @@ export const getQueryFn: <T>(options: {
   on401: UnauthorizedBehavior;
 }) => QueryFunction<T> =
   ({ on401: unauthorizedBehavior }) =>
-  async ({ queryKey, meta }) => {
+  async ({ queryKey, signal }) => {
+    const epoch = authRequestEpoch;
     const url = queryKey[0] as string;
     const res = await deduplicatedFetch(url, {
       credentials: "include",
+      signal,
+      ...(url.startsWith("/api/my/") ? { cache: "no-store" as const } : {}),
     });
 
     if (unauthorizedBehavior === "returnNull" && res.status === 401) {
@@ -173,12 +233,24 @@ export const getQueryFn: <T>(options: {
 
     await throwIfResNotOk(res);
     const data = await res.json();
+    assertAuthRequestEpoch(epoch, signal);
     if (shouldPersist(url)) {
       const ttl = ENDPOINT_CACHE_TIERS[url.split('?')[0]] ?? CACHE_TIMES.MEDIUM;
       setCachedData(url, data, ttl);
     }
     return data;
   };
+
+// Endpoint stays first for existing prefix invalidations; identity is cache-only,
+// never a client-supplied authorization parameter in the request URL.
+export function portalQueryOptions(endpoint: string, userId: string | null | undefined, ...parts: unknown[]) {
+  return {
+    queryKey: [endpoint, { portalUserId: userId ?? null }, ...parts],
+    enabled: !!userId,
+    placeholderData: undefined,
+    refetchOnMount: "always" as const,
+  };
+}
 
 export function getStaleTimeForEndpoint(url: string): number {
   const basePath = url.split("?")[0];
@@ -228,12 +300,27 @@ queryClient.setQueryDefaults(["owner"], {
 });
 
 let ownerAuthScope: string | undefined;
+let portalAuthIdentity: string | null | undefined;
 queryClient.getQueryCache().subscribe(event => {
   if (event.type !== "updated" || event.query.queryKey[0] !== "/api/auth/me" ||
       event.query.state.status !== "success") return;
   const user = event.query.state.data as {
     id?: string; role?: string; allowedBranches?: { branchId: string; accessLevel?: string }[];
   } | null;
+  const identity = user?.id ?? null;
+  if (portalAuthIdentity === undefined) {
+    // Establish a baseline without aborting unrelated startup queries.
+    portalAuthIdentity = identity;
+  } else if (portalAuthIdentity !== identity) {
+    portalAuthIdentity = identity;
+    resetAuthRequests();
+    const portalQueries = {
+      predicate: (query: { queryKey: readonly unknown[] }) =>
+        typeof query.queryKey[0] === "string" && query.queryKey[0].startsWith("/api/my/"),
+    };
+    void queryClient.cancelQueries(portalQueries);
+    queryClient.removeQueries(portalQueries);
+  }
   const scope = JSON.stringify([
     user?.id ?? null, user?.role ?? null,
     (user?.allowedBranches ?? []).map(branch => `${branch.branchId}:${branch.accessLevel ?? ""}`).sort(),

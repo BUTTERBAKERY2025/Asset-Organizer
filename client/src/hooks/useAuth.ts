@@ -3,6 +3,7 @@ import type { User, Branch } from "@shared/schema";
 import { clearPersistentCache, setCurrentUser } from "@/lib/persistentCache";
 import { detachPushSubscriptionFromCurrentUser, resumePushSubscriptionSync } from "@/lib/push-notifications";
 import { setBadgeAccount, syncAppBadge } from "@/lib/app-badge";
+import { assertAuthRequestEpoch, getAuthRequestEpoch, resetAuthRequests } from "@/lib/queryClient";
 
 type UserWithoutPassword = Omit<User, 'password'>;
 
@@ -26,16 +27,20 @@ export function useAuth(verifyOnMount = false) {
 
   const { data: user, isLoading, isFetching, isFetchedAfterMount, isError, refetch } = useQuery<AuthUser | null>({
     queryKey: ["/api/auth/me"],
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
+      const epoch = getAuthRequestEpoch();
       const res = await fetch("/api/auth/me", {
         credentials: "include",
+        signal,
       });
+      assertAuthRequestEpoch(epoch, signal);
       if (res.status === 401 || res.status === 403) {
-        queryClient.setQueryData(["/api/auth/me"], null);
         return null;
       }
       if (!res.ok) throw new Error(`${res.status}: request failed`);
-      return res.json();
+      const identity = await res.json();
+      assertAuthRequestEpoch(epoch, signal);
+      return identity;
     },
     retry: 1,
     retryDelay: 500,
@@ -48,6 +53,10 @@ export function useAuth(verifyOnMount = false) {
   });
 
   const loginMutation = useMutation({
+    onMutate: async () => {
+      resetAuthRequests();
+      await queryClient.cancelQueries({ queryKey: ["/api/auth/me"] });
+    },
     mutationFn: async (credentials: { username: string; password: string; rememberMe?: boolean }) => {
       // Revoke while the old account cookie is still active. The login response
       // replaces that cookie, after which owner-scoped cleanup is too late.
@@ -68,6 +77,7 @@ export function useAuth(verifyOnMount = false) {
     onSuccess: (userData) => {
       // المرحلة 5: إذا طُلب التحقق بخطوتين فلا تُنشئ الجلسة بعد — ننتظر رمز OTP
       if (userData?.otpRequired) return;
+      resetAuthRequests();
       resumePushSubscriptionSync();
       queryClient.clear();
       clearPersistentCache();
@@ -83,6 +93,10 @@ export function useAuth(verifyOnMount = false) {
 
   // المرحلة 5: التحقق من رمز OTP لإكمال تسجيل الدخول للمساهمين
   const verifyOtpMutation = useMutation({
+    onMutate: async () => {
+      resetAuthRequests();
+      await queryClient.cancelQueries({ queryKey: ["/api/auth/me"] });
+    },
     mutationFn: async (payload: { code: string }) => {
       if (user) await detachPushSubscriptionFromCurrentUser();
       if (user) setBadgeAccount(null);
@@ -99,6 +113,7 @@ export function useAuth(verifyOnMount = false) {
       return res.json();
     },
     onSuccess: (userData) => {
+      resetAuthRequests();
       resumePushSubscriptionSync();
       queryClient.clear();
       clearPersistentCache();
@@ -130,6 +145,10 @@ export function useAuth(verifyOnMount = false) {
 
   const logoutMutation = useMutation({
     mutationKey: ["auth", "logout"],
+    onMutate: async () => {
+      resetAuthRequests();
+      await queryClient.cancelQueries({ queryKey: ["/api/auth/me"] });
+    },
     mutationFn: async () => {
       await detachPushSubscriptionFromCurrentUser();
       setBadgeAccount(null);
@@ -140,6 +159,7 @@ export function useAuth(verifyOnMount = false) {
       return res.json();
     },
     onSuccess: () => {
+      resetAuthRequests();
       clearPersistentCache();
       setCurrentUser(null);
       queryClient.setQueryData(["/api/auth/me"], null);

@@ -123,6 +123,14 @@ async function getMyEmployee(req: any) {
 }
 
 export function registerSelfServiceRoutes(app: Express) {
+  // Apply before authentication as well: private data and denial responses must
+  // never survive an account switch, a revoked tab, or a revoked session.
+  // This deliberately excludes the administrative HR routes registered below.
+  app.use("/api/my", (_req, res, next) => {
+    res.set("Cache-Control", "no-store");
+    next();
+  });
+
   // ========================================================================
   // بوابة الموظف الذاتية — Employee Self-Service
   // كل المسارات هنا محصورة على ملف الموظف المرتبط بحساب المستخدم الحالي فقط.
@@ -130,8 +138,8 @@ export function registerSelfServiceRoutes(app: Express) {
 
   // تقدم تحديات الكاشير اليومية — قراءة فقط، ومحصورة على يومية المستخدم وفرعه.
   app.get("/api/my/challenges/today", isAuthenticated, async (req, res) => {
-    res.set("Cache-Control", "no-store");
     try {
+      if (!(await portalFlag(PORTAL_SETTING_KEYS.SHOW_INCENTIVES))) return res.status(403).json({ error: "عرض الحوافز غير مفعّل", disabled: true });
       const userId = getUserId(req);
       if (!userId) return res.status(401).json({ error: "غير مصرح" });
 
@@ -1038,10 +1046,10 @@ export function registerSelfServiceRoutes(app: Express) {
   app.get("/api/my/incentives", isAuthenticated, async (req, res) => {
     try {
       if (!(await portalFlag(PORTAL_SETTING_KEYS.SHOW_INCENTIVES))) return res.status(403).json({ error: "عرض الحوافز غير مفعّل", disabled: true });
-      const userId = getUserId(req);
-      if (!userId) return res.json([]);
+      const emp = await getMyEmployee(req);
+      if (!emp) return res.json([]);
       const rows = await db.select().from(incentiveAwards)
-        .where(eq(incentiveAwards.cashierId, userId))
+        .where(eq(incentiveAwards.cashierId, emp.linkedUserId!))
         .orderBy(desc(incentiveAwards.periodEnd))
         .limit(200);
       res.json(rows);

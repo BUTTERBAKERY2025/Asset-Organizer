@@ -31,7 +31,18 @@ self.addEventListener('activate', (event) => {
           .filter((name) => !keepCaches.includes(name))
           .map((name) => caches.delete(name))
       )
-    ).then(() => self.clients.claim())
+    ).then(async () => {
+      // Retained caches may contain private responses written by older workers.
+      for (const name of await caches.keys()) {
+        const cache = await caches.open(name);
+        for (const request of await cache.keys()) {
+          if (new URL(request.url).pathname.toLowerCase().startsWith('/api/my/')) {
+            await cache.delete(request);
+          }
+        }
+      }
+      return self.clients.claim();
+    })
   );
 });
 
@@ -40,7 +51,8 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
   // Sensitive owner aggregates must never reach any cache strategy, including
   // extension/download heuristics. Cache version bump removes old API entries.
-  if (url.pathname.toLowerCase().startsWith('/api/owner/')) {
+  if (url.pathname.toLowerCase().startsWith('/api/owner/')
+      || url.pathname.toLowerCase().startsWith('/api/my/')) {
     event.respondWith(fetch(event.request, { cache: 'no-store' }));
     return;
   }

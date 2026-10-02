@@ -29,3 +29,9 @@ Workflow details that determine the next permitted action also need fresh reads,
 **Why:** A kitchen order can appear prepared in a fresh queue while a stale detail still offers preparation. Reloading the page does not guarantee freshness when a service worker answers slow requests from its own cache.
 
 **How to apply:** When list and detail disagree after a transition, compare the authoritative state first and inspect every response cache before advising a reload. Cache regression tests must use authenticated, successful responses large enough to cross the middleware's cache-size threshold; otherwise the tests can pass without exercising caching at all.
+
+Clearing React Query does not revoke shared in-flight fetches, delayed body parsing, or browser-cached document downloads.
+
+**Why:** An account transition can consume the previous session's pending response even after cache clearing; new no-store headers also cannot erase downloads already cached by an older release.
+
+**How to apply:** Bind pending results to the authentication generation, isolate private query identities, and change private document URL cache identity when introducing no-store. URL identity is never authorization; the session remains authoritative.

@@ -40,6 +40,7 @@ const routeMocks = vi.hoisted(() => {
   };
 
   const storage = {
+    getPortalSetting: vi.fn(async () => "true"),
     getActiveDailyChallenges: vi.fn(async () => state.challenges),
     getPointSettings: vi.fn(async () => state.settings),
   };

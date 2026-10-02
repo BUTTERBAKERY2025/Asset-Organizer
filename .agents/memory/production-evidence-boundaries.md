@@ -26,3 +26,9 @@ Use the independently owned local PostgreSQL test path before paying for cloud s
 **Why:** PostgreSQL was already available locally; a disposable cluster let real startup/authentication checks run without cloud credentials or production service access. Node/pg returns inet_server_addr()::text with a subnet suffix, so literal socket proof must normalize with host() rather than reject its own cluster. Node listen may also look up literal IPs.
 
 **How to apply:** Keep identity/ownership proof fail-closed, normalize only actual literal addresses, and permit no hostname lookup just to accommodate loopback listeners. Test-only dependencies must stay lazy in normal CJS builds; unconditional createRequire(import.meta.url) breaks production even when test mode is off. See docs/governance/isolated-runtime.md for limitations.
+
+Existing tests labelled “development” are not proof of a disposable target.
+
+**Why:** Some legacy suites reject known production-provider URL patterns but still mutate the selected configured database. Such a heuristic cannot independently establish isolation, including when USE_SUPABASE changes connection precedence.
+
+**How to apply:** Prefer mocked queries or the owned local-cluster launcher for security regression work. Inspect DB imports before running older suites; never treat a passing production-name denylist as target ownership proof.
