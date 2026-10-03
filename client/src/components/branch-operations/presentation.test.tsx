@@ -30,21 +30,24 @@ describe("branch operations compact grouped board", () => {
     expect(html).toContain("branch-ops-card-main");
   });
 
-  it("uses full-width sections and uniform, legible tracks without the former count-weighted holes", () => {
+  it("uses compact full-width sections and balanced count-aware rows without empty tracks", () => {
     const css = readFileSync(new URL("./daily-workspace.css", import.meta.url), "utf8");
     const page = readFileSync(new URL("../../pages/branch-operations.tsx", import.meta.url), "utf8");
     expect(css).toMatch(/\.branch-ops-shell \.branch-ops-sections\s*\{[^}]*display:\s*grid;[^}]*grid-template-columns:\s*minmax\(0, 1fr\)/);
     expect(css).toMatch(/\.branch-ops-shell \.branch-ops-grid\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\)/);
     expect(css).toMatch(/@container branchops \(min-width: 760px\)/);
-    expect(css).toMatch(/@container branchops \(min-width: 1200px\)/);
-    expect(css).toMatch(/@container branchops \(min-width: 1450px\)/);
+    expect(css).toMatch(/@container branchops \(min-width: 1100px\)/);
     expect(css).toContain("repeat(3, minmax(0, 1fr))");
     expect(css).toContain("repeat(4, minmax(0, 1fr))");
     expect(css).toContain("repeat(5, minmax(0, 1fr))");
+    expect(css).toContain('data-card-count="5"] > .branch-ops-grid > :nth-child(n+4) { grid-column: span 3; }');
+    expect(css).toContain('data-card-count="5"] > .branch-ops-grid > :nth-child(n+4) { grid-column: auto; }');
+    expect(css).toContain("min-height: 96px");
+    expect(css).toMatch(/\.branch-ops-shell \.branch-ops-card-details\s*\{[^}]*min-height:\s*44px/);
     expect(css).not.toMatch(/\.branch-ops-section[^{}]*\{[^}]*flex(?:-basis)?:/);
     expect(css).not.toMatch(/auto-fill|auto-fit/);
     expect(css).toMatch(/\.branch-ops-shell \.branch-ops-card-title\s*\{[^}]*overflow:\s*visible;[^}]*word-break:\s*normal;[^}]*overflow-wrap:\s*normal/);
-    expect(css).toMatch(/\.branch-ops-shell \.platform-app-icon\s*\{\s*width:\s*42px/);
+    expect(css).toMatch(/\.branch-ops-shell \.platform-app-icon\s*\{\s*width:\s*36px/);
     expect(page).toContain('className="branch-ops-sections"');
     expect(page).toContain("data-card-count={cards.length}");
     expect(page).toContain('dir="rtl"');
@@ -67,7 +70,7 @@ describe("branch operations compact grouped board", () => {
       expect(html).toContain(originalIcon);
     }
     const css = readFileSync(new URL("./daily-workspace.css", import.meta.url), "utf8");
-    expect(css).toMatch(/\.platform-app-icon svg\s*\{\s*width:\s*23px;\s*height:\s*23px;\s*\}/);
+    expect(css).toMatch(/\.platform-app-icon svg\s*\{\s*width:\s*21px;\s*height:\s*21px;\s*\}/);
     expect(css).not.toMatch(/var\(--color-(?:card|muted|foreground|border|background)\)/);
     expect(css).not.toMatch(/\.platform-app-icon[^{}]*\{[^}]*(?:background|color|fill|stroke)\s*:/);
   });

@@ -323,7 +323,7 @@ export function EmptyState({ title, text, icon: Icon, action }: { title: string;
 }
 
 export function BoardSkeleton() {
-  return <div className="mt-7 space-y-7" aria-label="جار تحميل لوحة الفرع" aria-busy="true"><div className="branch-ops-shimmer h-8 w-44 rounded-lg" /><div className="branch-ops-sections">{[3, 5, 3].map((count, group) => <div key={group} className="branch-ops-section" data-card-count={count}><div className="branch-ops-shimmer mb-3 h-5 w-36 rounded-lg" /><div className="branch-ops-grid">{Array.from({ length: count }).map((_, index) => <div key={index} className="branch-ops-shimmer h-28 rounded-2xl" />)}</div></div>)}</div></div>;
+  return <div className="mt-4 space-y-4" aria-label="جار تحميل لوحة الفرع" aria-busy="true"><div className="branch-ops-shimmer h-8 w-44 rounded-lg" /><div className="branch-ops-sections">{[3, 5, 3].map((count, group) => <div key={group} className="branch-ops-section" data-card-count={count}><div className="branch-ops-shimmer mb-2 h-5 w-36 rounded-lg" /><div className="branch-ops-grid">{Array.from({ length: count }).map((_, index) => <div key={index} className="branch-ops-shimmer h-24 rounded-xl" />)}</div></div>)}</div></div>;
 }
 
 export { AlertTriangle, Settings2, ShieldAlert, Store };
