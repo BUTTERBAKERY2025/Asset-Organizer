@@ -4043,10 +4043,13 @@ export class DatabaseStorage implements IStorage {
       }).from(userPermissionOverrides)
         .innerJoin(permissions, eq(userPermissionOverrides.permissionId, permissions.id))
         .where(eq(userPermissionOverrides.userId, userId));
-      return normalizePermissionDecisionSnapshot({
+      const snapshot = normalizePermissionDecisionSnapshot({
         userId, sourceMode: sourceRows.length ? sourceRows[0].sourceMode : null,
         direct, roles: roleRows, overrides,
       });
+      const { readBranchTemplateBases } = await import("./branch-template-storage");
+      const branchTemplates = await readBranchTemplateBases(tx, userId);
+      return branchTemplates.length ? { ...snapshot, branchTemplates } : snapshot;
     };
     // Governance previews/applications must read the exact same resolver input
     // on their existing transaction, never a separate check-then-write read.

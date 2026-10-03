@@ -1,7 +1,8 @@
 import { sql } from "drizzle-orm";
+import { branchTemplateStorageReady } from "./branch-template-storage";
 import type { DelegatedEmployeeAccount } from "../shared/employee-account-delegation";
 
-type EmployeeLink = { id: number; linkedUserId: string | null };
+type EmployeeLink = { id: number; linkedUserId: string | null; branchId?: string };
 type Summary = NonNullable<DelegatedEmployeeAccount["templateAssignment"]>;
 
 /** Read-only metadata; never used as evidence to grant account-management access. */
@@ -35,6 +36,19 @@ export async function readDirectoryTemplateAssignments(
       templateId: row.templateId, name: row.name || null,
       version: row.version, approved: row.approved === true,
     });
+  }
+  if (await branchTemplateStorageReady(tx)) {
+    const scoped = await tx.execute(sql`SELECT b.employee_id AS "employeeId", b.user_id AS "userId",
+      b.branch_id AS "branchId", b.template_id AS "templateId", b.version,
+      v.content->>'name' AS name, (a.template_id IS NOT NULL) AS approved
+      FROM branch_employee_template_assignments b
+      LEFT JOIN job_permission_template_draft_versions v ON v.template_id=b.template_id AND v.version=b.version
+      LEFT JOIN job_permission_template_approvals a ON a.template_id=b.template_id AND a.version=b.version
+      WHERE b.employee_id IN (${sql.join(linked.map(e => sql`${e.id}`), sql`, `)})`);
+    for (const row of scoped.rows) {
+      if (!linked.some(e => e.id === row.employeeId && e.linkedUserId === row.userId && e.branchId === row.branchId)) continue;
+      summaries.set(row.employeeId, { templateId: row.templateId, name: row.name ?? null, version: row.version, approved: row.approved === true });
+    }
   }
   return summaries;
 }

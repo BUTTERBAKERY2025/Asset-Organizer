@@ -1,5 +1,6 @@
 import type { Express, RequestHandler } from "express";
 import bcrypt from "bcrypt";
+import { registerBranchTemplateRoutes } from "./branch-template-routes";
 import { createHash, randomUUID } from "node:crypto";
 import { and, eq, inArray, ne, sql } from "drizzle-orm";
 import { ZodError, z } from "zod";
@@ -537,7 +538,13 @@ async function roster(
       employeeId: employee.id, employeeName: employee.employeeName, branchId: employee.branchId,
       branchName: employee.branchName, hasAccount: Boolean(employee.linkedUserId),
       templateAssignment: templateSummaries ? templateSummaries.get(employee.id) ?? null : undefined,
-      management: { allowed: reason === "allowed", reason, ...(reason === "protected_account" && blocker ? { blocker } : {}) }, account: reason === "allowed" ? account : null,
+      management: { allowed: reason === "allowed", reason,
+        branchTemplateAllowed: approved.enabled && employee.status === "active"
+          && (actor.role === "admin" || grants.includes(employee.branchId))
+          && !!employee.linkedUserId && employee.linkedUserId !== actor.id
+          && ["employee", "viewer"].includes(byAccount.get(employee.linkedUserId)?.role ?? "")
+          && !verifiedBases.ambiguousUserIds.has(employee.linkedUserId),
+        ...(reason === "protected_account" && blocker ? { blocker } : {}) }, account: reason === "allowed" ? account : null,
     });
   }
   await budget();
@@ -586,6 +593,7 @@ async function managerDetail(tx: Tx, managerId: string, budget: () => Promise<vo
 }
 
 export function registerEmployeeAccountDelegation(app: Express) {
+  registerBranchTemplateRoutes(app, { db, actorState, policy, lockDelegationState, endpoint });
   // Deny all legacy reads and writes for ops, even with manually granted users,
   // RBAC or HR permissions. No body-controlled role or branch decides access.
   app.use((req, res, next) => {

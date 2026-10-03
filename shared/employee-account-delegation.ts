@@ -30,6 +30,7 @@ export interface DelegatedEmployeeAccount {
    * details are omitted unless allowed; protected linked rows still haveAccount.
    */
   management: {
+    branchTemplateAllowed?: boolean;
     allowed: boolean;
     reason: "allowed" | "not_selected" | "read_only_branch" | "protected_account";
     /** Safe authorization explanation only; never includes account credentials. */

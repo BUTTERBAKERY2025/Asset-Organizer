@@ -4,6 +4,7 @@ import connectPg from "connect-pg-simple";
 import rateLimit from "express-rate-limit";
 import { createPasswordLoginRateLimiter } from "./password-login-limiter";
 import { storage } from "./storage";
+import { branchTemplateSnapshot } from "./branch-template-decision";
 import {
   checkPermissionDecision, evaluatePermissionDecision, hasPermissionDecisionDeny,
   type PermissionContext, type PermissionDecisionSnapshot,
@@ -1497,6 +1498,8 @@ export function contextualActionAllowed(
   req: any, snapshot: PermissionDecisionSnapshot, module: string, action: string, context: PermissionContext,
 ): boolean {
   const user = req.currentUser;
+  if (snapshot.branchTemplates?.length)
+    snapshot = branchTemplateSnapshot(snapshot, snapshot.branchTemplates, context);
   snapshot = roleAdjustedSnapshot(snapshot, user, module);
   if (user.role === "viewer" && action !== "view") return false;
   if (user.role === "attendance_clerk" && (module !== "attendance_check" || !["view", "create", "edit"].includes(action))) return false;
@@ -1520,7 +1523,7 @@ export function contextualActionAllowed(
   if ((user.role === "operations_manager" || user.role === "warehouse_keeper"
     || user.role === "business_owner") && !inLegacyScope) return false;
   if (inLegacyScope && intrinsic) return true;
-  const scopedSources = { ...snapshot, tuples: snapshot.tuples.filter(tuple => tuple.source !== "direct") };
+  const scopedSources = { ...snapshot, tuples: snapshot.tuples.filter(tuple => tuple.source !== "direct" || tuple.branchId !== null) };
   return checkPermissionDecision(inLegacyScope ? snapshot : scopedSources, module, action, context);
 }
 
@@ -1616,6 +1619,17 @@ async function enforceContextualPermission(
   if (!snapshot) return false;
   req.permissionActionInferred = actionInferred;
   let context: PermissionRequestContext | undefined = req.permissionResourceContext;
+  if (!context && !resolver && snapshot.branchTemplates?.length) {
+    const { branchTemplateRouteContext } = await import("./branch-template-context");
+    const legacy = getLegacyAllowedBranchIds(req) ?? [];
+    const resolved = await branchTemplateRouteContext(req, module,
+      [...new Set([...legacy, ...snapshot.branchTemplates.map(base => base.branchId)])]);
+    if (resolved === null) {
+      res.status(404).json({ message: "المورد غير موجود" });
+      return true;
+    }
+    context = resolved;
+  }
   if (resolver) {
     const resolved = await resolver(req);
     if (resolved === null) {
@@ -2167,18 +2181,20 @@ function getLegacyAllowedBranchIds(req: any): string[] | null {
   
   // Check if user has explicit branch access
   const userBranchAccess = req.userBranchAccess || [];
+  const assignedBranches: string[] = getPermissionScopeConstraint(req)
+    ? (req.authPermissionDecisionSnapshot?.branchTemplates ?? []).map((base: any) => base.branchId) : [];
   if (userBranchAccess.length > 0) {
     // Return the list of branch IDs user has access to
-    return userBranchAccess.map((access: any) => access.branchId);
+    return [...new Set([...userBranchAccess.map((access: any) => access.branchId), ...assignedBranches])] as string[];
   }
   
   // Non-admins without explicit access - use their default branchId
   if (user.branchId) {
-    return [user.branchId];
+    return [...new Set([user.branchId, ...assignedBranches])];
   }
   
   // No access
-  return [];
+  return assignedBranches;
 }
 
 // Check if user has access to multiple branches (not just one)

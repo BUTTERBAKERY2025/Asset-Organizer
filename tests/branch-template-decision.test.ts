@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { normalizePermissionDecisionSnapshot } from "../server/permission-decision";
+import { normalizePermissionDecisionSnapshot, checkPermissionDecision, evaluatePermissionDecision } from "../server/permission-decision";
 import { branchTemplateSnapshot, checkBranchTemplateDecision } from "../server/branch-template-decision";
 
 const original = () => normalizePermissionDecisionSnapshot({
@@ -8,7 +8,14 @@ const original = () => normalizePermissionDecisionSnapshot({
   roles: [], overrides: [],
 });
 const bases = [{ branchId: "a", permissions: [{ module: "cashier_journal", actions: ["view"] }] }];
-describe("independent branch template decisions (not activated)", () => {
+describe("independent branch template decisions", () => {
+  it("uses scoped bases through the production decision entry point and includes new navigation keys", () => {
+    const snapshot = { ...original(), branchTemplates: [{ branchId: "a", permissions: [{ module: "quality_control", actions: ["view"] }] }] };
+    expect(checkPermissionDecision(snapshot, "quality_control", "view", { branchId: "a" })).toBe(true);
+    expect(checkPermissionDecision(snapshot, "quality_control", "view", { branchId: "b" })).toBe(false);
+    expect(checkPermissionDecision(snapshot, "cashier_journal", "create", { branchId: "b" })).toBe(true);
+    expect(evaluatePermissionDecision(snapshot, { branchId: "a" })).toContainEqual({ module: "quality_control", action: "view", allowed: true });
+  });
   it("removes create only in the assigned branch and preserves other branches", () => {
     const source = original();
     expect(checkBranchTemplateDecision(source, bases, "cashier_journal", "create", { branchId: "a" })).toBe(false);

@@ -1,5 +1,6 @@
 // Pure permission decisions. No database, environment, role auto-grants or admin
 // bypass live here. Auth retains those policies and supplies resource context.
+import { branchTemplateSnapshot, type BranchTemplateBase } from "./branch-template-decision";
 export type PermissionSourceMode = "direct" | "inherit" | null;
 export interface PermissionContext {
   branchId?: string | null;
@@ -21,6 +22,7 @@ export interface PermissionDecisionTuple {
   roleName?: string;
 }
 export interface PermissionDecisionSnapshot {
+  branchTemplates?: BranchTemplateBase[];
   userId: string;
   sourceMode: PermissionSourceMode;
   resolvedSourceMode: "direct" | "inherit";
@@ -123,6 +125,8 @@ export function checkPermissionDecision(
   snapshot: PermissionDecisionSnapshot, module: string, action: string,
   context: PermissionContext = {}, now = snapshot.capturedAt,
 ): boolean {
+  if (snapshot.branchTemplates?.length)
+    snapshot = branchTemplateSnapshot(snapshot, snapshot.branchTemplates, context);
   const matching = snapshot.tuples.filter(tuple =>
     permissionModuleMatches(tuple.module, module) && tuple.action === action
     && isPermissionTupleCurrent(tuple, now) && matchesScope(tuple, context));
@@ -142,6 +146,10 @@ export function evaluatePermissionDecision(
   snapshot: PermissionDecisionSnapshot, context: PermissionContext = {}, now = snapshot.capturedAt,
 ): { module: string; action: string; allowed: boolean }[] {
   const keys = new Map<string, { module: string; action: string }>();
+  for (const base of snapshot.branchTemplates ?? [])
+    for (const permission of base.permissions)
+      for (const action of permission.actions)
+        keys.set(JSON.stringify([permission.module, action]), { module: permission.module, action });
   for (const tuple of snapshot.tuples) {
     const modules = [tuple.module];
     if (tuple.module === "attendance") modules.push("attendance_check");

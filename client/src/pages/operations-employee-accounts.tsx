@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { BranchTemplateDialog } from "@/components/operations-center/branch-template-dialog";
 import { useIsMutating, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation, useSearch } from "wouter";
 import { AlertTriangle, ArrowRight, ChevronDown, KeyRound, Lock, RefreshCw, Search, ShieldCheck, Unlock, UserCheck } from "lucide-react";
@@ -169,13 +170,16 @@ function EmployeeAccountsWorkspace({ actorId, actorRole, authScope }: { actorId:
               {employee.account?.isActive === "inactive" && !employee.account.canReactivate && <p className="mt-1 text-[11px] text-amber-800">غير مؤهل لإعادة الفتح وفق السياسة الحالية؛ ظهور الحساب ضمن تغطية الفرع لا يعيد فتحه. راجع انتقاله إلى قالب معتمد ومؤهل ثم أهلية إعادة الفتح، كل إجراء بتأكيد مستقل.</p>}
               {!employee.management?.allowed && <div className="mt-1 break-words text-[11px] leading-5 text-amber-800">
                 {employee.management?.blocker && <p className="font-semibold">سبب الحماية: {employee.management.blocker.message} <bdi>({employee.management.blocker.code})</bdi></p>}
-                <p>{employeeManagementExplanation(employee.management?.reason ?? "not_selected", actorRole)}</p>
+                <p>{employee.management?.branchTemplateAllowed
+                  ? "تخصيص قالب لهذا الفرع متاح بالزر أدناه. الحماية تخص الإجراءات التي تغيّر الحساب كله، مثل تجميده أو تعديل صلاحياته العامة."
+                  : employeeManagementExplanation(employee.management?.reason ?? "not_selected", actorRole)}</p>
               </div>}
             </div>
             <EmployeeAssignment employee={employee} />
+            {employee.management?.branchTemplateAllowed && <BranchTemplateAction employee={employee} />}
             {(employee.management?.allowed || (actorRole === "admin" && employee.hasAccount)) && <div className="grid min-w-0 grid-cols-1 gap-1.5 min-[400px]:grid-cols-2 [&_button]:h-auto [&_button]:min-h-8 [&_button]:min-w-0 [&_button]:gap-1.5 [&_button]:whitespace-normal [&_button]:px-2 [&_button]:py-1.5 [&_button]:text-xs [&_button]:leading-4 [&_svg]:h-3.5 [&_svg]:w-3.5 [&_svg]:shrink-0">
               {employee.management?.allowed && (!employee.hasAccount ? <Button disabled={!delegationEnabled || directory.isFetching} onClick={() => open(employee, "create")}><KeyRound />اختيار الموظف</Button> : employee.account && <>
-                 <Button variant="outline" disabled={directory.isFetching} onClick={() => open(employee, "permissions")}><ShieldCheck />إسناد قالب معتمد</Button>
+                 {!employee.management?.branchTemplateAllowed && <Button variant="outline" disabled={directory.isFetching} onClick={() => open(employee, "permissions")}><ShieldCheck />إسناد قالب معتمد</Button>}
                 {employee.account.isActive === "active" ? <Button variant="outline" className="text-amber-800" disabled={directory.isFetching} onClick={() => open(employee, "freeze")}><Lock />تجميد</Button>
                   : <Button variant="outline" disabled={!delegationEnabled || !employee.account.canReactivate || directory.isFetching} onClick={() => open(employee, "reopen")}><Unlock />إعادة الفتح</Button>}
               </>)}
@@ -193,6 +197,15 @@ function EmployeeAccountsWorkspace({ actorId, actorRole, authScope }: { actorId:
           : <EmployeeAccountDialog key={`${dialogScope}:${dialog.employee.employeeId}:${dialog.mode}`} employee={currentEmployee} mode={dialog.mode} directory={data} close={() => setDialog(null)} refresh={refresh} />)}
     </>}
   </main></Layout>;
+}
+
+function BranchTemplateAction({ employee }: { employee: DelegatedEmployeeAccount }) {
+  const [open, setOpen] = useState(false);
+  return <div className="space-y-1">
+    <Button size="sm" variant="outline" onClick={() => setOpen(true)}><ShieldCheck className="h-3.5 w-3.5 me-1" />تخصيص قالب لهذا الفرع</Button>
+    <p className="text-[11px] text-muted-foreground">تخصيص الفرع مستقل عن إدارة الحساب كله.</p>
+    {open && <BranchTemplateDialog employee={employee} onClose={() => setOpen(false)} />}
+  </div>;
 }
 
 export default function OperationsEmployeeAccountsPage() {

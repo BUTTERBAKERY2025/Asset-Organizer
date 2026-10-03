@@ -12,7 +12,7 @@ export interface BranchTemplateBase {
  * Pure scoped base replacement. Independent overrides are never deleted.
  * Existing direct/inherited authority is unchanged outside the selected branch.
  * Unknown scope fails closed rather than treating a navigation union as a grant.
- * Not enabled in the live resolver until route-context coverage is verified.
+ * Unknown routes may use only original grants shared by every replacement.
  */
 export function branchTemplateSnapshot(
   original: PermissionDecisionSnapshot,
@@ -36,7 +36,7 @@ export function branchTemplateSnapshot(
         permissionModuleMatches(permission.module, tuple.module)
         && permission.actions.includes(tuple.action)));
     });
-    return { ...original, tuples: remaining };
+    return { ...original, branchTemplates: undefined, tuples: remaining };
   }
   const tuples: PermissionDecisionTuple[] = selected.permissions.flatMap(permission =>
     permission.actions.map(action => ({
@@ -44,7 +44,7 @@ export function branchTemplateSnapshot(
       scopeType: "branch", branchId: selected.branchId, departmentId: null,
       startDate: null, endDate: null, expiresAt: null, isActive: true, deny: false,
     })));
-  return { ...original, tuples: [...tuples, ...overlays] };
+  return { ...original, branchTemplates: undefined, tuples: [...tuples, ...overlays] };
 }
 
 export function checkBranchTemplateDecision(
