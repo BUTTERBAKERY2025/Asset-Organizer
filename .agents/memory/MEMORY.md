@@ -96,3 +96,4 @@
 - [Database test attestation](isolated-test-attestation.md) — a temporary schema is not an isolated target; every writing test must require owned-cluster proof before writes.
 - [Permission timestamp decoding](permission-timestamp-decoding.md) — raw SQL must use schema date decoders, or process time zones make intact additions appear tampered.
 - [Supabase authority defaults](supabase-authority-table-defaults.md) — server-only authorization metadata must explicitly revoke inherited browser-role grants.
+- [Payroll export filters](payroll-export-filter-contract.md) — exported rows and totals must honor combined screen filters; a successful download alone does not prove correctness.
