@@ -57,9 +57,12 @@ import {
   CAMPAIGN_SEASON_LABELS,
   CAMPAIGN_SEASONS,
 } from "@shared/schema";
-import { useAuth } from "@/hooks/useAuth";
+import { usePermissions } from "@/hooks/usePermissions";
+import { emptyCampaignForm } from "@/lib/marketing-campaign-form";
 
 const campaignFormSchema = z.object({
+  scopeType: z.enum(["central", "branch"], { message: "حدد نطاق الحملة" }),
+  branchId: z.string().nullable(),
   name: z.string().min(1, "اسم الحملة مطلوب"),
   nameAr: z.string().optional().nullable(),
   description: z.string().optional().nullable(),
@@ -277,6 +280,7 @@ function CampaignTimeline({
 }
 
 export default function MarketingCampaignsPage() {
+  const { data: scopeBranches = [] } = useQuery<{ id: string; name: string }[]>({ queryKey: ["/api/branches"] });
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [objectiveFilter, setObjectiveFilter] = useState<string>("all");
@@ -289,8 +293,9 @@ export default function MarketingCampaignsPage() {
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { isAdmin, isEmployee } = useAuth();
-  const canEdit = isAdmin || isEmployee;
+  const permissions = usePermissions();
+  const canEdit = permissions.canEdit("marketing_campaigns");
+  const canDelete = permissions.canDelete("marketing_campaigns");
 
   const buildQueryString = () => {
     const params = new URLSearchParams();
@@ -315,19 +320,7 @@ export default function MarketingCampaignsPage() {
 
   const form = useForm<CampaignFormData>({
     resolver: zodResolver(campaignFormSchema),
-    defaultValues: {
-      name: "",
-      nameAr: "",
-      description: "",
-      objective: "",
-      season: "",
-      totalBudget: 0,
-      startDate: "",
-      endDate: "",
-      targetAudience: "",
-      channels: "",
-      notes: "",
-    },
+    defaultValues: emptyCampaignForm(),
   });
 
   const createMutation = useMutation({
@@ -352,7 +345,7 @@ export default function MarketingCampaignsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/marketing/campaigns"] });
       setIsAddDialogOpen(false);
-      form.reset();
+      form.reset(emptyCampaignForm());
       toast({ title: "تم إنشاء الحملة بنجاح" });
     },
     onError: () => {
@@ -419,6 +412,8 @@ export default function MarketingCampaignsPage() {
   const openEditDialog = (campaign: MarketingCampaign) => {
     setSelectedCampaign(campaign);
     form.reset({
+      scopeType: campaign.scopeType as "central" | "branch",
+      branchId: campaign.branchId ?? null,
       name: campaign.name,
       nameAr: campaign.nameAr || "",
       description: campaign.description || "",
@@ -497,8 +492,8 @@ export default function MarketingCampaignsPage() {
                 Timeline
               </Button>
             </div>
-            {canEdit && (
-              <Button className="h-11 sm:h-9" onClick={() => { form.reset(); setIsAddDialogOpen(true); }} data-testid="button-add-campaign">
+            {permissions.canCreate("marketing_campaigns") && (
+              <Button className="h-11 sm:h-9" onClick={() => { setSelectedCampaign(null); form.reset(emptyCampaignForm()); setIsAddDialogOpen(true); }} data-testid="button-add-campaign">
                 <Plus className="w-4 h-4 ml-2" />
                 إضافة حملة جديدة
               </Button>
@@ -588,13 +583,18 @@ export default function MarketingCampaignsPage() {
                       <TableHead>الحالة</TableHead>
                       <TableHead>الميزانية</TableHead>
                       <TableHead className="hidden sm:table-cell">الفترة</TableHead>
-                      {canEdit && <TableHead>إجراءات</TableHead>}
+                      {(canEdit || canDelete) && <TableHead>إجراءات</TableHead>}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {filteredCampaigns.map((campaign) => (
                       <TableRow key={campaign.id} data-testid={`row-campaign-${campaign.id}`}>
                         <TableCell>
+                          <div className="text-xs text-muted-foreground">
+                            {campaign.scopeType === "central" ? "حملة مركزية" : campaign.scopeType === "branch"
+                              ? `حملة فرع: ${scopeBranches.find(b => b.id === campaign.branchId)?.name || campaign.branchId}`
+                              : "نطاق غير مصنف"}
+                          </div>
                           <div className="flex items-center gap-2">
                             <Megaphone className="w-4 h-4 text-muted-foreground" />
                             <div>
@@ -626,18 +626,18 @@ export default function MarketingCampaignsPage() {
                             <span className="text-xs sm:text-sm">{formatDateRange(campaign.startDate, campaign.endDate)}</span>
                           </div>
                         </TableCell>
-                        {canEdit && (
+                        {(canEdit || canDelete) && (
                           <TableCell>
                             <div className="flex items-center gap-1">
-                              <Button
+                              {canEdit && <Button
                                 variant="ghost"
                                 size="sm"
                                 onClick={() => openEditDialog(campaign)}
                                 data-testid={`button-edit-campaign-${campaign.id}`}
                               >
                                 <Pencil className="w-4 h-4" />
-                              </Button>
-                              {isAdmin && (
+                              </Button>}
+                              {canDelete && (
                                 <Button
                                   variant="ghost"
                                   size="sm"
@@ -670,7 +670,7 @@ export default function MarketingCampaignsPage() {
               setIsAddDialogOpen(false);
               setIsEditDialogOpen(false);
               setSelectedCampaign(null);
-              form.reset();
+              form.reset(emptyCampaignForm());
             }
           }}
         >
@@ -682,6 +682,27 @@ export default function MarketingCampaignsPage() {
               </DialogDescription>
             </DialogHeader>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="campaign-scope">نطاق الحملة</Label>
+                <select id="campaign-scope" className="w-full border rounded-md p-2"
+                  value={form.watch("scopeType") || ""}
+                  onChange={e => {
+                    form.setValue("scopeType", e.target.value as "central" | "branch");
+                    form.setValue("branchId", null);
+                  }}>
+                  <option value="" disabled>حدد نطاق الحملة غير المصنفة</option>
+                  <option value="central">حملة مركزية</option>
+                  <option value="branch">حملة مرتبطة بفرع</option>
+                </select>
+                {form.watch("scopeType") === "branch" && <select aria-label="فرع الحملة"
+                  required className="w-full border rounded-md p-2"
+                  value={form.watch("branchId") || ""}
+                  onChange={e => form.setValue("branchId", e.target.value)}>
+                  <option value="" disabled>اختر الفرع</option>
+                  {scopeBranches.map(branch => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
+                </select>}
+                {form.formState.errors.scopeType && <p className="text-sm text-red-600">حدد نطاق الحملة</p>}
+              </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>اسم الحملة (English)</Label>

@@ -4,6 +4,12 @@ description: Protected routes can strand React.lazy despite healthy APIs; do not
 ---
 Treat a protected-page skeleton/watchdog as a real unresolved failure, not an inherent headless-browser limitation.
 
+The same focused eager-loading workaround was verified for marketing campaigns through an authenticated owned-test origin: central/branch creation, reclassification, legacy validation and deletion all mounted and worked.
+
+**Why:** Successful authentication and API responses did not resolve the route's persistent loading screen.
+
+**How to apply:** Preserve the focused eager loading unless a replacement is verified through authenticated navigation; this is not proof that the generic lazy-loader problem is fixed.
+
 **Why (updated 2026-10-01):** An authenticated real-login test proved the suspended fiber was the route's React.lazy payload, not the permission guard or a non-lazy hook. Direct imports and APIs succeeded; clearing service-worker/HTTP caches did not fix it. Bounded loader retries alone also failed. Eagerly loading the focused operations HR route preserved its authorization guard and allowed the actual report and attendance drawer to mount. The deeper generic lazy-import cause remains unproven.
 
 **How to apply:** Preserve eager loading for operations HR, the operations center and kitchen orders unless authenticated mounting is verified after changing it. These focused routes mounted through real login with this workaround; this does not establish a generic lazy-loader fix. The kitchen verification covered rendering and opening the request dialog, not order submission: its synthetic branch lacked an active kitchen and assigned receiver. For another blocked route, capture the actual suspended fiber and executed module rather than assuming healthy APIs imply a working page. Fixture harnesses remain useful for isolated visual checks only; never present them as proof of authenticated navigation. The screenshot tool alone sees login, and repeated local logins are rate-limited.

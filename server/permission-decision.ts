@@ -6,6 +6,13 @@ export interface PermissionContext {
   branchId?: string | null;
   departmentId?: number | null;
 }
+
+/** Explicit central marketing resources are outside every branch replacement. */
+export function centralMarketingSnapshot(snapshot: PermissionDecisionSnapshot): PermissionDecisionSnapshot {
+  return { ...snapshot, branchTemplates: undefined,
+    tuples: snapshot.tuples.filter(tuple => tuple.branchId == null && tuple.departmentId == null
+      && !["branch", "department", "branch_department"].includes(tuple.scopeType)) };
+}
 export interface PermissionDecisionTuple {
   module: string;
   action: string;

@@ -29,6 +29,7 @@ try {
   await client.connect();
   await guard.proveDatabase(client, target);
   await client.query(await readFile("migrations/056_branch_employee_template_assignments.sql", "utf8"));
+  await client.query(await readFile("migrations/057_marketing_campaign_scope.sql", "utf8"));
   // The offline baseline predates carrier metadata used by the delivery workspace.
   // This migration is applied only to the same ownership-attested test connection.
   for (const migration of ["kitchen_warehouse_product_shipping.sql", "delivery_assignments.sql",
@@ -49,6 +50,15 @@ try {
     VALUES ($1,'warehouse',ARRAY['view'])`, [user]);
   await client.query(`INSERT INTO user_permissions(user_id,module,actions)
     VALUES ($1,'event_pos',ARRAY['view','create','edit'])`, [user]);
+  await client.query(`INSERT INTO user_permissions(user_id,module,actions)
+    VALUES ($1,'marketing_campaigns',ARRAY['view','create','edit','delete']),
+      ($1,'marketing_goals',ARRAY['view','create','edit','delete']),
+      ($1,'marketing_expenses',ARRAY['view','create','edit','delete'])`, [user]);
+  await client.query(`INSERT INTO marketing_campaigns
+    (id,name,objective,start_date,end_date,scope_type,branch_id,total_budget)
+    VALUES (900011,'Synthetic A','awareness','2026-10-01','2026-10-31','branch',$1,900),
+      (900012,'Synthetic B','awareness','2026-10-01','2026-10-31','branch',$2,7),
+      (900013,'Synthetic Central','awareness','2026-10-01','2026-10-31','central',null,3)`, [A, B]);
   await client.query(`INSERT INTO user_permissions(user_id,module,actions)
     VALUES ($1,'sales',ARRAY['view','create']),($1,'shifts',ARRAY['view'])`, [user]);
   await client.query(`INSERT INTO user_permissions(user_id,module,actions)
@@ -249,6 +259,41 @@ try {
       `BT_HR_DENIED_MOVE_${root}`);
   }
   const hrHistory = await request("/api/branch-employees/900012/attendance", { cookie: employee });
+  const marketing = await request("/api/marketing/campaigns", { cookie: employee });
+  check(marketing.status === 200 && marketing.json.length === 2
+    && marketing.json.every(c => [900012,900013].includes(c.id)), "BT_MARKETING_MIXED_SCOPE_LIST");
+  for (const id of [900012, 900013]) check((await request(`/api/marketing/campaigns/${id}?branchId=${A}`,
+    { cookie: employee })).status === 200, "BT_MARKETING_CENTRAL_AND_OTHER_BRANCH");
+  check((await request(`/api/marketing/campaigns/900011?branchId=${B}`, { cookie: employee })).status === 403,
+    "BT_MARKETING_PERSISTED_DENY");
+  check((await request("/api/marketing/campaigns/900012", { method: "PATCH", cookie: employee,
+    body: { scopeType: "branch", branchId: A } })).status === 403, "BT_MARKETING_MOVE_DENIED");
+  check((await request("/api/marketing/campaigns/900011", { method: "DELETE", cookie: employee })).status === 403,
+    "BT_MARKETING_DELETE_DENIED");
+  const goal = await request("/api/marketing/campaigns/900012/goals", { method: "POST", cookie: employee,
+    body: { goalType: "reach", targetValue: 100 } });
+  check(goal.status === 201, "BT_MARKETING_CHILD_CREATE_ALLOWED");
+  check((await request(`/api/marketing/goals/${goal.json.id}`, { method: "PATCH", cookie: employee,
+    body: { campaignId: 900011 } })).status === 403, "BT_MARKETING_CHILD_REPARENT_DENIED");
+  check(Number((await client.query("SELECT campaign_id FROM campaign_goals WHERE id=$1", [goal.json.id])).rows[0].campaign_id)
+    === 900012, "BT_MARKETING_CHILD_OWNER_UNCHANGED");
+  check((await request(`/api/marketing/goals/${goal.json.id}`, { method: "PATCH", cookie: employee,
+    body: { targetValue: 150 } })).status === 200, "BT_MARKETING_CHILD_EDIT_ALLOWED");
+  check((await request(`/api/marketing/goals/${goal.json.id}`, { method: "DELETE", cookie: employee })).status === 204,
+    "BT_MARKETING_CHILD_DELETE_ALLOWED");
+  for (const suffix of ["goals","expenses","expenses/total","budget-allocations"])
+    check((await request(`/api/marketing/campaigns/900011/${suffix}`, { cookie: employee })).status === 403,
+      "BT_MARKETING_CHILD_DENIED");
+  const marketingStats = await request("/api/marketing/statistics", { cookie: employee });
+  check(marketingStats.status === 200 && marketingStats.json.campaigns.totalBudget === 10, "BT_MARKETING_SCOPED_AGGREGATE");
+  const newCampaign = await request("/api/marketing/campaigns", { method: "POST", cookie: employee,
+    body: { name: "Synthetic new B", objective: "awareness", startDate: "2026-10-01", endDate: "2026-10-31",
+      scopeType: "branch", branchId: B } });
+  check(newCampaign.status === 201, `BT_MARKETING_CREATE_${newCampaign.status}`);
+  check((await request(`/api/marketing/campaigns/${newCampaign.json.id}`, { method: "PATCH", cookie: employee,
+    body: { scopeType: "central", branchId: null } })).status === 200, "BT_MARKETING_ALLOWED_RECLASSIFICATION");
+  check((await request(`/api/marketing/campaigns/${newCampaign.json.id}`, { method: "DELETE", cookie: employee })).status === 204,
+    "BT_MARKETING_ALLOWED_DELETE");
   const posEvent = await request("/api/pos/events", {
     method: "POST", cookie: employee, body: { branchId: B, name: "Synthetic POS", startDate: "2026-10-03", endDate: "2026-10-04" },
   });

@@ -4904,6 +4904,8 @@ export const CAMPAIGN_SEASON_LABELS: Record<CampaignSeason, string> = {
 // Marketing Campaigns - الحملات التسويقية
 export const marketingCampaigns = pgTable("marketing_campaigns", {
   id: serial("id").primaryKey(),
+  scopeType: text("scope_type"), // null = legacy campaign awaiting explicit classification
+  branchId: varchar("branch_id").references(() => branches.id),
   name: text("name").notNull(),
   nameAr: text("name_ar"),
   description: text("description"),

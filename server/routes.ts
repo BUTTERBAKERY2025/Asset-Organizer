@@ -26903,7 +26903,9 @@ export async function registerRoutes(
       if (isNaN(influencerId)) {
         return res.status(400).json({ error: "معرف غير صالح" });
       }
-      const total = await storage.getInfluencerTotalPayments(influencerId);
+      const { filterMarketingRows } = await import("./marketing-scope");
+      const rows = await filterMarketingRows(req, await storage.getInfluencerPayments(influencerId), "marketing_influencers");
+      const total = rows.filter(row => row.status === "completed").reduce((sum, row) => sum + Number(row.amount || 0), 0);
       res.json({ influencerId, total });
     } catch (error) {
       console.error("Error fetching influencer total payments:", error);
@@ -26931,7 +26933,10 @@ export async function registerRoutes(
       if (isNaN(influencerId)) {
         return res.status(400).json({ error: "معرف غير صالح" });
       }
-      const total = await storage.getTotalExpensesByInfluencerId(influencerId);
+      const { filterMarketingRows } = await import("./marketing-scope");
+      const rows = await filterMarketingRows(req, await storage.getExpensesByInfluencerId(influencerId), "marketing_influencers");
+      const total = rows.filter(row => ["paid", "approved"].includes(row.status))
+        .reduce((sum, row) => sum + Number(row.amount || 0), 0);
       res.json({ influencerId, total });
     } catch (error) {
       console.error("Error fetching influencer total expenses:", error);
@@ -27687,13 +27692,14 @@ export async function registerRoutes(
   // Marketing Statistics API endpoint
   app.get("/api/marketing/statistics", isAuthenticated, requirePermission("marketing_campaigns", "view"), async (req, res) => {
     try {
-      const campaigns = await storage.getAllMarketingCampaigns({});
-      const influencers = await storage.getAllMarketingInfluencers({});
-      const tasks = await storage.getAllMarketingTasks({});
-      const team = await storage.getAllMarketingTeamMembers({});
-      const calendarEvents = await storage.getAllMarketingCalendarEvents({});
-      const assets = await storage.getAllMarketingAssets({});
-      const alerts = await storage.getAllMarketingAlerts({});
+      const { filterMarketingRows } = await import("./marketing-scope");
+      const campaigns = await filterMarketingRows(req, await storage.getAllMarketingCampaigns({}), "marketing_campaigns", true);
+      const influencers = await filterMarketingRows(req, await storage.getAllMarketingInfluencers({}), "marketing_influencers");
+      const tasks = await filterMarketingRows(req, await storage.getAllMarketingTasks({}), "marketing_tasks");
+      const team = await filterMarketingRows(req, await storage.getAllMarketingTeamMembers({}), "marketing_team");
+      const calendarEvents = await filterMarketingRows(req, await storage.getAllMarketingCalendarEvents({}), "marketing_calendar");
+      const assets = await filterMarketingRows(req, await storage.getAllMarketingAssets({}), "marketing_assets");
+      const alerts = await filterMarketingRows(req, await storage.getAllMarketingAlerts({}), "marketing");
 
       // Calculate campaign statistics
       const activeCampaigns = campaigns.filter(c => c.status === 'active').length;

@@ -98,3 +98,4 @@
 - [Supabase authority defaults](supabase-authority-table-defaults.md) — server-only authorization metadata must explicitly revoke inherited browser-role grants.
 - [Payroll export filters](payroll-export-filter-contract.md) — exported rows and totals must honor combined screen filters; a successful download alone does not prove correctness.
 - [Onboarding WhatsApp handoff](onboarding-whatsapp-handoff.md) — HR links open WhatsApp with a prepared message; the user presses Send, not Twilio.
+- [Marketing campaign ownership](marketing-campaign-boundary.md) — central and branch campaigns coexist; legacy campaigns require explicit classification, not guessed ownership.

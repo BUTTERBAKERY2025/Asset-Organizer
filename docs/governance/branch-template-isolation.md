@@ -64,10 +64,16 @@ authority instead of flattened permissions. Isolated HTTP checks verify retained
 event creation/reporting in another branch and rejection in the restricted branch.
 This is not an end-to-end certification of every payment/refund workflow.
 
-Marketing campaigns currently have no authoritative branch ownership column.
-Treating campaign paths as branch resources without an ownership policy would
-invent scope. A central-versus-branch-owned campaign policy must be resolved before
-claiming marketing compatibility or assigning existing campaigns to branches.
+Marketing supports explicit central and single-branch campaigns. Central access
+uses original global authority and global denies, not a branch template's grants
+or branch-specific denies. Campaign-owned children inherit persisted campaign
+ownership; reparenting checks both owners. Collections and statistics exclude
+unauthorized source rows. Existing campaigns remain unclassified until explicitly
+classified rather than guessing their intended branch.
+
+Migration 057 is additive and required alongside the earlier permission
+prerequisites before deploying this version. It has been applied to development,
+not production. No production permissions have been modified.
 
 HR route adaptation now covers employee lists/bundle/stats, employee-owned
 details and histories, attendance records and approval, attendance dashboards,

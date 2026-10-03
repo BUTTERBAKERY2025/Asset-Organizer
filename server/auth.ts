@@ -6,7 +6,7 @@ import { createPasswordLoginRateLimiter } from "./password-login-limiter";
 import { storage } from "./storage";
 import { branchTemplateSnapshot } from "./branch-template-decision";
 import {
-  checkPermissionDecision, evaluatePermissionDecision, hasPermissionDecisionDeny,
+  checkPermissionDecision, evaluatePermissionDecision, hasPermissionDecisionDeny, centralMarketingSnapshot,
   type PermissionContext, type PermissionDecisionSnapshot,
 } from "./permission-decision";
 import {
@@ -1548,6 +1548,8 @@ export function projectNavigationPermissions(
   const keys = new Map<string, { module: string; action: string }>();
   const add = (module: string, action: string) => keys.set(JSON.stringify([module, action]), { module, action });
   for (const pair of evaluatePermissionDecision(snapshot)) add(pair.module, pair.action);
+  for (const tuple of snapshot.tuples)
+    if (tuple.module === "marketing" || tuple.module.startsWith("marketing_")) add(tuple.module, tuple.action);
   for (const row of seed) for (const action of row.actions) add(row.module, action);
   const roleMaps: Record<string, string[]>[] = [];
   if (user.role === "hr_manager") roleMaps.push(Object.fromEntries([...HR_MANAGER_MODULES].map(module => [module, [...MODULE_ACTIONS]])));
@@ -1575,7 +1577,9 @@ export function projectNavigationPermissions(
   if (user.role !== "warehouse_keeper") for (const departmentId of departments) contexts.push({ departmentId });
   const modules = new Map<string, Set<string>>();
   for (const { module, action } of keys.values()) {
-    if (!contexts.some(context => contextualActionAllowed(navigationRequest, snapshot, module, action, context))) continue;
+    const centralMarketing = (module === "marketing" || module.startsWith("marketing_"))
+      && contextualActionAllowed(navigationRequest, centralMarketingSnapshot(snapshot), module, action, {});
+    if (!centralMarketing && !contexts.some(context => contextualActionAllowed(navigationRequest, snapshot, module, action, context))) continue;
     const actions = modules.get(module) ?? new Set<string>();
     actions.add(action);
     modules.set(module, actions);
@@ -1685,6 +1689,15 @@ export const requirePermission = (module: string, action?: string, contextResolv
     const user = (req as any).currentUser;
     if (!user) {
       return res.status(401).json({ message: "غير مصرح" });
+    }
+    if (req.path?.startsWith("/api/marketing/") && (module === "marketing" || module.startsWith("marketing_"))) {
+      try {
+        if (user.role !== "admin") await getRequestPermissionSnapshot(req, user.id);
+        const { enforceMarketingScope } = await import("./marketing-scope");
+        return await enforceMarketingScope(req, res, next, module, action ?? ({
+          GET: "view", POST: "create", PATCH: "edit", PUT: "edit", DELETE: "delete",
+        } as Record<string, string>)[req.method] ?? "edit");
+      } catch { return res.status(503).json({ message: "تعذر التحقق من صلاحيات التسويق" }); }
     }
     
     // Admin has full access
@@ -1843,6 +1856,13 @@ export const requirePermission = (module: string, action?: string, contextResolv
 export const requireAnyPermission = (module: string, actions: string[], contextResolver?: PermissionContextResolver): RequestHandler => {
   return async (req, res, next) => {
     const user = (req as any).currentUser;
+    if (user && req.path?.startsWith("/api/marketing/") && (module === "marketing" || module.startsWith("marketing_"))) {
+      try {
+        if (user.role !== "admin") await getRequestPermissionSnapshot(req, user.id);
+        const { enforceMarketingScope } = await import("./marketing-scope");
+        return await enforceMarketingScope(req, res, next, module, actions);
+      } catch { return res.status(503).json({ message: "تعذر التحقق من صلاحيات التسويق" }); }
+    }
     if (user?.role === "admin") return next();
     if (user) {
       try {

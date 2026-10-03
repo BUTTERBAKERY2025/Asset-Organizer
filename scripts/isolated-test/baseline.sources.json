@@ -1,5 +1,5 @@
 {
-  "shared/schema.ts": "18ec8be9e628743c3a779bde73486f3375a761ec75e8aaf63b17cb7aef4c8a1f",
+  "shared/schema.ts": "f922ee47c6619301ef57e795a483f46ceb71ae5c0077d20734edbd606cdf8842",
   "shared/material-quantity.ts": "49c7f13ad2892a1960bb080fb1d6c89d8130a50b3475d8dffdc1401abba8e4f8",
   "migrations/029_central_kitchen_real_inventory.sql": "87093bf5fadd2e5efe700e9e2f11e3d54d1e0d1aeb9b90e9131a41ace3751571",
   "migrations/030_central_kitchen_real_inventory_hardening.sql": "a175a591c8a892ebdf467cea754704ce190113a13567e368158ca756f252e268",
