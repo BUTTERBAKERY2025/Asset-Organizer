@@ -31,10 +31,34 @@ describe("independent admin cashier template authority", () => {
       .toThrow("إرسال يومية الكاشير يتطلب صلاحية إنشاء");
     expect(withoutCreate.permissions[0].actions).toEqual(["submit", "view"]);
   });
-  it.each(["approve", "delete", "sign", "print"])("does not admit unrelated journal action %s", action => {
+  it.each(["approve", "delete", "reject", "reopen", "post", "unpost"])("does not admit unrelated journal action %s", action => {
     const invalid = { ...submissionTemplate, permissions: [{ module: "cashier_journal", actions: ["create", "view", action] }] };
     expect(() => eligibleAdminTemplatePermissions(invalid, null, "employee")).toThrow();
     expect(() => eligibleTemplatePermissions(invalid, { enabled: true, permissions: [] })).toThrow();
+  });
+  it("preserves the complete reviewed cashier vocabulary without changing input or adding authority", () => {
+    const complete = { ...content, permissions: [
+      { module: "cashier_journal", actions: ["view", "view_list", "view_details", "create", "edit", "submit", "sign", "print", "export", "view_signatures"] },
+      { module: "cashier", actions: ["view", "print", "export"] },
+    ] };
+    const original = structuredClone(complete);
+    const expected = complete.permissions.map(p => ({ ...p, actions: [...p.actions].sort() })).sort((a,b) => a.module.localeCompare(b.module));
+    expect(eligibleAdminTemplatePermissions(complete, null, "employee").permissions).toEqual(expected);
+    expect(eligibleTemplatePermissions(complete, { enabled: true, permissions: [] }).permissions).toEqual(expected);
+    expect(complete).toEqual(original);
+  });
+  it("reports all unsupported actions together rather than only the first", () => {
+    try {
+      eligibleAdminTemplatePermissions({ ...content, permissions: [{ module: "cashier_journal", actions: ["view", "approve", "delete", "reopen"] }] }, null, "employee");
+      throw new Error("Expected rejection");
+    } catch (error: any) {
+      expect(error.code).toBe("ADMIN_TEMPLATE_PERMISSION_UNSUPPORTED");
+      for (const action of ["approve", "delete", "reopen"]) expect(error.message).toContain(`cashier_journal:${action}`);
+    }
+  });
+  it("does not turn signing into create authority or allow signing in other modules", () => {
+    expect(() => eligibleAdminTemplatePermissions({ ...content, permissions: [{ module: "cashier_journal", actions: ["view", "sign"] }] }, null, "employee")).toThrow("يتطلب صلاحية إنشاء");
+    expect(() => eligibleAdminTemplatePermissions({ ...content, permissions: [{ module: "smart_incentives_wallet", actions: ["view", "sign"] }] }, null, "employee")).toThrow();
   });
   it("does not authorize submission for unrelated modules", () => {
     expect(() => eligibleAdminTemplatePermissions({

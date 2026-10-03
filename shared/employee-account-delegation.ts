@@ -30,6 +30,8 @@ export interface DelegatedEmployeeAccount {
   management: {
     allowed: boolean;
     reason: "allowed" | "not_selected" | "read_only_branch" | "protected_account";
+    /** Safe authorization explanation only; never includes account credentials. */
+    blocker?: { code: string; message: string };
   };
   account: null | {
     id: string;

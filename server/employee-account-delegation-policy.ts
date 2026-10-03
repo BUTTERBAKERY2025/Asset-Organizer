@@ -67,8 +67,14 @@ export function targetMayManage(
     deny("EXTRA_BRANCH_AUTHORITY", "الحساب مرتبط بفرع آخر أو يملك صلاحيات متعددة الفروع");
   // Reject even dormant assignments/overrides: clearing direct rows can revive
   // inherited permissions, and future-dated assignments must not be weaponized.
-  if (assignments || overrides || !permissionsWithin(direct, EMPLOYEE_ACCOUNT_SAFE_PERMISSIONS))
-    deny("ELEVATED_ACCOUNT", "الحساب يملك صلاحيات موروثة أو إضافية؛ يتطلب إدارة مسؤول النظام");
+  if (assignments || overrides || !permissionsWithin(direct, EMPLOYEE_ACCOUNT_SAFE_PERMISSIONS)) {
+    const reasons = [
+      assignments ? "إسنادات أدوار موروثة" : "",
+      overrides ? "استثناءات صلاحيات غير مشمولة بالتفويض الآمن" : "",
+      !permissionsWithin(direct, EMPLOYEE_ACCOUNT_SAFE_PERMISSIONS) ? "صلاحيات مباشرة خارج النطاق المدعوم" : "",
+    ].filter(Boolean);
+    deny("ELEVATED_ACCOUNT", `الحساب محمي بسبب: ${reasons.join("؛ ")}. يتطلب مراجعة مسؤول النظام.`);
+  }
   // Current admin approval is prospective, not target identity: withdrawal must
   // not hide an otherwise safe account or prevent reducing/suspending its access.
   // Unknown/global permissions and inherited RBAC remain categorically protected.

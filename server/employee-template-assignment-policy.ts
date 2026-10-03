@@ -18,16 +18,20 @@ export const ADMIN_CASHIER_PERMISSIONS = [
   })),
   // Submission still requires create at the journal route. Preserve this
   // explicit template action; never alias it to create or grant create for it.
-  { module: "cashier_journal", actions: ["submit"] },
+  { module: "cashier_journal", actions: ["submit", "sign", "print", "export", "view_signatures"] },
+  { module: "cashier", actions: ["print", "export"] },
 ];
 export function validateAdminCashierPermissions(permissions: DelegatedPermission[]) {
+  const unsupported: string[] = [];
   for (const p of permissions) for (const action of p.actions) {
     if (!ADMIN_CASHIER_PERMISSIONS.some(rule => rule.module === p.module && rule.actions.includes(action)))
-      deny("ADMIN_TEMPLATE_PERMISSION_UNSUPPORTED", `صلاحية غير مدعومة لإسناد قوالب حسابات الفروع: ${p.module}:${action}. لم تُحذف من القالب.`);
+      unsupported.push(`${p.module}:${action}`);
   }
+  if (unsupported.length)
+    deny("ADMIN_TEMPLATE_PERMISSION_UNSUPPORTED", `صلاحيات غير مدعومة لإسناد قوالب حسابات الفروع: ${[...new Set(unsupported)].join("، ")}. لم تُحذف من القالب.`);
   const journalActions = permissions.filter(p => p.module === "cashier_journal").flatMap(p => p.actions);
-  if (journalActions.includes("submit") && !journalActions.includes("create"))
-    deny("JOURNAL_SUBMIT_REQUIRES_CREATE", "إرسال يومية الكاشير يتطلب صلاحية إنشاء اليومية في المسار الحالي. أضفها صراحةً إلى إصدار القالب واعتمده؛ لم نضف صلاحيات تلقائيًا.");
+  if ((journalActions.includes("submit") || journalActions.includes("sign")) && !journalActions.includes("create"))
+    deny("JOURNAL_SUBMIT_REQUIRES_CREATE", "إرسال يومية الكاشير يتطلب صلاحية إنشاء اليومية في المسار الحالي، وكذلك توقيع الكاشير عند الإرسال. أضفها صراحةً إلى إصدار القالب واعتمده؛ لم نضف صلاحيات تلقائيًا.");
   return permissions;
 }
 export function eligibleAdminTemplatePermissions(raw: unknown, jobTitle: string | null, role: string) {

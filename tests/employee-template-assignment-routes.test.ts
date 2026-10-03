@@ -590,15 +590,15 @@ async function pilotConfirmation() {
     expectedComparisonRevision: preview.body.expectedComparisonRevision, acknowledgeChanges: true };
 }
 describe("phase6 actual admin comparison/application routes with strict offline IO", () => {
-  it("compares journal submit with create without mutating accounts, then applies only on confirmation", async () => {
-    state.content.permissions = [{ module: "cashier_journal", actions: ["view", "create", "submit"] }];
+  it("compares the full cashier journal template without mutating accounts, then applies only on confirmation", async () => {
+    state.content.permissions = [{ module: "cashier_journal", actions: ["view", "create", "edit", "submit", "sign", "print", "export", "view_list", "view_details", "view_signatures"] }];
     const original = structuredClone(state);
     const preview = await invokePilot();
     expect(preview.statusCode).toBe(200);
     expect(preview.body.canApply).toBe(true);
     expect(preview.body.comparisonStatus).toBe("known");
     expect(preview.body.blockedReasons).toEqual([]);
-    expect(preview.body.differences.additions).toEqual([{ module: "cashier_journal", actions: ["create", "submit"] }]);
+    expect(preview.body.differences.additions).toEqual([{ module: "cashier_journal", actions: ["create", "edit", "export", "print", "sign", "submit", "view_details", "view_list", "view_signatures"] }]);
     expect(state).toEqual(original);
     expect(runtime.invalidate).not.toHaveBeenCalled();
     const applied = await invokePilot("post", {
@@ -606,7 +606,7 @@ describe("phase6 actual admin comparison/application routes with strict offline 
       expectedComparisonRevision: preview.body.expectedComparisonRevision, acknowledgeChanges: true,
     });
     expect(applied.statusCode).toBe(200);
-    expect(state.permissions).toEqual([{ module: "cashier_journal", actions: ["create", "submit", "view"] }]);
+    expect(state.permissions).toEqual([{ module: "cashier_journal", actions: ["create", "edit", "export", "print", "sign", "submit", "view", "view_details", "view_list", "view_signatures"] }]);
   });
   it("reports the explicit compatibility blocker for submit without create and never changes the account", async () => {
     state.content.permissions = [{ module: "cashier_journal", actions: ["view", "submit"] }];

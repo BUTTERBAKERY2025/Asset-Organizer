@@ -138,7 +138,10 @@ function EmployeeAccountsWorkspace({ actorId, actorRole, authScope }: { actorId:
                 {employee.account && <span className="text-[11px] text-muted-foreground">{employee.account.isActive === "active" ? "نشط" : "مجمّد"}</span>}</div>
               <p className="mt-1 text-xs text-muted-foreground">{employee.branchName}{employee.account && <> · <bdi className="font-mono">{employee.account.username ?? "اسم المستخدم غير متاح"}</bdi></>}</p>
               {employee.account?.isActive === "inactive" && !employee.account.canReactivate && <p className="mt-1 text-[11px] text-amber-800">غير مؤهل لإعادة الفتح وفق السياسة الحالية؛ ظهور الحساب ضمن تغطية الفرع لا يعيد فتحه. راجع انتقاله إلى قالب معتمد ومؤهل ثم أهلية إعادة الفتح، كل إجراء بتأكيد مستقل.</p>}
-              {!employee.management?.allowed && <p className="mt-1 text-[11px] text-amber-800">{employeeManagementExplanation(employee.management?.reason ?? "not_selected", actorRole)}</p>}
+              {!employee.management?.allowed && <div className="mt-1 text-[11px] text-amber-800">
+                {employee.management?.blocker && <p className="font-semibold">سبب الحماية: {employee.management.blocker.message} <bdi>({employee.management.blocker.code})</bdi></p>}
+                <p>{employeeManagementExplanation(employee.management?.reason ?? "not_selected", actorRole)}</p>
+              </div>}
             </div>
             {(employee.management?.allowed || (actorRole === "admin" && employee.hasAccount)) && <div className="flex flex-wrap gap-2">
               {employee.management?.allowed && (!employee.hasAccount ? <Button className="min-h-11 gap-2" disabled={!delegationEnabled || directory.isFetching} onClick={() => open(employee, "create")}><KeyRound className="h-4 w-4" />اختيار الموظف</Button> : employee.account && <>

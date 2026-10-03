@@ -500,6 +500,7 @@ async function roster(
   for (const employee of employees) {
     let account: DelegatedEmployeeAccount["account"] = null;
     let protectedAccount = false;
+    let blocker: { code: string; message: string } | undefined;
     try {
       if (employee.linkedUserId) {
         const target = byAccount.get(employee.linkedUserId);
@@ -525,6 +526,7 @@ async function roster(
     } catch (error) {
       if (!(error instanceof DelegationError) || error.status !== 403) throw error;
       protectedAccount = true;
+      blocker = { code: error.code, message: error.message };
     }
     const reason: DelegatedEmployeeAccount["management"]["reason"] = protectedAccount ? "protected_account"
       : actor.role !== "admin" && !grants.includes(employee.branchId) ? "read_only_branch"
@@ -532,7 +534,7 @@ async function roster(
     rows.push({
       employeeId: employee.id, employeeName: employee.employeeName, branchId: employee.branchId,
       branchName: employee.branchName, hasAccount: Boolean(employee.linkedUserId),
-      management: { allowed: reason === "allowed", reason }, account: reason === "allowed" ? account : null,
+      management: { allowed: reason === "allowed", reason, ...(reason === "protected_account" && blocker ? { blocker } : {}) }, account: reason === "allowed" ? account : null,
     });
   }
   await budget();
