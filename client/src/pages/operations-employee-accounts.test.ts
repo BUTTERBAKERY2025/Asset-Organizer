@@ -22,6 +22,11 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@/hooks/useAuth", () => ({ useAuth: () => ({ user: mocks.user, isAuthError: false, isSwitchingBranch: mocks.switching }) }));
 vi.mock("@/components/layout", () => ({ Layout: ({ children }: { children: React.ReactNode }) => createElement("div", null, children) }));
 vi.mock("@/components/protected-route", () => ({ AccessDeniedPage: ({ message }: { message: string }) => createElement("p", { "data-testid": "denied" }, message) }));
+vi.mock("@/components/operations-center/branch-template-dialog", () => ({
+  BranchTemplateDialog: ({ employee, onClose }: { employee: { employeeName: string }; onClose: () => void }) =>
+    createElement("section", { "data-testid": "branch-template-dialog" }, employee.employeeName,
+      createElement("button", { onClick: onClose }, "إغلاق تخصيص الفرع")),
+}));
 vi.mock("wouter", () => ({
   useSearch: () => mocks.search,
   useLocation: () => ["/operations-employee-accounts", mocks.navigate],
@@ -92,6 +97,93 @@ afterEach(async () => {
 });
 
 describe("operations employee account page", () => {
+  it("uses exactly five scan columns and keeps all account actions in the initially collapsed details surface", async () => {
+    mocks.user = { ...mocks.user, role: "admin" };
+    mocks.state.data = { ...data, employees: [{ ...data.employees[1], management: { allowed: true, reason: "allowed", branchTemplateAllowed: true }, account: { ...data.employees[1].account!, isActive: "active" } }] };
+    await mount();
+    const record = renderer.root.findByProps({ "data-testid": "employee-account-2" });
+    expect(record.type).toBe("details");
+    expect(record.props.open).not.toBe(true);
+    const summary = record.findByType("summary");
+    expect(summary.children).toHaveLength(5);
+    expect(summary.findAllByType("button")).toHaveLength(0);
+    expect(summary.props["aria-label"]).toContain(data.employees[1].employeeName);
+    const management = record.findByProps({ "data-testid": "employee-account-management-2" });
+    const text = JSON.stringify(management.findAllByType("h3").map((node: any) => node.children));
+    expect(text).toContain("قالب هذا الفرع");
+    expect(text).toContain("حالة الدخول · الحساب بالكامل");
+    expect(text).toContain("أدوات مسؤول النظام");
+    expect(button("تخصيص قالب لهذا الفرع")).toBeTruthy();
+    expect(button("تجميد")).toBeTruthy();
+    expect(button("الإضافات المستقلة")).toBeTruthy();
+    expect(button("مقارنة وتجربة قالب")).toBeTruthy();
+  });
+
+  it("retains branch-only assignment for protected linked employees without offering whole-account actions", async () => {
+    mocks.state.data = { ...data, employees: [{ ...data.employees[1], account: null,
+      management: { allowed: false, reason: "protected_account", branchTemplateAllowed: true, blocker: { code: "EXTRA_BRANCH_AUTHORITY", message: "صلاحيات في فرع آخر" } } }] };
+    await mount();
+    expect(button("تخصيص قالب لهذا الفرع")).toBeTruthy();
+    expect(button("إسناد قالب معتمد")).toBeUndefined();
+    expect(button("تجميد")).toBeUndefined();
+    expect(button("إعادة الفتح")).toBeUndefined();
+    expect(button("الإضافات المستقلة")).toBeUndefined();
+    expect(button("مقارنة وتجربة قالب")).toBeUndefined();
+    expect(JSON.stringify(renderer.toJSON())).toContain("الحالة غير متاحة");
+    expect(JSON.stringify(renderer.toJSON())).toContain("صلاحيات في فرع آخر");
+    await act(async () => button("تخصيص قالب لهذا الفرع").props.onClick());
+    expect(renderer.root.findAllByProps({ "data-testid": "branch-template-dialog" })).toHaveLength(1);
+    mocks.state.data = { ...mocks.state.data, employees: [{ ...mocks.state.data.employees[0], management: { allowed: false, reason: "read_only_branch", branchTemplateAllowed: false } }] };
+    await renderAgain();
+    expect(renderer.root.findAllByProps({ "data-testid": "branch-template-dialog" })).toHaveLength(0);
+    expect(button("تخصيص قالب لهذا الفرع")).toBeUndefined();
+  });
+
+  it("disables every management entry while directory verification is in progress", async () => {
+    mocks.user = { ...mocks.user, role: "admin" };
+    mocks.state = { ...mocks.state, isFetching: true, data: { ...data, employees: [{ ...data.employees[1],
+      management: { allowed: true, reason: "allowed", branchTemplateAllowed: true } }] } };
+    await mount();
+    for (const label of ["تخصيص قالب لهذا الفرع", "إعادة الفتح", "الإضافات المستقلة", "مقارنة وتجربة قالب"]) {
+      expect(button(label).props.disabled).toBe(true);
+    }
+    await act(async () => button("تخصيص قالب لهذا الفرع").props.onClick());
+    expect(renderer.root.findAllByProps({ "data-testid": "branch-template-dialog" })).toHaveLength(0);
+  });
+
+  it("unmounts branch assignment review on an explicit scope change even when the employee remains visible", async () => {
+    mocks.state.data = { ...data, employees: [{ ...data.employees[1],
+      management: { allowed: false, reason: "protected_account", branchTemplateAllowed: true } }] };
+    await mount();
+    await act(async () => button("تخصيص قالب لهذا الفرع").props.onClick());
+    expect(renderer.root.findAllByProps({ "data-testid": "branch-template-dialog" })).toHaveLength(1);
+    mocks.search = "?branchId=a";
+    await renderAgain();
+    expect(renderer.root.findAllByProps({ "data-testid": "employee-account-2" })).toHaveLength(1);
+    expect(renderer.root.findAllByProps({ "data-testid": "branch-template-dialog" })).toHaveLength(0);
+    expect(button("تخصيص قالب لهذا الفرع")).toBeTruthy();
+  });
+
+  it("filters login status independently of management authority and ignores it on the no-account tab", async () => {
+    mocks.state.data = { ...data, employees: [
+      ...data.employees,
+      { ...data.employees[1], employeeId: 3, employeeName: "حساب نشط", account: { ...data.employees[1].account!, isActive: "active" } },
+      { ...data.employees[1], employeeId: 4, employeeName: "حساب محمي", account: null, management: { allowed: false, reason: "protected_account" } },
+    ] };
+    await mount();
+    await act(async () => renderer.root.findByProps({ id: "employee-accounts-status" }).props.onChange({ target: { value: "active" } }));
+    expect(renderer.root.findAllByProps({ "data-testid": "employee-account-3" })).toHaveLength(1);
+    expect(renderer.root.findAllByProps({ "data-testid": "employee-account-2" })).toHaveLength(0);
+    expect(renderer.root.findAllByProps({ "data-testid": "employee-account-4" })).toHaveLength(0);
+    await act(async () => renderer.root.findByProps({ id: "employee-accounts-status" }).props.onChange({ target: { value: "unknown" } }));
+    expect(renderer.root.findAllByProps({ "data-testid": "employee-account-4" })).toHaveLength(1);
+    expect(renderer.root.findAllByProps({ "data-testid": "employee-account-3" })).toHaveLength(0);
+    await act(async () => button("موظفون دون حساب").props.onClick());
+    expect(renderer.root.findByProps({ id: "employee-accounts-status" }).props.disabled).toBe(true);
+    expect(renderer.root.findAllByProps({ "data-testid": "employee-account-1" })).toHaveLength(1);
+    expect(mocks.navigate).not.toHaveBeenCalled();
+  });
+
   it("shows actual assigned historical version even for a protected account", async () => {
     mocks.state.data = { ...data, employees: [{
       ...data.employees[1], account: null,

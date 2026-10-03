@@ -1,0 +1,70 @@
+/* A scoped operations ledger: existing Arabic typography and plum identity,
+   with readable scan lines and an explicit, separate management workspace. */
+.employee-accounts-workspace {
+  --accounts-ink: #302840;
+  --accounts-tint: #f5f1f8;
+  --accounts-line: #e3dce9;
+  color: var(--accounts-ink);
+}
+.employee-accounts-workspace .accounts-ledger {
+  border: 1px solid var(--accounts-line);
+  border-radius: .75rem;
+  overflow: hidden;
+  container-type: inline-size;
+}
+.accounts-columns,
+.accounts-summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: .75rem;
+}
+.accounts-columns { display: none; }
+.accounts-record + .accounts-record { border-top: 1px solid var(--accounts-line); }
+.accounts-summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 1rem;
+  align-items: center;
+  font-size: .875rem;
+}
+.accounts-summary::-webkit-details-marker { display: none; }
+.accounts-summary:hover { background: var(--accounts-tint); }
+.accounts-summary:focus-visible { outline: 2px solid #78519b; outline-offset: -3px; }
+.accounts-record[open] > .accounts-summary { background: var(--accounts-tint); }
+.accounts-record[open] .accounts-chevron { transform: rotate(180deg); }
+.accounts-detail {
+  border-top: 1px solid var(--accounts-line);
+  padding: 1rem;
+  background: color-mix(in srgb, var(--accounts-tint) 45%, var(--color-card, #faf8fc));
+}
+.accounts-detail-section {
+  min-width: 0;
+  border: 1px solid var(--accounts-line);
+  border-radius: .625rem;
+  padding: 1rem;
+  background: var(--color-card, #faf8fc);
+}
+.accounts-detail-section h3 { font-size: .9375rem; font-weight: 700; }
+.accounts-detail-section p { font-size: .875rem; line-height: 1.7; }
+.accounts-detail-section button { min-height: 2.5rem; font-size: .875rem; }
+.accounts-mobile-label { display: block; margin-bottom: .25rem; font-size: .75rem; color: #73667e; }
+/* The app sidebar can leave a narrow content pane on a desktop viewport. */
+@container (min-width: 820px) {
+  .accounts-columns,
+  .accounts-summary {
+    grid-template-columns: minmax(150px, 1.45fr) minmax(100px, .85fr) minmax(100px, .65fr) minmax(145px, 1fr) 135px;
+    gap: 1rem;
+    padding: .875rem 1rem;
+  }
+  .accounts-columns {
+    display: grid;
+    border-bottom: 1px solid var(--accounts-line);
+    background: var(--accounts-tint);
+    font-size: .8125rem;
+    font-weight: 700;
+  }
+  .accounts-mobile-label { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .employee-accounts-workspace *, .employee-accounts-workspace *::before { transition: none !important; }
+}
