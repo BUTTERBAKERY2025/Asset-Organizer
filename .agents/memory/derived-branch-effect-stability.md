@@ -14,3 +14,9 @@ Validate navigation authority without triggering the UI's authority-refresh load
 **Why:** The canonical operations-manager branch hook intentionally hides rows during refetch. Using that hook's refetch as a click preflight unmounted the selected workspace, invalidated its legitimate unmount guard and silently cancelled the click before source navigation.
 
 **How to apply:** Use a separate fresh no-store preflight bound to actor, source and intent generation. Unchanged grants should leave the current workspace mounted; confirmed revocation must purge/hide stale data and deny navigation. Retain unmount and A→B→A guards rather than weakening them to mask self-cancellation.
+
+Do not finalize a default branch before authorization finishes loading. Keep requested selection separate from the currently authorized selection.
+
+**Why:** A single-branch scheduling account could become stranded on "all" during the temporary empty scope, then have its selector disabled once its sole branch arrived. This is a loading race, not evidence that the user needs broader permissions.
+
+**How to apply:** Derive the usable selection from fresh branches; single-branch users open their authorized branch automatically. Pause scoped queries and draft synchronization during revalidation, preserve multi-branch choices, and distinguish loading/error from confirmed empty access.

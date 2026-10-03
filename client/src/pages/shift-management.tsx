@@ -15,6 +15,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { useBranches } from "@/hooks/useBranches";
+import { resolveScheduleBranch } from "@/lib/schedule-branch-selection";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Calendar, Clock, Users, Plus, Save, Check, X, ChevronRight, ChevronLeft, FileText, UserCheck, Building2, CalendarDays, Download, Printer, Loader2, FileSpreadsheet, File, Upload, FileUp, AlertCircle, Copy, Lock, History, Info, AlertTriangle } from "lucide-react";
@@ -45,7 +46,7 @@ export default function ShiftManagementPage() {
   const dateLocale = isRTL ? ar : enUS;
   const DAYS = isRTL ? DAYS_AR : DAYS_EN;
   const [activeTab, setActiveTab] = useState("schedule");
-  const [selectedBranch, setSelectedBranch] = useState<string>("");
+  const [requestedBranch, setSelectedBranch] = useState<string>("");
   const [viewMode, setViewMode] = useState<"week" | "month">("week");
   const [currentWeekStart, setCurrentWeekStart] = useState(() => startOfWeek(new Date(), { weekStartsOn: 6 }));
   const [currentMonth, setCurrentMonth] = useState(() => new Date());
@@ -109,7 +110,10 @@ export default function ShiftManagementPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { user } = useAuth();
-  const { branches, userBranchId, canSelectBranch } = useBranches();
+  const { branches, canSelectBranch, isLoading: branchesLoading, isError: branchesError, refetch: refetchBranches } = useBranches();
+  const selectedBranch = resolveScheduleBranch(
+    requestedBranch, branches, !branchesLoading && !branchesError, canSelectBranch,
+  );
   
   const startDateStr = format(currentWeekStart, "yyyy-MM-dd");
   const endDateStr = format(addDays(currentWeekStart, 6), "yyyy-MM-dd");
@@ -149,7 +153,7 @@ export default function ShiftManagementPage() {
   const draftKey = `shift-draft:${selectedBranch}:${startDateStr}`;
 
   const writeDraft = () => {
-    if (selectedBranch === "all") return;
+    if (!selectedBranch || selectedBranch === "all") return;
     try {
       localStorage.setItem(draftKey, JSON.stringify({ savedAt: Date.now(), data: scheduleData }));
     } catch { /* التخزين ممتلئ أو معطل - نتجاهل */ }
@@ -172,7 +176,7 @@ export default function ShiftManagementPage() {
 
   // حفظ تلقائي للمسودة كل ثانية ونصف أثناء التعديل
   useEffect(() => {
-    if (!hasUnsavedChanges || selectedBranch === "all") return;
+    if (!hasUnsavedChanges || !selectedBranch || selectedBranch === "all") return;
     const t = setTimeout(writeDraft, 1500);
     return () => clearTimeout(t);
   }, [scheduleData, hasUnsavedChanges, draftKey, selectedBranch]);
@@ -258,7 +262,7 @@ export default function ShiftManagementPage() {
       const res = await apiRequest("GET", `/api/schedule-change-audit?branchId=${selectedBranch}&weekStartDate=${startDateStr}`);
       return res.json();
     },
-    enabled: selectedBranch !== "all" && showAuditTrail,
+    enabled: !!selectedBranch && selectedBranch !== "all" && showAuditTrail,
   });
 
   // Report attendance query - driven by report filter bar
@@ -268,7 +272,7 @@ export default function ShiftManagementPage() {
       const res = await apiRequest("GET", `/api/attendance?branchId=${selectedBranch}&startDate=${reportStartDate}&endDate=${reportEndDate}`);
       return res.json();
     },
-    enabled: selectedBranch !== "all" && !!reportStartDate && !!reportEndDate && activeTab === "reports",
+    enabled: !!selectedBranch && selectedBranch !== "all" && !!reportStartDate && !!reportEndDate && activeTab === "reports",
   });
 
   // Report schedule query
@@ -278,7 +282,7 @@ export default function ShiftManagementPage() {
       const res = await apiRequest("GET", `/api/employee-schedules?branchId=${selectedBranch}&startDate=${reportStartDate}&endDate=${reportEndDate}`);
       return res.json();
     },
-    enabled: selectedBranch !== "all" && !!reportStartDate && !!reportEndDate && activeTab === "reports",
+    enabled: !!selectedBranch && selectedBranch !== "all" && !!reportStartDate && !!reportEndDate && activeTab === "reports",
   });
 
   // Employee Signature Report Query - stays separate for individual employee
@@ -301,7 +305,7 @@ export default function ShiftManagementPage() {
         return false;
       });
     },
-    enabled: selectedBranch !== "all" && !!signatureReportEmployee && !!reportStartDate && !!reportEndDate,
+    enabled: !!selectedBranch && selectedBranch !== "all" && !!signatureReportEmployee && !!reportStartDate && !!reportEndDate,
   });
 
   // Build report schedule data from reportSchedules
@@ -398,19 +402,11 @@ export default function ShiftManagementPage() {
     return filteredEmployees.filter(e => String(e.id) === reportSelectedEmployee);
   }, [filteredEmployees, reportSelectedEmployee]);
 
-  useEffect(() => {
-    if (userBranchId && selectedBranch === "") {
-      setSelectedBranch(userBranchId);
-    } else if (!userBranchId && selectedBranch === "") {
-      setSelectedBranch("all");
-    }
-  }, [userBranchId, selectedBranch]);
-
   const prevWeekRef = useRef(startDateStr);
   const prevBranchRef = useRef(selectedBranch);
 
   useEffect(() => {
-    if (isBundlePlaceholder) return;
+    if (!selectedBranch || isBundlePlaceholder) return;
     const weekChanged = prevWeekRef.current !== startDateStr;
     const branchChanged = prevBranchRef.current !== selectedBranch;
     prevWeekRef.current = startDateStr;
@@ -1935,7 +1931,7 @@ export default function ShiftManagementPage() {
           backHref="/attendance-dashboard"
           actions={
             <Select value={selectedBranch} onValueChange={setSelectedBranch}>
-              <SelectTrigger className="w-48 h-10" data-testid="select-branch" disabled={!canSelectBranch}>
+              <SelectTrigger className="w-48 h-10" data-testid="select-branch" disabled={branchesLoading || branchesError || !branches.length || !canSelectBranch}>
                 <Building2 className="w-4 h-4 ml-2" />
                 <SelectValue placeholder={t("shiftManagement.selectBranch")} />
               </SelectTrigger>
@@ -1949,7 +1945,16 @@ export default function ShiftManagementPage() {
           }
         />
 
-        {selectedBranch === "all" ? (
+        {branchesLoading ? (
+          <Card><CardContent className="py-12 text-center" role="status">جارٍ تحميل الفروع المصرّح بها...</CardContent></Card>
+        ) : branchesError ? (
+          <Card><CardContent className="py-12 text-center space-y-4" role="alert">
+            <p>تعذّر تحميل الفروع المصرّح بها. أعد المحاولة لفتح جدول الدوام.</p>
+            <Button onClick={() => refetchBranches()}>إعادة المحاولة</Button>
+          </CardContent></Card>
+        ) : !selectedBranch ? (
+          <Card><CardContent className="py-12 text-center">لا توجد فروع متاحة لهذا الحساب. يرجى مراجعة مسؤول الصلاحيات.</CardContent></Card>
+        ) : selectedBranch === "all" ? (
           <Card>
             <CardContent className="py-12 text-center">
               <Building2 className="w-16 h-16 mx-auto mb-4 text-muted-foreground opacity-50" />
