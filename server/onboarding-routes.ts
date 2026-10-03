@@ -578,6 +578,8 @@ export function registerOnboardingRoutes(app: Express) {
         if (!Number.isSafeInteger(id) || id < 1) return res.status(400).json({ error: "الإشعار غير صالح" });
         if (req.body?.replaceToken !== undefined && typeof req.body.replaceToken !== "boolean")
           return res.status(400).json({ error: "خيار استبدال الرابط يجب أن يكون صحيحاً أو خطأ" });
+        if (req.body?.deliveryMode !== undefined && !["whatsapp_link", "automatic"].includes(req.body.deliveryMode))
+          return res.status(400).json({ error: "طريقة الإرسال غير صالحة" });
         const result = await prepareOnboardingSend(id, req.body?.replaceToken === true,
           n => checkBranchAccess(req, n.branchId));
         if ("error" in result) {
@@ -587,7 +589,11 @@ export function registerOnboardingRoutes(app: Express) {
         }
         const n = result.notification;
         const link = `${req.protocol}://${req.get("host")}/onboarding/${result.token}`;
-        const waResult = await deliverOnboardingLink(isTwilioConfigured, async () => {
+        // The HR browser opens WhatsApp for a human to press Send. Do not also
+        // deliver via Twilio, which would create an unexpected duplicate.
+        const waResult = req.body?.deliveryMode === "whatsapp_link"
+          ? { success: false, skipped: true, status: "manual" }
+          : await deliverOnboardingLink(isTwilioConfigured, async () => {
           let branchName: string | undefined = n.branchName || undefined;
           if (n.branchId) {
             const [b] = await db.select({ name: branches.name }).from(branches).where(eq(branches.id, n.branchId)).limit(1);

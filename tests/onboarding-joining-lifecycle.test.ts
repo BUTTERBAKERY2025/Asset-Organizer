@@ -312,6 +312,17 @@ describe("shared HR / operations retry-safe sends", () => {
     expect(renewed.payload.link).not.toBe(replacement.payload.link);
     expect(state.tokens).toHaveLength(3);
   });
+  it("HR WhatsApp-link mode prepares a reusable link without sending a provider message", async () => {
+    state.configured = true;
+    const first = await request(hrSend, { body: { deliveryMode: "whatsapp_link" } });
+    const again = await request(hrSend, { body: { deliveryMode: "whatsapp_link" } });
+    expect(first.status).toBe(200);
+    expect(first.payload.whatsapp.status).toBe("manual");
+    expect(again.payload.link).toBe(first.payload.link);
+    expect(state.sends).toBe(0);
+    expect(state.tokens).toHaveLength(1);
+    expect((await request(hrSend, { body: { deliveryMode: "invalid" } })).status).toBe(400);
+  });
   it("returns saved link with truthful provider success/failure, including exception, never a post-commit 500", async () => {
     state.configured = true; state.providerFailure = true;
     const failure = await request(operationsSend);

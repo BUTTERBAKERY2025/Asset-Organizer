@@ -19,6 +19,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { reserveWhatsAppWindow, navigateWhatsAppWindow, onboardingWhatsAppUrl } from "@/lib/onboarding-whatsapp-window";
 import { useBranches } from "@/hooks/useBranches";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -179,19 +180,23 @@ export default function OnboardingPage() {
   };
 
   const sendMutation = useMutation({
-    mutationFn: async (id: number) => {
-      const r = await apiRequest("POST", `/api/hr/onboarding/${id}/send`, {});
+    mutationFn: async ({ id }: { id: number; tab: Window | null }) => {
+      const r = await apiRequest("POST", `/api/hr/onboarding/${id}/send`, { deliveryMode: "whatsapp_link" });
       return await r.json();
     },
-    onSuccess: (data) => {
+    onSuccess: (data, { tab }) => {
+      const opened = navigateWhatsAppWindow(tab, onboardingWhatsAppUrl(normalizeSaudiPhone(data.phone || ""), data.link));
       toast({
-        title: data.whatsapp?.success ? "تم الإرسال عبر واتساب" : "تم توليد الرابط",
-        description: data.whatsapp?.success ? "وصل الإشعار للموظف" : "اضغط نسخ الرابط لإرساله يدوياً",
+        title: opened ? "رسالة واتساب جاهزة" : "تعذّر فتح واتساب تلقائيًا",
+        description: opened ? "اضغط إرسال داخل واتساب لإرسال الإشعار للموظف." : "اضغط «فتح واتساب» في النافذة لإكمال الإرسال.",
       });
-      setShareLink({ link: data.link, phone: data.phone });
+      setShareLink(opened ? null : { link: data.link, phone: data.phone });
       invalidate();
     },
-    onError: (e: any) => toast({ title: "فشل الإرسال", description: e.message, variant: "destructive" }),
+    onError: (e: any, { tab }) => {
+      tab?.close();
+      toast({ title: "تعذّر تجهيز رسالة واتساب", description: e.message, variant: "destructive" });
+    },
   });
 
   const confirmMutation = useMutation({
@@ -377,7 +382,7 @@ export default function OnboardingPage() {
                               <Button
                                 size="sm"
                                 className="bg-blue-600 hover:bg-blue-700 gap-1"
-                                onClick={() => sendMutation.mutate(n.id)}
+                                onClick={() => sendMutation.mutate({ id: n.id, tab: reserveWhatsAppWindow() })}
                                 disabled={sendMutation.isPending}
                                 data-testid={`btn-send-${n.id}`}
                               >
@@ -482,7 +487,7 @@ export default function OnboardingPage() {
                       </Button>
                       {shareLink && (
                         <a
-                          href={`https://wa.me/${waPhone}?text=${encodeURIComponent(`🥐 *Butter Bakery* — إشعار مباشرة العمل\n\nرابط التوقيع (يفتح داخل الفرع):\n${shareLink.link}`)}`}
+                          href={onboardingWhatsAppUrl(waPhone, shareLink.link)}
                           target="_blank"
                           rel="noreferrer"
                           className="flex-1"
