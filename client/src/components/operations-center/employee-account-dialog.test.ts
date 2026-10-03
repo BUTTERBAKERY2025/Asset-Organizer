@@ -255,6 +255,45 @@ describe("employee account dialog without browser or persistent secrets", () => 
     expect(fetch).toHaveBeenCalledWith("/api/operations/employee-accounts/19/status", expect.objectContaining({ method: "PATCH", body: JSON.stringify({ isActive: "active" }) }));
   });
 
+  it("defaults manual limits to closed while retaining choices and keeping controls outside", async () => {
+    const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ policy: directory.policy })));
+    const refresh = vi.fn();
+    vi.stubGlobal("fetch", fetch);
+    await act(async () => {
+      renderer = create(createElement(EmployeeAccountPolicyEditor, { directory, refresh }));
+    });
+    const details = renderer.root.findByType("details");
+    expect(details.props.open).toBeUndefined();
+    expect(details.findByType("summary").children).toEqual(["إعدادات متقدمة — حدود المنح اليدوي"]);
+    expect(details.findByType("summary").props.className).toContain("min-h-11");
+    expect(details.findAllByType("button")).toHaveLength(0);
+    expect(details.findAllByType("input")).toHaveLength(2);
+    expect(renderer.root.findAllByType("input")[0].props.checked).toBe(true);
+    expect(details.findAllByType("input").map((node: any) => node.props.checked)).toEqual([true, false]);
+    for (const input of details.findAllByType("input")) {
+      expect(input.props["aria-label"]).toBeTruthy();
+      expect(input.parent.props.className).toContain("min-h-11");
+    }
+    const warning = renderer.root.findAllByType("p").find((node: any) => node.children.join("").includes("تعطيل السياسة أو تضييقها"));
+    expect(warning.parent.type).toBe("section");
+    // Native details hides, rather than unmounts, its contents: edits remain controlled.
+    await act(async () => details.findAllByType("input")[1].props.onChange({ target: { checked: true } }));
+    await act(async () => renderer.update(createElement(EmployeeAccountPolicyEditor, { directory, refresh })));
+    expect(details.findAllByType("input").map((node: any) => node.props.checked)).toEqual([true, true]);
+    expect(details.props.open).toBeUndefined();
+    await act(async () => details.findAllByType("input")[0].props.onChange({ target: { checked: false } }));
+    expect(details.findAllByType("input").map((node: any) => node.props.checked)).toEqual([false, false]);
+    expect(button("اعتماد وحفظ السياسة").props.disabled).toBe(true);
+    await act(async () => details.findAllByType("input")[1].props.onChange({ target: { checked: true } }));
+    expect(details.findAllByType("input").map((node: any) => node.props.checked)).toEqual([true, true]);
+    expect(fetch).not.toHaveBeenCalled();
+    await act(async () => button("اعتماد وحفظ السياسة").props.onClick());
+    expect(fetch).toHaveBeenCalledWith("/api/admin/employee-account-policy", expect.objectContaining({
+      method: "PUT", body: JSON.stringify({ enabled: true, permissions: [{ module: "cashier_journal", actions: ["view", "create"] }] }),
+    }));
+    expect(renderer.root.findByProps({ role: "status" }).parent.type).toBe("section");
+  });
+
   it("keeps admin policy disabled until explicit approval and sends the exact PUT contract", async () => {
     const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ policy: directory.policy })));
     vi.stubGlobal("fetch", fetch);

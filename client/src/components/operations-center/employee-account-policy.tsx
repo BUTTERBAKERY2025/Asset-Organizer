@@ -43,13 +43,18 @@ export function EmployeeAccountPolicyEditor({ directory, refresh }: { directory:
   };
   return <section className="space-y-3 rounded-xl border border-violet-200 bg-card p-4" aria-labelledby="delegation-policy-title" data-testid="employee-account-policy-editor">
     <div className="flex items-center gap-2"><ShieldCheck className="h-5 w-5 text-violet-700" /><h2 id="delegation-policy-title" className="text-sm font-bold">سياسة تفويض حسابات الموظفين · مدير النظام فقط</h2></div>
-    <p className="text-xs leading-6 text-muted-foreground">تفعيل السياسة هو مفتاح السماح بتفويض الحسابات؛ تعطيله يمنع إنشاء الحساب وإسناد القالب وإعادة الفتح. اعتماد القوالب المخصصة للإدارة المفوّضة مستقل عن سقف الصلاحيات اليدوية القديم أدناه، وليس محصورًا بالكاشير. يشمل نطاق المدير تلقائيًا الموظفين الحاليين والمستقبليين في فروعه القابلة للإدارة والكتابة، دون قائمة أسماء منفصلة؛ لا يشمل فروع القراءة فقط أو الأدوار والحسابات المحمية ومتعددة الفروع. مدير العمليات يحدد موظفًا واحدًا وإصدارًا معتمدًا ومؤهلًا لكل إجراء صريح، ولا يغيّر اعتماد القالب أو يمنح إجراءات أو نطاقات غير مدعومة.</p>
+    <p className="text-xs leading-6 text-muted-foreground">تفعيل السياسة يسمح بإنشاء الحساب وإسناد القالب وإعادة الفتح. اعتماد القوالب المخصصة للإدارة المفوّضة مستقل عن سقف الصلاحيات اليدوية القديم، وليس محصورًا بالكاشير. يشمل نطاق المدير موظفي فروعه القابلة للإدارة والكتابة حاليًا ومستقبلًا دون اختيار أسماء؛ يستثني فروع القراءة فقط والأدوار والحسابات المحمية ومتعددة الفروع. كل إجراء صريح لمدير العمليات يخص موظفًا واحدًا وإصدارًا معتمدًا ومؤهلًا؛ لا يغيّر اعتماد القالب ولا يمنح إجراءات أو نطاقات غير مدعومة.</p>
     <label className="flex min-h-11 cursor-pointer items-center gap-2 rounded-lg bg-violet-50/60 px-3 text-sm font-bold">
       <input type="checkbox" className="h-4 w-4 accent-violet-700" checked={enabled} disabled={pending} onChange={event => { setEnabled(event.target.checked); setSaved(false); }} />
       تفعيل تفويض الحسابات بعد الاعتماد
     </label>
-    <h3 className="text-xs font-bold">سقف المسار القديم للصلاحيات اليدوية · ليس قائمة القوالب المعتمدة</h3>
-    <EmployeeAccountPermissions available={directory.availablePermissions} selected={permissions} onChange={next => { setPermissions(next); setSaved(false); }} disabled={pending} />
+    <details className="rounded-lg border border-border">
+      <summary className="min-h-11 cursor-pointer rounded-lg px-3 py-3 text-xs font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">إعدادات متقدمة — حدود المنح اليدوي</summary>
+      <div className="space-y-3 border-t border-border p-3">
+        <h3 className="text-xs font-bold">سقف المسار القديم للصلاحيات اليدوية · ليس قائمة القوالب المعتمدة</h3>
+        <EmployeeAccountPermissions compact available={directory.availablePermissions} selected={permissions} onChange={next => { setPermissions(next); setSaved(false); }} disabled={pending} />
+      </div>
+    </details>
     <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs leading-6 text-amber-900">تعطيل السياسة أو تضييقها لا يسحب تلقائيًا وصول الحسابات الحالية. السياسة تحدّد التفويض اللاحق فقط؛ لإيقاف وصول حساب قائم جمّده أو خفّض صلاحياته صراحةً. يبقى عرض الحسابات والتجميد والتخفيض متاحًا، بينما يتطلب الإنشاء وإعادة الفتح سياسة مفعّلة.</p>
     {error && <p role="alert" className="text-xs leading-6 text-destructive">{error}</p>}
     {saved && <p role="status" className="text-xs text-emerald-700">تم حفظ السياسة من الخادم.</p>}
