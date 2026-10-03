@@ -72,8 +72,13 @@ unauthorized source rows. Existing campaigns remain unclassified until explicitl
 classified rather than guessing their intended branch.
 
 Migration 057 is additive and required alongside the earlier permission
-prerequisites before deploying this version. It has been applied to development,
-not production. No production permissions have been modified.
+prerequisites before deploying this version. On 2026-10-03, migrations 056 and
+057 were applied to the owner-confirmed production Supabase project and verified.
+The assignment table is empty, RLS is enabled, and PUBLIC/anon/authenticated have
+no table grants. Scope columns, validation constraint, branch foreign key and
+index are present. All 13 existing campaigns remain unclassified; the direct
+permission row count remained 706. Neither migration contains grant-data updates.
+The application was not published as part of this database preparation.
 
 HR route adaptation now covers employee lists/bundle/stats, employee-owned
 details and histories, attendance records and approval, attendance dashboards,
