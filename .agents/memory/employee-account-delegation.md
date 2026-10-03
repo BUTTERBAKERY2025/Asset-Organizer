@@ -3,7 +3,7 @@ name: Employee account delegation
 description: User-approved security boundary for operations-manager employee account administration.
 ---
 
-Operations managers may administer employee-linked accounts only within their explicitly assigned branches. Delegatable permissions come from an administrator-approved allowlist, not automatically from the manager's own permissions. Both job templates and custom selections must obey that ceiling.
+Operations managers may administer employee-linked accounts only within their explicitly assigned writable branches. Raw permission grants obey the administrator-approved allowlist, not the manager's own permissions. Approved branch-template bases are independently authorized; see operations-template-delegation.md.
 
 **Why:** The user explicitly chose administrator-approved permissions, and requires employee linkage before any account can be created. General user-administration authority would defeat this boundary.
 
@@ -13,7 +13,7 @@ The delegation policy is prospective: disabling or narrowing it stops new grants
 
 **Why:** Hiding accounts on policy withdrawal prevented managers from performing emergency suspension. Silent bulk revocation would be a different, destructive policy that the user did not request.
 
-**How to apply:** Explain this distinction in policy controls. Allow safety suspension and reduction-only edits while the permission policy is disabled only if the manager still has individual employee delegation; do not relax branch or protected-account checks.
+**How to apply:** Explain this distinction in policy controls. Allow safety suspension and reduction-only edits while the permission policy is disabled only if the manager still has current writable branch authority; do not relax branch or protected-account checks.
 
 Session revocation must cover authentication already in progress, not just session IDs that already exist.
 
@@ -39,11 +39,11 @@ The directory should show all active employees in authorized branches, separated
 
 **How to apply:** Separate basic roster visibility from account-management authority; never expose protected account details merely to explain that management is blocked.
 
-Administrators select individual employees independently for each operations manager, in addition to setting the allowed permission ceiling.
+All current and future active employees in a manager's writable branches are covered automatically, without named selection.
 
-**Why:** The user explicitly chose “اختيار مستقل لكل مدير تشغيل” rather than a shared employee list.
+**Why:** The user superseded their earlier named-selection choice by explicitly confirming «نعم، جميع موظفي فروعه الحاليين والجدد».
 
-**How to apply:** Require both explicit employee selection and current branch-management authority for every account-management action. Roster visibility is broader than this authority. Removing delegation must not silently disable the employee's account or revoke their own access.
+**How to apply:** Require fresh branch-management authority and valid employee/account linkage for every action. Read-only branch visibility does not authorize management. Removing a manager's branch authority must not silently disable employee accounts or revoke their own access.
 
 The user states that the system serves multiple functions and departments, not just operations, and expects additional departments. They want to build on existing authorization, correct security flaws and maintain coherent, secure, expandable governance rather than a separate operations-only permission system. The proposed job matrix was not approved.
 

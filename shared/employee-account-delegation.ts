@@ -9,8 +9,10 @@ export interface EmployeeAccountPolicy {
    * account access. Directory and suspension remain available. Permission
    * reductions into the current ceiling remain allowed for individually selected
    * employees in writable branches; creation/reactivation require enabled approval.
-   * Withdrawing employee selection stops every manager mutation without changing
-   * the employee account itself. Explicitly reduce or suspend existing accounts.
+   * Employee coverage is automatic within writable authorized branches, subject
+   * to account/role guards; it never creates accounts or applies templates itself.
+   * Withdrawing branch write access stops mutations there without changing
+   * employee accounts. Explicitly reduce or suspend existing accounts.
    */
   enabled: boolean;
   permissions: DelegatedPermission[];
@@ -66,6 +68,8 @@ export interface EmployeeAccountManagersResponse {
 
 export interface EmployeeAccountManagerSelectionResponse {
   managerId: string;
+  /** Missing on old/manual-selection services; the coverage UI requires this marker. */
+  scopeMode?: "all_branch_employees";
   revision: string;
   employees: Array<{
     employeeId: number;
@@ -76,9 +80,11 @@ export interface EmployeeAccountManagerSelectionResponse {
     eligible: boolean;
     reason: "allowed" | "read_only_branch" | "protected_account";
   }>;
+  /** Compatibility read field: current eligible employees, not a selection gate. */
   selectedEmployeeIds: number[];
 }
 
+/** Deprecated manual-selection request; the endpoint rejects writes in automatic branch mode. */
 export interface EmployeeAccountManagerSelectionInput {
   employeeIds: number[];
   revision: string;

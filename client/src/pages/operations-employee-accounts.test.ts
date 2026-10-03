@@ -115,7 +115,7 @@ describe("operations employee account page", () => {
     await renderAgain();
     expect(button("تأكيد إسناد الإصدار")).toBeUndefined();
     expect(button("إسناد قالب معتمد")).toBeUndefined();
-    expect(JSON.stringify(renderer.toJSON())).toContain(reason === "not_selected" ? "لم يفوضك مسؤول النظام" : "للقراءة فقط");
+    expect(JSON.stringify(renderer.toJSON())).toContain(reason === "not_selected" ? "أعاد الخادم رمز تفويض قديمًا" : "للقراءة فقط");
   });
 
   it("closes a modal if the active roster no longer contains its employee", async () => {
@@ -146,7 +146,7 @@ describe("operations employee account page", () => {
     mocks.state.data = { ...data, employees: [{ ...data.employees[0], management: undefined }] };
     await mount();
     await act(async () => button("موظفون دون حساب").props.onClick());
-    expect(JSON.stringify(renderer.toJSON())).toContain("لم يفوضك مسؤول النظام");
+    expect(JSON.stringify(renderer.toJSON())).toContain("أعاد الخادم رمز تفويض قديمًا");
     expect(button("اختيار الموظف")).toBeUndefined();
   });
 
@@ -218,6 +218,33 @@ describe("operations employee account page", () => {
     mocks.user = { ...mocks.user, role: "operations_manager" };
     await renderAgain();
     expect(renderer.root.findAllByProps({ "data-testid": "employee-account-policy-editor" })).toHaveLength(0);
+  });
+  it.each(["admin", "operations_manager"])("browses automatic branch coverage without selection writes or auto-grants as %s", async role => {
+    mocks.user = { ...mocks.user, role };
+    mocks.search = "?policy=1";
+    const managerEndpoint = "/api/admin/employee-account-managers";
+    const fetch = vi.fn(async (url: string) => new Response(JSON.stringify(url === managerEndpoint
+      ? { managers: [{ id: "coverage-manager", name: "مدير نطاق الفرع", branches: [{ id: "a", name: "فرع أ", canManage: true }] }] }
+      : { managerId: "coverage-manager", scopeMode: "all_branch_employees", revision: "coverage-read", selectedEmployeeIds: [], employees: [
+        { employeeId: 1, employeeName: "موظف بلا حساب", branchId: "a", branchName: "فرع أ", hasAccount: false, eligible: true, reason: "allowed" },
+      ] })));
+    vi.stubGlobal("fetch", fetch);
+    await mount();
+    expect(JSON.stringify(renderer.toJSON())).toContain("تشمل تلقائيًا جميع الموظفين الحاليين والمستقبليين");
+    expect(JSON.stringify(renderer.toJSON())).not.toContain("لم يفوضك مسؤول النظام");
+    if (role === "admin") {
+      await act(async () => renderer.root.findByProps({ id: "employee-account-manager" }).props.onChange({ target: { value: "coverage-manager" } }));
+      const coverage = renderer.root.findByProps({ "data-testid": "employee-account-manager-selection" });
+      const text = (node: any): string => typeof node === "string" ? node : (node.children ?? []).map(text).join("");
+      expect(coverage.findAllByType("input").filter((node: any) => node.props.type === "checkbox")).toHaveLength(0);
+      expect(coverage.findAllByType("button").some((node: any) => text(node).includes("حفظ"))).toBe(false);
+      await act(async () => button("إعادة قراءة تغطية المدير").props.onClick());
+    } else {
+      expect(renderer.root.findAllByProps({ id: "employee-account-manager" })).toHaveLength(0);
+      expect(fetch).not.toHaveBeenCalled();
+    }
+    await act(async () => button("موظفون دون حساب").props.onClick());
+    expect(fetch.mock.calls.every((call: any) => call[1].method === "GET" && call[1].body === undefined)).toBe(true);
   });
   it("offers independent-addition editing only to admin on linked employees, without weakening manager protection", async () => {
     await mount();

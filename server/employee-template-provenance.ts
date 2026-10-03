@@ -1,7 +1,7 @@
 import { sql } from "drizzle-orm";
 import type { db } from "./db";
 import type { DelegatedPermission } from "@shared/employee-account-delegation";
-import { eligibleTemplatePermissions } from "./employee-template-assignment-policy";
+import { eligibleTemplatePermissions, ADMIN_CASHIER_PERMISSIONS } from "./employee-template-assignment-policy";
 import { DelegationError, permissionsWithin } from "./employee-account-delegation-policy";
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 type Binding = { employeeId: number; branchId: string; permissions: DelegatedPermission[] };
@@ -9,7 +9,7 @@ type Binding = { employeeId: number; branchId: string; permissions: DelegatedPer
 /** Historical approved bindings authorize continued management, not automatic
  * migration to the newest version. Missing metadata never relaxes protection. */
 export async function readVerifiedTemplateBases(tx: Tx, userIds: string[]) {
-  const bases = new Map<string, Binding>();
+  const bases = Object.assign(new Map<string, Binding>(), { ready: false, boundUserIds: new Set<string>(), ambiguousUserIds: new Set<string>() });
   if (!userIds.length) return bases;
   const ready = await tx.execute(sql`SELECT
     to_regclass('public.employee_job_template_assignments') IS NOT NULL
@@ -17,6 +17,15 @@ export async function readVerifiedTemplateBases(tx: Tx, userIds: string[]) {
     AND to_regclass('public.job_permission_template_approvals') IS NOT NULL
     AND to_regclass('public.user_permission_source_modes') IS NOT NULL AS ready`);
   if (!(ready.rows[0] as any)?.ready) return bases;
+  bases.ready = true;
+  const ambiguous = await tx.execute(sql`SELECT linked_user_id AS "userId"
+    FROM public.branch_employees WHERE linked_user_id IN (${sql.join(userIds.map(id => sql`${id}`), sql`, `)})
+    GROUP BY linked_user_id HAVING count(*) > 1`);
+  for (const row of ambiguous.rows as any[]) bases.ambiguousUserIds.add(row.userId);
+  const bindings = await tx.execute(sql`SELECT user_id AS "userId"
+    FROM public.employee_job_template_assignments
+    WHERE user_id IN (${sql.join(userIds.map(id => sql`${id}`), sql`, `)})`);
+  for (const row of bindings.rows as any[]) bases.boundUserIds.add(row.userId);
   const result = await tx.execute(sql`SELECT b.user_id AS "userId", b.employee_id AS "employeeId",
     b.branch_id AS "branchId", v.content, u.role, u.job_title AS "jobTitle"
     FROM public.employee_job_template_assignments b
@@ -37,6 +46,13 @@ export async function readVerifiedTemplateBases(tx: Tx, userIds: string[]) {
     }
   }
   return bases;
+}
+export function canReviewLegacyTemplateBase(
+  evidence: { ready: boolean; boundUserIds: Set<string> }, userId: string, direct: DelegatedPermission[],
+) {
+  // Existing but broken provenance is not an unassigned legacy account.
+  return evidence.ready && !evidence.boundUserIds.has(userId)
+    && permissionsWithin(direct, ADMIN_CASHIER_PERMISSIONS);
 }
 export function matchesVerifiedTemplateBase(base: Binding | undefined,
   employee: { id: number; branchId: string }, direct: DelegatedPermission[]) {

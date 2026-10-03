@@ -56,7 +56,8 @@ export async function runAdminAdditionsSmoke({ client, request, admin, manager, 
   const selectionPath = `/api/admin/employee-account-managers/${managerId}`;
   const selected = await call(selectionPath, undefined, "AA_SELECTION_READ", 200, admin, "GET");
   await call(selectionPath, { revision: selected.json.revision,
-    employeeIds: [...selected.json.selectedEmployeeIds, employeeId] }, "AA_SELECTION_WRITE", 200, admin, "PUT");
+     employeeIds: [...selected.json.selectedEmployeeIds, employeeId] }, "AA_OBSOLETE_SELECTION_REFUSED", 409, admin, "PUT");
+   check(selected.json.employees.some(e => e.employeeId === employeeId && e.eligible), "AA_AUTOMATIC_BRANCH_EMPLOYEE");
   const draft = async (key, permissions, scopeType = "branch") => {
     const content = { key: `isolated_phase5_${key}`, name: `Synthetic phase5 ${key}`, description: "Disposable fixture",
       reviewNotes: "Explicit reviewed base", scopeType, assignmentAuthority: "delegated_operations", permissions };

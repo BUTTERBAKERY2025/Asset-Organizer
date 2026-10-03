@@ -16,7 +16,6 @@ export async function runTemplateAssignmentSmoke({ client, request, admin, edito
   const linkedId = "isolated-phase4-linked";
   const managerId = "isolated-fixture-manager";
   const policyKey = "employee_account_delegation.policy.v1";
-  const selectionKey = `employee_account_delegation.manager.${managerId}.v1`;
   const grants = [
     { module: "cashier_journal", actions: ["view", "edit"] },
     { module: "maintenance", actions: ["view"] },
@@ -59,8 +58,9 @@ export async function runTemplateAssignmentSmoke({ client, request, admin, edito
   const select = async ids => {
     const detail = await call(`/api/admin/employee-account-managers/${managerId}`, undefined,
       "TA_SELECTION_SNAPSHOT", 200, admin, "GET");
+    check(detail.json.scopeMode === "all_branch_employees", "TA_AUTOMATIC_BRANCH_SCOPE");
     return call(`/api/admin/employee-account-managers/${managerId}`,
-      { revision: detail.json.revision, employeeIds: ids }, "TA_SELECTION_CONTROL", 200, admin, "PUT");
+      { revision: detail.json.revision, employeeIds: ids }, "TA_OBSOLETE_SELECTION_REFUSED", 409, admin, "PUT");
   };
   // Dedicated synthetic fixtures avoid clearing assignments/overrides on earlier
   // phase accounts. Only the fixture transaction writes rows directly.
@@ -149,7 +149,8 @@ export async function runTemplateAssignmentSmoke({ client, request, admin, edito
   await reject(route, missingRevision, "TA_REVISION_REQUIRED", 400, "INVALID_INPUT");
   await reject(route, { ...validBody, branchId: "isolated-fixture-b" }, "TA_FORGED_BRANCH", 403);
   await reject(`${base}/900003/template-assignment`, validBody, "TA_WRONG_BRANCH_EMPLOYEE", 403);
-  await reject(`${base}/${unselected}/template-account`, validBody, "TA_NOT_SELECTED", 403);
+  await call(`${base}/${unselected}/template-assignment`, undefined, "TA_UNSELECTED_BRANCH_EMPLOYEE_INCLUDED", 200, manager, "GET");
+  await reject(`${base}/${unselected}/template-account`, validBody, "TA_OTHER_EMPLOYEE_REVISION_DENIED", 409);
   await reject(`${base}/${inactive}/template-account`, validBody, "TA_INACTIVE", 403);
   await reject(`${base}/2147483647/template-assignment`, validBody, "TA_MISSING_EMPLOYEE", 404, "EMPLOYEE_NOT_FOUND");
   await reject(route, { ...validBody, templateId: 2147483647 }, "TA_MISSING_TEMPLATE", 404, "TEMPLATE_NOT_FOUND");
@@ -185,7 +186,7 @@ export async function runTemplateAssignmentSmoke({ client, request, admin, edito
   try { await reject(route, validBody, "TA_PERSISTED_PRIVILEGED_ROLE", 403, "PROTECTED_ACCOUNT"); }
   finally { await client.query("UPDATE users SET role='employee' WHERE id=$1", [linkedId]); }
   await select([]);
-  await reject(route, validBody, "TA_SELECTION_WITHDRAWAL", 403);
+  await call(`${base}/${linked}/template-assignment`, undefined, "TA_OBSOLETE_SELECTION_CANNOT_WITHDRAW_SCOPE", 200, manager, "GET");
   await select([linked, unlinked, delivery]);
   await client.query("UPDATE user_branch_access SET access_level='view_only' WHERE user_id=$1 AND branch_id=$2", [managerId, branch]);
   try { await reject(route, validBody, "TA_READ_ONLY_BRANCH_DENIED", 403, "BRANCH_FORBIDDEN"); }
@@ -429,12 +430,11 @@ export async function runTemplateAssignmentSmoke({ client, request, admin, edito
       [policyKey, JSON.stringify({ enabled: false, permissions: grants })]),
     bodyFor(empty, await preview()), "TA_POLICY_WITHDRAWAL_RACE", 403, "DELEGATION_DISABLED");
   await policy();
-  const selectionValue = (await client.query("SELECT value FROM portal_settings WHERE key=$1", [selectionKey])).rows[0].value;
-  await blockedWrite("LOCK TABLE portal_settings IN SHARE ROW EXCLUSIVE MODE",
-    () => client.query("UPDATE portal_settings SET value=$2 WHERE key=$1",
-      [selectionKey, JSON.stringify({ revision: "isolated-phase4-selection-race", selections: [] })]),
-    bodyFor(empty, await preview()), "TA_SELECTION_REVISION_RACE", 403, "EMPLOYEE_NOT_SELECTED");
-  await client.query("UPDATE portal_settings SET value=$2 WHERE key=$1", [selectionKey, selectionValue]);
+  await blockedWrite("LOCK TABLE user_branch_access IN SHARE ROW EXCLUSIVE MODE",
+    () => client.query("UPDATE user_branch_access SET access_level='view_only' WHERE user_id=$1 AND branch_id=$2",
+      [managerId, branch]),
+    bodyFor(empty, await preview()), "TA_BRANCH_WITHDRAWAL_RACE", 403, "BRANCH_FORBIDDEN");
+  await client.query("UPDATE user_branch_access SET access_level='limited' WHERE user_id=$1 AND branch_id=$2", [managerId, branch]);
   await blockedWrite(`SELECT id FROM job_permission_template_drafts WHERE id=${ordinary.id} FOR UPDATE`,
     () => client.query(`INSERT INTO job_permission_template_draft_versions
       (template_id,version,content,change_reason,created_by)
@@ -450,12 +450,14 @@ export async function runTemplateAssignmentSmoke({ client, request, admin, edito
   check((await catalog()).json.templates.length === 0, "TA_DISABLED_POLICY_NO_TEMPLATE_CHOICES");
   await reject(route, bodyFor(empty, await preview()), "TA_DISABLED_POLICY_WRITE_BLOCKED", 403, "DELEGATION_DISABLED");
   await policy(true, [grants[1]]);
-  await reject(route, bodyFor(courier, await preview()), "TA_NARROWED_POLICY_CEILING_BLOCKED", 403);
+  await reject(route, bodyFor(courier, await preview()), "TA_DELIVERY_TITLE_REQUIRED", 403);
   await call(`/api/users/${linkedId}/permissions`, { permissions: [grants[0], grants[1]] },
     "TA_OUTSIDE_NARROWED_POLICY_FIXTURE", 200, admin, "PUT");
+  // Explicit synthetic legacy fixture, not a stale binding bypass.
+  await client.query("DELETE FROM employee_job_template_assignments WHERE employee_id=$1", [linked]);
   const addition = await makeDraft("not_reduction", [{ module: "maintenance", actions: ["view", "edit"] }]);
   await policy(true, [{ module: "maintenance", actions: ["view", "edit"] }]);
-  await reject(route, bodyFor(addition, await preview()), "TA_OUT_OF_POLICY_ACCOUNT_REDUCTION_ONLY", 403, "REDUCTION_ONLY");
+  await call(route, bodyFor(addition, await preview()), "TA_APPROVED_TEMPLATE_INDEPENDENT_OF_RAW_CEILING", 200);
   await assign(linked, empty);
   await policy();
   await client.query("UPDATE user_branch_access SET access_level='full' WHERE user_id=$1 AND branch_id=$2", [managerId, branch]);

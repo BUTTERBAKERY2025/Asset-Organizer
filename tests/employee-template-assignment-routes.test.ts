@@ -82,8 +82,16 @@ function txFor(data: any) {
       if (sql.includes("DELETE FROM public.employee_job_template_assignments")) {
         data.assignment = null; return { rows: [] };
       }
+      if (sql.includes("SELECT b.user_id")) {
+        const user = data.users.find((u: any) => u.id === data.assignment?.userId);
+        return { rows: data.assignment && user && data.source === "direct"
+          ? [{ userId: user.id, employeeId: data.employee.id, branchId: data.assignment.branchId,
+            role: user.role, jobTitle: user.jobTitle, content: data.assignmentContent ?? data.content }]
+          : [] };
+      }
       if (sql.includes("FROM public.employee_job_template_assignments")) return { rows: data.assignment ? [data.assignment] : [] };
       if (sql.includes("INSERT INTO public.employee_job_template_assignments")) {
+        data.assignmentContent = structuredClone(data.content);
         data.assignment = { templateId: params[2], version: params[3], branchId: params[4],
           revision: params[5], assignedAt: params[6], assignedBy: params[7], reason: params[8], userId: params[1] };
       }
@@ -245,7 +253,7 @@ describe("template assignment authoritative transaction (mocked IO)", () => {
     const input = await observed();
     expect((await invoke("post", "template-assignment", input)).statusCode).toBe(200);
     state.permissions = [{ module: "cashier_journal", actions: ["view"] }];
-    expect((await invoke("post", "template-assignment", input)).body.code).toBe("ASSIGNMENT_REVISION_CONFLICT");
+    expect((await invoke("post", "template-assignment", input)).body.code).toBe("TEMPLATE_BASE_DRIFT");
   });
   it("supports reviewed empty self assignments without restoring inheritance", async () => {
     const input = await observed();
@@ -302,9 +310,13 @@ describe("template assignment authoritative transaction (mocked IO)", () => {
     expect(state).toEqual(before);
     expect(runtime.invalidate).not.toHaveBeenCalled();
   });
-  it.each(["selection", "branch", "inactive", "disabled"])("revalidates %s under transaction lock", async change => {
+  it("does not let obsolete named selections withhold authorized branch employees", async () => {
     const input = await observed();
-    if (change === "selection") state.selected = false;
+    state.selected = false;
+    expect((await invoke("post", "template-assignment", input)).statusCode).toBe(200);
+  });
+  it.each(["branch", "inactive", "disabled"])("revalidates %s under transaction lock", async change => {
+    const input = await observed();
     if (change === "branch") state.employee.branchId = "B";
     if (change === "inactive") state.employee.status = "inactive";
     if (change === "disabled") state.enabled = false;
@@ -344,7 +356,7 @@ describe("legacy ops paths cannot bypass approved-template grants", () => {
     const before = structuredClone(state);
     const result = await invoke("put", "permissions", { permissions: perms });
     expect(result.statusCode).toBe(403);
-    expect(result.body.code).toBe("REDUCTION_ONLY");
+    expect(result.body.code).toBe(bound ? "TEMPLATE_BASE_DRIFT" : "REDUCTION_ONLY");
     expect(state).toEqual(before);
   });
   it.each([true, false])("allows real subset reduction with enabled policy %s and detaches bound metadata", async enabled => {

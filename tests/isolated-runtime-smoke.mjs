@@ -101,10 +101,13 @@ try {
   check(detail.status === 200 && detail.json?.revision, "DELEGATION_MANAGER_REVISION");
   check((await request("/api/admin/employee-account-managers/isolated-fixture-manager", {
     method: "PUT", cookie: admin, body: { revision: detail.json.revision, employeeIds: [900003] },
-  })).status === 403, "DELEGATION_CROSS_BRANCH_SELECTION_DENIED");
+  })).status === 409, "DELEGATION_OBSOLETE_CROSS_BRANCH_SELECTION_DENIED");
   check((await request("/api/admin/employee-account-managers/isolated-fixture-manager", {
     method: "PUT", cookie: admin, body: { revision: detail.json.revision, employeeIds: [900001, 900002] },
-  })).status === 200, "DELEGATION_ADMIN_SELECTION_CONTROL");
+  })).status === 409, "DELEGATION_OBSOLETE_SELECTION_DENIED");
+  check(detail.json.scopeMode === "all_branch_employees"
+    && [900001,900002].every(id => detail.json.employees.some(e => e.employeeId === id && e.eligible)),
+    "DELEGATION_AUTOMATIC_BRANCH_CONTROL");
   check((await request("/api/admin/employee-account-managers/isolated-fixture-manager", {
     method: "PUT", cookie: admin, body: { revision: detail.json.revision, employeeIds: [900001] },
   })).status === 409, "DELEGATION_STALE_SELECTION_REVISION_DENIED");

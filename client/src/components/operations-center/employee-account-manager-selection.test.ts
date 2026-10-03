@@ -6,160 +6,130 @@ import { EmployeeAccountManagerSelectionEditor } from "./employee-account-manage
 const { act, create } = createRequire(import.meta.url)("react-test-renderer");
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 const endpoint = "/api/admin/employee-account-managers";
-const managers = ["a", "b"].map(id => ({ id, name: `مدير ${id}`, branches: [{ id: "branch", name: "الفرع", canManage: true }] }));
-const selection = (managerId: string) => ({
-  managerId, revision: `revision-${managerId}`, selectedEmployeeIds: managerId === "a" ? [1] : [2],
-  employees: [1, 2].map(employeeId => ({ employeeId, employeeName: `موظف ${employeeId}`, branchId: "branch", branchName: "الفرع", hasAccount: false, eligible: true, reason: "allowed" })),
+const managers = ["a", "b"].map(id => ({ id, name: `مدير ${id}`, branches: [
+  { id: "branch", name: "فرع الكتابة", canManage: true }, { id: "read", name: "فرع العرض", canManage: false },
+] }));
+const coverage = (managerId: string) => ({
+  managerId, scopeMode: "all_branch_employees", revision: `revision-${managerId}`,
+  selectedEmployeeIds: [], // Compatibility metadata is deliberately NOT the eligibility gate.
+  employees: [
+    { employeeId: 1, employeeName: "موظف حالي", branchId: "branch", branchName: "فرع الكتابة", hasAccount: true, eligible: true, reason: "allowed" },
+    { employeeId: 2, employeeName: "موظف جديد بلا حساب", branchId: "branch", branchName: "فرع الكتابة", hasAccount: false, eligible: true, reason: "allowed" },
+    { employeeId: 3, employeeName: "حساب إداري محمي", branchId: "branch", branchName: "فرع الكتابة", hasAccount: true, eligible: false, reason: "protected_account" },
+    { employeeId: 4, employeeName: "موظف فرع العرض", branchId: "read", branchName: "فرع العرض", hasAccount: true, eligible: false, reason: "read_only_branch" },
+  ],
 });
 const response = (data: unknown, status = 200) => new Response(JSON.stringify(data), { status });
 let renderer: any;
-let refresh: ReturnType<typeof vi.fn>;
-async function mount() {
-  refresh = vi.fn();
-  await act(async () => { renderer = create(createElement(EmployeeAccountManagerSelectionEditor, { refresh })); });
+const text = (node: any): string => typeof node === "string" ? node : (node.children ?? []).map(text).join("");
+const button = (label: string) => renderer.root.findAllByType("button").find((node: any) => text(node).includes(label));
+async function mount(actorRole = "admin") {
+  await act(async () => { renderer = create(createElement(EmployeeAccountManagerSelectionEditor, { actorRole })); });
 }
 async function choose(id: string) {
   await act(async () => renderer.root.findByProps({ id: "employee-account-manager" }).props.onChange({ target: { value: id } }));
 }
-function text(node: any): string { return typeof node === "string" ? node : (node.children ?? []).map(text).join(""); }
-function button(label: string) { return renderer.root.findAllByType("button").find((node: any) => text(node).includes(label)); }
-function checkbox(id: number) { return renderer.root.findByProps({ "aria-label": `تفويض موظف ${id}` }); }
 afterEach(async () => {
   if (renderer) await act(async () => renderer.unmount());
   renderer = undefined;
   vi.unstubAllGlobals();
 });
 
-describe("per-manager employee selection", () => {
-  it("isolates drafts between two managers and saves only captured manager/revision without autosave", async () => {
-    const fetch = vi.fn().mockImplementation(async (url: string, options: any) => {
-      if (options.method === "PUT") return response({ saved: true });
-      return response(url === endpoint ? { managers } : selection(url.endsWith("/a") ? "a" : "b"));
-    });
+describe("read-only automatic branch employee coverage", () => {
+  it("shows admin branch coverage and current eligible employees without checkboxes, selection mutations or save controls", async () => {
+    const fetch = vi.fn(async (url: string) => response(url === endpoint ? { managers } : coverage(url.endsWith("/a") ? "a" : "b")));
     vi.stubGlobal("fetch", fetch);
     await mount();
     await choose("a");
-    expect(checkbox(1).props.checked).toBe(true);
-    await act(async () => checkbox(2).props.onChange({ target: { checked: true } }));
-    expect(fetch.mock.calls.filter(([, options]) => options.method === "PUT")).toHaveLength(0);
+    expect(renderer.root.findAllByType("input").filter((node: any) => node.props.type === "checkbox")).toHaveLength(0);
+    expect(button("حفظ")).toBeUndefined();
+    expect(button("مسح الاختيار")).toBeUndefined();
+    expect(text(renderer.root.findByProps({ "aria-label": "تغطية فروع المدير" }))).toContain("الموظفين الحاليين والمستقبليين تلقائيًا");
+    expect(text(renderer.root.findByProps({ "data-testid": "manager-selection-count" }))).toContain("الموظفون المؤهلون حاليًا: 2");
+    expect(text(renderer.root.findByProps({ "data-testid": "manager-coverage-employee-1" }))).toContain("مؤهل حاليًا");
+    expect(text(renderer.root.findByProps({ "data-testid": "manager-coverage-employee-3" }))).toContain("خارج نطاق الإدارة المفوّضة");
+    expect(text(renderer.root.findByProps({ "data-testid": "manager-coverage-employee-4" }))).toContain("للقراءة فقط");
+    expect(JSON.stringify(renderer.toJSON())).toContain("التغطية التلقائية ليست إنشاءً أو منحًا تلقائيًا");
     await choose("b");
-    expect(checkbox(1).props.checked).toBe(false);
-    expect(checkbox(2).props.checked).toBe(true);
-    await act(async () => button("حفظ اختيار الموظفين").props.onClick());
-    const put = fetch.mock.calls.find(([, options]) => options.method === "PUT")!;
-    expect(put[0]).toBe(`${endpoint}/b`);
-    expect(JSON.parse(put[1].body)).toEqual({ employeeIds: [2], revision: "revision-b" });
-    expect(refresh).toHaveBeenCalledOnce();
-    expect(JSON.stringify(renderer.toJSON())).toContain("تم حفظ اختيار هذا المدير");
-    await choose("a");
-    expect(checkbox(2).props.checked).toBe(false);
+    await act(async () => button("إعادة قراءة تغطية المدير").props.onClick());
+    expect(fetch.mock.calls.every((call: any) => call[1].method === "GET" && call[1].body === undefined)).toBe(true);
   });
-
-  it("ignores an old manager response including A→B→A and aborts the old request", async () => {
-    let resolve!: (result: Response) => void;
+  it.each(["operations_manager", "employee"])("mounts no admin resources or mutation controls for %s", async role => {
+    const fetch = vi.fn();
+    vi.stubGlobal("fetch", fetch);
+    await mount(role);
+    expect(fetch).not.toHaveBeenCalled();
+    expect(renderer.root.findAllByType("input")).toHaveLength(0);
+    expect(renderer.root.findAllByType("button")).toHaveLength(0);
+  });
+  it("filters branches and employees as read-only views and includes a newly returned employee without any saved selection", async () => {
+    let data = coverage("a");
+    const fetch = vi.fn(async (url: string) => response(url === endpoint ? { managers } : data));
+    vi.stubGlobal("fetch", fetch);
+    await mount(); await choose("a");
+    await act(async () => renderer.root.findByProps({ id: "manager-employees-branch" }).props.onChange({ target: { value: "read" } }));
+    expect(renderer.root.findAllByProps({ "data-testid": "manager-coverage-employee-1" })).toHaveLength(0);
+    expect(renderer.root.findByProps({ "data-testid": "manager-coverage-employee-4" })).toBeTruthy();
+    await act(async () => renderer.root.findByProps({ id: "manager-employees-branch" }).props.onChange({ target: { value: "" } }));
+    data = { ...data, employees: [...data.employees, { ...data.employees[1], employeeId: 5, employeeName: "موظف انضم لاحقًا" }] };
+    await act(async () => button("إعادة قراءة تغطية المدير").props.onClick());
+    expect(renderer.root.findByProps({ "data-testid": "manager-coverage-employee-5" })).toBeTruthy();
+    expect(text(renderer.root.findByProps({ "data-testid": "manager-selection-count" }))).toContain("حاليًا: 3");
+    await act(async () => renderer.root.findByProps({ id: "manager-employees-search" }).props.onChange({ target: { value: "انضم لاحقًا" } }));
+    expect(renderer.root.findAllByProps({ "data-testid": "manager-coverage-employee-1" })).toHaveLength(0);
+    expect(fetch.mock.calls.every((call: any) => call[1].method === "GET")).toBe(true);
+  });
+  it.each([undefined, "manual_selection"])("fails closed on missing or obsolete scopeMode %s without showing an old selection list", async scopeMode => {
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => response(url === endpoint ? { managers } : { ...coverage("a"), scopeMode })));
+    await mount(); await choose("a");
+    expect(JSON.stringify(renderer.toJSON())).toContain("الخدمة لا تؤكد نمط تغطية جميع موظفي الفروع");
+    expect(renderer.root.findAllByProps({ "data-testid": "manager-coverage-employee-1" })).toHaveLength(0);
+    expect(button("إعادة قراءة تغطية المدير").props.disabled).toBe(false);
+    expect(button("حفظ")).toBeUndefined();
+  });
+  it("rejects claimed eligibility in a read-only branch rather than widening coverage", async () => {
+    const data = coverage("a");
+    data.employees[3] = { ...data.employees[3], eligible: true, reason: "allowed" };
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => response(url === endpoint ? { managers } : data)));
+    await mount(); await choose("a");
+    expect(JSON.stringify(renderer.toJSON())).toContain("لم نعرض أهلية بديلة");
+    expect(renderer.root.findAllByProps({ "data-testid": "manager-coverage-employee-4" })).toHaveLength(0);
+  });
+  it("isolates A→B→A reads and aborts the superseded request", async () => {
+    let resolveOld!: (value: Response) => void;
     let oldSignal!: AbortSignal;
-    let aCalls = 0;
-    vi.stubGlobal("fetch", vi.fn().mockImplementation((url: string, options: any) => {
+    let aReads = 0;
+    vi.stubGlobal("fetch", vi.fn((url: string, options: any) => {
       if (url === endpoint) return Promise.resolve(response({ managers }));
-      if (url.endsWith("/a") && ++aCalls === 1) {
+      if (url.endsWith("/a") && ++aReads === 1) {
         oldSignal = options.signal;
-        return new Promise<Response>(done => { resolve = done; });
+        return new Promise<Response>(resolve => { resolveOld = resolve; });
       }
-      return Promise.resolve(response(selection(url.endsWith("/a") ? "a" : "b")));
+      return Promise.resolve(response(coverage(url.endsWith("/a") ? "a" : "b")));
     }));
-    await mount();
-    await choose("a");
-    await choose("b");
+    await mount(); await choose("a"); await choose("b"); await choose("a");
     expect(oldSignal.aborted).toBe(true);
-    await choose("a");
-    expect(checkbox(1).props.checked).toBe(true);
-    await act(async () => {
-      resolve(response({ ...selection("a"), revision: "old", selectedEmployeeIds: [2] }));
-      await new Promise(done => setTimeout(done, 0));
-    });
-    expect(checkbox(1).props.checked).toBe(true);
-    expect(checkbox(2).props.checked).toBe(false);
+    await act(async () => resolveOld(response({ ...coverage("a"), employees: [{ ...coverage("a").employees[0], employeeName: "قراءة قديمة يجب تجاهلها" }] })));
+    expect(JSON.stringify(renderer.toJSON())).not.toContain("قراءة قديمة يجب تجاهلها");
+    expect(renderer.root.findByProps({ "data-testid": "manager-coverage-employee-2" })).toBeTruthy();
   });
-
-  it("ignores a late save when manager changes and leaves the second manager untouched", async () => {
-    let resolve!: (result: Response) => void;
+  it("clears admin resources on role withdrawal and aborts pending reads", async () => {
     let signal!: AbortSignal;
-    vi.stubGlobal("fetch", vi.fn().mockImplementation((url: string, options: any) => {
-      if (options.method === "PUT") {
-        signal = options.signal;
-        return new Promise<Response>(done => { resolve = done; });
-      }
-      return Promise.resolve(response(url === endpoint ? { managers } : selection(url.endsWith("/a") ? "a" : "b")));
-    }));
-    await mount();
-    await choose("a");
-    let pending!: Promise<void>;
-    await act(async () => { pending = button("حفظ اختيار الموظفين").props.onClick(); });
-    await choose("b");
-    expect(signal.aborted).toBe(true);
-    await act(async () => { resolve(response({ saved: true })); await pending; });
-    expect(checkbox(2).props.checked).toBe(true);
-    expect(JSON.stringify(renderer.toJSON())).not.toContain("تم حفظ اختيار هذا المدير");
-    expect(refresh).not.toHaveBeenCalled();
-  });
-
-  it("explains optimistic conflicts and requires explicit reload instead of force overwrite", async () => {
-    const fetch = vi.fn().mockImplementation(async (url: string, options: any) =>
-      options.method === "PUT" ? response({ error: "تعارض" }, 409) : response(url === endpoint ? { managers } : selection("a")));
-    vi.stubGlobal("fetch", fetch);
-    await mount();
-    await choose("a");
-    await act(async () => button("حفظ اختيار الموظفين").props.onClick());
-    expect(JSON.stringify(renderer.toJSON())).toContain("لن يتم فرض استبدال الاختيار");
-    expect(button("حفظ اختيار الموظفين").props.disabled).toBe(true);
-    await act(async () => button("حفظ اختيار الموظفين").props.onClick());
-    expect(fetch.mock.calls.filter(([, options]) => options.method === "PUT")).toHaveLength(1);
-    await act(async () => button("إعادة تحميل اختيار المدير").props.onClick());
-    expect(button("حفظ اختيار الموظفين").props.disabled).toBe(false);
-  });
-
-  it("surfaces save failures without claiming success", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockImplementation(async (url: string, options: any) =>
-      options.method === "PUT" ? response({ error: "تعذر حفظ الاختيار" }, 500) : response(url === endpoint ? { managers } : selection("a"))));
-    await mount();
-    await choose("a");
-    await act(async () => button("حفظ اختيار الموظفين").props.onClick());
-    expect(JSON.stringify(renderer.toJSON())).toContain("تعذر حفظ الاختيار (500)");
-    expect(JSON.stringify(renderer.toJSON())).not.toContain("تم حفظ اختيار هذا المدير");
-    expect(refresh).not.toHaveBeenCalled();
-  });
-
-  it("shows explicit list errors, empty states, and cancels requests on scope unmount", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response({ error: "غير مصرح" }, 403)));
-    await mount();
-    expect(JSON.stringify(renderer.toJSON())).toContain("غير مصرح (403)");
-    expect(renderer.root.findByProps({ id: "employee-account-manager" }).props.disabled).toBe(true);
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response({ managers: [] })));
-    await act(async () => button("تحديث قائمة المديرين").props.onClick());
-    expect(JSON.stringify(renderer.toJSON())).toContain("لا يوجد مديرو عمليات");
-    let signal!: AbortSignal;
-    vi.stubGlobal("fetch", vi.fn().mockImplementation((_: string, options: any) => {
+    vi.stubGlobal("fetch", vi.fn((_: string, options: any) => {
       signal = options.signal;
       return new Promise<Response>(() => {});
     }));
-    await act(async () => { void button("تحديث قائمة المديرين").props.onClick(); });
-    await act(async () => renderer.unmount());
-    renderer = undefined;
-    expect(signal.aborted).toBe(true);
-  });
-
-  it("disables protected/read-only employees and supports clear plus filtered selection count", async () => {
-    const data = selection("a");
-    data.employees[1] = { ...data.employees[1], eligible: false, reason: "protected_account", hasAccount: true };
-    vi.stubGlobal("fetch", vi.fn().mockImplementation(async (url: string) => response(url === endpoint ? { managers } : data)));
     await mount();
-    await choose("a");
-    expect(checkbox(2).props.disabled).toBe(true);
-    expect(JSON.stringify(renderer.toJSON())).toContain("خارج نطاق الإدارة المفوّضة");
-    await act(async () => renderer.root.findByProps({ id: "manager-employees-search" }).props.onChange({ target: { value: "موظف 2" } }));
-    expect(renderer.root.findAllByProps({ "aria-label": "تفويض موظف 1" })).toHaveLength(0);
-    expect(text(renderer.root.findByProps({ "data-testid": "manager-selection-count" }))).toContain("1");
-    await act(async () => button("مسح الاختيار").props.onClick());
-    expect(text(renderer.root.findByProps({ "data-testid": "manager-selection-count" }))).toContain("0");
+    await act(async () => renderer.update(createElement(EmployeeAccountManagerSelectionEditor, { actorRole: "operations_manager" })));
+    expect(signal.aborted).toBe(true);
+    expect(renderer.root.findAllByProps({ id: "employee-account-manager" })).toHaveLength(0);
+  });
+  it("offers retry for auth errors and shows a genuine empty manager list without any writes", async () => {
+    const fetch = vi.fn().mockResolvedValueOnce(response({ error: "غير مصرح" }, 403)).mockResolvedValue(response({ managers: [] }));
+    vi.stubGlobal("fetch", fetch); await mount();
+    expect(JSON.stringify(renderer.toJSON())).toContain("غير مصرح (403)");
+    await act(async () => button("تحديث قائمة المديرين").props.onClick());
+    expect(JSON.stringify(renderer.toJSON())).toContain("لا يوجد مديرو عمليات متاحون");
+    expect(fetch.mock.calls.every((call: any) => call[1].method === "GET")).toBe(true);
   });
 });

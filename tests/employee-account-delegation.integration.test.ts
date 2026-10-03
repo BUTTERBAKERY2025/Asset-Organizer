@@ -190,7 +190,7 @@ describe.skipIf(!process.env.ISOLATED_TEST_REGISTRY)("employee account delegatio
     `);
     const eligible = (await invoke("get", "selection", {}, "admin")).body.employees
       .filter((e: any) => e.eligible).map((e: any) => e.employeeId);
-    expect((await select(eligible)).statusCode).toBe(200);
+    expect((await select(eligible)).statusCode).toBe(409);
     runtime.queries = [];
     const result = await invoke("get");
     expect(result.statusCode).toBe(200);
@@ -529,7 +529,7 @@ describe.skipIf(!process.env.ISOLATED_TEST_REGISTRY)("employee account delegatio
       }
     }
   });
-  it("missing individual selection grants nothing while showing the complete active branch roster", async () => {
+  it("includes every active employee in writable branches without named selections", async () => {
     await configure();
     await query("DELETE FROM portal_settings WHERE key=$1", [managerKey()]);
     await query(`INSERT INTO user_branch_access(user_id,branch_id,access_level) VALUES ('ops','b','view_only');
@@ -540,15 +540,13 @@ describe.skipIf(!process.env.ISOLATED_TEST_REGISTRY)("employee account delegatio
     expect(listed.body.employees.map((e: any) => e.employeeId).sort()).toEqual([1, 2]);
     expect(listed.body.branches.map((b: any) => b.id).sort()).toEqual(["a", "b", "empty"]);
     expect(listed.body.employees.find((e: any) => e.employeeId === 1).management)
-      .toEqual({ allowed: false, reason: "not_selected" });
+      .toEqual({ allowed: true, reason: "allowed" });
     expect(listed.body.employees.find((e: any) => e.employeeId === 2).management.reason).toBe("read_only_branch");
-    expect((await invoke("post", "/:employeeId", { permissions })).body.code).toBe("EMPLOYEE_NOT_SELECTED");
-    // Admin bypasses employee selection, never the protected-account checks.
-    expect((await invoke("post", "/:employeeId", { permissions }, "admin")).statusCode).toBe(201);
+    expect((await invoke("post", "/:employeeId", { permissions })).statusCode).toBe(201);
     expect((await invoke("get")).body.employees.find((e: any) => e.employeeId === 1))
-      .toMatchObject({ hasAccount: true, account: null, management: { reason: "not_selected" } });
+      .toMatchObject({ hasAccount: true, management: { reason: "allowed" } });
   });
-  it("keeps selections independent per manager and saving has no employee-account/session side effects", async () => {
+  it("shares writable branch coverage without account/session side effects or named-selection writes", async () => {
     await configure(); await create();
     const target = await id();
     await query(`INSERT INTO users(id,role,first_name,last_name) VALUES ('ops2','operations_manager','مدير','ثانٍ');
@@ -560,13 +558,11 @@ describe.skipIf(!process.env.ISOLATED_TEST_REGISTRY)("employee account delegatio
     const beforeAccount = (await query("SELECT * FROM users WHERE id=$1", [target])).rows[0];
     const beforePermissions = (await query("SELECT * FROM user_permissions WHERE user_id=$1", [target])).rows;
     expect((await invoke("get", "", {}, "ops2")).body.employees.find((e: any) => e.employeeId === 1))
-      .toMatchObject({ hasAccount: true, account: null, management: { reason: "not_selected" } });
-    expect((await invoke("patch", "/:employeeId/status", { isActive: "inactive" }, "ops2")).body.code)
-      .toBe("EMPLOYEE_NOT_SELECTED");
-    expect((await select([1], "ops2")).statusCode).toBe(200);
-    expect((await select([], "ops")).statusCode).toBe(200);
+      .toMatchObject({ hasAccount: true, management: { reason: "allowed" } });
+    expect((await select([1], "ops2")).statusCode).toBe(409);
+    expect((await select([], "ops")).statusCode).toBe(409);
     expect((await invoke("get", "", {}, "ops2")).body.employees.find((e: any) => e.employeeId === 1).management.allowed).toBe(true);
-    expect((await invoke("get")).body.employees[0].management.reason).toBe("not_selected");
+    expect((await invoke("get")).body.employees[0].management.reason).toBe("allowed");
     expect((await query("SELECT * FROM users WHERE id=$1", [target])).rows[0]).toEqual(beforeAccount);
     expect((await query("SELECT * FROM user_permissions WHERE user_id=$1", [target])).rows).toEqual(beforePermissions);
     expect((await query("SELECT sess FROM sessions WHERE sid='employee-session'")).rows[0].sess.userId).toBe(target);
@@ -578,19 +574,19 @@ describe.skipIf(!process.env.ISOLATED_TEST_REGISTRY)("employee account delegatio
     });
     expect(JSON.stringify(managers)).not.toMatch(/username|password|permissions/);
   });
-  it("individual withdrawal blocks even safety reductions/freezing, unlike disabled permission policy", async () => {
+  it("obsolete individual withdrawal cannot block safety reductions/freezing", async () => {
     await configure(); await create(); await configure(false);
     expect((await invoke("put", "/:employeeId/permissions", { permissions: [] })).statusCode).toBe(200);
-    expect((await select([])).statusCode).toBe(200);
+    expect((await select([])).statusCode).toBe(409);
     for (const [method, suffix, body] of [
       ["put", "/:employeeId/permissions", { permissions: [] }],
       ["patch", "/:employeeId/status", { isActive: "inactive" }],
     ] as const) {
-      expect((await invoke(method, suffix, body)).body.code).toBe("EMPLOYEE_NOT_SELECTED");
+      expect((await invoke(method, suffix, body)).statusCode).toBe(200);
     }
-    expect((await query("SELECT is_active FROM users WHERE id=$1", [await id()])).rows[0].is_active).toBe("active");
+    expect((await query("SELECT is_active FROM users WHERE id=$1", [await id()])).rows[0].is_active).toBe("inactive");
     expect((await invoke("get")).body.employees[0]).toMatchObject({
-      hasAccount: true, account: null, management: { reason: "not_selected" },
+      hasAccount: true, management: { reason: "allowed" },
     });
   });
   it("rejects duplicate, forged, protected, inactive, HQ and read-only employee selections", async () => {
@@ -607,55 +603,54 @@ describe.skipIf(!process.env.ISOLATED_TEST_REGISTRY)("employee account delegatio
     expect(JSON.stringify(current)).not.toMatch(/private-protected-name|username|permissions|linkedUserId/);
     expect(JSON.stringify((await invoke("get")).body)).not.toContain("private-protected-name");
     for (const employeeIds of [[1], [2], [3], [4], [999]]) {
-      expect((await select(employeeIds)).statusCode).toBe(403);
+      expect((await select(employeeIds)).statusCode).toBe(409);
     }
-    expect((await select([1, 1])).statusCode).toBe(400);
+    expect((await select([1, 1])).statusCode).toBe(409);
     for (const body of [
       { employeeIds: ["1"], revision: current.revision },
       { employeeIds: [1] },
       { employeeIds: [], revision: current.revision, managerId: "ops2" },
-    ]) expect((await invoke("put", "selection", body, "admin")).statusCode).toBe(400);
-    expect((await select([])).statusCode).toBe(200);
+    ]) expect((await invoke("put", "selection", body, "admin")).statusCode).toBe(409);
+    expect((await select([])).statusCode).toBe(409);
   });
-  it("hides stale selections after branch transfer, never carries them to new targets, and prunes on save", async () => {
+  it("recomputes scope after transfer and relinking without changing historical selections", async () => {
     await configure(); await create();
     const oldRevision = (await invoke("get", "selection", {}, "admin")).body.revision;
     await query("UPDATE branch_employees SET branch_id='b' WHERE id=1");
     expect((await invoke("get", "selection", {}, "admin")).body.selectedEmployeeIds).toEqual([]);
     expect((await select([], "ops", oldRevision)).statusCode).toBe(409);
-    expect((await select([])).statusCode).toBe(200);
+    expect((await select([])).statusCode).toBe(409);
     const stored = JSON.parse((await query("SELECT value FROM portal_settings WHERE key=$1", [managerKey()])).rows[0].value);
-    expect(stored.selections).toEqual([]);
+    expect(stored.selections).toHaveLength(1);
     await query("UPDATE branch_employees SET branch_id='a' WHERE id=1");
-    expect((await select([1])).statusCode).toBe(200);
+    expect((await select([1])).statusCode).toBe(409);
     const original = await id();
     await query(`INSERT INTO users(id,username,role,branch_id) VALUES ('replacement','replacement-user','employee','a');
       UPDATE branch_employees SET linked_user_id='replacement' WHERE id=1;`);
-    expect((await invoke("get")).body.employees[0]).toMatchObject({ hasAccount: true, account: null, management: { reason: "not_selected" } });
-    expect((await invoke("patch", "/:employeeId/status", { isActive: "inactive" })).body.code).toBe("EMPLOYEE_NOT_SELECTED");
+    expect((await invoke("get")).body.employees[0]).toMatchObject({ hasAccount: true, management: { reason: "allowed" } });
+    expect((await invoke("patch", "/:employeeId/status", { isActive: "inactive" })).statusCode).toBe(200);
     expect((await query("SELECT is_active FROM users WHERE id=$1", [original])).rows[0].is_active).toBe("active");
-    expect((await invoke("get", "selection", {}, "admin")).body.selectedEmployeeIds).toEqual([]);
+    expect((await invoke("get", "selection", {}, "admin")).body.selectedEmployeeIds).toEqual([1]);
   });
-  it("transfer to another currently authorized branch still requires new individual approval", async () => {
+  it("includes an unlinked employee transferred into another writable authorized branch", async () => {
     await configure();
     await query(`INSERT INTO user_branch_access(user_id,branch_id) VALUES ('ops','b');
       UPDATE branch_employees SET branch_id='b' WHERE id=1;`);
-    expect((await invoke("get")).body.employees.find((e: any) => e.employeeId === 1).management.reason).toBe("not_selected");
-    expect((await invoke("post", "/:employeeId", { permissions })).body.code).toBe("EMPLOYEE_NOT_SELECTED");
-    expect((await select([1])).statusCode).toBe(200);
+    expect((await invoke("get")).body.employees.find((e: any) => e.employeeId === 1).management.reason).toBe("allowed");
+    expect((await select([1])).statusCode).toBe(409);
     expect((await invoke("post", "/:employeeId", { permissions })).statusCode).toBe(201);
   });
-  it("allows clearing grants of demoted/inactive managers without exposing former employee scope", async () => {
+  it("hides the former scope of demoted/inactive managers and refuses obsolete writes", async () => {
     await configure();
     await query("UPDATE users SET role='employee' WHERE id='ops'");
     expect((await invoke("get", "managers", {}, "admin")).body.managers).toEqual([]);
     const detail = (await invoke("get", "selection", {}, "admin")).body;
     expect(detail).toMatchObject({ managerId: "ops", employees: [], selectedEmployeeIds: [] });
-    expect((await select([1])).statusCode).toBe(403);
-    expect((await select([])).statusCode).toBe(200);
+    expect((await select([1])).statusCode).toBe(409);
+    expect((await select([])).statusCode).toBe(409);
     await query("UPDATE users SET role='operations_manager',is_active='inactive' WHERE id='ops'");
     expect((await invoke("get", "selection", {}, "admin")).body.employees).toEqual([]);
-    expect((await select([])).statusCode).toBe(200);
+    expect((await select([])).statusCode).toBe(409);
   });
   it("admin endpoints re-read the actor and cannot be accessed by ops with forged users permissions", async () => {
     await configure();
@@ -672,22 +667,18 @@ describe.skipIf(!process.env.ISOLATED_TEST_REGISTRY)("employee account delegatio
     await query("UPDATE users SET role='admin',is_active='inactive' WHERE id='admin'");
     expect((await invoke("get", "selection", {}, "admin")).statusCode).toBe(403);
   });
-  it("serializes concurrent administrator selections with an optimistic 409 and minimal no-secret audit", async () => {
+  it("rejects concurrent obsolete selection writes without an audit claiming successful changes", async () => {
     const revision = (await invoke("get", "selection", {}, "admin")).body.revision;
     const responses = await Promise.all([
       invoke("put", "selection", { employeeIds: [], revision }, "admin"),
       invoke("put", "selection", { employeeIds: [1], revision }, "admin"),
     ]);
-    expect(responses.map(r => r.statusCode).sort()).toEqual([200, 409]);
-    const winner = responses.find(r => r.statusCode === 200)!;
-    expect((await invoke("get", "selection", {}, "admin")).body).toEqual(winner.body);
+    expect(responses.map(r => r.statusCode).sort()).toEqual([409, 409]);
     const logs = (await query("SELECT action,details,target_id FROM system_audit_logs")).rows;
-    expect(logs).toHaveLength(1);
-    expect(logs[0].action).toBe("manager_selection_update");
-    expect(logs[0].target_id).toBe("ops");
+    expect(logs).toHaveLength(0);
     expect(JSON.stringify(logs)).not.toMatch(/username|password|secret-|permissions|salary|iqama|bank/);
   });
-  it("selection save locks block concurrent legacy elevation before authoritative eligibility reads", async () => {
+  it("obsolete selection writes cannot undo concurrent account elevation protection", async () => {
     await configure(); await create();
     const revision = (await invoke("get", "selection", {}, "admin")).body.revision;
     const client = await pool.connect();
@@ -698,7 +689,8 @@ describe.skipIf(!process.env.ISOLATED_TEST_REGISTRY)("employee account delegatio
       await new Promise(resolve => setTimeout(resolve, 60));
       await client.query("COMMIT");
       expect((await pending).statusCode).toBe(409);
-      expect((await select([1])).statusCode).toBe(403);
+      expect((await select([1])).statusCode).toBe(409);
+      expect((await invoke("get")).body.employees[0].management.reason).toBe("protected_account");
     } finally { await client.query("ROLLBACK"); client.release(); }
   });
 });

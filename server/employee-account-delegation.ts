@@ -16,7 +16,7 @@ import {
   type EmployeeTemplatePilotResponse,
 } from "@shared/employee-account-delegation";
 import { assignmentSnapshotRevision, eligibleTemplatePermissions, eligibleAdminTemplatePermissions, validateAdminCashierPermissions, templateAssignmentInput } from "./employee-template-assignment-policy";
-import { readVerifiedTemplateBases, matchesVerifiedTemplateBase } from "./employee-template-provenance";
+import { readVerifiedTemplateBases, matchesVerifiedTemplateBase, canReviewLegacyTemplateBase } from "./employee-template-provenance";
 import {
   ADDITION_CAPABILITIES, additionInput, additionUpdateInput, additionDeleteInput,
   additionDTO, additionFingerprint, additionIsDelegationSafe, requireAdditionsStorage,
@@ -33,7 +33,7 @@ import { evaluatePermissionDecision, checkPermissionDecision, type PermissionDec
 import {
   actorMayManage, availableGeneratedUsername, branchMayManage, createAccountInput, DEFAULT_POLICY, DelegationError, deny,
   delegationTemplates, effectiveDelegatedPermissions, generatedCredentials, isLegacyAccountPath, permissionsInput,
-  permissionsWithin, policyInput, statusInput, targetMayManage, validatePermissions, managerSelectionInput,
+  permissionsWithin, policyInput, statusInput, targetMayManage, validatePermissions,
 } from "./employee-account-delegation-policy";
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
@@ -45,26 +45,11 @@ type Actor = Pick<typeof users.$inferSelect, keyof typeof accountProjection>;
 type Employee = Pick<typeof branchEmployees.$inferSelect,
   "id" | "employeeName" | "branchId" | "linkedUserId" | "status" | "jobTitle">;
 const POLICY_KEY = "employee_account_delegation.policy.v1";
-const selectionKey = (id: string) => `employee_account_delegation.manager.${id}.v1`;
-const storedSelectionInput = z.object({
-  revision: z.string().min(1),
-  selections: z.array(z.object({
-    employeeId: z.number().int().positive().safe(),
-    branchId: z.string(),
-    linkedUserId: z.string().nullable(),
-  }).strict()),
-}).strict();
-type Selection = z.infer<typeof storedSelectionInput>;
-async function managerSelection(tx: Tx, managerId: string): Promise<Selection> {
-  const [row] = await tx.select({ value: portalSettings.value }).from(portalSettings)
-    .where(eq(portalSettings.key, selectionKey(managerId)));
-  if (!row) return { revision: "0", selections: [] };
-  try { return storedSelectionInput.parse(JSON.parse(row.value)); }
-  catch { throw new DelegationError(503, "INVALID_SELECTION", "اختيارات الموظفين غير صالحة؛ راجع مسؤول النظام"); }
-}
-function individuallySelected(selection: Selection, employee: Employee) {
-  return selection.selections.some(s => s.employeeId === employee.id
-    && s.branchId === employee.branchId && s.linkedUserId === employee.linkedUserId);
+type Selection = { revision: string; selections: never[] };
+function automaticEmployeeScope(): Selection {
+  // Historical named selections remain untouched, but no longer grant or
+  // withhold authority. Fresh writable branch access is the source of scope.
+  return { revision: "all_branch_employees", selections: [] };
 }
 const suspensionKey = (id: string) => `employee_account_delegation.suspension.${id}`;
 const employeeProjection = {
@@ -148,17 +133,23 @@ async function accountState(tx: Tx, actor: Actor, employee: Employee, approved: 
   const direct = await tx.select({ module: userPermissions.module, actions: userPermissions.actions }).from(userPermissions).where(eq(userPermissions.userId, account.id));
   const additions = overrides.length ? await readManagedAdditions(tx, [account.id]) : [];
   const safeAdditionIds = new Set(additions.filter(row => additionIsDelegationSafe(row, employee, approved)).map(row => row.id));
-  const boundBase = matchesVerifiedTemplateBase((await readVerifiedTemplateBases(tx, [account.id])).get(account.id), employee, direct);
+  const evidence = await readVerifiedTemplateBases(tx, [account.id]);
+  if (evidence.ambiguousUserIds.has(account.id))
+    deny("AMBIGUOUS_ACCOUNT_LINK", "الحساب مرتبط بأكثر من موظف؛ يلزم تصحيح الربط بواسطة مسؤول النظام");
+  const boundBase = matchesVerifiedTemplateBase(evidence.get(account.id), employee, direct);
+  if (actor.role !== "admin" && !adminPilot && evidence.boundUserIds.has(account.id) && !boundBase)
+    deny("TEMPLATE_BASE_DRIFT", "تغيرت قاعدة القالب المسند أو بيانات ربطه؛ يلزم مراجعة مسؤول النظام");
+  const legacyBase = canReviewLegacyTemplateBase(evidence, account.id, direct);
   if (adminPilot) {
     actorMayManage(actor, true);
     validateAdminCashierPermissions(direct);
   }
   targetMayManage(actor.id, account, employee.branchId, access.map(g => g.branchId), assignments.length,
-    overrides.filter(row => !safeAdditionIds.has(row.id)).length, adminPilot || boundBase ? [] : direct, approved);
+    overrides.filter(row => !safeAdditionIds.has(row.id)).length, adminPilot || boundBase || legacyBase ? [] : direct, approved);
   if (!["active", "inactive"].includes(account.isActive ?? ""))
     deny("PROTECTED_ACCOUNT", "حالة الحساب تتطلب مراجعة مسؤول النظام");
   return {
-    account, permissions: direct, additions, boundBase,
+    account, permissions: direct, additions, boundBase, legacyBase,
     canReactivate: approved.enabled
       && (boundBase || permissionsWithin(effectiveDelegatedPermissions(account, direct), approved.permissions))
       && (actor.role === "admin" || await suspensionOwned(tx, account, employee)),
@@ -214,8 +205,6 @@ async function templateEmployeeState(tx: Tx, actor: Actor, grants: string[], app
   if (!employee) throw new DelegationError(404, "EMPLOYEE_NOT_FOUND", "الموظف غير موجود");
   branchMayManage(actor, employee.branchId, grants);
   if (employee.status !== "active") deny("EMPLOYEE_INACTIVE", "يلزم موظف مسجل ونشط في الفرع");
-  if (actor.role !== "admin" && !individuallySelected(await managerSelection(tx, actor.id), employee))
-    deny("EMPLOYEE_NOT_SELECTED", "لم يعتمد مسؤول النظام إدارة هذا الموظف لهذا المدير");
   const state = await accountState(tx, actor, employee, approved);
   return { employee, state };
 }
@@ -237,7 +226,7 @@ async function effectiveAccountBase(tx: Tx, state: Awaited<ReturnType<typeof acc
     if (actions.length) currentByModule.set(p.module, actions);
   }
   const groups = Array.from(currentByModule, ([module, actions]) => ({ module, actions }));
-  const permissions = state?.boundBase ? validateAdminCashierPermissions(groups)
+  const permissions = state?.boundBase || state?.legacyBase ? validateAdminCashierPermissions(groups)
     : validatePermissions(groups, EMPLOYEE_ACCOUNT_SAFE_PERMISSIONS, false);
   return { sourceMode: source?.mode ?? null, permissions };
 }
@@ -515,12 +504,17 @@ async function roster(
       if (employee.linkedUserId) {
         const target = byAccount.get(employee.linkedUserId);
         if (!target) deny("INVALID_LINK", "رابط حساب الموظف غير صالح");
+        if (verifiedBases.ambiguousUserIds.has(target.id))
+          deny("AMBIGUOUS_ACCOUNT_LINK", "الحساب مرتبط بأكثر من موظف؛ يلزم تصحيح الربط");
         const permissions = permissionsByUser.get(target.id) ?? [];
         const safeAdditionIds = new Set((additionsByUser.get(target.id) ?? []).filter(row => additionIsDelegationSafe(row, employee, approved)).map(row => row.id));
         const unknownOverrides = (overridesByUser.get(target.id) ?? []).filter(id => !safeAdditionIds.has(id)).length;
         const boundBase = matchesVerifiedTemplateBase(verifiedBases.get(target.id), employee, permissions);
+        if (actor.role !== "admin" && verifiedBases.boundUserIds.has(target.id) && !boundBase)
+          deny("TEMPLATE_BASE_DRIFT", "قاعدة القالب المسند أو بيانات ربطه تحتاج مراجعة مسؤول النظام");
+        const legacyBase = canReviewLegacyTemplateBase(verifiedBases, target.id, permissions);
         targetMayManage(actor.id, target, employee.branchId, grantsByUser.get(target.id) ?? [],
-          Number(assigned.has(target.id)), unknownOverrides, boundBase ? [] : permissions, approved);
+          Number(assigned.has(target.id)), unknownOverrides, boundBase || legacyBase ? [] : permissions, approved);
         if (!["active", "inactive"].includes(target.isActive ?? ""))
           deny("PROTECTED_ACCOUNT", "حالة الحساب تتطلب مراجعة مسؤول النظام");
         account = { id: target.id, username: target.username, isActive: target.isActive as "active" | "inactive",
@@ -534,7 +528,7 @@ async function roster(
     }
     const reason: DelegatedEmployeeAccount["management"]["reason"] = protectedAccount ? "protected_account"
       : actor.role !== "admin" && !grants.includes(employee.branchId) ? "read_only_branch"
-      : actor.role !== "admin" && !individuallySelected(selection, employee) ? "not_selected" : "allowed";
+      : "allowed";
     rows.push({
       employeeId: employee.id, employeeName: employee.employeeName, branchId: employee.branchId,
       branchName: employee.branchName, hasAccount: Boolean(employee.linkedUserId),
@@ -559,13 +553,13 @@ async function managerDetail(tx: Tx, managerId: string, budget: () => Promise<vo
   const [manager] = await tx.select(accountProjection).from(users).where(eq(users.id, managerId));
   if (!manager) throw new DelegationError(404, "MANAGER_NOT_FOUND", "مدير التشغيل غير موجود");
   await budget();
-  const selected = await managerSelection(tx, managerId);
+  const selected = automaticEmployeeScope();
   const revision = (scope: unknown) => createHash("sha256")
     .update(JSON.stringify({ stored: selected, manager, scope })).digest("hex");
-  // Former/inactive managers can still have outdated grants cleared, but no
-  // out-of-scope employee identifiers are returned or accepted for new grants.
+  // Former/inactive managers have no current employee coverage. Historical
+  // named selections are neither returned nor used as authority.
   if (manager.role !== "operations_manager" || manager.isActive !== "active") {
-    return { response: { managerId, revision: revision([]), employees: [], selectedEmployeeIds: [] } as EmployeeAccountManagerSelectionResponse,
+    return { response: { managerId, scopeMode: "all_branch_employees", revision: revision([]), employees: [], selectedEmployeeIds: [] } as EmployeeAccountManagerSelectionResponse,
       selected, internalEmployees: [] as Employee[] };
   }
   const state = await actorState(tx, managerId, false, budget);
@@ -581,7 +575,8 @@ async function managerDetail(tx: Tx, managerId: string, budget: () => Promise<vo
   return { response: {
     managerId, revision: revision({ branches: data.branches, grants: Array.from(new Set(state.grants)).sort(),
       employees: data.internalEmployees, eligibility: employees }), employees,
-    selectedEmployeeIds: data.internalEmployees.filter(e => eligible.has(e.id) && individuallySelected(selected, e)).map(e => e.id).sort((a,b) => a-b),
+    scopeMode: "all_branch_employees",
+    selectedEmployeeIds: Array.from(eligible).sort((a,b) => a-b),
   } as EmployeeAccountManagerSelectionResponse, selected, internalEmployees: data.internalEmployees };
 }
 
@@ -826,7 +821,7 @@ export function registerEmployeeAccountDelegation(app: Express) {
       await budget();
       const approved = await policy(tx);
       await budget();
-      const selection = actor.role === "admin" ? { revision: "0", selections: [] } : await managerSelection(tx, actor.id);
+      const selection = automaticEmployeeScope();
       const data = await roster(tx, actor, visibleGrants, grants, approved, selection, budget);
       const available = actor.role === "admin" ? EMPLOYEE_ACCOUNT_SAFE_PERMISSIONS : approved.permissions;
       const result: EmployeeAccountsResponse = {
@@ -883,35 +878,11 @@ export function registerEmployeeAccountDelegation(app: Express) {
   }, "employee_account_manager_selection"));
 
   app.put("/api/admin/employee-account-managers/:managerId", isAuthenticated, endpoint(async (req, res) => {
-    const input = managerSelectionInput.parse(req.body);
-    if (new Set(input.employeeIds).size !== input.employeeIds.length)
-      throw new DelegationError(400, "DUPLICATE_EMPLOYEE", "لا تكرر اختيار الموظف");
-    const result = await db.transaction(async tx => {
-      await lockDelegationState(tx);
-      const { actor } = await actorState(tx, req.session.userId!, true);
-      const budget = readBudget(performance.now() + 10_000, tx);
-      const current = await managerDetail(tx, req.params.managerId, budget);
-      if (current.response.revision !== input.revision)
-        throw new DelegationError(409, "SELECTION_REVISION_CONFLICT", "تغيرت اختيارات المدير؛ حدّث القائمة وحاول مجدداً");
-      const eligible = new Set(current.response.employees.filter(e => e.eligible).map(e => e.employeeId));
-      if (input.employeeIds.some(id => !eligible.has(id)))
-        deny("EMPLOYEE_SELECTION_FORBIDDEN", "الاختيار يشمل موظفاً غير مؤهل أو خارج نطاق مدير التشغيل");
-      const requested = new Set(input.employeeIds);
-      const next: Selection = { revision: randomUUID(), selections: current.internalEmployees
-        .filter(e => requested.has(e.id)).map(e => ({
-          employeeId: e.id, branchId: e.branchId, linkedUserId: e.linkedUserId,
-        })).sort((a,b) => a.employeeId-b.employeeId) };
-      await setting(tx, selectionKey(req.params.managerId), JSON.stringify(next));
-      // Audit only the minimal employee-ID diff; never account/credential/HR
-      // payloads. Hidden stale IDs may be removed, but are not returned to UI.
-      const before = new Set(current.selected.selections.map(e => e.employeeId));
-      await audit(tx, actor, "manager_selection_update", null, {
-        addedEmployeeIds: next.selections.filter(e => !before.has(e.employeeId)).map(e => e.employeeId),
-        removedEmployeeIds: Array.from(before).filter(id => !requested.has(id)),
-      }, req.params.managerId);
-      return (await managerDetail(tx, req.params.managerId, budget)).response;
+    await db.transaction(async tx => {
+      await actorState(tx, req.session.userId!, true);
     });
-    res.json(result);
+    throw new DelegationError(409, "BRANCH_SCOPE_AUTOMATIC",
+      "إدارة الموظفين تتبع الفروع المصرح بها تلقائيًا؛ لم يعد الاختيار بالاسم مستخدمًا. حدّث الصفحة.");
   }, "employee_account_manager_selection_update"));
 
   app.put("/api/admin/employee-account-policy", isAuthenticated, endpoint(async (req, res) => {
@@ -974,10 +945,6 @@ export function registerEmployeeAccountDelegation(app: Express) {
       branchMayManage(actor, employee.branchId, grants);
       if (employee.status !== "active") deny("EMPLOYEE_INACTIVE", "يلزم موظف مسجل ونشط في الفرع");
       const state = await accountState(tx, actor, employee, approved);
-      const individualGrant: Selection = actor.role === "admin"
-        ? { revision: "0", selections: [] } : await managerSelection(tx, actor.id);
-      if (actor.role !== "admin" && !individuallySelected(individualGrant, employee))
-        deny("EMPLOYEE_NOT_SELECTED", "لم يعتمد مسؤول النظام إدارة هذا الموظف لهذا المدير");
       let previousAssignment: EmployeeTemplateAssignment | null = null;
       let assigned: EmployeeTemplateAssignment | null = null;
       let selected = "permissions" in input ? validatePermissions(input.permissions, approved.permissions) : null;
@@ -1011,14 +978,6 @@ export function registerEmployeeAccountDelegation(app: Express) {
         await tx.update(branchEmployees).set({ linkedUserId: account.id, updatedAt: new Date() })
           .where(and(eq(branchEmployees.id, employee.id), sql`${branchEmployees.linkedUserId} IS NULL`));
         employee.linkedUserId = account.id;
-        if (actor.role !== "admin") {
-          // Bind the approved unlinked target to this atomically created account.
-          // A later legacy relink/transfer cannot carry authority to a new target.
-          individualGrant.revision = randomUUID();
-          for (const s of individualGrant.selections)
-            if (s.employeeId === employee.id) s.linkedUserId = account.id;
-          await setting(tx, selectionKey(actor.id), JSON.stringify(individualGrant));
-        }
         await audit(tx, actor, "account_create", employee, { permissions: selected, role: "employee" }, account.id);
       } else {
         if (!state) throw new DelegationError(409, "ACCOUNT_NOT_LINKED", "لا يوجد حساب مرتبط بالموظف");

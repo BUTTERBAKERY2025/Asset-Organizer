@@ -280,7 +280,8 @@ export async function runTemplatePilotSmoke({ client, request, admin, manager, e
   const managerSelection = (await call(managerRoot, undefined, "TP_SELECT_READ", 200, admin, "GET")).json;
   check(managerSelection.employees.some(e => e.employeeId === id && e.eligible),
     `TP_SELECTION_ELIGIBILITY_${managerSelection.employees.find(e => e.employeeId === id)?.reason ?? "absent"}`);
-  await call(managerRoot, { revision: managerSelection.revision, employeeIds: [id] }, "TP_SELECT_BOUND_ACCOUNT", 200, admin, "PUT");
+  check(managerSelection.scopeMode === "all_branch_employees", "TP_AUTOMATIC_BRANCH_SCOPE");
+  await call(managerRoot, { revision: managerSelection.revision, employeeIds: [] }, "TP_OBSOLETE_SELECTION_REJECTED", 409, admin, "PUT");
   const opsRoot = `/api/operations/employee-accounts/${id}`;
   const opsSnapshot = (await call(`${opsRoot}/template-assignment`, undefined, "TP_OPS_BOUND_SNAPSHOT", 200, manager, "GET")).json;
   const opsBody = { templateId: expanded, version: 1, branchId: A, reason: "Approved delegated branch template",
@@ -300,6 +301,9 @@ export async function runTemplatePilotSmoke({ client, request, admin, manager, e
   await client.query("INSERT INTO user_permissions (user_id,module,actions) VALUES ($1,'users',ARRAY['view'])", [userId]);
   await call(`${opsRoot}/template-assignment`, undefined, "TP_BINDING_DRIFT_PROTECTED", 403, manager, "GET");
   await client.query("DELETE FROM user_permissions WHERE user_id=$1 AND module='users'", [userId]);
+  await client.query("INSERT INTO user_permissions (user_id,module,actions) VALUES ($1,'maintenance',ARRAY['view'])", [userId]);
+  await call(`${opsRoot}/template-assignment`, undefined, "TP_SAFE_MODULE_DRIFT_IS_NOT_LEGACY", 403, manager, "GET");
+  await client.query("DELETE FROM user_permissions WHERE user_id=$1 AND module='maintenance'", [userId]);
   const outside = await call(`${opsRoot}/template-assignment`, undefined, "TP_FORGED_BRANCH_SNAPSHOT", 200, manager, "GET");
   await call(`${opsRoot}/template-assignment`, { ...opsBody, templateId: second, branchId: B,
     expectedAssignmentRevision: outside.json.expectedAssignmentRevision }, "TP_OPS_OTHER_BRANCH_DENIED", 403, manager);
@@ -308,7 +312,7 @@ export async function runTemplatePilotSmoke({ client, request, admin, manager, e
     (id,branch_id,employee_name,job_title,nationality,salary,status)
     VALUES ($1,$2,'Synthetic new delegated branch account','cashier','Synthetic',1000,'active')`, [freshEmployee,A]);
   const selectFresh = (await call(managerRoot, undefined, "TP_SELECT_FRESH_READ", 200, admin, "GET")).json;
-  await call(managerRoot, { revision: selectFresh.revision, employeeIds: [id, freshEmployee] }, "TP_SELECT_FRESH", 200, admin, "PUT");
+  check(selectFresh.employees.some(e => e.employeeId === freshEmployee && e.eligible), "TP_NEW_EMPLOYEE_AUTOMATICALLY_INCLUDED");
   const freshRoot = `/api/operations/employee-accounts/${freshEmployee}`;
   const freshSnapshot = (await call(`${freshRoot}/template-assignment`, undefined, "TP_CREATE_PREVIEW", 200, manager, "GET")).json;
   const created = await call(`${freshRoot}/template-account`, { ...opsBody, templateId: second,
@@ -318,4 +322,24 @@ export async function runTemplatePilotSmoke({ client, request, admin, manager, e
   const createdPermissions = (await call("/api/my-permissions", undefined, "TP_CREATED_EFFECTIVE_READ", 200, createdCookie, "GET")).json;
   check(expandedContent.permissions.every(p => createdPermissions.some(a => a.module === p.module && a.actions.includes("view"))),
     "TP_CREATE_PRESERVES_TEMPLATE_MODULES");
+  const createdId = created.json.employee.account.id;
+  // Model a pre-template branch account, without synthesizing approval evidence.
+  await client.query("DELETE FROM employee_job_template_assignments WHERE employee_id=$1", [freshEmployee]);
+  await client.query("DELETE FROM user_permissions WHERE user_id=$1", [createdId]);
+  await client.query("INSERT INTO user_permissions (user_id,module,actions) VALUES ($1,'cashier_performance',ARRAY['view','view_list'])", [createdId]);
+  const legacyPreview = (await call(`${freshRoot}/template-assignment`, undefined, "TP_LEGACY_BRANCH_PREVIEW", 200, manager, "GET")).json;
+  check(legacyPreview.assignment === null && legacyPreview.currentPermissions.some(p => p.module === "cashier_performance"), "TP_LEGACY_BASE_HONESTLY_DISPLAYED");
+  await call(`${freshRoot}/template-assignment`, { ...opsBody, templateId: second,
+    expectedAssignmentRevision: legacyPreview.expectedAssignmentRevision }, "TP_LEGACY_EXPLICIT_TEMPLATE_MIGRATION", 200, manager);
+  await client.query("UPDATE users SET role='admin' WHERE id=$1", [createdId]);
+  await call(`${freshRoot}/template-assignment`, undefined, "TP_ADMIN_ACCOUNT_PROTECTED", 403, manager, "GET");
+  await client.query("UPDATE users SET role='employee' WHERE id=$1", [createdId]);
+  await client.query("UPDATE branch_employees SET branch_id=$2 WHERE id=$1", [freshEmployee,B]);
+  await call(`${freshRoot}/template-assignment`, undefined, "TP_TRANSFER_OUTSIDE_BRANCH_REVOKES_SCOPE", 403, manager, "GET");
+  await client.query("UPDATE branch_employees SET branch_id=$2 WHERE id=$1", [freshEmployee,A]);
+  await assert.rejects(client.query(`INSERT INTO branch_employees (id,branch_id,linked_user_id,employee_name,job_title,nationality,salary,status)
+    VALUES (930012,$1,$2,'Synthetic ambiguous link','cashier','Synthetic',1000,'active')`, [A,createdId]), { code: "23505" });
+  check(true, "TP_DATABASE_REJECTS_AMBIGUOUS_LINK");
+  await client.query("UPDATE user_branch_access SET access_level='view_only' WHERE user_id='isolated-fixture-manager' AND branch_id=$1", [A]);
+  await call(`${freshRoot}/template-assignment`, undefined, "TP_READONLY_BRANCH_NOT_MANAGEABLE", 403, manager, "GET");
 }
