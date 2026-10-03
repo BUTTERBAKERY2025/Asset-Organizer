@@ -1,12 +1,50 @@
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("../server/storage", () => ({ storage: {} }));
-vi.mock("../server/db", () => ({ db: {} }));
+const mocks = vi.hoisted(() => ({ batch: vi.fn(), rows: vi.fn() }));
+vi.mock("../server/storage", () => ({ storage: { getDailyProductionBatch: mocks.batch } }));
+vi.mock("../server/db", () => ({ db: {
+  select: () => ({ from: () => ({ where: () => ({ limit: mocks.rows }) }) }),
+} }));
 
 import { branchTemplateRouteContext } from "../server/branch-template-context";
 
 describe("reviewed legacy contexts with branch template assignments", () => {
   const branches = ["a", "b"];
+  it("uses stored owners for production and closures despite a forged branch", async () => {
+    mocks.batch.mockResolvedValue({ branchId: "b" });
+    mocks.rows.mockResolvedValue([{ branchId: "b" }]);
+    for (const [path, module] of [
+      ["/api/daily-production/batches/12/finish", "production"],
+      ["/api/branch-daily-closures/12/close", "daily_closures"],
+    ]) {
+      expect(await branchTemplateRouteContext({
+        path, method: "POST", body: { branchId: "a" }, query: { branchId: "a" },
+      }, module, branches)).toEqual({ kind: "resource", branchId: "b" });
+    }
+  });
+
+  it("does not invent an owner for missing production or closure records", async () => {
+    mocks.batch.mockResolvedValue(undefined);
+    mocks.rows.mockResolvedValue([]);
+    for (const [path, module] of [
+      ["/api/daily-production/batches/12", "production"],
+      ["/api/branch-daily-closures/12", "daily_closures"],
+    ]) {
+      expect(await branchTemplateRouteContext({ path, method: "GET" }, module, branches)).toBeNull();
+    }
+  });
+
+  it("constrains reviewed production and closure lists to authorized candidates", async () => {
+    for (const [path, module] of [
+      ["/api/daily-production/batches", "production"],
+      ["/api/daily-production/unfinished", "production"],
+      ["/api/branch-daily-closures", "daily_closures"],
+      ["/api/branch-daily-closures/journals-preview", "daily_closures"],
+    ]) {
+      expect(await branchTemplateRouteContext({ path, method: "GET" }, module, branches))
+        .toEqual({ kind: "collection", branchIds: branches });
+    }
+  });
 
   it("uses authorized candidates, not submitted targets, for a bulk write", async () => {
     const req = {

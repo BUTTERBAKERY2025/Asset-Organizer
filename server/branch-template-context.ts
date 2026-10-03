@@ -1,6 +1,6 @@
 import { storage } from "./storage";
 import { db } from "./db";
-import { branchComplaints, maintenanceTickets, materialTransfers, centralKitchenOrders,
+import { branchComplaints, maintenanceTickets, materialTransfers, centralKitchenOrders, branchDailyClosures,
   cashierDailyChallenges, productCommissions, branchAchievementBonus, cashierPointsLedger, cashierProductSales } from "@shared/schema";
 import { eq } from "drizzle-orm";
 
@@ -11,6 +11,29 @@ import { eq } from "drizzle-orm";
 export async function branchTemplateRouteContext(req: any, module: string, branches: string[]) {
   const path = req.path;
   const method = req.method;
+  if (module === "daily_closures") {
+    if (method === "GET" && ["/api/branch-daily-closures", "/api/branch-daily-closures/journals-preview"].includes(path))
+      return { kind: "collection" as const, branchIds: branches };
+    if (method === "POST" && path === "/api/branch-daily-closures" && typeof req.body?.branchId === "string")
+      return { kind: "resource" as const, branchId: req.body.branchId };
+    const closure = path.match(/^\/api\/branch-daily-closures\/([1-9]\d*)(?:\/close)?$/);
+    if (closure) {
+      const [row] = await db.select({ branchId: branchDailyClosures.branchId }).from(branchDailyClosures)
+        .where(eq(branchDailyClosures.id, Number(closure[1]))).limit(1);
+      return row ? { kind: "resource" as const, branchId: row.branchId } : null;
+    }
+  }
+  if (module === "production") {
+    if (method === "GET" && ["/api/daily-production/batches", "/api/daily-production/unfinished"].includes(path))
+      return { kind: "collection" as const, branchIds: branches };
+    if (method === "POST" && path === "/api/daily-production/batches" && typeof req.body?.branchId === "string")
+      return { kind: "resource" as const, branchId: req.body.branchId };
+    const batch = path.match(/^\/api\/daily-production\/batches\/([1-9]\d*)(?:\/(?:finish|carry-over|reschedule))?$/);
+    if (batch) {
+      const row = await storage.getDailyProductionBatch(Number(batch[1]));
+      return row?.branchId ? { kind: "resource" as const, branchId: row.branchId } : null;
+    }
+  }
   // Both handlers enforce getEffectiveBranchFilter on every returned row or
   // every submitted target. Do not infer a scope for other sales/shift routes.
   if (module === "sales" && method === "POST" && path === "/api/cashier-shift-targets/bulk")

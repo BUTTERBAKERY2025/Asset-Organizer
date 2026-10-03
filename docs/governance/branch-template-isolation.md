@@ -57,6 +57,14 @@ Consequently unsupported unscoped operations may be denied after a restrictive
 branch assignment, even though their original outside-branch grants remain stored.
 Further route adaptation is required for full behavioral parity.
 
+Daily-closure list/preview/create/detail/close/delete routes now resolve branch
+contexts, retaining their existing financial policy (including admin-only
+deletion and separation of duties). Daily-production batch list, unfinished
+list, create, detail, update, delete, finish, carry-over and reschedule resolve
+the persisted source branch where applicable. Lists explicitly filter the
+entire allowed branch set, not just singleBranchId. This does not add either
+module to delegated template vocabulary or certify all production endpoints.
+
 The bulk cashier-target writer and shift-performance collection now also resolve
 their branch candidates before authorization. The bulk writer validates every
 target against the resulting branch constraint before inserting anything, so a
@@ -108,6 +116,13 @@ including explicit denied-branch queries and forged resource query parameters.
 The same isolated test now checks retained bulk-target creation in branch B,
 rejection of mixed B/A and B/foreign batches with unchanged row counts, and
 populated shift-tracking results containing only branch B.
+
+It also verifies populated production and closure reads, closure totals,
+persisted-owner checks against forged queries, retained production edits and
+closure approval in B, denied mutations in A, and unchanged admin-only closure
+deletion. With A restricted and both B/C retained, production and unfinished
+lists must return B/C only. This third-branch case catches accidental
+singleBranchId=null → unfiltered queries.
 It also seeds an outbound transfer from the retained warehouse branch and a
 restricted transfer, verifying both list filtering and persisted-resource decisions.
 The linked account's default branch deliberately differs from the canonical

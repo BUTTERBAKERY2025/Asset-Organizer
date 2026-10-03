@@ -49,6 +49,14 @@ try {
     VALUES ($1,'warehouse',ARRAY['view'])`, [user]);
   await client.query(`INSERT INTO user_permissions(user_id,module,actions)
     VALUES ($1,'sales',ARRAY['view','create']),($1,'shifts',ARRAY['view'])`, [user]);
+  await client.query(`INSERT INTO user_permissions(user_id,module,actions)
+    VALUES ($1,'production',ARRAY['view','edit']),($1,'daily_closures',ARRAY['view','delete','approve'])`, [user]);
+  await client.query(`INSERT INTO daily_production_batches
+    (id,branch_id,product_name,quantity,destination,status)
+    VALUES (900001,$1,'Synthetic A',1,'display_bar','in_progress'),
+      (900002,$2,'Synthetic B',1,'display_bar','in_progress')`, [A, B]);
+  await client.query(`INSERT INTO branch_daily_closures (id,branch_id,closure_date,total_sales)
+    VALUES (900001,$1,'2026-10-03',900),(900002,$2,'2026-10-03',7)`, [A, B]);
   await client.query(`INSERT INTO shift_performance_tracking
     (branch_id,shift_type,tracking_date,total_sales)
     VALUES ($1,'morning','2026-10-03',900),($2,'morning','2026-10-03',7)`, [A, B]);
@@ -202,6 +210,43 @@ try {
     check(collection.status === 200 && collection.json.length === 1 && collection.json[0].branchId === B, `BT_OUTSIDE_FILTER_${root}`);
     check((await request(root + "?branchId=" + A, { cookie: employee })).status === 403, `BT_REMOVED_PERFORMANCE_${root}`);
   }
+  for (const root of ["/api/daily-production/batches", "/api/daily-production/unfinished"]) {
+    const result = await request(root, { cookie: employee });
+    check(result.status === 200 && result.json.length === 1 && result.json[0].branchId === B,
+      `BT_OUTSIDE_PRODUCTION_LIST_${root}`);
+    check((await request(root + "?branchId=" + A, { cookie: employee })).status === 403,
+      "BT_DENIED_PRODUCTION_LIST");
+  }
+  for (const root of ["/api/daily-production/batches", "/api/branch-daily-closures"]) {
+    check((await request(`${root}/900002?branchId=${A}`, { cookie: employee })).status === 200,
+      "BT_OUTSIDE_PERSISTED_OWNER");
+    check((await request(`${root}/900001?branchId=${B}`, { cookie: employee })).status === 403,
+      "BT_DENIED_PERSISTED_OWNER");
+  }
+  const closures = await request("/api/branch-daily-closures", { cookie: employee });
+  check(closures.status === 200 && closures.json.closures.length === 1
+    && closures.json.closures[0].branchId === B && Number(closures.json.totals.totalSales) === 7,
+    "BT_CLOSURE_AGGREGATE_SCOPE");
+  check((await request("/api/daily-production/batches/900002", {
+    method: "PATCH", cookie: employee, body: { notes: "Other branch remains writable" },
+  })).status === 200, "BT_OUTSIDE_PRODUCTION_EDIT");
+  check((await request("/api/daily-production/batches/900001", {
+    method: "PATCH", cookie: employee, body: { notes: "Must not change" },
+  })).status === 403, "BT_DENIED_PRODUCTION_EDIT");
+  check((await client.query("SELECT notes FROM daily_production_batches WHERE id=900001")).rows[0].notes === null,
+    "BT_DENIED_PRODUCTION_UNCHANGED");
+  check((await request("/api/branch-daily-closures/900001", {
+    method: "DELETE", cookie: employee,
+  })).status === 403, "BT_DENIED_CLOSURE_DELETE");
+  check((await request("/api/branch-daily-closures/900002", {
+    method: "DELETE", cookie: employee,
+  })).status === 403, "BT_CLOSURE_DELETE_REMAINS_ADMIN_ONLY");
+  check((await request("/api/branch-daily-closures/900002/close", {
+    method: "POST", cookie: employee,
+  })).status === 200, "BT_OUTSIDE_CLOSURE_APPROVE");
+  check((await request("/api/branch-daily-closures/900001/close", {
+    method: "POST", cookie: employee,
+  })).status === 403, "BT_DENIED_CLOSURE_APPROVE");
   check((await request("/api/average-ticket-targets/900002?branchId=" + A, { cookie: employee })).status === 200, "BT_OUTSIDE_RESOURCE_PRESERVED");
   check((await request("/api/average-ticket-targets/900001?branchId=" + B, { cookie: employee })).status === 403, "BT_RESOURCE_BRANCH_NOT_QUERY");
   check((await request(`/api/cashier-shift-targets/branch/${B}/date/2026-10-03`, { cookie: employee })).status === 200, "BT_OUTSIDE_TARGETS_PRESERVED");
@@ -272,6 +317,20 @@ try {
   const ownTasks = await request("/api/deliveries/workspace", { cookie: employee });
   check(ownTasks.status === 200, `BT_DRIVER_OWN_TASKS_${ownTasks.status}_${ownTasks.json?.error ?? ownTasks.json?.message ?? "no_message"}`);
   check((await request("/api/deliveries/reports", { cookie: employee })).status === 403, "BT_DRIVER_NO_MANAGEMENT");
+  // Multiple retained branches must still exclude the replaced branch. This
+  // catches handlers that accidentally translate singleBranchId=null to all.
+  const C = "isolated-fixture-extra-branch";
+  await client.query("INSERT INTO branches(id,name) VALUES($1,'Synthetic C')", [C]);
+  await client.query("INSERT INTO user_branch_access(user_id,branch_id,access_level) VALUES($1,$2,'full')", [user, C]);
+  await client.query(`INSERT INTO daily_production_batches
+    (branch_id,product_name,quantity,destination,status)
+    VALUES ($1,'Synthetic C',1,'display_bar','in_progress')`, [C]);
+  employee = await login("employee");
+  for (const root of ["/api/daily-production/batches", "/api/daily-production/unfinished"]) {
+    const result = await request(root, { cookie: employee });
+    check(result.status === 200 && result.json.length === 2
+      && result.json.every(row => [B, C].includes(row.branchId)), "BT_MULTIBRANCH_PRODUCTION_ISOLATION");
+  }
   await client.query(`DELETE FROM user_branch_access WHERE user_id='isolated-fixture-manager'`);
   check((await request(url, { cookie: manager })).status === 403, "BT_MANAGER_WITHDRAWN");
   assert.deepEqual((await client.query("SELECT module,actions FROM user_permissions WHERE user_id=$1 ORDER BY module", [user])).rows, unchanged);

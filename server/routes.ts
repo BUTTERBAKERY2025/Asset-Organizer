@@ -22427,7 +22427,8 @@ export async function registerRoutes(
         category: category as string,
       });
       console.log("Found batches:", batches.length);
-      res.json(batches);
+      res.json(branchFilter.branchIds === null ? batches
+        : batches.filter(batch => branchFilter.branchIds!.includes(batch.branchId)));
     } catch (error) {
       console.error("Error fetching daily production batches:", error);
       res.status(500).json({ error: "فشل في جلب دفعات الإنتاج اليومي" });
@@ -22453,7 +22454,8 @@ export async function registerRoutes(
       
       const effectiveBranchId = branchFilter.singleBranchId;
       const batches = await storage.getUnfinishedBatches(effectiveBranchId ?? undefined);
-      res.json(batches);
+      res.json(branchFilter.branchIds === null ? batches
+        : batches.filter(batch => branchFilter.branchIds!.includes(batch.branchId)));
     } catch (error) {
       console.error("Error fetching unfinished batches:", error);
       res.status(500).json({ error: "فشل في جلب الدفعات غير المكتملة" });
