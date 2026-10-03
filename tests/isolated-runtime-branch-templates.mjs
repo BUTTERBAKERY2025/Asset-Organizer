@@ -48,6 +48,11 @@ try {
   await client.query(`INSERT INTO user_permissions(user_id,module,actions)
     VALUES ($1,'warehouse',ARRAY['view'])`, [user]);
   await client.query(`INSERT INTO user_permissions(user_id,module,actions)
+    VALUES ($1,'sales',ARRAY['view','create']),($1,'shifts',ARRAY['view'])`, [user]);
+  await client.query(`INSERT INTO shift_performance_tracking
+    (branch_id,shift_type,tracking_date,total_sales)
+    VALUES ($1,'morning','2026-10-03',900),($2,'morning','2026-10-03',7)`, [A, B]);
+  await client.query(`INSERT INTO user_permissions(user_id,module,actions)
     VALUES ($1,'smart_incentives_commissions',ARRAY['view','create','edit'])`, [user]);
   await client.query(`INSERT INTO product_commissions
     (id,product_name,commission_type,branch_id,target_quantity,points_on_target,valid_from)
@@ -200,6 +205,29 @@ try {
   check((await request("/api/average-ticket-targets/900002?branchId=" + A, { cookie: employee })).status === 200, "BT_OUTSIDE_RESOURCE_PRESERVED");
   check((await request("/api/average-ticket-targets/900001?branchId=" + B, { cookie: employee })).status === 403, "BT_RESOURCE_BRANCH_NOT_QUERY");
   check((await request(`/api/cashier-shift-targets/branch/${B}/date/2026-10-03`, { cookie: employee })).status === 200, "BT_OUTSIDE_TARGETS_PRESERVED");
+  const tracking = await request("/api/shift-performance-tracking", { cookie: employee });
+  check(tracking.status === 200 && tracking.json.length === 1 && tracking.json[0].branchId === B,
+    "BT_OUTSIDE_SHIFT_TRACKING_PRESERVED");
+  check((await request("/api/shift-performance-tracking?branchId=" + A, { cookie: employee })).status === 403,
+    "BT_SHIFT_TRACKING_RESTRICTED_BRANCH");
+  const targetFor = branchId => ({
+    cashierId: user, branchId, shiftType: "morning", cashierRole: "main", periodType: "daily",
+    startDate: "2026-10-03", endDate: "2026-10-03", targetDate: "2026-10-03",
+    totalTargetAmount: "10", targetAmount: "10",
+  });
+  const bulkTargets = await request("/api/cashier-shift-targets/bulk", {
+    method: "POST", cookie: employee, body: { targets: [targetFor(B)] },
+  });
+  check(bulkTargets.status === 201 && bulkTargets.json.length === 1 && bulkTargets.json[0].branchId === B,
+    `BT_OUTSIDE_BULK_TARGETS_${bulkTargets.status}`);
+  const countTargets = async () => Number((await client.query("SELECT count(*) FROM cashier_shift_targets")).rows[0].count);
+  const targetCount = await countTargets();
+  for (const branchId of [A, "nonexistent-foreign"]) {
+    check((await request("/api/cashier-shift-targets/bulk", {
+      method: "POST", cookie: employee, body: { targets: [targetFor(B), targetFor(branchId)] },
+    })).status === 403, "BT_BULK_TARGETS_MIXED_SCOPE_DENIED");
+    check(await countTargets() === targetCount, "BT_BULK_TARGETS_NO_PARTIAL_INSERT");
+  }
   const home = await request("/api/dashboard/stats", { cookie: employee });
   check(home.status === 200 && home.json.todaySales === 7, "BT_HOME_ONLY_AUTHORIZED_BRANCH_SALES");
   check((await request("/api/dashboard/stats?branchId=" + A, { cookie: employee })).json.todaySales === 0, "BT_HOME_RESTRICTED_BRANCH");

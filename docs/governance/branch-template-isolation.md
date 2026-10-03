@@ -57,6 +57,12 @@ Consequently unsupported unscoped operations may be denied after a restrictive
 branch assignment, even though their original outside-branch grants remain stored.
 Further route adaptation is required for full behavioral parity.
 
+The bulk cashier-target writer and shift-performance collection now also resolve
+their branch candidates before authorization. The bulk writer validates every
+target against the resulting branch constraint before inserting anything, so a
+mixed allowed/denied batch cannot partially succeed. These two adaptations do
+not certify the remaining sales or shifts routes.
+
 ## Release
 
 1. Review and apply migrations/056_branch_employee_template_assignments.sql
@@ -98,6 +104,10 @@ The isolated test also replaces the branch base a second time, removing performa
 from branch A, then proves branch B targets and home sales remain readable.
 It seeds nonzero sales in both branches and checks aggregate and top-branch outputs,
 including explicit denied-branch queries and forged resource query parameters.
+
+The same isolated test now checks retained bulk-target creation in branch B,
+rejection of mixed B/A and B/foreign batches with unchanged row counts, and
+populated shift-tracking results containing only branch B.
 It also seeds an outbound transfer from the retained warehouse branch and a
 restricted transfer, verifying both list filtering and persisted-resource decisions.
 The linked account's default branch deliberately differs from the canonical

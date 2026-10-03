@@ -11,6 +11,12 @@ import { eq } from "drizzle-orm";
 export async function branchTemplateRouteContext(req: any, module: string, branches: string[]) {
   const path = req.path;
   const method = req.method;
+  // Both handlers enforce getEffectiveBranchFilter on every returned row or
+  // every submitted target. Do not infer a scope for other sales/shift routes.
+  if (module === "sales" && method === "POST" && path === "/api/cashier-shift-targets/bulk")
+    return { kind: "collection" as const, branchIds: branches };
+  if (module === "shifts" && method === "GET" && path === "/api/shift-performance-tracking")
+    return { kind: "collection" as const, branchIds: branches };
   const incentiveResources = [
     ["smart_incentives_challenges", "challenges", cashierDailyChallenges],
     ["smart_incentives_commissions", "product-commissions", productCommissions],

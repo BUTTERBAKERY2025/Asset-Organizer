@@ -5,6 +5,12 @@ description: Phase-two security decisions and deployment limits for scope-aware 
 
 Keep action and scope in one decision. Navigation unions are display-only; never authorize data by combining a flattened action list with an independent branch list.
 
+Complete branch-template isolation before recommending publication; do not repeatedly hand the user partial preparation choices instead of closing the known gaps.
+
+**Why:** The user explicitly corrected the workflow: «خلص كل شيء قبل النشر».
+
+**How to apply:** Treat known compatibility gaps as part of the requested work, not optional follow-up suggestions. Keep production publication and live employee activation separate from development verification.
+
 **Why:** Existing branch-view access previously amplified actions from a different assignment. An unknown resource context cannot establish that a scoped permission or deny applies.
 
 **How to apply:** Route-owned persisted-resource context and actual collection filtering are required for scoped grants. Unadapted routes fail closed; explicitly review their legitimate workflows before activating the new resolver. See docs/governance/phase2-contextual-permissions.md.
