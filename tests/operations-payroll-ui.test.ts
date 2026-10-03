@@ -226,7 +226,8 @@ describe("current-scope settled rendering and explicit loading/error states", ()
     expect(page).toContain('authorizedBranch && branch && activeTab === "employees"');
     expect(employees).toContain("enabled: employeesNeeded");
     expect(employees).toContain('employeesState === "ready" && employees.data');
-    expect(joining).toContain('const rows = state === "ready"');
+    expect(joining).toContain('const authorizedRows = state === "ready"');
+    expect(joining).toContain('const rows = focus.requested ? focus.row ? [focus.row] : [] : authorizedRows');
     expect(joining).toContain('queryKey: ["/api/operations-hr/joining", branch.id]');
     expect(joining).toContain("new URLSearchParams({ branchId: branch.id })");
     expect(transfers).toContain('const rows = state === "ready"');

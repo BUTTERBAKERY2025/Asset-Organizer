@@ -32768,7 +32768,8 @@ export async function registerRoutes(
         readPayrollSource("employees", () => storage.getBranchEmployeesByBranch(scope.branchId)),
       ]);
       const historicalEmployees = !isLocked
-        ? (await fetchSalaryClosingRaw(scope.branchId, scope.month)).employees : [];
+        ? (await readPayrollSource("historicalMembership",
+          () => loadHistoricalPayrollEmployees(scope.branchId, scope.month, []))).employees : [];
       const historicalEmployee = historicalEmployees.find(e => e.id === employeeId);
       if (!savedEmployee && !currentEmployee) return res.status(404).json({ error: "الموظف غير موجود" });
       if (!savedEmployee && !historicalEmployee) {

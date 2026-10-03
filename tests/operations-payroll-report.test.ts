@@ -8,6 +8,7 @@ import { payrollAttendanceEvidence, payrollReadError, readPayrollSource } from "
 import { buildOperationsPayrollExport } from "../server/operations-payroll-export";
 import { operationsPayrollFullCsv } from "../shared/operations-payroll-export";
 import { storage as authStorage } from "../server/storage";
+import { normalizePermissionDecisionSnapshot } from "../server/permission-decision";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -100,6 +101,13 @@ function fixture() {
       authPermissions: [{ module: "operations_hr", actions: ["view"] }, { module: "salary_closing", actions: ["view"] }],
       ...overrides,
     };
+    req.authPermissionDecisionSnapshot = {
+      ...normalizePermissionDecisionSnapshot({
+        userId: req.currentUser.id, sourceMode: null, direct: req.authPermissions, roles: [], overrides: [],
+      }),
+      directPermissions: req.authPermissions,
+    };
+    req.userBranchAccess = await authStorage.getUserBranchAccess(req.currentUser.id);
     const res: any = {
       statusCode: 200, body: undefined, headers: {} as Record<string, string>,
       status(value: number) { this.statusCode = value; return this; },
@@ -120,6 +128,25 @@ function fixture() {
 }
 
 describe("operations payroll authoritative report and read routes", () => {
+  it("blocks every server export format on unresolved membership", async () => {
+    const f = fixture();
+    f.context.loadHistoricalPayrollEmployees.mockResolvedValue({
+      employees: [], warnings: [{ code: "historical_membership", message: "review" }] as any,
+    });
+    for (const format of ["csv", "xlsx", "pdf"]) {
+      const res = await f.invoke("/api/operations-hr/payroll/export", { format });
+      expect(res.statusCode).toBe(409);
+      expect(res.body.code).toBe("PAYROLL_MEMBERSHIP_REVIEW_REQUIRED");
+    }
+  });
+  it("permits proven open-month historical attendance but not current-branch guesses", async () => {
+    const f = fixture();
+    f.mockStorage.getBranchEmployee.mockResolvedValue({ ...f.employee, branchId: "outside" });
+    f.context.loadHistoricalPayrollEmployees.mockResolvedValue({ employees: [{ ...f.employee, branchId: "a" }], warnings: [] });
+    expect((await f.invoke("/api/operations-hr/payroll/attendance", { branchEmployeeId: "18" })).statusCode).toBe(200);
+    f.context.loadHistoricalPayrollEmployees.mockResolvedValue({ employees: [], warnings: [] });
+    expect((await f.invoke("/api/operations-hr/payroll/attendance", { branchEmployeeId: "18" })).statusCode).toBe(403);
+  });
   it("historical preview retains full salary inputs after a later transfer", async () => {
     const f = fixture();
     const before = await f.helpers.buildBranchPreview("a", "2026-06");
@@ -251,7 +278,7 @@ describe("operations payroll authoritative report and read routes", () => {
     for (const route of ["/api/operations-hr/payroll", "/api/operations-hr/payroll/export", "/api/salary-closing/preview"]) {
       const res = await f.invoke(route, {}, route.startsWith("/api/salary") ? { currentUser: { id: "admin", role: "admin" } } : {});
       expect(res.statusCode).toBe(500);
-      expect(res.body).toMatchObject({ code: "PAYROLL_SOURCE_UNAVAILABLE", source });
+      expect(res.body).toMatchObject({ code: "PAYROLL_SOURCE_UNAVAILABLE", source: source === "employees" ? "historicalMembership" : source });
       expect(JSON.stringify(res.body)).not.toMatch(/secret|postgres|SELECT/);
       expect(res.body.lines).toBeUndefined();
     }
@@ -376,6 +403,7 @@ describe("operations payroll authoritative report and read routes", () => {
       expect((await f.invoke("/api/operations-hr/payroll/attendance", { branchEmployeeId: id })).statusCode).toBe(400);
     }
     f.mockStorage.getBranchEmployee.mockResolvedValue({ ...f.employee, branchId: "outside" });
+    f.context.loadHistoricalPayrollEmployees.mockResolvedValue({ employees: [], warnings: [] });
     expect((await f.invoke("/api/operations-hr/payroll/attendance", { branchEmployeeId: "18" })).statusCode).toBe(403);
     expect(f.mockStorage.getAllAttendanceRecords).not.toHaveBeenCalled();
   });
@@ -395,6 +423,7 @@ describe("operations payroll authoritative report and read routes", () => {
     expect((await f.invoke("/api/operations-hr/payroll/attendance", { branchEmployeeId: "91" })).statusCode).toBe(403);
     f.mockStorage.getBranchEmployee.mockResolvedValue({ ...f.employee, branchId: "outside" });
     f.mockStorage.getSalaryClosureByBranchAndMonth.mockResolvedValue({ id: 6, status: "reopened" });
+    f.context.loadHistoricalPayrollEmployees.mockResolvedValue({ employees: [], warnings: [] });
     expect((await f.invoke("/api/operations-hr/payroll/attendance", { branchEmployeeId: "18" })).statusCode).toBe(403);
   });
 

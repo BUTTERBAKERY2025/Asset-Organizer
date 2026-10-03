@@ -11,6 +11,12 @@ Historical branch membership must remain tied to the payroll period even before 
 
 **How to apply:** Distinguish historical membership from an immutable financial snapshot. Do not invent a mid-month salary allocation policy, infer a transfer date from today's branch, or reopen existing closures as part of a membership correction.
 
+Payroll route tests must model both current permission decisions and fresh explicit branch grants, not only a role plus a legacy permission list.
+
+**Why:** Incomplete authentication fixtures caused permission-source errors and branch denials before the payroll calculation ran, concealing whether the historical-payroll changes worked.
+
+**How to apply:** Keep production guards intact; update isolated request fixtures to reflect the real authenticated request. Test historical membership separately from current branch grants and require both before exposing attendance.
+
 - A closed month must behave as an **immutable snapshot**. The preview endpoint must return the SAVED snapshot (salary_closure_lines + header totals/warnings), NOT a live recompute, whenever status==='closed'. Live recompute on a locked month silently lets numbers drift away from payslips/bank-file.
   **Why:** payslip PDF and bank file read saved lines; on-screen and report exports must match them.
 
