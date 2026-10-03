@@ -13,7 +13,13 @@ The user subsequently explicitly confirmed: «نعم، جميع موظفي فر�
 
 **Why:** The user wants existing and future employees under each operations manager's branches to follow the same organized template workflow.
 
-**How to apply:** Derive coverage from fresh writable branch grants and active employee membership, not historic selections. Coverage does not create accounts or assign templates automatically. Allow ordinary unbound legacy branch-permission accounts to enter explicit template review; a broken existing binding is not legacy evidence. Administrative, multi-branch and unknown inherited/override authority stays protected.
+**How to apply:** Derive coverage from fresh writable branch grants and active employee membership, not historic selections. Coverage does not create accounts or assign templates automatically. Allow ordinary unbound legacy branch-permission accounts to enter explicit template review; a broken existing binding is not legacy evidence. Administrative and unknown inherited/override authority stays protected. Multi-branch accounts require independent branch assignment, not removal of protections around the old account-wide writer.
+
+The user approved separating template assignments per branch while preserving existing permissions elsewhere.
+
+**Why:** A manager must be able to assign templates for employees of their authorized branches without changing those employees' other-branch authority.
+
+**How to apply:** Use a branch-scoped assignment and contextual authorization together. Never replace account-wide permissions to implement a branch-only change. Whole-account freeze, reactivation and credential operations require their own broader authority; branch assignment alone does not authorize them.
 
 A genuine template-backed account must remain manageable after assignment. This exception requires intact approval, account/employee/branch binding, explicit direct source, and exact equality with the assigned base; mere similarity to a template is not authority.
 
