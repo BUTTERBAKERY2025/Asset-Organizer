@@ -12,7 +12,7 @@ export async function runTemplatePilotSmoke({ client, request, admin, manager, e
     { module: "delivery_tasks", actions: ["view", "edit"] }];
   const call = async (path, body, code, status = 200, cookie = admin, method = "POST") => {
     const response = await request(path, { cookie, method, ...(body === undefined ? {} : { body }) });
-    check(response.status === status, code); return response;
+    check(response.status === status, `${code}_HTTP_${response.status}_${response.json?.code ?? "no_code"}`); return response;
   };
   const tables = ["users", "branch_employees", "user_permissions", "user_permission_source_modes", "user_assignments",
     "user_branch_access", "user_permission_overrides", "employee_account_additions",
@@ -254,7 +254,8 @@ export async function runTemplatePilotSmoke({ client, request, admin, manager, e
   check([expanded, unsupported].every(tid => catalogue.templates.some(t => t.templateId === tid)), "TP_NO_SILENT_CATALOG_FILTER");
   await call("/api/admin/employee-template-pilot-catalog", undefined, "TP_MANAGER_NO_ADMIN_CATALOG", 403, manager, "GET");
   const delegated = (await call("/api/operations/employee-accounts/job-templates", undefined, "TP_OPS_CATALOG", 200, manager, "GET")).json;
-  check(!delegated.templates.some(t => t.templateId === expanded), "TP_OPS_CEILING_UNCHANGED");
+  check(delegated.templates.some(t => t.templateId === expanded), "TP_APPROVED_BRANCH_TEMPLATE_AVAILABLE_TO_OPS");
+  check(delegated.excludedTemplates.some(t => t.templateId === unsupported && t.reason.includes("users")), "TP_OPS_EXCLUSION_EXPLAINED");
   const blocked = await preview(unsupported, 1);
   check(!blocked.canApply && blocked.blockedReasons.some(b => b.code === "ADMIN_TEMPLATE_PERMISSION_UNSUPPORTED"), "TP_EXPLICIT_UNSUPPORTED_REASON");
   await reject(root, body(blocked), "TP_UNSUPPORTED_WRITE_DENIED", 403, "PILOT_BLOCKED");
@@ -275,4 +276,46 @@ export async function runTemplatePilotSmoke({ client, request, admin, manager, e
     "TP_EXPANDED_RUNTIME_READ", 200, expandedCookie, "GET")).json;
   check(expandedContent.permissions.every(p => actualPermissions.some(actual => actual.module === p.module
     && actual.actions.includes("view"))), "TP_EXPANDED_RUNTIME_HAS_EVERY_CHOSEN_MODULE");
+  const managerRoot = "/api/admin/employee-account-managers/isolated-fixture-manager";
+  const managerSelection = (await call(managerRoot, undefined, "TP_SELECT_READ", 200, admin, "GET")).json;
+  check(managerSelection.employees.some(e => e.employeeId === id && e.eligible),
+    `TP_SELECTION_ELIGIBILITY_${managerSelection.employees.find(e => e.employeeId === id)?.reason ?? "absent"}`);
+  await call(managerRoot, { revision: managerSelection.revision, employeeIds: [id] }, "TP_SELECT_BOUND_ACCOUNT", 200, admin, "PUT");
+  const opsRoot = `/api/operations/employee-accounts/${id}`;
+  const opsSnapshot = (await call(`${opsRoot}/template-assignment`, undefined, "TP_OPS_BOUND_SNAPSHOT", 200, manager, "GET")).json;
+  const opsBody = { templateId: expanded, version: 1, branchId: A, reason: "Approved delegated branch template",
+    expectedAssignmentRevision: opsSnapshot.expectedAssignmentRevision };
+  await call(`${opsRoot}/template-assignment`, opsBody, "TP_OPS_EXPANDED_UPDATE", 200, manager);
+  // Same family of permissions under a different job-template key: no cashier special case.
+  const second = (await call("/api/rbac/job-template-drafts", {
+    content: { ...expandedContent, key: "isolated_other_branch_job", name: "Different approved branch job" },
+  }, "TP_OTHER_JOB_CREATE", 201)).json.id;
+  await approve(second, 1);
+  const nextOps = (await call(`${opsRoot}/template-assignment`, undefined, "TP_OPS_NEXT_SNAPSHOT", 200, manager, "GET")).json;
+  await call(`${opsRoot}/template-assignment`, { ...opsBody, templateId: second,
+    expectedAssignmentRevision: nextOps.expectedAssignmentRevision }, "TP_OPS_DIFFERENT_JOB_APPLY", 200, manager);
+  const roster = (await call("/api/operations/employee-accounts", undefined, "TP_OPS_AFTER_ROSTER", 200, manager, "GET")).json;
+  check(roster.employees.find(e => e.employeeId === id)?.management.allowed, "TP_TEMPLATE_ACCOUNT_REMAINS_MANAGEABLE");
+  // A forged direct grant is NOT covered by the genuine binding.
+  await client.query("INSERT INTO user_permissions (user_id,module,actions) VALUES ($1,'users',ARRAY['view'])", [userId]);
+  await call(`${opsRoot}/template-assignment`, undefined, "TP_BINDING_DRIFT_PROTECTED", 403, manager, "GET");
+  await client.query("DELETE FROM user_permissions WHERE user_id=$1 AND module='users'", [userId]);
+  const outside = await call(`${opsRoot}/template-assignment`, undefined, "TP_FORGED_BRANCH_SNAPSHOT", 200, manager, "GET");
+  await call(`${opsRoot}/template-assignment`, { ...opsBody, templateId: second, branchId: B,
+    expectedAssignmentRevision: outside.json.expectedAssignmentRevision }, "TP_OPS_OTHER_BRANCH_DENIED", 403, manager);
+  const freshEmployee = 930011;
+  await client.query(`INSERT INTO branch_employees
+    (id,branch_id,employee_name,job_title,nationality,salary,status)
+    VALUES ($1,$2,'Synthetic new delegated branch account','cashier','Synthetic',1000,'active')`, [freshEmployee,A]);
+  const selectFresh = (await call(managerRoot, undefined, "TP_SELECT_FRESH_READ", 200, admin, "GET")).json;
+  await call(managerRoot, { revision: selectFresh.revision, employeeIds: [id, freshEmployee] }, "TP_SELECT_FRESH", 200, admin, "PUT");
+  const freshRoot = `/api/operations/employee-accounts/${freshEmployee}`;
+  const freshSnapshot = (await call(`${freshRoot}/template-assignment`, undefined, "TP_CREATE_PREVIEW", 200, manager, "GET")).json;
+  const created = await call(`${freshRoot}/template-account`, { ...opsBody, templateId: second,
+    expectedAssignmentRevision: freshSnapshot.expectedAssignmentRevision }, "TP_CREATE_FULL_APPROVED_TEMPLATE", 201, manager);
+  check(created.json.employee.hasAccount && created.json.employee.management.allowed, "TP_NEW_ACCOUNT_MANAGEABLE");
+  const createdCookie = await loginCredentials(created.json.credentials);
+  const createdPermissions = (await call("/api/my-permissions", undefined, "TP_CREATED_EFFECTIVE_READ", 200, createdCookie, "GET")).json;
+  check(expandedContent.permissions.every(p => createdPermissions.some(a => a.module === p.module && a.actions.includes("view"))),
+    "TP_CREATE_PRESERVES_TEMPLATE_MODULES");
 }

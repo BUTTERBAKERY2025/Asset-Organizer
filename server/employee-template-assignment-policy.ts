@@ -5,8 +5,8 @@ import { templateContentSchema, type TemplateContent } from "@shared/job-permiss
 import { deny, validatePermissions } from "./employee-account-delegation-policy";
 import { EMPLOYEE_ACCOUNT_SAFE_PERMISSIONS } from "@shared/employee-account-delegation";
 
-// Admin-only cashier review vocabulary. This is NOT the operations delegation
-// ceiling, and must never be used by its catalog or mutation endpoints.
+// Reviewed branch-account template vocabulary. Applies to approved template
+// versions, never to arbitrary delegated raw grants. No template-name special cases.
 export const ADMIN_CASHIER_PERMISSIONS = [
   ...EMPLOYEE_ACCOUNT_SAFE_PERMISSIONS.map(p => ({
     module: p.module, actions: [...p.actions, "view_list", "view_details"],
@@ -20,7 +20,7 @@ export const ADMIN_CASHIER_PERMISSIONS = [
 export function validateAdminCashierPermissions(permissions: DelegatedPermission[]) {
   for (const p of permissions) for (const action of p.actions) {
     if (!ADMIN_CASHIER_PERMISSIONS.some(rule => rule.module === p.module && rule.actions.includes(action)))
-      deny("ADMIN_TEMPLATE_PERMISSION_UNSUPPORTED", `صلاحية غير مدعومة في تجربة الأدمن الحالية: ${p.module}:${action}. لم تُحذف من القالب.`);
+      deny("ADMIN_TEMPLATE_PERMISSION_UNSUPPORTED", `صلاحية غير مدعومة لإسناد قوالب حسابات الفروع: ${p.module}:${action}. لم تُحذف من القالب.`);
   }
   return permissions;
 }
@@ -58,7 +58,14 @@ export function eligibleTemplatePermissions(
   if (content.assignmentAuthority !== "delegated_operations" || content.scopeType === "branches")
     deny("TEMPLATE_SCOPE_FORBIDDEN", "القالب يتطلب إسناد مسؤول النظام أو نطاقاً غير مدعوم");
   // Empty action vocabulary rows have no effective authority and are omitted.
-  const permissions = validatePermissions(content.permissions.filter(p => p.actions.length), approved.permissions);
+  // An approved delegated template is the authority for its complete base.
+  // The old checkbox policy still controls raw grants, not approved versions.
+  // Reuse the reviewed branch-operation vocabulary, never a template name.
+  const permissions = validateAdminCashierPermissions(content.permissions.filter(p => p.actions.length))
+    .map(p => ({ module: p.module, actions: [...p.actions].sort() }))
+    .sort((a, b) => a.module.localeCompare(b.module));
+  if (permissions.some(p => p.actions.some(a => a !== "view") && !p.actions.includes("view")))
+    deny("VIEW_REQUIRED", "اختر صلاحية العرض مع إجراءات الوحدة");
   if (content.scopeType === "self" && permissions.length)
     deny("TEMPLATE_SCOPE_FORBIDDEN", "قالب البوابة الذاتية لا يمنح إجراءات إدارة الفرع");
   if (content.scopeType === "assigned_tasks"

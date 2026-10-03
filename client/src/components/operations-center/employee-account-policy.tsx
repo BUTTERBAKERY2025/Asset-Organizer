@@ -43,11 +43,12 @@ export function EmployeeAccountPolicyEditor({ directory, refresh }: { directory:
   };
   return <section className="space-y-3 rounded-xl border border-violet-200 bg-card p-4" aria-labelledby="delegation-policy-title" data-testid="employee-account-policy-editor">
     <div className="flex items-center gap-2"><ShieldCheck className="h-5 w-5 text-violet-700" /><h2 id="delegation-policy-title" className="text-sm font-bold">سياسة تفويض حسابات الموظفين · مدير النظام فقط</h2></div>
-    <p className="text-xs leading-6 text-muted-foreground">التفويض معطّل افتراضيًا إلى أن تُعتمد هذه السياسة. اختر السقف المسموح ثم فعّل التفويض واحفظ. مدير العمليات لا يستطيع تعديل هذا السقف أو منح صلاحيات خارجه.</p>
+    <p className="text-xs leading-6 text-muted-foreground">تفعيل السياسة هو مفتاح السماح بتفويض الحسابات؛ تعطيله يمنع إنشاء الحساب وإسناد القالب وإعادة الفتح. اعتماد القوالب المخصصة للإدارة المفوّضة مستقل عن سقف الصلاحيات اليدوية القديم أدناه، وليس محصورًا بالكاشير. مدير العمليات يختار إصدارًا معتمدًا ومؤهلًا وموظفًا محددًا في فرع مصرّح به، ولا يستطيع تعديل اعتماد القالب أو منح إجراءات أو نطاقات غير مدعومة.</p>
     <label className="flex min-h-11 cursor-pointer items-center gap-2 rounded-lg bg-violet-50/60 px-3 text-sm font-bold">
       <input type="checkbox" className="h-4 w-4 accent-violet-700" checked={enabled} disabled={pending} onChange={event => { setEnabled(event.target.checked); setSaved(false); }} />
       تفعيل تفويض الحسابات بعد الاعتماد
     </label>
+    <h3 className="text-xs font-bold">سقف المسار القديم للصلاحيات اليدوية · ليس قائمة القوالب المعتمدة</h3>
     <EmployeeAccountPermissions available={directory.availablePermissions} selected={permissions} onChange={next => { setPermissions(next); setSaved(false); }} disabled={pending} />
     <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs leading-6 text-amber-900">تعطيل السياسة أو تضييقها لا يسحب تلقائيًا وصول الحسابات الحالية. السياسة تحدّد التفويض اللاحق فقط؛ لإيقاف وصول حساب قائم جمّده أو خفّض صلاحياته صراحةً. يبقى عرض الحسابات والتجميد والتخفيض متاحًا، بينما يتطلب الإنشاء وإعادة الفتح سياسة مفعّلة.</p>
     {error && <p role="alert" className="text-xs leading-6 text-destructive">{error}</p>}

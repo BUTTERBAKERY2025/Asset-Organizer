@@ -89,6 +89,7 @@
 - [Operations performance evidence](operations-performance-evidence.md) — journal sales, exact source periods, null versus zero, and pagination-independent assistant evidence.
 - [Daily closure policy boundary](daily-closure-policy-boundary.md) — follow-up fixes must preserve financial policy; closed snapshots are not proof of full-day coverage or settled discrepancies.
 - [Employee account delegation](employee-account-delegation.md) — user-approved admin allowlist, employee linkage and explicit branch scope govern operations account management.
+- [Operations template delegation](operations-template-delegation.md) — approved branch templates are independent of raw-grant ceilings; intact provenance keeps assigned accounts manageable.
 - [Authorization rollout roadmap](authorization-roadmap.md) — six-stage matrix-to-pilot sequence; individual security fixes and test infrastructure are not the template rollout.
 - [Contextual permission boundary](contextual-permission-boundary.md) — action/scope tuples, explicit-empty source, route context opt-in and manual migration prerequisite; navigation is not authority.
 - [Isolated browser origin](isolated-browser-origin.md) — temporary UI/API test proxies must preserve browser-facing Host and stay running; do not weaken CSRF for test setup.

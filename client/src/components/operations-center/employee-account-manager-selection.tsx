@@ -43,7 +43,7 @@ export function EmployeeAccountManagerSelectionEditor({ refresh }: { refresh: ()
   const manager = managers?.find(row => row.id === managerId);
   return <section dir="rtl" className="space-y-3 rounded-xl border border-violet-200 bg-card p-4" data-testid="employee-account-manager-selection" aria-labelledby="manager-selection-title">
     <h2 id="manager-selection-title" className="flex items-center gap-2 text-sm font-bold"><ShieldCheck className="h-5 w-5 text-violet-700" />اختيار الموظفين المفوّضين لكل مدير عمليات</h2>
-    <p className="text-xs leading-6 text-muted-foreground">الاختيار مستقل لكل مدير وليس قائمة عامة. الموظف غير المختار للقراءة فقط؛ يبقى سقف الصلاحيات في السياسة أعلاه دون تغيير. لا يتم الحفظ تلقائيًا.</p>
+    <p className="text-xs leading-6 text-muted-foreground">الاختيار مستقل لكل مدير وليس قائمة عامة. الموظف غير المختار للقراءة فقط. القوالب المعتمدة للإدارة المفوّضة مستقلة عن سقف الصلاحيات اليدوية القديم؛ يبقى تفعيل السياسة والفرع المصرّح به وأهلية القالب والحساب مطلوبًا. لا يتم الحفظ تلقائيًا.</p>
     <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs leading-6 text-amber-900">سحب التفويض عن موظف لا يعطّل حساب الموظف أو يسحب وصوله الحالي. لإيقاف وصوله، جمّد الحساب صراحةً.</p>
     <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
       <div className="min-w-0 flex-1"><label htmlFor="employee-account-manager" className="mb-1 block text-xs font-bold">مدير العمليات</label>

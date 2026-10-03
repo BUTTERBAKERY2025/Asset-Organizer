@@ -16,6 +16,7 @@ import {
   type EmployeeTemplatePilotResponse,
 } from "@shared/employee-account-delegation";
 import { assignmentSnapshotRevision, eligibleTemplatePermissions, eligibleAdminTemplatePermissions, validateAdminCashierPermissions, templateAssignmentInput } from "./employee-template-assignment-policy";
+import { readVerifiedTemplateBases, matchesVerifiedTemplateBase } from "./employee-template-provenance";
 import {
   ADDITION_CAPABILITIES, additionInput, additionUpdateInput, additionDeleteInput,
   additionDTO, additionFingerprint, additionIsDelegationSafe, requireAdditionsStorage,
@@ -147,18 +148,19 @@ async function accountState(tx: Tx, actor: Actor, employee: Employee, approved: 
   const direct = await tx.select({ module: userPermissions.module, actions: userPermissions.actions }).from(userPermissions).where(eq(userPermissions.userId, account.id));
   const additions = overrides.length ? await readManagedAdditions(tx, [account.id]) : [];
   const safeAdditionIds = new Set(additions.filter(row => additionIsDelegationSafe(row, employee, approved)).map(row => row.id));
+  const boundBase = matchesVerifiedTemplateBase((await readVerifiedTemplateBases(tx, [account.id])).get(account.id), employee, direct);
   if (adminPilot) {
     actorMayManage(actor, true);
     validateAdminCashierPermissions(direct);
   }
   targetMayManage(actor.id, account, employee.branchId, access.map(g => g.branchId), assignments.length,
-    overrides.filter(row => !safeAdditionIds.has(row.id)).length, adminPilot ? [] : direct, approved);
+    overrides.filter(row => !safeAdditionIds.has(row.id)).length, adminPilot || boundBase ? [] : direct, approved);
   if (!["active", "inactive"].includes(account.isActive ?? ""))
     deny("PROTECTED_ACCOUNT", "حالة الحساب تتطلب مراجعة مسؤول النظام");
   return {
-    account, permissions: direct, additions,
+    account, permissions: direct, additions, boundBase,
     canReactivate: approved.enabled
-      && permissionsWithin(effectiveDelegatedPermissions(account, direct), approved.permissions)
+      && (boundBase || permissionsWithin(effectiveDelegatedPermissions(account, direct), approved.permissions))
       && (actor.role === "admin" || await suspensionOwned(tx, account, employee)),
   };
 }
@@ -234,8 +236,9 @@ async function effectiveAccountBase(tx: Tx, state: Awaited<ReturnType<typeof acc
     }
     if (actions.length) currentByModule.set(p.module, actions);
   }
-  const permissions = validatePermissions(Array.from(currentByModule, ([module, actions]) => ({ module, actions })),
-    EMPLOYEE_ACCOUNT_SAFE_PERMISSIONS, false);
+  const groups = Array.from(currentByModule, ([module, actions]) => ({ module, actions }));
+  const permissions = state?.boundBase ? validateAdminCashierPermissions(groups)
+    : validatePermissions(groups, EMPLOYEE_ACCOUNT_SAFE_PERMISSIONS, false);
   return { sourceMode: source?.mode ?? null, permissions };
 }
 async function readTemplateBinding(tx: Tx, employeeId: number) {
@@ -462,6 +465,7 @@ async function roster(
     .where(scope).orderBy(branchEmployees.employeeName, branchEmployees.id);
   await budget();
   const accounts = await tx.select(accountProjection).from(users).where(inArray(users.id, linked));
+  const verifiedBases = await readVerifiedTemplateBases(tx, accounts.map(account => account.id));
   await budget();
   const access = await tx.select({ userId: userBranchAccess.userId, branchId: userBranchAccess.branchId })
     .from(userBranchAccess).where(inArray(userBranchAccess.userId, linked));
@@ -514,13 +518,14 @@ async function roster(
         const permissions = permissionsByUser.get(target.id) ?? [];
         const safeAdditionIds = new Set((additionsByUser.get(target.id) ?? []).filter(row => additionIsDelegationSafe(row, employee, approved)).map(row => row.id));
         const unknownOverrides = (overridesByUser.get(target.id) ?? []).filter(id => !safeAdditionIds.has(id)).length;
+        const boundBase = matchesVerifiedTemplateBase(verifiedBases.get(target.id), employee, permissions);
         targetMayManage(actor.id, target, employee.branchId, grantsByUser.get(target.id) ?? [],
-          Number(assigned.has(target.id)), unknownOverrides, permissions, approved);
+          Number(assigned.has(target.id)), unknownOverrides, boundBase ? [] : permissions, approved);
         if (!["active", "inactive"].includes(target.isActive ?? ""))
           deny("PROTECTED_ACCOUNT", "حالة الحساب تتطلب مراجعة مسؤول النظام");
         account = { id: target.id, username: target.username, isActive: target.isActive as "active" | "inactive",
           permissions, canReactivate: approved.enabled
-            && permissionsWithin(effectiveDelegatedPermissions(target, permissions), approved.permissions)
+            && (boundBase || permissionsWithin(effectiveDelegatedPermissions(target, permissions), approved.permissions))
             && (actor.role === "admin" || suspensionMatches(markerValues.get(suspensionKey(target.id)), target, employee)) };
       }
     } catch (error) {
@@ -617,6 +622,7 @@ export function registerEmployeeAccountDelegation(app: Express) {
         WHERE v.version = (SELECT MAX(x.version) FROM public.job_permission_template_draft_versions x WHERE x.template_id = d.id)
         ORDER BY d.id`);
       const summaries: EmployeeJobTemplateSummary[] = [];
+      const excludedTemplates: { templateId: number; version: number; name: string; code: string; reason: string }[] = [];
       for (const raw of result.rows as any[]) {
         try {
           const { content, permissions } = eligibleTemplatePermissions(raw.content, approved, jobTitle, targetRole);
@@ -625,13 +631,14 @@ export function registerEmployeeAccountDelegation(app: Express) {
             permissions, approvedAt: new Date(raw.approvedAt).toISOString() });
         } catch (error) {
           if (!(error instanceof DelegationError)) throw error;
-          // Ineligibility is a catalog filter, never a permissive write fallback.
+          excludedTemplates.push({ templateId: raw.templateId, version: raw.version,
+            name: raw.content.name, code: error.code, reason: error.message });
         }
       }
       await budget();
-      return summaries;
+      return { templates: summaries, excludedTemplates };
     }, { isolationLevel: "repeatable read", accessMode: "read only" });
-    res.json({ templates });
+    res.json(templates);
   }, "employee_job_template_catalog"));
 
   app.get("/api/operations/employee-accounts/:employeeId/template-assignment", isAuthenticated, endpoint(async (req, res) => {
@@ -1034,7 +1041,7 @@ export function registerEmployeeAccountDelegation(app: Express) {
           // Disabled policies and accounts outside a narrowed approval may only
           // lose permissions, never exchange them for new rights. The requested
           // result was already validated against the current approved ceiling.
-          if ((!approved.enabled || !permissionsWithin(existingEffective, approved.permissions))
+          if ((!approved.enabled || (!templateMode && !permissionsWithin(existingEffective, approved.permissions)))
               && !permissionsWithin(selected!, existingEffective))
             deny("REDUCTION_ONLY", "بعد سحب التفويض يسمح بتقليل الصلاحيات الحالية إلى الحدود المعتمدة فقط");
           if (mode === "template-assignment" && "templateId" in input) {
@@ -1052,7 +1059,7 @@ export function registerEmployeeAccountDelegation(app: Express) {
           }
         } else if ("isActive" in input) {
           if (input.isActive === "active"
-              && !permissionsWithin(effectiveDelegatedPermissions(account, state.permissions), approved.permissions))
+              && !state.boundBase && !permissionsWithin(effectiveDelegatedPermissions(account, state.permissions), approved.permissions))
             deny("PERMISSION_NOT_APPROVED", "قلّل صلاحيات الحساب إلى الحدود المعتمدة قبل إعادة تفعيله");
           if (input.isActive === "active" && account.isActive === "inactive" && !state.canReactivate)
             deny("ADMIN_FROZEN_ACCOUNT", "الحساب مجمّد خارج تفويض التشغيل؛ يلزم مسؤول النظام لإعادة تفعيله");

@@ -212,6 +212,9 @@ describe("operations employee account page", () => {
     mocks.search = "?policy=1";
     await mount();
     expect(renderer.root.findAllByProps({ "data-testid": "employee-account-policy-editor" })).toHaveLength(1);
+    expect(JSON.stringify(renderer.toJSON())).toContain("اعتماد القوالب المخصصة للإدارة المفوّضة مستقل عن سقف الصلاحيات اليدوية القديم");
+    expect(JSON.stringify(renderer.toJSON())).toContain("سقف المسار القديم للصلاحيات اليدوية · ليس قائمة القوالب المعتمدة");
+    expect(JSON.stringify(renderer.toJSON())).toContain("لا يعني اعتماد القالب دعم كل نطاق فرع أو منح وصول عالمي آمن");
     mocks.user = { ...mocks.user, role: "operations_manager" };
     await renderAgain();
     expect(renderer.root.findAllByProps({ "data-testid": "employee-account-policy-editor" })).toHaveLength(0);
@@ -375,7 +378,7 @@ describe("operations employee account page", () => {
     await mount();
     expect(renderer.root.findAllByProps({ "data-testid": "employee-account-2" })).toHaveLength(1);
     expect(button("إسناد قالب معتمد").props.disabled).toBe(false);
-    expect(JSON.stringify(renderer.toJSON())).toContain("تعطيل السياسة أو تضييقها لا يسحب تلقائيًا وصول الحسابات الحالية");
+    expect(JSON.stringify(renderer.toJSON())).toContain("تعطيل السياسة أو تضييق المسار اليدوي القديم لا يسحب تلقائيًا وصول الحسابات الحالية");
     await act(async () => button("إسناد قالب معتمد").props.onClick());
     expect(button("تأكيد إسناد الإصدار").props.disabled).toBe(true);
     expect(renderer.root.findAllByType("input").filter((node: any) => node.props.type === "checkbox")).toHaveLength(1);

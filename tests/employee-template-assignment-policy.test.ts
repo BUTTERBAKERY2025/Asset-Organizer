@@ -37,11 +37,11 @@ describe("approved employee template assignment boundary", () => {
     eligibleTemplatePermissions(raw, policy, null);
     expect(raw).toEqual(cashier);
   });
-  it("requires both enabled admin policy and every approved action", () => {
+  it("requires enabled delegation but trusts approved template contents independently of legacy checkboxes", () => {
     expect(() => eligibleTemplatePermissions(cashier, { ...policy, enabled: false })).toThrow();
-    expect(() => eligibleTemplatePermissions(cashier, { enabled: true, permissions: [] })).toThrow();
+    expect(eligibleTemplatePermissions(cashier, { enabled: true, permissions: [] }).permissions).toEqual(eligibleTemplatePermissions(cashier, policy).permissions);
     expect(() => eligibleTemplatePermissions(cashier, { enabled: true,
-      permissions: [{ module: "cashier_journal", actions: ["view"] }] })).toThrow();
+      permissions: [{ module: "cashier_journal", actions: ["view"] }] })).not.toThrow();
   });
   it("rejects administrator-only and multibranch templates", () => {
     expect(() => eligibleTemplatePermissions({ ...cashier, assignmentAuthority: "admin" }, policy)).toThrow();

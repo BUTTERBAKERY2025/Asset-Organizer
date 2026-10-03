@@ -41,6 +41,7 @@ const independentAddition: EmployeeAccountAddition = {
 };
 let renderer: any;
 let catalog: ApprovedEmployeeTemplate[];
+let excludedTemplates: unknown;
 let current: EmployeeAssignmentSnapshot;
 let write: ReturnType<typeof vi.fn>;
 let fetchMock: ReturnType<typeof vi.fn>;
@@ -61,11 +62,12 @@ async function mount(mode: "create" | "permissions" = "permissions", row = emplo
 }
 beforeEach(() => {
   catalog = [template];
+  excludedTemplates = undefined;
   current = snapshot;
   write = vi.fn().mockResolvedValue(new Response(JSON.stringify({ employee, assignment: {} })));
   fetchMock = vi.fn((url: string, options: { method: string }) => {
     if (options.method === "POST") return write(url, options);
-    return Promise.resolve(new Response(JSON.stringify(url.includes("job-templates") ? { templates: catalog } : current)));
+    return Promise.resolve(new Response(JSON.stringify(url.includes("job-templates") ? { templates: catalog, ...(excludedTemplates === undefined ? {} : { excludedTemplates }) } : current)));
   });
   vi.stubGlobal("fetch", fetchMock);
   vi.stubGlobal("window", { isSecureContext: true });
@@ -78,6 +80,86 @@ afterEach(async () => {
 });
 
 describe("approved employee template review", () => {
+  it.each(["create", "permissions"] as const)("shows concrete non-selectable exclusions and eligible non-cashier templates in %s mode without filtering against the legacy ceiling", async mode => {
+    const quality = { ...template, templateId: 8, version: 2, key: "quality-branch", name: "جودة الفرع", permissions: [{ module: "quality_control", actions: ["view", "create"] }] };
+    catalog = [template, quality];
+    excludedTemplates = [{ templateId: 12, version: 4, name: "إدارة عدة فروع", reason: "نطاق branches غير مدعوم للإسناد المفوض لهذا الموظف", code: "UNSUPPORTED_TEMPLATE_SCOPE" },
+      { templateId: 13, version: 1, name: "صلاحية مالية عامة", reason: "finance:approve ليس إجراءً مدعومًا في هذا المسار", code: "UNSUPPORTED_TEMPLATE_PERMISSION" }];
+    const row = mode === "create" ? { ...employee, hasAccount: false, account: null } : employee;
+    current = { ...snapshot, currentPermissions: mode === "create" ? [] : snapshot.currentPermissions };
+    const legacyOnly = { ...directory, policy: { enabled: true, permissions: [{ module: "cashier_journal", actions: ["view"] }] }, availablePermissions: [{ module: "cashier_journal", actions: ["view"] }] };
+    await mount(mode, row, legacyOnly);
+    const picker = renderer.root.findByProps({ id: "approved-employee-template" });
+    expect(text(picker)).toContain("جودة الفرع");
+    expect(text(picker)).not.toContain("إدارة عدة فروع");
+    expect(text(picker)).not.toContain("صلاحية مالية عامة");
+    const exclusions = renderer.root.findByProps({ "aria-label": "القوالب المعتمدة المستبعدة من الإسناد" });
+    expect(text(exclusions)).toContain("إدارة عدة فروع");
+    expect(text(exclusions)).toContain("finance:approve");
+    expect(text(exclusions)).toContain("UNSUPPORTED_TEMPLATE_SCOPE");
+    expect(renderer.root.findByProps({ id: "approved-employee-template" }).props.value).toBe("");
+    expect(serialized()).toContain("ليست الخيارات محصورة بالكاشير");
+    await select("12:4");
+    await confirm();
+    const applyLabel = mode === "create" ? "تأكيد الإسناد وتوليد الحساب" : "تأكيد إسناد الإصدار";
+    await act(async () => button(applyLabel).props.onClick());
+    expect(write).not.toHaveBeenCalled();
+    await select("8:2");
+    await confirm();
+    write.mockResolvedValueOnce(new Response(JSON.stringify({ employee, assignment: {}, ...(mode === "create" ? { credentials: { username: "quality-user", password: "one-display-only" } } : {}) })));
+    await act(async () => button(applyLabel).props.onClick());
+    expect(write).toHaveBeenCalledOnce();
+    expect(write.mock.calls[0][0]).toContain(mode === "create" ? "/template-account" : "/template-assignment");
+    expect(JSON.parse(write.mock.calls[0][1].body)).toEqual({ templateId: 8, version: 2, branchId: "a", reason: "اعتماد مهام الفرع", expectedAssignmentRevision: current.expectedAssignmentRevision });
+    if (mode === "create") expect(renderer.root.findByProps({ "data-testid": "generated-password" }).children).toEqual(["one-display-only"]);
+  });
+  it.each(["create", "permissions"] as const)("allows refresh of an empty eligible catalog without choosing anything in %s mode", async mode => {
+    catalog = [];
+    excludedTemplates = [{ templateId: 12, version: 4, name: "قالب معتمد مستبعد", reason: "وظيفة الموظف غير متوافقة مع مهام التوصيل", code: "DELIVERY_JOB_REQUIRED" }];
+    await mount(mode, mode === "create" ? { ...employee, hasAccount: false, account: null } : employee);
+    expect(renderer.root.findByProps({ id: "approved-employee-template" }).props.value).toBe("");
+    expect(serialized()).toContain("وظيفة الموظف غير متوافقة");
+    const reload = button("تحديث المعاينة والقوالب");
+    expect(reload.props.disabled).toBe(false);
+    catalog = [template];
+    excludedTemplates = [];
+    await act(async () => reload.props.onClick());
+    expect(fetchMock.mock.calls.filter(call => call[0].includes("job-templates"))).toHaveLength(2);
+    expect(renderer.root.findByProps({ id: "approved-employee-template" }).props.value).toBe("");
+    expect(renderer.root.findAllByProps({ "aria-label": "القوالب المعتمدة المستبعدة من الإسناد" })).toHaveLength(0);
+    expect(write).not.toHaveBeenCalled();
+  });
+  it.each([
+    ["null exclusions", null],
+    ["missing exclusion reason", [{ templateId: 12, version: 4, name: "قالب غير مكتمل", code: "UNSUPPORTED_TEMPLATE_SCOPE" }]],
+    ["missing exclusion name", [{ templateId: 12, version: 4, reason: "نطاق غير مدعوم", code: "UNSUPPORTED_TEMPLATE_SCOPE" }]],
+    ["missing exclusion code", [{ templateId: 12, version: 4, name: "قالب غير مكتمل", reason: "نطاق غير مدعوم" }]],
+  ])("fails closed on malformed catalog metadata: %s", async (_case, malformed) => {
+    excludedTemplates = malformed;
+    await mount();
+    expect(serialized()).toContain("بيانات كتالوج القوالب أو أسباب الاستبعاد أو سجل الإسناد غير مكتملة");
+    expect(serialized()).not.toContain("لا يوجد إصدار معتمد مؤهل");
+    expect(renderer.root.findAllByProps({ id: "approved-employee-template" })).toHaveLength(0);
+    expect(button("تأكيد إسناد الإصدار").props.disabled).toBe(true);
+    expect(write).not.toHaveBeenCalled();
+  });
+  it.each(["create", "permissions"] as const)("fails closed when required approval metadata is missing in %s mode", async mode => {
+    catalog = [{ ...template, approvedAt: undefined }] as unknown as ApprovedEmployeeTemplate[];
+    await mount(mode, mode === "create" ? { ...employee, hasAccount: false, account: null } : employee);
+    expect(serialized()).toContain("بيانات كتالوج القوالب");
+    expect(renderer.root.findAllByProps({ id: "approved-employee-template" })).toHaveLength(0);
+    expect(write).not.toHaveBeenCalled();
+  });
+  it.each([
+    ["missing BASE", { ...snapshot, currentPermissions: undefined }],
+    ["incomplete persisted assignment", { ...snapshot, assignment: { templateId: 7, version: 1, branchId: "a", revision: "previous-revision", assignedAt: "2026-05-04T10:03:00Z", reason: "إسناد سابق" } }],
+  ])("does not fabricate empty current permissions or assignment metadata: %s", async (_case, malformed) => {
+    current = malformed as unknown as EmployeeAssignmentSnapshot;
+    await mount();
+    expect(serialized()).toContain("بيانات كتالوج القوالب أو أسباب الاستبعاد أو سجل الإسناد غير مكتملة");
+    expect(renderer.root.findAllByProps({ id: "approved-employee-template" })).toHaveLength(0);
+    expect(write).not.toHaveBeenCalled();
+  });
   it("loads an employee-filtered catalog and snapshot, with no implicit grant selection", async () => {
     await mount();
     expect(fetchMock.mock.calls.map(call => call[0])).toEqual([

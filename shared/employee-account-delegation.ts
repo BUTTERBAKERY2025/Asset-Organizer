@@ -216,6 +216,8 @@ export interface EmployeeJobTemplateSummary {
 }
 export interface EmployeeJobTemplatesResponse {
   templates: EmployeeJobTemplateSummary[];
+  /** Approved latest entries excluded for this employee/context, never selectable. */
+  excludedTemplates?: Array<{ templateId: number; version: number; name: string; reason: string; code: string }>;
 }
 export interface EmployeeTemplateAssignedResponse {
   employee: DelegatedEmployeeAccount;

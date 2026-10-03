@@ -13,7 +13,7 @@ const content = {
 describe("independent admin cashier template authority", () => {
   it("preserves the chosen permissions without using the operations ceiling", () => {
     expect(eligibleAdminTemplatePermissions(content, null, "employee").permissions).toEqual(content.permissions);
-    expect(() => eligibleTemplatePermissions(content, { enabled: true, permissions: ADMIN_CASHIER_PERMISSIONS })).toThrow();
+    expect(eligibleTemplatePermissions(content, { enabled: true, permissions: [] }).permissions).toEqual(content.permissions);
   });
   it("supports expressly admin-assigned templates", () => {
     expect(eligibleAdminTemplatePermissions({ ...content, assignmentAuthority: "admin" }, null, "employee").permissions).toEqual(content.permissions);

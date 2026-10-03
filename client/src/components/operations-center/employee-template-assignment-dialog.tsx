@@ -57,7 +57,8 @@ export function EmployeeTemplateAssignmentDialog({ employee, mode, directory, cl
   const snapshot = review.data?.snapshot;
   const templates = review.data?.templates ?? [];
   const selected = templates.find(template => employeeTemplateKey(template) === selection);
-  // The catalog is already server-filtered by authority, ceiling, role and job title.
+  // Server filters delegated authority, supported permissions/scopes, role and job.
+  // Approved template authority is independent of the legacy raw-permission ceiling.
   // Branch selection cannot move the employee or widen their persisted scope.
   const branches = directory.branches.filter(branch => branch.id === employee.branchId && branch.id === snapshot?.branchId);
   const allowed = employee.management?.allowed === true && directory.policy.enabled
@@ -155,13 +156,13 @@ export function EmployeeTemplateAssignmentDialog({ employee, mode, directory, cl
           <p className="rounded-lg border border-violet-200 bg-violet-50/60 p-3 text-xs leading-6 text-violet-900">{selected?.name} · الإصدار {selected?.version} · {employee.branchName}</p>
           <EmployeeAccountCredentials credentials={credentials} copied={copied} saved={handoffSaved} onCopy={copy} onSaved={saved => { setHandoffSaved(saved); setError(""); }} />
         </> : <>
-          <p className="text-xs leading-6 text-muted-foreground">يعرض الخادم الإصدارات المعتمدة المتاحة لهذا الموظف فقط. لا توجد صلاحيات مخصصة أو إسناد جماعي. القالب الفارغ صالح ولا يعطّل بوابة الموظف الذاتية أو يسحب صلاحيات الدور الموروثة.</p>
+          <p className="text-xs leading-6 text-muted-foreground">يمكن لمدير العمليات إنشاء حساب أو تحديث حساب قائم لكل موظف مختار في فرع مصرّح به، باستخدام أي إصدار معتمد ومؤهل للإدارة المفوّضة؛ ليست الخيارات محصورة بالكاشير ولا بسقف الصلاحيات اليدوية القديم. يبقى تفعيل السياسة واختيار الموظف والفرع وحدود الصلاحيات والنطاقات المدعومة شروطًا يتحقق منها الخادم. لا توجد صلاحيات مخصصة أو إسناد جماعي؛ القالب الفارغ لا يسحب الوصول الأصيل.</p>
           <p className="text-[11px] leading-6 text-muted-foreground">لوظيفة التوصيل وصول أصيل إلى عرض وتعديل مهام التوصيل. لا يسحبه قالب فارغ؛ الخادم يعرض فقط القوالب المتوافقة معه ولا يغيّر وظيفة الموظف.</p>
           {!allowed && <p role="alert" className="text-xs leading-6 text-destructive">التفويض أو السياسة الحالية لا يسمحان بالإسناد. لا يتم تعديل الحساب أو تجاوز حمايته.</p>}
           {review.loading ? <div role="status" className="space-y-3 rounded-lg border p-4"><div className="h-5 w-36 animate-pulse rounded bg-muted" /><div className="h-20 animate-pulse rounded bg-muted" /><span className="sr-only">جار التحقق من القوالب وحالة الحساب</span></div> : review.error ? <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-xs leading-6 text-destructive">{review.error}</div> : <>
             {!templates.length && <div className="rounded-lg border border-dashed border-violet-200 bg-violet-50/40 p-4">
               <p className="text-sm font-bold">لا يوجد إصدار معتمد مؤهل لهذا الموظف</p>
-              <p className="mt-1 text-xs leading-6 text-muted-foreground">قد يكون الاعتماد غير متاح أو نطاق القالب أو سقف السياسة أو الدور غير متوافق. قوالب الإدارة فقط لا تظهر هنا. قالب مهام التوصيل يتطلب وظيفة توصيل محفوظة على الموظف؛ اختيار قالب لا يغيّر الوظيفة.</p>
+              <p className="mt-1 text-xs leading-6 text-muted-foreground">راجع أسباب استبعاد الإصدارات المعتمدة أدناه إن وجدت. الاعتماد وحده لا يدعم كل نطاق أو إجراء عالمي؛ قوالب الأدمن فقط والأدوار المحمية والوظائف غير المتوافقة لا تُتاح للإسناد. قالب مهام التوصيل يتطلب وظيفة توصيل محفوظة؛ اختيار القالب لا يغيّرها. يمكنك تحديث المعاينة دون اختيار قالب.</p>
             </div>}
             <div className="grid gap-3 md:grid-cols-[1.5fr_1fr]">
               <div><label htmlFor="approved-employee-template" className="mb-1 block text-xs font-bold">القالب والإصدار المعتمد</label>
@@ -177,6 +178,11 @@ export function EmployeeTemplateAssignmentDialog({ employee, mode, directory, cl
                   {branches.map(branch => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
                 </select></div>
             </div>
+            {!!review.data?.excludedTemplates.length && <section className="space-y-2 rounded-lg border border-amber-200 bg-amber-50/40 p-3" aria-label="القوالب المعتمدة المستبعدة من الإسناد">
+              <h3 className="text-xs font-bold text-amber-900">إصدارات معتمدة غير مؤهلة لهذا الموظف · للقراءة فقط</h3>
+              <p className="text-[11px] leading-6 text-muted-foreground">هذه ليست خيارات قابلة للإسناد. يعرض الخادم السبب لكل قالب بدل إخفائه أو تمكينه تلقائيًا.</p>
+              {review.data.excludedTemplates.map(template => <article key={`${template.templateId}:${template.version}`} className="rounded-lg border border-amber-200 p-2 text-xs leading-6"><h4 className="font-bold">{template.name} · الإصدار {template.version}</h4><p>{template.reason}</p><bdi className="break-all font-mono text-[10px] text-muted-foreground">{template.code}</bdi></article>)}
+            </section>}
             <p className="text-[11px] leading-5 text-muted-foreground">النطاق مقيد بفرع الموظف المحفوظ على الخادم. لا ينقل هذا الإجراء الموظف إلى فرع آخر.</p>
             {selection && !selected && <p role="alert" className="text-xs text-destructive">لم يعد الإصدار المختار مؤهلًا أو معتمدًا. اختر إصدارًا متاحًا وراجع فرقًا جديدًا؛ لم نغيّر اختيارك تلقائيًا.</p>}
             {snapshot?.assignment && <p className="rounded-lg border bg-muted/20 p-3 text-xs leading-6">الإسناد الحالي: قالب #{snapshot.assignment.templateId} · إصدار {snapshot.assignment.version} · {employee.branchName}. لا يعني اعتماد إصدار أحدث إعادة تطبيقه تلقائيًا.</p>}
@@ -189,7 +195,7 @@ export function EmployeeTemplateAssignmentDialog({ employee, mode, directory, cl
                 <div className="grid grid-cols-2 gap-3 text-xs leading-6"><p>{actionsLabel(row.before)}</p><p>{actionsLabel(row.after)}</p></div>
                 {(row.added.length > 0 || row.removed.length > 0) && <p className="mt-2 border-t pt-2 text-[11px] leading-6">{row.added.length > 0 && <span className="block text-emerald-800">سيُضاف: {actionsLabel(row.added)}</span>}{row.removed.length > 0 && <span className="block text-amber-800">سيُزال: {actionsLabel(row.removed)}</span>}</p>}
               </div>)}
-              <p className="text-[11px] leading-6 text-muted-foreground">هذا فرق الأساس فقط. يستبدل الإسناد صلاحيات الأساس ولا يدمج الإضافات أو يغيّر منحها ومنعها ومددها. الاستثناءات القديمة أو المتغيرة والإضافات خارج السقف وإسنادات النظام القديم والأدوار غير المدعومة تُبقي الحساب محميًا؛ الخادم يقرر الأهلية.</p>
+              <p className="text-[11px] leading-6 text-muted-foreground">هذا فرق الأساس فقط، وليس شهادة بحصر كل وصول في الفرع. اعتماد القالب مستقل عن سقف الصلاحيات اليدوية القديم، لكنه لا يتيح إجراءات عالمية أو نطاقات غير مدعومة تلقائيًا. يستبدل الإسناد الأساس ولا يدمج الإضافات أو يغيّر منحها ومنعها ومددها؛ الاستثناءات غير المعروفة والإسنادات غير الموثقة والأدوار المحمية تمنع الإدارة المفوّضة، والخادم يتحقق من الأهلية ودليل الربط الدقيق.</p>
             </section>}
             {snapshot && !invalidPreview && <EmployeeAccountAdditionsReadOnly additions={snapshot.additions} branchName={employee.branchName} />}
             {employee.account?.isActive === "inactive" && <p className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs leading-6 text-amber-900"><AlertTriangle className="mt-1 h-4 w-4 shrink-0" />الحساب مجمّد. إسناد القالب لا يعيد فتحه أو يولّد كلمة مرور جديدة؛ إعادة الفتح إجراء مستقل.</p>}
