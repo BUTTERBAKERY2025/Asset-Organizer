@@ -3,6 +3,12 @@ name: Employee account delegation
 description: User-approved security boundary for operations-manager employee account administration.
 ---
 
+The user requires operations managers to be able to assign templates and perform delegated employee-management actions for any employee in their authorized branches, according to their granted permissions. They object to blanket exclusion of these employees with EXTRA_BRANCH_AUTHORITY.
+
+**Why:** The user explicitly clarified that all employees in the manager's authorized branches should be manageable within that manager's permissions.
+
+**How to apply:** Distinguish branch-scoped employee actions from authority to alter the entire account. Do not interpret this requirement as permission to overwrite grants in other branches or manage protected administrators. Existing blanket exclusions need review against this requirement, not merely removal of the guard.
+
 Operations managers may administer employee-linked accounts only within their explicitly assigned writable branches. Raw permission grants obey the administrator-approved allowlist, not the manager's own permissions. Approved branch-template bases are independently authorized; see operations-template-delegation.md.
 
 **Why:** The user explicitly chose administrator-approved permissions, and requires employee linkage before any account can be created. General user-administration authority would defeat this boundary.
