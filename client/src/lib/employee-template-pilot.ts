@@ -1,7 +1,13 @@
-import type { EmployeeTemplateAssignedResponse, EmployeeTemplatePilotResponse } from "@shared/employee-account-delegation";
+import type { EmployeeJobTemplateSummary, EmployeeTemplateAssignedResponse, EmployeeTemplatePilotResponse } from "@shared/employee-account-delegation";
 import { EmployeeAccountRequestError, employeeAccountErrorMessage } from "@/lib/employee-account-delegation";
 
 export type EmployeeTemplatePilotResult = EmployeeTemplateAssignedResponse & { comparison: EmployeeTemplatePilotResponse };
+/** Admin catalog includes approved multi-branch content even when pilot application is blocked. */
+export interface EmployeeTemplatePilotCatalogResponse {
+  templates: Array<Omit<EmployeeJobTemplateSummary, "scopeType"> & {
+    scopeType: EmployeeJobTemplateSummary["scopeType"] | "branches";
+  }>;
+}
 export interface EmployeeTemplatePilotInput {
   templateId: number;
   version: number;

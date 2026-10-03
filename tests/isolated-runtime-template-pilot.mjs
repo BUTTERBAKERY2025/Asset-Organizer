@@ -236,4 +236,43 @@ export async function runTemplatePilotSmoke({ client, request, admin, manager, e
   await remove(extraUpdate);
   check((await client.query("SELECT allow FROM user_permission_overrides WHERE id=$1", [deny.id])).rows[0].allow === false,
     "TP_INDEPENDENT_DENY_SURVIVES_ALL_PILOT_CHECKS");
+  const expandedContent = { ...content, key: "isolated_admin_cashier_expanded",
+    permissions: [
+      { module: "cashier_journal", actions: ["view", "create", "view_list"] },
+      { module: "branch_complaints", actions: ["view", "create", "view_list", "view_details"] },
+      ...["platform_home", "dashboard", "cashier", "cashier_performance", "incentives",
+        "smart_incentives_challenges", "smart_incentives_commissions", "smart_incentives_bonus",
+        "smart_incentives_wallet"].map(module => ({ module, actions: ["view", "view_list"] })),
+    ] };
+  const expanded = (await call("/api/rbac/job-template-drafts", { content: expandedContent }, "TP_ADMIN_EXPANDED_DRAFT", 201)).json.id;
+  await approve(expanded, 1);
+  const unsupported = (await call("/api/rbac/job-template-drafts", {
+    content: { ...content, key: "isolated_admin_unsupported", permissions: [{ module: "users", actions: ["view"] }] },
+  }, "TP_UNSUPPORTED_DRAFT", 201)).json.id;
+  await approve(unsupported, 1);
+  const catalogue = (await call("/api/admin/employee-template-pilot-catalog", undefined, "TP_ADMIN_ALL_APPROVED", 200, admin, "GET")).json;
+  check([expanded, unsupported].every(tid => catalogue.templates.some(t => t.templateId === tid)), "TP_NO_SILENT_CATALOG_FILTER");
+  await call("/api/admin/employee-template-pilot-catalog", undefined, "TP_MANAGER_NO_ADMIN_CATALOG", 403, manager, "GET");
+  const delegated = (await call("/api/operations/employee-accounts/job-templates", undefined, "TP_OPS_CATALOG", 200, manager, "GET")).json;
+  check(!delegated.templates.some(t => t.templateId === expanded), "TP_OPS_CEILING_UNCHANGED");
+  const blocked = await preview(unsupported, 1);
+  check(!blocked.canApply && blocked.blockedReasons.some(b => b.code === "ADMIN_TEMPLATE_PERMISSION_UNSUPPORTED"), "TP_EXPLICIT_UNSUPPORTED_REASON");
+  await reject(root, body(blocked), "TP_UNSUPPORTED_WRITE_DENIED", 403, "PILOT_BLOCKED");
+  const expandedPreview = await preview(expanded, 1);
+  check(expandedPreview.canApply, "TP_EXPANDED_ADMIN_ELIGIBLE");
+  await call(root, body(expandedPreview), "TP_EXPANDED_ADMIN_APPLY");
+  const expandedAfter = await preview(expanded, 1);
+  check(expandedAfter.canApply && expandedAfter.differences.additions.length === 0 && expandedAfter.differences.removals.length === 0,
+    "TP_EXPANDED_ACCOUNT_REMAINS_REVIEWABLE");
+  const stored = (await client.query("SELECT module,actions FROM user_permissions WHERE user_id=$1 ORDER BY module", [userId])).rows;
+  equal(stored.map(p => ({ ...p, actions: [...p.actions].sort() })),
+    [...expandedContent.permissions].sort((a,b)=>a.module.localeCompare(b.module)).map(p=>({...p,actions:[...p.actions].sort()})),
+    "TP_ALL_CHOSEN_PERMISSIONS_PRESERVED");
+  check((await client.query("SELECT allow FROM user_permission_overrides WHERE id=$1", [deny.id])).rows[0].allow === false,
+    "TP_EXPANDED_PRESERVES_DENY");
+  const expandedCookie = await loginCredentials(credentials);
+  const actualPermissions = (await call("/api/my-permissions", undefined,
+    "TP_EXPANDED_RUNTIME_READ", 200, expandedCookie, "GET")).json;
+  check(expandedContent.permissions.every(p => actualPermissions.some(actual => actual.module === p.module
+    && actual.actions.includes("view"))), "TP_EXPANDED_RUNTIME_HAS_EVERY_CHOSEN_MODULE");
 }

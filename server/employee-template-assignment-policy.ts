@@ -3,6 +3,42 @@ import { z } from "zod";
 import type { DelegatedPermission, EmployeeAccountPolicy } from "@shared/employee-account-delegation";
 import { templateContentSchema, type TemplateContent } from "@shared/job-permission-templates";
 import { deny, validatePermissions } from "./employee-account-delegation-policy";
+import { EMPLOYEE_ACCOUNT_SAFE_PERMISSIONS } from "@shared/employee-account-delegation";
+
+// Admin-only cashier review vocabulary. This is NOT the operations delegation
+// ceiling, and must never be used by its catalog or mutation endpoints.
+export const ADMIN_CASHIER_PERMISSIONS = [
+  ...EMPLOYEE_ACCOUNT_SAFE_PERMISSIONS.map(p => ({
+    module: p.module, actions: [...p.actions, "view_list", "view_details"],
+  })),
+  ...["platform_home", "dashboard", "cashier", "cashier_performance", "incentives",
+    "smart_incentives_challenges", "smart_incentives_commissions",
+    "smart_incentives_bonus", "smart_incentives_wallet"].map(module => ({
+    module, actions: ["view", "view_list", "view_details"],
+  })),
+];
+export function validateAdminCashierPermissions(permissions: DelegatedPermission[]) {
+  for (const p of permissions) for (const action of p.actions) {
+    if (!ADMIN_CASHIER_PERMISSIONS.some(rule => rule.module === p.module && rule.actions.includes(action)))
+      deny("ADMIN_TEMPLATE_PERMISSION_UNSUPPORTED", `صلاحية غير مدعومة في تجربة الأدمن الحالية: ${p.module}:${action}. لم تُحذف من القالب.`);
+  }
+  return permissions;
+}
+export function eligibleAdminTemplatePermissions(raw: unknown, jobTitle: string | null, role: string) {
+  const content = templateContentSchema.parse(raw);
+  const permissions = validateAdminCashierPermissions(content.permissions.filter(p => p.actions.length));
+  if (content.scopeType === "branches" || (content.scopeType === "self" && permissions.length))
+    deny("TEMPLATE_SCOPE_FORBIDDEN", "هذا النطاق غير مدعوم في تجربة الحساب الفردي للأدمن");
+  if (content.scopeType === "assigned_tasks" &&
+    (jobTitle !== "delivery" || role !== "employee" || permissions.some(p => p.module !== "delivery_tasks")))
+    deny("TEMPLATE_SCOPE_FORBIDDEN", "نطاق المهام المسندة يتطلب حساب توصيل وإجراءات التوصيل فقط");
+  if (jobTitle === "delivery" && !permissions.some(p => p.module === "delivery_tasks" && p.actions.includes("view") && p.actions.includes("edit")))
+    deny("INTRINSIC_AUTHORITY", "وظيفة التوصيل تتطلب عرض وتعديل مهام التوصيل");
+  if (permissions.some(p => p.actions.some(a => a !== "view") && !p.actions.includes("view")))
+    deny("VIEW_REQUIRED", "اختر صلاحية العرض مع إجراءات الوحدة");
+  return { content, permissions: permissions.map(p => ({ module: p.module, actions: [...p.actions].sort() }))
+    .sort((a, b) => a.module.localeCompare(b.module)) };
+}
 
 export const templateAssignmentInput = z.object({
   templateId: z.number().int().positive().max(2147483647),

@@ -38,3 +38,9 @@ Pilot approval is approval of a fresh contextual comparison for one existing acc
 **Why:** The sixth stage requires comparison and an approved limited experiment before migration; time boundaries can change effective authority without changing stored rows.
 
 **How to apply:** Recompute the comparison inside the application transaction, reject stale decisions including validity-boundary changes, preserve evidence, and treat unsupported/protected accounts as unknown rather than safe empty diffs. Live participants still require explicit approval.
+
+Admin template visibility must not reuse the operations-manager eligibility filter. The user explicitly chose to preserve the cashier template's selected permissions and fix the admin route rather than shrink the template to fit delegation.
+
+**Why:** A valid approved cashier template disappeared from the admin pilot catalog because it included read permissions outside the operations ceiling.
+
+**How to apply:** Keep separate admin application and delegated-operations boundaries, show approved but unsupported templates with explicit blockers, preserve selected permissions, and never imply a branch label confines legacy global routes.

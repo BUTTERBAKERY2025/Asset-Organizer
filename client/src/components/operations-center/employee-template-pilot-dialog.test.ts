@@ -79,7 +79,7 @@ beforeEach(() => {
   });
   fetchMock = vi.fn((url: string, options: { method: string }) => {
     if (options.method === "POST") return write(url, options);
-    if (url.includes("/job-templates")) return Promise.resolve(new Response(JSON.stringify({ templates: catalog })));
+    if (url === "/api/admin/employee-template-pilot-catalog") return Promise.resolve(new Response(JSON.stringify({ templates: catalog })));
     if (postReadFails && write.mock.calls.length) return Promise.resolve(new Response(JSON.stringify({ error: "القراءة غير متاحة" }), { status: 503 }));
     return Promise.resolve(new Response(JSON.stringify(preview)));
   });
@@ -105,8 +105,30 @@ describe("bounded admin template comparison and pilot", () => {
     expect(renderer.root.findByProps({ id: "pilot-employee" }).props.readOnly).toBe(true);
     expect(renderer.root.findByProps({ id: "pilot-template" }).props.value).toBe("");
     expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledWith("/api/admin/employee-template-pilot-catalog", expect.objectContaining({ method: "GET" }));
+    expect(fetchMock.mock.calls.some(call => call[0].includes("/api/operations/"))).toBe(false);
     expect(write).not.toHaveBeenCalled();
     expect(button("مقارنة الآن").props.disabled).toBe(true);
+  });
+  it("retains approved permissions outside the operations ceiling in the admin catalog and displays server blocking reasons", async () => {
+    catalog = [{ ...template, name: "كاشير مع اعتماد إداري أوسع", scopeType: "branches", permissions: [{ module: "cashier_journal", actions: ["view", "create", "edit", "export"] }, { module: "finance", actions: ["view", "approve"] }] }];
+    preview = { ...initial, comparisonStatus: "unknown", canApply: false, proposedBase: null, after: null, differences: null,
+      blockedReasons: [{ code: "UNSUPPORTED_TEMPLATE_PERMISSION", message: "الصلاحيات غير المدعومة للتجربة: cashier_journal:export، finance:view، finance:approve" }] };
+    await mount();
+    const picker = renderer.root.findByProps({ id: "pilot-template" });
+    expect(text(picker)).toContain("كاشير مع اعتماد إداري أوسع");
+    await compare();
+    const content = renderer.root.findByProps({ "data-testid": "pilot-selected-content" });
+    expect(text(content)).toContain("عدة فروع");
+    expect(text(content)).toContain("تصدير");
+    expect(text(content)).toContain("اعتماد");
+    expect(serialized()).toContain("cashier_journal:export");
+    expect(serialized()).toContain("finance:approve");
+    expect(serialized()).toContain("UNSUPPORTED_TEMPLATE_PERMISSION");
+    expect(renderer.root.findByProps({ id: "pilot-template" }).props.value).toBe("7:3");
+    expect(renderer.root.findByProps({ id: "pilot-review" }).props.disabled).toBe(true);
+    expect(serialized()).toContain("لا تضمن تقييد كل إجراء بهذا الفرع");
+    expect(write).not.toHaveBeenCalled();
   });
   it("comparison is GET only and displays actual sources, denies, expiry and intrinsic authority separately from BASE", async () => {
     preview = { ...initial, before: { ...initial.before!, sources: [deny, intrinsic, { ...deny, source: "override_grant", module: "maintenance", temporalState: "expired", allowed: true }] } };
@@ -214,7 +236,7 @@ describe("bounded admin template comparison and pilot", () => {
     fetchMock.mockImplementation(() => Promise.resolve(new Response(JSON.stringify({ error: "missing required storage", code: "migration_required" }), { status: 503 })));
     await mount();
     expect(serialized()).toContain("050–054");
-    expect(serialized()).not.toContain("لا توجد خيارات معتمدة");
+    expect(serialized()).not.toContain("لا توجد أحدث إصدارات معتمدة");
     expect(button("إعادة تحميل الخيارات")).toBeTruthy();
     expect(write).not.toHaveBeenCalled();
   });

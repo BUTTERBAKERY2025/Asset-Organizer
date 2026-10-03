@@ -62,7 +62,7 @@ function templateFetch(password = "page-test-secret") {
   return vi.fn((url: string, options: { method: string }) => Promise.resolve(new Response(JSON.stringify(
     options.method === "POST"
       ? { employee: data.employees[0], credentials: { username: "unit-user", password } }
-      : url.includes("job-templates")
+      : url.includes("job-templates") || url === "/api/admin/employee-template-pilot-catalog"
         ? { templates: [{ templateId: 7, version: 3, key: "test", name: "قالب اختبار", scopeType: "branch", permissions: [], approvedAt: "2026-05-05T10:03:00Z" }] }
         : { employeeId: Number(url.split("/").at(-2)), branchId: "a", assignment: null, currentPermissions: [], additions: [], expectedAssignmentRevision: "f".repeat(64) },
   ))));

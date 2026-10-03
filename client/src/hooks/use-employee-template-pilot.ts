@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import type { EmployeeJobTemplatesResponse, EmployeeTemplatePilotResponse } from "@shared/employee-account-delegation";
-import { EMPLOYEE_ACCOUNTS_ENDPOINT, requestEmployeeAccount } from "@/lib/employee-account-delegation";
+import type { EmployeeTemplatePilotResponse } from "@shared/employee-account-delegation";
+import type { EmployeeTemplatePilotCatalogResponse } from "@/lib/employee-template-pilot";
+import { requestEmployeeAccount } from "@/lib/employee-account-delegation";
 import { employeeTemplatePilotEndpoint, employeeTemplatePilotError } from "@/lib/employee-template-pilot";
 
 /** Explicit comparison reads only. No automatic participant, comparison or pilot write. */
 export function useEmployeeTemplatePilot(employeeId: number) {
-  const [catalog, setCatalog] = useState<EmployeeJobTemplatesResponse | null>(null);
+  const [catalog, setCatalog] = useState<EmployeeTemplatePilotCatalogResponse | null>(null);
   const [catalogLoading, setCatalogLoading] = useState(true);
   const [catalogError, setCatalogError] = useState("");
   const [comparison, setComparison] = useState<EmployeeTemplatePilotResponse | null>(null);
@@ -25,7 +26,7 @@ export function useEmployeeTemplatePilot(employeeId: number) {
     setCatalogError("");
     setCatalogLoading(true);
     try {
-      const result = await requestEmployeeAccount<EmployeeJobTemplatesResponse>(`${EMPLOYEE_ACCOUNTS_ENDPOINT}/job-templates`, { signal: controller.signal });
+      const result = await requestEmployeeAccount<EmployeeTemplatePilotCatalogResponse>("/api/admin/employee-template-pilot-catalog", { signal: controller.signal });
       if (!Array.isArray(result.templates)) throw new Error("Invalid approved template catalog");
       if (catalogGeneration.current === token) setCatalog(result);
     } catch (cause) {

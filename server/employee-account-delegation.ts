@@ -15,7 +15,7 @@ import {
   type EmployeeTemplateAssignment, type EmployeeTemplateAssignmentResponse, type EmployeeJobTemplateSummary,
   type EmployeeTemplatePilotResponse,
 } from "@shared/employee-account-delegation";
-import { assignmentSnapshotRevision, eligibleTemplatePermissions, templateAssignmentInput } from "./employee-template-assignment-policy";
+import { assignmentSnapshotRevision, eligibleTemplatePermissions, eligibleAdminTemplatePermissions, validateAdminCashierPermissions, templateAssignmentInput } from "./employee-template-assignment-policy";
 import {
   ADDITION_CAPABILITIES, additionInput, additionUpdateInput, additionDeleteInput,
   additionDTO, additionFingerprint, additionIsDelegationSafe, requireAdditionsStorage,
@@ -137,7 +137,7 @@ function suspensionMatches(value: string | undefined, account: Actor, employee: 
       && marker.updatedAt === account.updatedAt.toISOString();
   } catch { return false; }
 }
-async function accountState(tx: Tx, actor: Actor, employee: Employee, approved: EmployeeAccountPolicy) {
+async function accountState(tx: Tx, actor: Actor, employee: Employee, approved: EmployeeAccountPolicy, adminPilot = false) {
   if (!employee.linkedUserId) return null;
   const [account] = await tx.select(accountProjection).from(users).where(eq(users.id, employee.linkedUserId));
   if (!account) deny("INVALID_LINK", "رابط حساب الموظف غير صالح");
@@ -147,8 +147,12 @@ async function accountState(tx: Tx, actor: Actor, employee: Employee, approved: 
   const direct = await tx.select({ module: userPermissions.module, actions: userPermissions.actions }).from(userPermissions).where(eq(userPermissions.userId, account.id));
   const additions = overrides.length ? await readManagedAdditions(tx, [account.id]) : [];
   const safeAdditionIds = new Set(additions.filter(row => additionIsDelegationSafe(row, employee, approved)).map(row => row.id));
+  if (adminPilot) {
+    actorMayManage(actor, true);
+    validateAdminCashierPermissions(direct);
+  }
   targetMayManage(actor.id, account, employee.branchId, access.map(g => g.branchId), assignments.length,
-    overrides.filter(row => !safeAdditionIds.has(row.id)).length, direct, approved);
+    overrides.filter(row => !safeAdditionIds.has(row.id)).length, adminPilot ? [] : direct, approved);
   if (!["active", "inactive"].includes(account.isActive ?? ""))
     deny("PROTECTED_ACCOUNT", "حالة الحساب تتطلب مراجعة مسؤول النظام");
   return {
@@ -158,8 +162,8 @@ async function accountState(tx: Tx, actor: Actor, employee: Employee, approved: 
       && (actor.role === "admin" || await suspensionOwned(tx, account, employee)),
   };
 }
-async function dto(tx: Tx, actor: Actor, employee: Employee, approved: EmployeeAccountPolicy): Promise<DelegatedEmployeeAccount> {
-  const state = await accountState(tx, actor, employee, approved);
+async function dto(tx: Tx, actor: Actor, employee: Employee, approved: EmployeeAccountPolicy, adminPilot = false): Promise<DelegatedEmployeeAccount> {
+  const state = await accountState(tx, actor, employee, approved, adminPilot);
   const [branch] = await tx.select({ name: branches.name }).from(branches).where(eq(branches.id, employee.branchId));
   return {
     employeeId: employee.id, employeeName: employee.employeeName,
@@ -263,7 +267,7 @@ async function templateAssignmentSnapshot(tx: Tx, employee: Employee, state: Awa
   return { employeeId: employee.id, branchId: employee.branchId, assignment, currentPermissions,
     expectedAssignmentRevision, additions: (state?.additions ?? []).map(additionDTO) };
 }
-async function resolveAssignmentTemplate(tx: Tx, templateId: number, version: number, approved: EmployeeAccountPolicy, jobTitle: string | null, role: string, lock = true) {
+async function resolveAssignmentTemplate(tx: Tx, templateId: number, version: number, approved: EmployeeAccountPolicy, jobTitle: string | null, role: string, lock = true, adminPilot = false) {
   // Shared with append/approval writers and their DB triggers. Hold parent row
   // until permission replacement, session revocation and audit have committed.
   const parent = await tx.execute(sql`SELECT id FROM public.job_permission_template_drafts WHERE id = ${templateId} ${lock ? sql`FOR UPDATE` : sql``}`);
@@ -278,7 +282,8 @@ async function resolveAssignmentTemplate(tx: Tx, templateId: number, version: nu
     throw new DelegationError(409, "STALE_TEMPLATE_VERSION", "تغير آخر إصدار للقالب؛ حدّث القائمة وراجع الفروقات");
   if (!latest.approved)
     throw new DelegationError(409, "TEMPLATE_NOT_APPROVED", "آخر إصدار للقالب غير معتمد");
-  return eligibleTemplatePermissions(latest.content, approved, jobTitle, role).permissions;
+  return (adminPilot ? eligibleAdminTemplatePermissions(latest.content, jobTitle, role)
+    : eligibleTemplatePermissions(latest.content, approved, jobTitle, role)).permissions;
 }
 async function saveTemplateAssignment(tx: Tx, actor: Actor, employee: Employee, input: z.infer<typeof templateAssignmentInput>) {
   const assignment: EmployeeTemplateAssignment = {
@@ -332,11 +337,11 @@ async function pilotComparison(
     ? await tx.select(accountProjection).from(users).where(eq(users.id, employee.linkedUserId)) : [];
   if (!account) blockedReasons.push({ code: "ACCOUNT_NOT_LINKED", message: "التجربة لحساب قائم مرتبط فقط" });
   if (account && account.isActive !== "active") blockedReasons.push({ code: "ACCOUNT_INACTIVE", message: "الحساب غير نشط؛ التجربة لا تعيد تفعيله" });
-  const state = account ? await guard(() => accountState(tx, actor, employee, approved)) : null;
+  const state = account ? await guard(() => accountState(tx, actor, employee, approved, true)) : null;
   const access = account ? await tx.select().from(userBranchAccess).where(eq(userBranchAccess.userId, account.id)) : [];
   const snapshot = account ? await storage.getPermissionDecisionSnapshot(account.id, tx) : null;
   const selected = await guard(() => resolveAssignmentTemplate(tx, input.templateId, input.version, approved,
-    account?.jobTitle ?? null, account?.role ?? "employee", applying));
+    account?.jobTitle ?? null, account?.role ?? "employee", applying, true));
   const template = await tx.execute(sql`SELECT v.version, v.content, a.approved_at AS "approvedAt",
     a.approved_by AS "approvedBy" FROM public.job_permission_template_draft_versions v
     LEFT JOIN public.job_permission_template_approvals a ON a.template_id=v.template_id AND a.version=v.version
@@ -735,6 +740,28 @@ export function registerEmployeeAccountDelegation(app: Express) {
   app.patch("/api/admin/employee-account-additions/:employeeId/:id", isAuthenticated, mutateAddition("update"));
   app.delete("/api/admin/employee-account-additions/:employeeId/:id", isAuthenticated, mutateAddition("delete"));
 
+  app.get("/api/admin/employee-template-pilot-catalog", isAuthenticated, endpoint(async (req, res) => {
+    const result = await db.transaction(async tx => {
+      await readBudget(performance.now() + 10_000, tx)();
+      await actorState(tx, req.session.userId!, true);
+      await requireTemplateStorage(tx);
+      const rows = await tx.execute(sql`SELECT d.id AS "templateId", v.version,
+        v.content, a.approved_at AS "approvedAt"
+        FROM public.job_permission_template_drafts d
+        JOIN public.job_permission_template_draft_versions v ON v.template_id=d.id
+        JOIN public.job_permission_template_approvals a ON a.template_id=v.template_id AND a.version=v.version
+        WHERE v.version=(SELECT MAX(x.version) FROM public.job_permission_template_draft_versions x WHERE x.template_id=d.id)
+        ORDER BY d.id`);
+      // Visibility is not authority: unsupported approved versions remain
+      // selectable so the comparison can explain its precise blockers.
+      return { templates: rows.rows.map((row: any) => ({
+        templateId: row.templateId, version: row.version, key: row.content.key,
+        name: row.content.name, scopeType: row.content.scopeType,
+        permissions: row.content.permissions, approvedAt: new Date(row.approvedAt).toISOString(),
+      })) };
+    }, { isolationLevel: "repeatable read", accessMode: "read only" });
+    res.json(result);
+  }, "admin_employee_template_catalog"));
   app.get("/api/admin/employee-template-pilot/:employeeId", isAuthenticated, endpoint(async (req, res) => {
     const input = pilotQuery.parse(req.query);
     const result = await db.transaction(async tx => {
@@ -774,7 +801,7 @@ export function registerEmployeeAccountDelegation(app: Express) {
         differences: current.response.differences, extras: current.response.extras, assignment,
       }, current.state.account.id);
       ensureBoundaryUnchanged();
-      return { userId: current.state.account.id, employee: await dto(tx, current.actor, current.employee, await policy(tx)),
+      return { userId: current.state.account.id, employee: await dto(tx, current.actor, current.employee, await policy(tx), true),
         assignment, comparison: current.response };
     });
     if (result.blocked) return res.status(403).json({ error: "الحساب أو القالب خارج التجربة المحدودة",
