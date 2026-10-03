@@ -1232,15 +1232,17 @@ export default function SalaryClosingPage() {
   const refreshPayments = () => {
     queryClient.invalidateQueries({ queryKey: ["/api/salary-closing/payments"] });
   };
-  const fetchLatestPayments = async (): Promise<Map<number, SalaryPayment>> => {
+  const fetchLatestPayments = async (): Promise<Map<number, SalaryPayment> | null> => {
     try {
       const r = await salaryPaymentsQuery.refetch();
-      const list = r.data ?? salaryPayments;
+      if (r.isError || !r.data) throw new Error("payments unavailable");
+      const list = r.data;
       const m = new Map<number, SalaryPayment>();
       for (const p of list) m.set(Number(p.branchEmployeeId), p);
       return m;
     } catch {
-      return paymentByEmp;
+      toast({ title: "تعذر تحديث بيانات الصرف", description: "لم يتم التصدير؛ أعد المحاولة لضمان صحة حالة الصرف.", variant: "destructive" });
+      return null;
     }
   };
 
@@ -1497,7 +1499,28 @@ export default function SalaryClosingPage() {
       const ok = confirm(`تنبيه: تعذّر حساب ${failed.length} من الفروع (${names}) — الملف المصدَّر لن يشملها وستكون الأرقام ناقصة.\n\nهل تريد المتابعة رغم ذلك؟`);
       if (!ok) return null;
     }
-    return data;
+    const exportPayments = await fetchLatestPayments();
+    if (exportPayments === null) return null;
+    const lines = filterSalaryLines(data.lines ?? [], exportPayments);
+    if (!lines.length) {
+      toast({ title: "لا توجد بيانات مطابقة للفلاتر", description: "لم يتم إنشاء ملف؛ راجع اختيارات التصفية." });
+      return null;
+    }
+    return {
+      ...data, lines, exportPayments,
+      ...(hasActiveFilters ? { unlinked: [], unlinkedSummary: { totalRecords: 0, presentRecords: 0, totalHours: 0 } } : {}),
+    };
+  };
+
+  const exportSavedBankFile = async () => {
+    const fresh = await fetchLatestClosing();
+    if (!fresh) return;
+    if (!fresh.isLocked || !fresh.closure?.id) {
+      toast({ title: "لا توجد لقطة إغلاق نهائية", description: "حدّث الشاشة وراجع حالة الشهر قبل تنزيل ملف التحويل.", variant: "destructive" });
+      return;
+    }
+    const params = new URLSearchParams({ lineIds: fresh.lines.map((line: any) => line.id).join(",") });
+    await downloadFile(`/api/salary-closing/${fresh.closure.id}/bank-file?${params}`, `bank_transfer_${month}.csv`);
   };
 
   const exportSalaryClosingToExcel = async () => {
@@ -1517,6 +1540,7 @@ export default function SalaryClosingPage() {
       { [isRTL ? "البيان" : "Item"]: isRTL ? "عدد الموظفين" : "Employee Count", [isRTL ? "القيمة" : "Value"]: lines.length },
       { [isRTL ? "البيان" : "Item"]: isRTL ? "إجمالي الرواتب (شامل البدلات)" : "Total Salaries (Incl. Allowances)", [isRTL ? "القيمة" : "Value"]: lines.reduce((sum, e) => sum + e.grossSalary, 0) },
       { [isRTL ? "البيان" : "Item"]: isRTL ? "إجمالي خصم الغياب" : "Total Absence Deduction", [isRTL ? "القيمة" : "Value"]: lines.reduce((sum, e) => sum + e.absenceDeduction, 0) },
+      { [isRTL ? "البيان" : "Item"]: isRTL ? "إجمالي خصم المرضية" : "Total Sick Leave Deduction", [isRTL ? "القيمة" : "Value"]: lines.reduce((sum, e) => sum + (e.sickLeaveDeduction || 0), 0) },
       { [isRTL ? "البيان" : "Item"]: isRTL ? "إجمالي التأمينات الاجتماعية" : "Total Social Insurance", [isRTL ? "القيمة" : "Value"]: lines.reduce((sum, e) => sum + e.socialInsurance, 0) },
       { [isRTL ? "البيان" : "Item"]: isRTL ? "إجمالي السُلف والخصومات اليدوية" : "Total Manual Deductions", [isRTL ? "القيمة" : "Value"]: lines.reduce((sum, e) => sum + (e.manualDeductionsTotal || 0), 0) },
       { [isRTL ? "البيان" : "Item"]: isRTL ? "صافي الرواتب المستحقة" : "Net Salaries Due", [isRTL ? "القيمة" : "Value"]: lines.reduce((sum, e) => sum + e.netSalary, 0) },
@@ -1526,6 +1550,10 @@ export default function SalaryClosingPage() {
       { [isRTL ? "البيان" : "Item"]: isRTL ? "إجمالي ساعات غير مرتبطة" : "Total Unlinked Hours", [isRTL ? "القيمة" : "Value"]: Math.round(unlinkedSummary.totalHours * 10) / 10 },
       { [isRTL ? "البيان" : "Item"]: isRTL ? "ملاحظة" : "Note", [isRTL ? "القيمة" : "Value"]: unlinkedCount > 0 ? (isRTL ? "توجد سجلات حضور غير مرتبطة بموظفين - راجع ورقة السجلات غير المرتبطة للتفاصيل والمراجعة" : "Unlinked attendance records exist - see Unlinked Records sheet for details") : (isRTL ? "جميع السجلات مرتبطة بموظفين" : "All records are linked to employees") },
     ];
+    if (hasActiveFilters) summaryData[summaryData.length - 1] = {
+      [isRTL ? "البيان" : "Item"]: isRTL ? "ملاحظة" : "Note",
+      [isRTL ? "القيمة" : "Value"]: isRTL ? "الكشف حسب الفلاتر المختارة؛ سجلات الحضور غير المرتبطة مستبعدة لتعذر إثبات مطابقتها للفلاتر." : "Filtered report; unlinked attendance is excluded because filter membership cannot be verified.",
+    };
     const wsSummary = XLSX.utils.json_to_sheet(summaryData);
     XLSX.utils.book_append_sheet(wb, wsSummary, isRTL ? "ملخص" : "Summary");
 
@@ -1597,7 +1625,7 @@ export default function SalaryClosingPage() {
     const fresh = await fetchLatestClosing();
     if (fresh === null) return; // ألغى المستخدم التصدير بسبب فروع متعذّرة
     const lines: any[] = fresh?.lines ?? salaryClosingData;
-    const payMap = await fetchLatestPayments();
+    const payMap: Map<number, SalaryPayment> = fresh.exportPayments;
     const isPaid = (emp: any) => payMap.has(Number(emp.branchEmployeeId ?? emp.id));
     const subset = lines.filter((emp) => (mode === "paid" ? isPaid(emp) : !isPaid(emp)));
     if (subset.length === 0) {
@@ -1936,7 +1964,8 @@ export default function SalaryClosingPage() {
   const accruedDeptOf = (e: any) => (e.department && String(e.department).trim()) || "غير محدد";
   const accruedOtherAllow = (e: any) => round2((e.allowances || 0) - (e.housingAllowance || 0));
 
-  const accruedAbsence = (e: any) => round2(e.absenceDeduction || 0);
+  // Both deductions reduce net pay; keep report breakdowns consistent with it.
+  const accruedAbsence = (e: any) => round2((e.absenceDeduction || 0) + (e.sickLeaveDeduction || 0));
   const accruedInsurance = (e: any) => round2(e.socialInsurance || 0);
   const accruedManual = (e: any) => round2(e.manualDeductionsTotal || 0);
   const accruedTotalDed = (e: any) => round2(accruedAbsence(e) + accruedInsurance(e) + accruedManual(e));
@@ -2016,7 +2045,7 @@ export default function SalaryClosingPage() {
       { "البيان": "إجمالي البدلات", "القيمة": totalAllow },
       { "البيان": "إجمالي المستحق (قبل الخصومات)", "القيمة": totalGross },
       { "البيان": "", "القيمة": "" },
-      { "البيان": "إجمالي خصم الغياب", "القيمة": totalAbsence },
+      { "البيان": "إجمالي خصم الغياب والمرضية", "القيمة": totalAbsence },
       { "البيان": "إجمالي التأمينات الاجتماعية", "القيمة": totalInsurance },
       { "البيان": "إجمالي الخصومات المباشرة / السُلف", "القيمة": totalManual },
       { "البيان": "إجمالي الخصومات", "القيمة": totalDed },
@@ -2039,7 +2068,7 @@ export default function SalaryClosingPage() {
         "بدلات أخرى": g.other,
         "إجمالي البدلات": g.allowances,
         "إجمالي المستحق (قبل الخصومات)": g.gross,
-        "خصم الغياب": g.absence,
+        "خصم الغياب والمرضية": g.absence,
         "التأمينات": g.insurance,
         "خصومات مباشرة / سُلف": g.manual,
         "إجمالي الخصومات": g.totalDed,
@@ -2054,7 +2083,7 @@ export default function SalaryClosingPage() {
         "بدلات أخرى": totalOther,
         "إجمالي البدلات": totalAllow,
         "إجمالي المستحق (قبل الخصومات)": totalGross,
-        "خصم الغياب": totalAbsence,
+        "خصم الغياب والمرضية": totalAbsence,
         "التأمينات": totalInsurance,
         "خصومات مباشرة / سُلف": totalManual,
         "إجمالي الخصومات": totalDed,
@@ -2086,7 +2115,7 @@ export default function SalaryClosingPage() {
       "إجمالي البدلات": round2(e.allowances || 0),
       "إجمالي المستحق (قبل الخصومات)": round2(e.grossSalary || 0),
       "أيام الغياب": e.absentDays || 0,
-      "خصم الغياب": accruedAbsence(e),
+      "خصم الغياب والمرضية": accruedAbsence(e),
       "التأمينات": accruedInsurance(e),
       "خصومات مباشرة / سُلف": accruedManual(e),
       "تفصيل الخصومات المباشرة": manualDeductionsText(e),
@@ -2127,7 +2156,7 @@ export default function SalaryClosingPage() {
       <h3 class="section-title">${title}</h3>
       <table>
         <thead><tr>
-          <th>${label}</th><th>عدد</th><th>المستحق (قبل الخصومات)</th><th>خصم الغياب</th><th>التأمينات</th><th>خصومات / سُلف</th><th>إجمالي الخصومات</th><th>الصافي (بعد الخصومات)</th>
+          <th>${label}</th><th>عدد</th><th>المستحق (قبل الخصومات)</th><th>خصم الغياب والمرضية</th><th>التأمينات</th><th>خصومات / سُلف</th><th>إجمالي الخصومات</th><th>الصافي (بعد الخصومات)</th>
         </tr></thead>
         <tbody>
           ${groups.map((g, i) => `<tr class="${i % 2 === 0 ? "even" : "odd"}">
@@ -2217,7 +2246,7 @@ export default function SalaryClosingPage() {
         <div class="cards">
           <div class="card"><div class="lbl">عدد الموظفين</div><div class="val">${lines.length}</div></div>
           <div class="card"><div class="lbl">المستحق (قبل الخصومات)</div><div class="val">${fmt(totalGross)}</div></div>
-          <div class="card"><div class="lbl">خصم الغياب</div><div class="val" style="color:#b91c1c">${fmt(totalAbsence)}</div></div>
+          <div class="card"><div class="lbl">خصم الغياب والمرضية</div><div class="val" style="color:#b91c1c">${fmt(totalAbsence)}</div></div>
           <div class="card"><div class="lbl">التأمينات</div><div class="val" style="color:#b91c1c">${fmt(totalInsurance)}</div></div>
           <div class="card"><div class="lbl">خصومات مباشرة / سُلف</div><div class="val" style="color:#b91c1c">${fmt(totalManual)}</div></div>
           <div class="card"><div class="lbl">إجمالي الخصومات</div><div class="val" style="color:#b91c1c">${fmt(totalDed)}</div></div>
@@ -2233,7 +2262,7 @@ export default function SalaryClosingPage() {
           <thead><tr>
             <th>م</th><th>رقم الموظف</th><th>الاسم</th><th>الفرع</th><th>الإدارة</th>
             <th>الراتب الأساسي</th><th>إجمالي البدلات</th><th>المستحق (قبل الخصومات)</th>
-            <th>خصم الغياب</th><th>التأمينات</th><th>خصومات / سُلف</th><th>إجمالي الخصومات</th><th>الصافي (بعد الخصومات)</th>
+            <th>خصم الغياب والمرضية</th><th>التأمينات</th><th>خصومات / سُلف</th><th>إجمالي الخصومات</th><th>الصافي (بعد الخصومات)</th>
           </tr></thead>
           <tbody>${detailRows}</tbody>
         </table>
@@ -2258,8 +2287,8 @@ export default function SalaryClosingPage() {
     [salaryClosingData],
   );
 
-  const filteredLines = useMemo(() => {
-    let result = [...salaryClosingData];
+  const filterSalaryLines = (lines: any[], payments = paymentByEmp) => {
+    let result = [...lines];
     const q = search.trim().toLowerCase();
     if (q) {
       result = result.filter(
@@ -2280,9 +2309,9 @@ export default function SalaryClosingPage() {
     else if (statusFilter === "no_work") result = result.filter((e) => e.noWorkAtAll);
     if (bankFilter === "has_bank") result = result.filter((e) => !!(e.bankAccountNumber || e.bankName));
     else if (bankFilter === "no_bank") result = result.filter((e) => !e.bankAccountNumber && !e.bankName);
-    if (paymentStatusFilter === "paid") result = result.filter((e) => paymentByEmp.has(Number(e.branchEmployeeId ?? e.id)));
-    else if (paymentStatusFilter === "unpaid") result = result.filter((e) => !paymentByEmp.has(Number(e.branchEmployeeId ?? e.id)));
-    if (paymentMethodFilter !== "all") result = result.filter((e) => paymentByEmp.get(Number(e.branchEmployeeId ?? e.id))?.paymentMethod === paymentMethodFilter);
+    if (paymentStatusFilter === "paid") result = result.filter((e) => payments.has(Number(e.branchEmployeeId ?? e.id)));
+    else if (paymentStatusFilter === "unpaid") result = result.filter((e) => !payments.has(Number(e.branchEmployeeId ?? e.id)));
+    if (paymentMethodFilter !== "all") result = result.filter((e) => payments.get(Number(e.branchEmployeeId ?? e.id))?.paymentMethod === paymentMethodFilter);
     const min = netMin ? parseFloat(netMin) : -Infinity;
     const max = netMax ? parseFloat(netMax) : Infinity;
     result = result.filter((e) => (e.netSalary || 0) >= min && (e.netSalary || 0) <= max);
@@ -2305,7 +2334,9 @@ export default function SalaryClosingPage() {
       return sortOrder === "asc" ? av - bv : bv - av;
     });
     return result;
-  }, [salaryClosingData, search, jobTitleFilter, nationalityFilter, dataSourceFilter, statusFilter, bankFilter, paymentStatusFilter, paymentMethodFilter, paymentByEmp, netMin, netMax, sortField, sortOrder]);
+  };
+  const filteredLines = useMemo(() => filterSalaryLines(salaryClosingData),
+    [salaryClosingData, search, jobTitleFilter, nationalityFilter, dataSourceFilter, statusFilter, bankFilter, paymentStatusFilter, paymentMethodFilter, paymentByEmp, netMin, netMax, sortField, sortOrder]);
 
   const hasActiveFilters =
     !!search ||
@@ -2485,7 +2516,7 @@ export default function SalaryClosingPage() {
                 {salaryClosingClosure && (
                   <Button
                     variant="outline"
-                    onClick={() => downloadFile(`/api/salary-closing/${salaryClosingClosure.id}/bank-file`, `bank_transfer_${month}.csv`)}
+                    onClick={exportSavedBankFile}
                     data-testid="button-bank-file"
                   >
                     <Download className="w-4 h-4 ml-2" />

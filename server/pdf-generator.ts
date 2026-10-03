@@ -34,6 +34,7 @@ export interface SalaryClosingEmployee {
   allowances: number;
   dailyRate?: number;
   absenceDeduction?: number;
+  sickLeaveDeduction?: number;
   socialInsurance: number;
   netSalary: number;
   dataSource?: "signed_timesheet" | "schedule_attendance" | "attendance_only";
@@ -74,7 +75,7 @@ export async function generateSalaryClosingPdf(data: SalaryClosingPdfData): Prom
       baseSalary: acc.baseSalary + emp.baseSalary,
       allowances: acc.allowances + emp.allowances,
       grossSalary: acc.grossSalary + (emp.baseSalary + emp.allowances),
-      absenceDeduction: acc.absenceDeduction + (emp.absenceDeduction || 0),
+      absenceDeduction: acc.absenceDeduction + (emp.absenceDeduction || 0) + (emp.sickLeaveDeduction || 0),
       socialInsurance: acc.socialInsurance + emp.socialInsurance,
       manualDeductions: acc.manualDeductions + (emp.manualDeductionsTotal || 0),
       netSalary: acc.netSalary + emp.netSalary,
@@ -91,7 +92,7 @@ export async function generateSalaryClosingPdf(data: SalaryClosingPdfData): Prom
 
   const employeeRows = data.employees.map((emp, index) => {
     const dailyRate = emp.dailyRate ?? ((emp.baseSalary + emp.allowances) / 30);
-    const absenceDeduction = emp.absenceDeduction ?? 0;
+    const absenceDeduction = (emp.absenceDeduction ?? 0) + (emp.sickLeaveDeduction ?? 0);
     const manualTotal = emp.manualDeductionsTotal ?? 0;
     const rowBg = emp.dataSource === "signed_timesheet" ? "background:#f0fdf4;" : "";
     const bankCell = (emp.bankName || emp.bankAccountNumber)
@@ -245,7 +246,7 @@ export async function generateSalaryClosingPdf(data: SalaryClosingPdfData): Prom
         <th>البدلات</th>
         <th>الإجمالي</th>
         <th>قيمة اليوم</th>
-        <th>خصم الغياب</th>
+        <th>خصم الغياب والمرضية</th>
         <th>التأمينات</th>
         <th>سُلف/خصومات</th>
         <th>الصافي</th>
@@ -273,7 +274,7 @@ export async function generateSalaryClosingPdf(data: SalaryClosingPdfData): Prom
     { label: 'إجمالي الرواتب الأساسية', value: formatNumber(totals.baseSalary) + ' ريال' },
     { label: 'إجمالي البدلات', value: formatNumber(totals.allowances) + ' ريال' },
     { label: 'إجمالي الرواتب (شامل البدلات)', value: formatNumber(totals.grossSalary) + ' ريال' },
-    { label: 'إجمالي خصم الغياب', value: '- ' + formatNumber(totals.absenceDeduction) + ' ريال' },
+    { label: 'إجمالي خصم الغياب والمرضية', value: '- ' + formatNumber(totals.absenceDeduction) + ' ريال' },
     { label: 'إجمالي التأمينات', value: '- ' + formatNumber(totals.socialInsurance) + ' ريال' },
     { label: 'إجمالي السُلف والخصومات اليدوية', value: '- ' + formatNumber(totals.manualDeductions) + ' ريال' },
     { label: 'صافي الرواتب المستحقة', value: formatNumber(totals.netSalary) + ' ريال' },

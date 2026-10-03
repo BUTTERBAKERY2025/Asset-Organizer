@@ -34995,7 +34995,18 @@ export async function registerRoutes(
       if (!closure) return res.status(404).json({ error: "الإغلاق غير موجود" });
       const hasAccess = await canAccessBranch(req, closure.branchId);
       if (!hasAccess) return res.status(403).json({ error: "غير مصرح بالوصول لهذا الفرع" });
-      const lines = await storage.getSalaryClosureLines(id);
+      let lines = await storage.getSalaryClosureLines(id);
+      if (req.query.lineIds !== undefined) {
+        const raw = req.query.lineIds;
+        if (typeof raw !== "string" || !/^[1-9]\d*(,[1-9]\d*)*$/.test(raw)) {
+          return res.status(400).json({ error: "تحديد صفوف التصدير غير صالح" });
+        }
+        const ids = raw.split(",").map(Number);
+        if (ids.some(n => !Number.isSafeInteger(n))) return res.status(400).json({ error: "تحديد صفوف التصدير غير صالح" });
+        const byId = new Map(lines.map(line => [line.id, line]));
+        if (ids.some(n => !byId.has(n))) return res.status(409).json({ error: "تغيّرت بيانات الإغلاق؛ حدّث الكشف قبل التصدير" });
+        lines = [...new Set(ids)].map(n => byId.get(n)!);
+      }
 
       const esc = (v: any) => {
         const s = v == null ? "" : String(v);
