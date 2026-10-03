@@ -70,16 +70,16 @@ export const SECTIONS: readonly SectionMeta[] = [
 // Cards the server may add later land in the section matching their server group.
 const SERVER_GROUP_FALLBACK: Record<string, SectionId> = { orders: "orders", sales: "sales", operations: "operations", people: "people" };
 
-export function groupCards(cards: OperationCard[]): Array<{ section: SectionMeta; cards: OperationCard[] }> {
+export function groupCards(cards: OperationCard[], sections: readonly SectionMeta[] = SECTIONS): Array<{ section: SectionMeta; cards: OperationCard[] }> {
   const byId = new Map(cards.map((card) => [card.id, card]));
   const placed = new Set<string>();
-  const buckets = SECTIONS.map((section) => ({
+  const buckets = sections.map((section) => ({
     section,
     cards: section.cardIds.flatMap((id) => { const card = byId.get(id); if (!card) return []; placed.add(id); return [card]; }),
   }));
   for (const card of cards) {
     if (placed.has(card.id)) continue;
-    const target = buckets.find((bucket) => bucket.section.id === (SERVER_GROUP_FALLBACK[card.group] ?? "operations")) ?? buckets[2];
+    const target = buckets.find((bucket) => bucket.section.id === (SERVER_GROUP_FALLBACK[card.group] ?? "operations")) ?? buckets.find(bucket => bucket.section.id === "operations")!;
     target.cards.push(card);
     placed.add(card.id);
   }
@@ -290,16 +290,16 @@ export function NeedsActionStrip({ branchId, cards, onOpen, routine = false, com
   </section>;
 }
 
-export function OperationCardView({ card, section, onOpen, onRefresh, expanded = false, onToggle }: { card: OperationCard; section: SectionMeta; onOpen: (href: string) => void; onRefresh: () => void; expanded?: boolean; onToggle?: () => void }) {
+export function OperationCardView({ card, section, onOpen, onRefresh, expanded = false, onToggle, variant = "card" }: { card: OperationCard; section: SectionMeta; onOpen: (href: string) => void; onRefresh: () => void; expanded?: boolean; onToggle?: () => void; variant?: "card" | "row" }) {
   const meta = CARD_META[card.id] ?? FALLBACK_META;
   const panelId = `branch-operation-card-panel-${card.id}`;
-  return <article id={`branch-operation-card-${card.id}`} className={`branch-ops-card border border-border bg-card text-card-foreground shadow-sm ${expanded ? "branch-ops-card-expanded" : ""}`} data-testid={`branch-operation-card-${card.id}`}>
+  return <article id={`branch-operation-card-${card.id}`} className={`branch-ops-card border border-border bg-card text-card-foreground shadow-sm ${variant === "row" ? "branch-ops-function-row" : ""} ${expanded ? "branch-ops-card-expanded" : ""}`} data-testid={`branch-operation-card-${card.id}`}>
     <button type="button" className="group branch-ops-card-main" onClick={() => onOpen(workflowHref(card.id, card.href))} aria-label={`فتح ${card.title}`}>
        <div className="branch-ops-card-row">
-        <PlatformAppIcon icon={meta.icon} color={meta.color} />
+        {variant === "card" && <PlatformAppIcon icon={meta.icon} color={meta.color} />}
         <span className="min-w-0 flex-1">
             <h3 className="branch-ops-card-title">{card.title}</h3>
-            <span className="branch-ops-card-caption">فتح صفحة العمل</span>
+            {variant === "card" && <span className="branch-ops-card-caption">فتح صفحة العمل</span>}
         </span>
          <ChevronLeft className="branch-ops-card-arrow h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
       </div>
@@ -323,7 +323,7 @@ export function EmptyState({ title, text, icon: Icon, action }: { title: string;
 }
 
 export function BoardSkeleton() {
-  return <div className="mt-4 space-y-4" aria-label="جار تحميل لوحة الفرع" aria-busy="true"><div className="branch-ops-shimmer h-8 w-44 rounded-lg" /><div className="branch-ops-sections">{[3, 5, 3].map((count, group) => <div key={group} className="branch-ops-section" data-card-count={count}><div className="branch-ops-shimmer mb-2 h-5 w-36 rounded-lg" /><div className="branch-ops-grid">{Array.from({ length: count }).map((_, index) => <div key={index} className="branch-ops-shimmer h-24 rounded-xl" />)}</div></div>)}</div></div>;
+  return <div className="mt-4 space-y-4" aria-label="جار تحميل لوحة الفرع" aria-busy="true"><div className="branch-ops-shimmer h-8 w-44 rounded-lg" /><div className="branch-ops-work-groups">{Array.from({ length: 4 }).map((_, index) => <div key={index} className="branch-ops-shimmer h-20 rounded-xl" />)}</div></div>;
 }
 
 export { AlertTriangle, Settings2, ShieldAlert, Store };

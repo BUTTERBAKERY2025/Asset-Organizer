@@ -5,6 +5,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { DailyWorkspace } from "@/components/branch-operations/daily-workspace";
+import { WorkGroups } from "@/components/branch-operations/work-groups";
 import "@/components/branch-operations/daily-workspace.css";
 import { Layout } from "@/components/layout";
 import { MobilePushSettings } from "@/components/push-notification-prompt";
@@ -17,7 +18,7 @@ import { branchBoardUrl, branchOperationUrl, resolveBoardBranch } from "@/lib/br
 import { captureBranchDeskReturn, resolveBranchDeskReturnForCurrentSession, restoreBranchDeskScroll } from "@/lib/branch-operation-return-state";
 import {
   AlertTriangle, BoardSkeleton, EmptyState,
-  OperationCardView, SectionHeader, Settings2, ShieldAlert, Store, formatServerDate, groupCards, isNavigationOnly, SECTIONS, type OperationCard,
+  Settings2, ShieldAlert, Store, formatServerDate, type OperationCard,
 } from "@/components/branch-operations/presentation";
 
 type BranchOperationsSummary = {
@@ -182,27 +183,9 @@ export default function BranchOperationsPage() {
             {validBoard.cards.length === 0 ? <EmptyState title="لا توجد وحدات متاحة" text="لا توجد صفحات تشغيلية مسموح بها لهذا الحساب في الفرع المحدد." icon={Settings2} /> : (
                <div className="mt-6">
                   <div className="branch-desk-work-heading"><p className="branch-desk-section-label">02 / صفحات العمل</p><h2>المؤشرات وصفحات العمل</h2></div>
-                 <div className="branch-ops-sections">
-                {groupCards(validBoard.cards.filter(card => !isNavigationOnly(card))).map(({ section, cards }) => section.id === "people" ? (
-                    <details key={`${validBoard.branchId}-${section.id}`} className="branch-ops-section branch-desk-disclosure" data-card-count={cards.length} data-testid="branch-operations-section-people">
-                    <summary className="min-h-8 cursor-pointer font-bold" id="branch-ops-people">{section.label}</summary>
-                    <p className="mb-3 text-xs text-muted-foreground">{section.hint}</p>
-                    <div className="branch-ops-grid">{cards.map(card => <OperationCardView key={card.id} card={card} section={section} onOpen={go} onRefresh={() => board.refetch()} expanded={expandedCardId === card.id} onToggle={() => setExpandedCardId(current => current === card.id ? null : card.id)} />)}</div>
-                  </details>
-                ) : (
-                   <section key={section.id} className="branch-ops-section" data-card-count={cards.length} aria-labelledby={`branch-ops-${section.id}`} data-testid={`branch-operations-section-${section.id}`}>
-                    <SectionHeader section={section} count={cards.length} />
-                    <div className="branch-ops-grid">
-                      {cards.map((card) => <OperationCardView key={card.id} card={card} section={section} onOpen={go} onRefresh={() => board.refetch()} expanded={expandedCardId === card.id} onToggle={() => setExpandedCardId(current => current === card.id ? null : card.id)} />)}
-                    </div>
-                  </section>
-                ))}
-                 </div>
-                 {validBoard.cards.some(isNavigationOnly) && <details className="branch-desk-disclosure mt-4" data-testid="branch-operations-navigation-only">
-                  <summary className="min-h-11 cursor-pointer font-bold">روابط تنقل فقط ({validBoard.cards.filter(isNavigationOnly).length})</summary>
-                  <p className="mb-3 text-xs text-muted-foreground">هذه الصفحات لا توفر مؤشرات للوحة؛ فتحها لا يعني وجود إجراء مطلوب أو اكتماله.</p>
-                  <div className="branch-ops-grid">{validBoard.cards.filter(isNavigationOnly).map(card => <OperationCardView key={card.id} card={card} section={SECTIONS[2]} onOpen={go} onRefresh={() => board.refetch()} expanded={expandedCardId === card.id} onToggle={() => setExpandedCardId(current => current === card.id ? null : card.id)} />)}</div>
-                </details>}
+                 <WorkGroups key={validBoard.branchId} cards={validBoard.cards} expandedCardId={expandedCardId}
+                   onToggle={id => setExpandedCardId(current => current === id ? null : id)}
+                   onOpen={go} onRefresh={() => board.refetch()} />
               </div>
             )}
             <details className="branch-desk-disclosure mt-5" data-testid="branch-operations-push-settings">

@@ -48,8 +48,8 @@ describe("branch operations compact grouped board", () => {
     expect(css).not.toMatch(/auto-fill|auto-fit/);
     expect(css).toMatch(/\.branch-ops-shell \.branch-ops-card-title\s*\{[^}]*overflow:\s*visible;[^}]*word-break:\s*normal;[^}]*overflow-wrap:\s*normal/);
     expect(css).toMatch(/\.branch-ops-shell \.platform-app-icon\s*\{\s*width:\s*36px/);
-    expect(page).toContain('className="branch-ops-sections"');
-    expect(page).toContain("data-card-count={cards.length}");
+    expect(page).toContain("<WorkGroups");
+    expect(page).not.toContain('className="branch-ops-grid"');
     expect(page).toContain('dir="rtl"');
   });
 
@@ -90,9 +90,8 @@ describe("branch operations compact grouped board", () => {
     expect(failed).toContain("تعذر تحديث المؤشرات");
     expect(failed).toContain("إعادة المحاولة");
     const page = readFileSync(new URL("../../pages/branch-operations.tsx", import.meta.url), "utf8");
-    for (const id of ["branch-operations-section-people", "branch-operations-navigation-only", "branch-operations-push-settings"]) {
-      expect(page).toMatch(new RegExp(`<details[^>]*data-testid="${id}"`));
-    }
+    expect(page).toMatch(/<details[^>]*data-testid="branch-operations-push-settings"/);
+    expect(page).not.toContain("branch-operations-navigation-only");
     expect(page).not.toMatch(/<details[^>]*\bopen[=>\s]/);
   });
 

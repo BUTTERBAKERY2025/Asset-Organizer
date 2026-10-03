@@ -196,6 +196,67 @@
   padding: .75rem;
   line-height: 1.8;
 }
+/* The work desk exposes four workflow groups, not a launcher of icon tiles. */
+.branch-ops-shell .branch-ops-work-groups {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: .625rem;
+  align-items: start;
+}
+.branch-ops-shell .branch-ops-work-group {
+  padding: 0;
+  overflow: visible;
+}
+.branch-ops-work-group > .branch-ops-group-summary {
+  display: flex;
+  align-items: center;
+  gap: .625rem;
+  min-height: 76px;
+  padding: .625rem .75rem;
+  margin: 0;
+  list-style: none;
+}
+.branch-ops-group-summary::-webkit-details-marker { display: none; }
+.branch-ops-group-copy { flex: 1; min-width: 0; }
+.branch-ops-group-title { display: block; font-size: .875rem; line-height: 1.7; }
+.branch-ops-group-hint { display: block; font-size: .75rem; font-weight: 400; line-height: 1.7; color: #706579; }
+.branch-ops-group-count { flex-shrink: 0; color: var(--branch-desk-accent); font-size: .6875rem; font-weight: 700; }
+.branch-ops-group-chevron { flex-shrink: 0; width: 16px; height: 16px; color: var(--branch-desk-accent); transition: transform 160ms ease; }
+.branch-ops-work-group[open] > summary .branch-ops-group-chevron { transform: rotate(180deg); }
+.branch-ops-group-rows { padding: 0 .75rem .5rem; }
+.branch-ops-shell .branch-ops-function-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  min-height: 44px;
+  border: 0;
+  border-top: 1px solid var(--branch-desk-line);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  transition: none;
+}
+.branch-ops-shell .branch-ops-function-row:hover { transform: none; box-shadow: none; }
+.branch-ops-shell .branch-ops-function-row .branch-ops-card-main {
+  min-height: 44px;
+  padding: .5rem .125rem;
+  border-radius: .375rem;
+}
+.branch-ops-shell .branch-ops-function-row .branch-ops-card-title { font-size: .8125rem; font-weight: 600; }
+.branch-ops-shell .branch-ops-function-row .branch-ops-card-details {
+  min-height: 44px;
+  min-width: 76px;
+  padding: .5rem .5rem;
+  align-self: start;
+  border-radius: .375rem;
+}
+.branch-ops-shell .branch-ops-function-row .branch-ops-card-panel {
+  grid-column: 1 / -1;
+  padding: .5rem .125rem .75rem;
+  border-top: 0;
+}
+@container branchops (min-width: 760px) {
+  .branch-ops-shell .branch-ops-work-groups { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 .branch-ops-shell .platform-app-icon {
   width: 36px;
   height: 36px;
@@ -262,4 +323,5 @@
   .branch-ops-shell .branch-ops-card,
   .branch-ops-shell .platform-app-icon { transition: none; }
   .branch-ops-shell .branch-ops-card:hover { transform: none; }
+  .branch-ops-group-chevron { transition: none; }
 }
