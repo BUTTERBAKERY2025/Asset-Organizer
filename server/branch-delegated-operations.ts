@@ -12,7 +12,7 @@ export function delegatedBranchAllowed(user: { branchId?: string | null }, allow
   return typeof branchId === "string" && branchId !== "main_warehouse"
     && branchId === user.branchId && allowed !== null && allowed.includes(branchId);
 }
-function requestBranchAllowed(req: any, branchId: unknown) {
+export function requestBranchAllowed(req: any, branchId: unknown) {
   const bound = req.authPermissionDecisionSnapshot?.branchTemplates?.some((base: any) => base.branchId === branchId);
   return delegatedBranchAllowed(bound ? { branchId: branchId as string } : req.currentUser,
     getAllowedBranchIds(req), branchId);

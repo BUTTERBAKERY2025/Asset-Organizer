@@ -15,6 +15,12 @@ Review custom permission helpers and aggregates as well as standard route guards
 
 **How to apply:** Feed custom guards the same resource-context decision; filter source rows before aggregation. Test with nonzero contributions from both an allowed and a denied branch.
 
+Selecting which permission module guards an operation must also be branch-aware.
+
+**Why:** Adding a branch-supply template in one branch changed a legacy account's route classification everywhere, denying its existing warehouse authority in another branch even though no stored grant was deleted.
+
+**How to apply:** Resolve the request's branch or persisted source/destination before choosing the authority path. Test original authority in the other branch, not just unchanged permission rows.
+
 Intentional empty direct replacement is not a request to inherit, manufacture permanent deny overrides, or erase independent denies.
 
 **Why:** Synthesizing omission-denies while switching to direct mode prevented later explicit restoration; erasing denies on checkbox changes undid independent restrictions.

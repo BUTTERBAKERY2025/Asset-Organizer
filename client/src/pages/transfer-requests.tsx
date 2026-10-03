@@ -143,10 +143,12 @@ export default function TransferRequestsPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { user } = useAuth();
-  const permissions = usePermissions();
+  const [filterBranch, setFilterBranch] = useState<string>("all");
+  const permissions = usePermissions(filterBranch);
   const isKeeper = user?.role === "warehouse_keeper";
   const isBranchManager = user?.role === "branch_manager"
-    || (["employee", "viewer"].includes(user?.role ?? "") && permissions.canView("branch_supply"));
+    || (["employee", "viewer"].includes(user?.role ?? "") && permissions.canView("branch_supply")
+      && !permissions.canView("warehouse"));
   const transferModule = isBranchManager ? "branch_supply" : "warehouse";
   const { branches, isLoading: branchesLoading, userBranchId, canSelectBranch } = useBranches();
   const operationalBranchId = isKeeper ? "main_warehouse" : userBranchId;
@@ -174,7 +176,6 @@ export default function TransferRequestsPage() {
     const status = params.get("status");
     setFilterStatus(STATUS_OPTIONS.some(option => option.value === status) ? status! : "all");
   }, [search]);
-  const [filterBranch, setFilterBranch] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [transferType, setTransferType] = useState<"to_warehouse" | "between_branches">("to_warehouse");
   const shortagePrefillRef = useRef<string | null>(null);

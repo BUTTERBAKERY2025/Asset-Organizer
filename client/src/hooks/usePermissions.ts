@@ -7,15 +7,16 @@ interface Permission {
   actions: string[];
 }
 
-export function usePermissions() {
+export function usePermissions(branchId?: string | null) {
   const { user, isAdmin, isAttendanceClerk } = useAuth();
   const isViewer = user?.role === "viewer";
   const isEmployee = user?.role === "employee";
 
   const { data: permissions = [], isLoading } = useQuery<Permission[]>({
-    queryKey: ["/api/my-permissions"],
+    queryKey: branchId && branchId !== "all" ? ["/api/my-permissions", { branchId }] : ["/api/my-permissions"],
     queryFn: async () => {
-      const res = await fetch("/api/my-permissions", { credentials: "include" });
+      const url = "/api/my-permissions" + (branchId && branchId !== "all" ? `?branchId=${encodeURIComponent(branchId)}` : "");
+      const res = await fetch(url, { credentials: "include" });
       if (!res.ok) throw new Error(`${res.status}: request failed`);
       return res.json();
     },

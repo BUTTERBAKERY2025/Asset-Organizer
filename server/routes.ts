@@ -3,6 +3,9 @@ import { centralKitchenInventoryMovements } from "@shared/schema";
 import { createServer, type Server } from "http";
 import memoize from "memoizee";
 import { storage } from "./storage";
+import { dashboardPermissionScope } from "./dashboard-permission-scope";
+import { branchTransferPermission } from "./branch-transfer-permission";
+import { contextualActionAllowed } from "./auth";
 import { assignmentUserId, assignmentCreateBody, assignmentUpdateBody, normalizeAssignmentScope, isValidAssignmentScopeAndTime } from "./user-assignment-validation";
 import { readEmployeeDocumentMetadata } from "./employee-documents-read";
 import { authenticatedUploadMatchesActor, makeAuthenticatedUploadName, mayDownloadUpload, resolveUploadBindings, validUploadKey, type UploadBinding } from "./upload-file-access";
@@ -221,7 +224,7 @@ import { registerKitchenRoutingRoutes, kitchenActionAllowed, getKitchenRouting, 
 import { setupAuth, isAuthenticated, requirePermission, requireAnyPermission, getActiveBranchFilter, requireBranchAccess, canAccessBranch, isUserAdmin, getAllowedBranchIds, getEffectiveBranchFilter, getWarehouseKeeperEffectivePermissions, getBranchManagerEffectivePermissions, invalidateAuthCache, HR_MANAGER_MODULES, HR_SPECIALIST_PERMISSIONS, FINANCIAL_MANAGER_PERMISSIONS, OPERATIONS_MANAGER_PERMISSIONS, BRANCH_MANAGER_INTRINSIC_PERMISSIONS, hasCrossBranchHrReadAccess, filterRoleDeniedPermissions } from "./auth";
 import { registerEmployeeAccountDelegation } from "./employee-account-delegation";
 import { registerJobPermissionTemplateDraftRoutes } from "./job-permission-template-routes";
-import { registerBranchStockDesk, workforcePermission, operationalRoster, operationalAttendance } from "./branch-delegated-operations";
+import { registerBranchStockDesk, workforcePermission, operationalRoster, operationalAttendance, requestBranchAllowed } from "./branch-delegated-operations";
 import { comparisonBranchIds, comparisonDate, comparisonEvidence, comparisonRange, buildCanonicalComparisons, COMPARISON_REASON_PREFIX, COMPARISON_UNAVAILABLE } from "./production-comparison-evidence";
 import { authRateLimiter, biometricRateLimiter, uploadRateLimiter, apiRateLimiter, validateFileUpload, sanitizeFilename, trackLoginAttempt } from "./security";
 import { registerGovernanceRoutes } from "./governance-routes";
@@ -421,6 +424,13 @@ export async function registerRoutes(
 
       const salesConds: SQL[] = [eq(cashierSalesJournals.journalDate, today)];
       const prodConds: SQL[] = [eq(productionOrders.scheduledDate, today)];
+      const salesScope = await dashboardPermissionScope(req,
+        ["cashier_journal", "sales_analytics", "cashier_performance"], branchIds, queryBranchId);
+      const productionScope = await dashboardPermissionScope(req, ["production"], branchIds, queryBranchId);
+      if (salesScope.branchIds !== null)
+        salesConds.push(salesScope.branchIds.length ? inArray(cashierSalesJournals.branchId, salesScope.branchIds) : sql`false`);
+      if (productionScope.branchIds !== null)
+        prodConds.push(productionScope.branchIds.length ? inArray(productionOrders.branchId, productionScope.branchIds) : sql`false`);
       if (singleBranchId) {
         salesConds.push(eq(cashierSalesJournals.branchId, singleBranchId));
         prodConds.push(eq(productionOrders.branchId, singleBranchId));
@@ -429,12 +439,7 @@ export async function registerRoutes(
         prodConds.push(inArray(productionOrders.branchId, branchIds));
       }
 
-      const uid = req.currentUser?.id;
-      const canViewSales = uid
-        ? (await storage.hasPermission(uid, "cashier_journal", "view")) ||
-          (await storage.hasPermission(uid, "sales_analytics", "view")) ||
-          (await storage.hasPermission(uid, "cashier_performance", "view"))
-        : false;
+      const canViewSales = salesScope.canView;
 
       const [[salesRow], [prodRow]] = await Promise.all([
         db
@@ -449,7 +454,7 @@ export async function registerRoutes(
 
       res.json({
         todaySales: canViewSales ? Number(salesRow?.total ?? 0) : 0,
-        productionOrders: Number(prodRow?.count ?? 0),
+        productionOrders: productionScope.canView ? Number(prodRow?.count ?? 0) : 0,
       });
     } catch (error) {
       console.error("Error fetching dashboard stats:", error);
@@ -485,6 +490,14 @@ export async function registerRoutes(
 
       const salesBranchCond: SQL[] = [gte(cashierSalesJournals.journalDate, weekStart), lte(cashierSalesJournals.journalDate, today)];
       const prodBranchCond: SQL[] = [eq(productionOrders.scheduledDate, today)];
+      const salesScope = await dashboardPermissionScope(req,
+        ["cashier_journal", "sales_analytics", "cashier_performance"], branchIds, queryBranchId);
+      const productionScope = await dashboardPermissionScope(req, ["production"], branchIds, queryBranchId);
+      const salesScopeCondition = salesScope.branchIds === null ? sql`true`
+        : salesScope.branchIds.length ? inArray(cashierSalesJournals.branchId, salesScope.branchIds) : sql`false`;
+      salesBranchCond.push(salesScopeCondition);
+      if (productionScope.branchIds !== null)
+        prodBranchCond.push(productionScope.branchIds.length ? inArray(productionOrders.branchId, productionScope.branchIds) : sql`false`);
       if (singleBranchId) {
         salesBranchCond.push(eq(cashierSalesJournals.branchId, singleBranchId));
         prodBranchCond.push(eq(productionOrders.branchId, singleBranchId));
@@ -512,6 +525,7 @@ export async function registerRoutes(
           .innerJoin(branches, eq(branches.id, cashierSalesJournals.branchId))
           .where(and(
             eq(cashierSalesJournals.journalDate, today),
+            salesScopeCondition,
             ...(singleBranchId
               ? [eq(cashierSalesJournals.branchId, singleBranchId)]
               : branchIds !== null && branchIds.length > 0
@@ -539,15 +553,8 @@ export async function registerRoutes(
       const weekSales = days.map((date) => ({ date, total: byDate.get(date) ?? 0 }));
       const yesterdaySales = byDate.get(yesterday) ?? 0;
 
-      const uid = req.currentUser?.id;
-      const canViewSales = uid
-        ? (await storage.hasPermission(uid, "cashier_journal", "view")) ||
-          (await storage.hasPermission(uid, "sales_analytics", "view")) ||
-          (await storage.hasPermission(uid, "cashier_performance", "view"))
-        : false;
-      const canViewProduction = uid
-        ? await storage.hasPermission(uid, "production", "view")
-        : false;
+      const canViewSales = salesScope.canView;
+      const canViewProduction = productionScope.canView;
 
       res.json({
         weekSales: canViewSales ? weekSales : empty.weekSales,
@@ -1619,7 +1626,16 @@ export async function registerRoutes(
       const navigationPermissions = await getNavigationPermissionProjection(
         req, (await getCachedBranches()).map(branch => branch.id), permissions,
       );
-      res.json(filterRoleDeniedPermissions(currentUser.role, navigationPermissions));
+      const branchId = req.query.branchId;
+      const snapshot = (req as any).authPermissionDecisionSnapshot;
+      const projected = typeof branchId === "string" && branchId !== "all" && snapshot
+        ? navigationPermissions.map(permission => ({
+          ...permission,
+          actions: permission.actions.filter(action =>
+            contextualActionAllowed(req, snapshot, permission.module, action, { branchId })),
+        })).filter(permission => permission.actions.length > 0)
+        : navigationPermissions;
+      res.json(filterRoleDeniedPermissions(currentUser.role, projected));
     } catch (error) {
       console.error("Error fetching my permissions:", error);
       res.status(500).json({ error: "Failed to fetch permissions" });
@@ -8243,7 +8259,7 @@ export async function registerRoutes(
   }): Promise<boolean> => {
     if (isUserAdmin(req)) return true;
     if (["employee", "viewer"].includes(req.currentUser?.role ?? "")
-      && (order.requestBranchId === "main_warehouse" || order.requestBranchId !== req.currentUser?.branchId)) return false;
+      && !requestBranchAllowed(req, order.requestBranchId)) return false;
     if (["branch_manager", "employee", "viewer"].includes(req.currentUser?.role ?? ""))
       return await canAccessBranch(req, order.requestBranchId);
     return (await canAccessBranch(req, order.requestBranchId))
@@ -8269,7 +8285,7 @@ export async function registerRoutes(
         const conditions: SQL[] = [];
         if (["branch_manager", "employee", "viewer"].includes(req.currentUser?.role ?? "")) {
           const authorized = (getAllowedBranchIds(req) ?? []).filter(id =>
-            !["employee", "viewer"].includes(req.currentUser?.role ?? "") || (id === req.currentUser?.branchId && id !== "main_warehouse"));
+            !["employee", "viewer"].includes(req.currentUser?.role ?? "") || requestBranchAllowed(req, id));
           if (!authorized.length) return res.status(403).json({ error: "لا يوجد فرع طالب مفوض" });
           conditions.push(inArray(centralKitchenOrders.requestBranchId, authorized));
         }
@@ -8473,7 +8489,7 @@ export async function registerRoutes(
         ];
         if (["branch_manager", "employee", "viewer"].includes(req.currentUser?.role ?? "")) {
           const authorized = (getAllowedBranchIds(req) ?? []).filter(id =>
-            !["employee", "viewer"].includes(req.currentUser?.role ?? "") || (id === req.currentUser?.branchId && id !== "main_warehouse"));
+            !["employee", "viewer"].includes(req.currentUser?.role ?? "") || requestBranchAllowed(req, id));
           if (!authorized.length) return res.status(403).json({ error: "لا يوجد فرع طالب مفوض" });
           conditions.push(inArray(centralKitchenOrders.requestBranchId, authorized));
         }
@@ -9189,7 +9205,7 @@ export async function registerRoutes(
         // The requesting branch must be authorized at submission time.
         if (!(await canAccessBranch(req, payload.requestBranchId))
           || (["employee", "viewer"].includes(user.role)
-            && (payload.requestBranchId !== user.branchId || payload.requestBranchId === "main_warehouse"))) {
+            && !requestBranchAllowed(req, payload.requestBranchId))) {
           return res.status(403).json({ error: "ليس لديك صلاحية لإنشاء طلب لهذا الفرع" });
         }
         const orderDay = saudiDate();
@@ -16769,6 +16785,13 @@ export async function registerRoutes(
 
       const isSelfRecording = String(cashierId) === String(user.id);
       if (!isSelfRecording && user.role !== 'admin') {
+        const snapshot = (req as any).authPermissionDecisionSnapshot;
+        if (snapshot?.branchTemplates?.length) {
+          const persisted = await storage.getProductCommission(Number(commissionId));
+          if (!persisted?.branchId || !["create", "edit"].some(action =>
+            contextualActionAllowed(req, snapshot, "smart_incentives_commissions", action, { branchId: persisted.branchId })))
+            return res.status(403).json({ error: "غير مصرح بتسجيل عمولات هذا الفرع لكاشير آخر" });
+        } else {
         const perms = await storage.getUserPermissions(user.id);
         const commPerm = perms.find((p: any) => p.module === 'smart_incentives_commissions');
         if (!commPerm) {
@@ -16780,6 +16803,7 @@ export async function registerRoutes(
         else if (typeof rawActions === 'string') actionsArray = rawActions.replace(/[{}]/g, '').split(',').map((a: string) => a.trim());
         if (!actionsArray.includes('create') && !actionsArray.includes('edit')) {
           return res.status(403).json({ error: "غير مصرح - تحتاج صلاحية إنشاء أو تعديل عمولات الأصناف" });
+        }
         }
       }
 
@@ -16811,10 +16835,12 @@ export async function registerRoutes(
       if (!branchId) return res.status(400).json({ error: "الفرع غير محدد في العمولة" });
 
       // Branch isolation: ensure cashier can only record for their own branch
-      if (isSelfRecording && user.branchId && user.branchId !== branchId) {
+      const commissionBranchAllowed = (req as any).authPermissionDecisionSnapshot?.branchTemplates?.length
+        ? requestBranchAllowed(req, branchId) : !user.branchId || user.branchId === branchId;
+      if (isSelfRecording && !commissionBranchAllowed) {
         return res.status(403).json({ error: "غير مصرح - العمولة تنتمي لفرع آخر" });
       }
-      if (!isSelfRecording && user.role !== 'admin' && user.branchId && user.branchId !== branchId) {
+      if (!isSelfRecording && user.role !== 'admin' && !commissionBranchAllowed) {
         return res.status(403).json({ error: "غير مصرح بالوصول لعمولات فرع آخر" });
       }
 
@@ -25414,7 +25440,9 @@ export async function registerRoutes(
       if (isActive !== undefined) filters.isActive = isActive === 'true';
       
       const targets = await storage.getAllAverageTicketTargets(filters);
-      res.json(targets);
+      res.json(branchFilter.branchIds
+        ? targets.filter(target => !!target.branchId && branchFilter.branchIds!.includes(target.branchId))
+        : targets);
     } catch (error) {
       console.error("Error fetching average ticket targets:", error);
       res.status(500).json({ error: "فشل في جلب أهداف متوسط الفاتورة" });
@@ -25437,7 +25465,9 @@ export async function registerRoutes(
         branchFilter.singleBranchId ?? undefined,
         cashierId as string | undefined
       );
-      res.json(targets);
+      res.json(branchFilter.branchIds
+        ? targets.filter(target => !!target.branchId && branchFilter.branchIds!.includes(target.branchId))
+        : targets);
     } catch (error) {
       console.error("Error fetching active average ticket targets:", error);
       res.status(500).json({ error: "فشل في جلب الأهداف النشطة" });
@@ -36925,7 +36955,8 @@ export async function registerRoutes(
 
   const mainWarehouseBranchId = "main_warehouse";
   const isWarehouseKeeper = (req: any) => req.currentUser?.role === "warehouse_keeper";
-  const isBranchSupplyManager = (req: any) => req.currentUser?.role === "branch_manager"
+  const isBranchSupplyManager = (req: any) => typeof req.branchSupplyRouteMode === "boolean"
+    ? req.branchSupplyRouteMode : req.currentUser?.role === "branch_manager"
     || (["employee", "viewer"].includes(req.currentUser?.role ?? "")
       && (req.authPermissions?.some((p: any) => p.module === "branch_supply")
         || req.authPermissionDecisionSnapshot?.tuples?.some((p: any) => p.module === "branch_supply")
@@ -36933,11 +36964,10 @@ export async function registerRoutes(
           base.permissions.some((p: any) => p.module === "branch_supply"))));
   // Branch requests use their own module, never a broad warehouse grant.
   const transferPermission = (action: "view" | "create" | "edit") =>
-    (req: any, res: any, next: any) =>
-      requirePermission(isBranchSupplyManager(req) ? "branch_supply" : "warehouse", action)(req, res, next);
+    branchTransferPermission(action, isBranchSupplyManager);
   const branchSupplyDestination = async (req: any, branchId: string | null | undefined) =>
     !!branchId && branchId !== mainWarehouseBranchId
-      && (!["employee", "viewer"].includes(req.currentUser?.role ?? "") || branchId === req.currentUser.branchId)
+      && (!["employee", "viewer"].includes(req.currentUser?.role ?? "") || requestBranchAllowed(req, branchId))
       && (getAllowedBranchIds(req) ?? []).includes(branchId)
       && await canAccessBranch(req, branchId);
   const keeperWarehouseScope = (req: any, branchId: string | null | undefined) =>
@@ -37395,7 +37425,7 @@ export async function registerRoutes(
     try {
       if (isBranchSupplyManager(req)) {
         const allowed = (getAllowedBranchIds(req) ?? []).filter(id => id !== mainWarehouseBranchId
-          && (!["employee", "viewer"].includes(req.currentUser?.role ?? "") || id === req.currentUser?.branchId));
+          && (!["employee", "viewer"].includes(req.currentUser?.role ?? "") || requestBranchAllowed(req, id)));
         const requested = req.query.branchId || req.query.destinationBranchId;
         if (typeof requested === "string" && requested !== "all" && !allowed.includes(requested))
           return res.status(403).json({ error: "غير مصرح بالوصول لهذا الفرع" });

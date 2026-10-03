@@ -239,9 +239,6 @@ export default function CentralKitchenOrdersPage() {
     && (new URLSearchParams(window.location.search).getAll("branchId").length !== 1
       || !branches.some(branch => branch.id === linkedBranchId));
   const { canView, canCreate, canEdit, canApprove, canExport, hasPermission } = usePermissions();
-  const supplyModule = user?.role === "branch_manager"
-    || (["employee", "viewer"].includes(user?.role ?? "") && canView("branch_supply"))
-      ? "branch_supply" : "warehouse";
   const operationsView = isKitchenOperationsPresentation(user, canApprove("central_kitchen_orders"));
   const [desktop, setDesktop] = useState(() => typeof window !== "undefined" && window.matchMedia("(min-width: 1536px)").matches);
   useEffect(() => {
@@ -478,6 +475,10 @@ export default function CentralKitchenOrdersPage() {
     }
     return Array.from(merged.values());
   }, [branches, kitchensQuery.data]);
+  const supplyPermissions = usePermissions(branchFilter);
+  const supplyModule = user?.role === "branch_manager"
+    || (["employee", "viewer"].includes(user?.role ?? "") && supplyPermissions.canView("branch_supply")
+      && !supplyPermissions.canView("warehouse")) ? "branch_supply" : "warehouse";
   const supplyBranchId = useMemo(() => {
     if (branchFilter === "all") return null;
     return branches.some(branch => branch.id === branchFilter) ? branchFilter : null;
@@ -804,10 +805,10 @@ export default function CentralKitchenOrdersPage() {
         current="kitchen"
         branchId={supplyBranchId}
         canKitchen={canView("central_kitchen_orders")}
-        canWarehouse={canView(supplyModule)}
+        canWarehouse={supplyPermissions.canView(supplyModule)}
         compact
         onKitchenRequest={canCreate("central_kitchen_orders") ? () => void openCreate() : undefined}
-        onWarehouseRequest={canCreate(supplyModule) && supplyBranchId
+        onWarehouseRequest={supplyPermissions.canCreate(supplyModule) && supplyBranchId
           ? () => navigateSupply(branchSupplyUrl("warehouse", supplyBranchId, true)) : undefined}
       />}
       {operationsView ? <details className="rounded-xl border border-border bg-card px-3" data-testid="kitchen-operations-schedule">

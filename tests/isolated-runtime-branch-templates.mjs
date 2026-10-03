@@ -35,11 +35,35 @@ try {
     "delivery_source_extension.sql", "delivery_handover_reverse.sql", "delivery_external_carriers.sql"])
     await client.query(await readFile(`migrations/${migration}`, "utf8"));
   const A = "isolated-fixture-a", B = "isolated-fixture-b", user = "isolated-fixture-employee";
+  // Canonical employee belongs to A, while the linked account's old default is B.
+  // Explicit branch binding must work without rewriting that account default.
+  await client.query("UPDATE users SET branch_id=$2 WHERE id=$1", [user, B]);
   await client.query(`INSERT INTO user_branch_access(user_id,branch_id,access_level,is_default)
     VALUES ($1,$2,'full',true),($1,$3,'full',false);
     `.replace(/;\s*$/, ""), [user, A, B]);
   await client.query(`INSERT INTO user_permissions(user_id,module,actions)
     VALUES ($1,'cashier_journal',ARRAY['view','create'])`, [user]);
+  await client.query(`INSERT INTO user_permissions(user_id,module,actions)
+    VALUES ($1,'cashier_performance',ARRAY['view'])`, [user]);
+  await client.query(`INSERT INTO user_permissions(user_id,module,actions)
+    VALUES ($1,'warehouse',ARRAY['view'])`, [user]);
+  await client.query(`INSERT INTO user_permissions(user_id,module,actions)
+    VALUES ($1,'smart_incentives_commissions',ARRAY['view','create','edit'])`, [user]);
+  await client.query(`INSERT INTO product_commissions
+    (id,product_name,commission_type,branch_id,target_quantity,points_on_target,valid_from)
+    VALUES (900001,'Synthetic A','weekly_product',$1,1,2,'2020-01-01'),
+      (900002,'Synthetic B','weekly_product',$2,1,2,'2020-01-01')`, [A, B]);
+  await client.query(`INSERT INTO material_transfers
+    (id,transfer_number,source_type,source_branch_id,destination_branch_id,transfer_date)
+    VALUES (900001,'SYNTHETIC-OUTSIDE-WAREHOUSE','branch',$2,$1,'2026-10-03'),
+      (900002,'SYNTHETIC-RESTRICTED-WAREHOUSE','branch',$1,$1,'2026-10-03')`, [A, B]);
+  await client.query(`INSERT INTO average_ticket_targets
+    (id,branch_id,target_type,target_value,valid_from) VALUES
+    (900001,$1,'branch',10,'2020-01-01'),(900002,$2,'branch',20,'2020-01-01')`, [A, B]);
+  const today = new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  await client.query(`INSERT INTO cashier_sales_journals
+    (branch_id,cashier_id,cashier_name,journal_date,total_sales)
+    VALUES ($1,$3,'Synthetic',$4,900),($2,$3,'Synthetic',$4,7)`, [A, B, user, today]);
   await client.query(`INSERT INTO cashier_points_ledger
     (cashier_id,branch_id,transaction_date,points_type,points_earned,point_value,amount_earned,status)
     VALUES ($1,$2,'2026-10-03','branch_bonus',8,1,8,'earned'),
@@ -63,7 +87,7 @@ try {
   const draft = await request("/api/rbac/job-template-drafts", { method: "POST", cookie: admin, body: { content: {
     key: "isolated_branch_base", name: "Isolated branch base", description: "Synthetic", reviewNotes: "Isolation",
     scopeType: "branch", assignmentAuthority: "delegated_operations",
-    permissions: ["branch_workforce", "branch_supply", "central_kitchen_orders", "maintenance", "branch_complaints", "quality_control", "cashier_performance", "platform_home", "dashboard", "cashier", "incentives",
+    permissions: ["branch_stock", "branch_workforce", "branch_supply", "central_kitchen_orders", "maintenance", "branch_complaints", "quality_control", "cashier_performance", "platform_home", "dashboard", "cashier", "incentives",
       "smart_incentives_challenges", "smart_incentives_commissions", "smart_incentives_bonus", "smart_incentives_wallet"]
       .map(module => ({ module, actions: ["branch_workforce", "branch_supply", "central_kitchen_orders", "maintenance", "branch_complaints"].includes(module) ? ["view", "create", "edit"] : ["view"] })),
   } } });
@@ -84,6 +108,12 @@ try {
   check((await request(url, { method: "POST", cookie: manager, body })).status === 409, "BT_STALE_REVIEW");
   check((await request("/api/cashier-journals?branchId=" + A, { cookie: employee })).status === 401, "BT_SESSION_REVOKED");
   employee = await login("employee");
+  const branchUiA = await request("/api/my-permissions?branchId=" + A, { cookie: employee });
+  const branchUiB = await request("/api/my-permissions?branchId=" + B, { cookie: employee });
+  check(branchUiA.status === 200 && branchUiA.json.some(p => p.module === "branch_supply")
+    && !branchUiA.json.some(p => p.module === "warehouse"), "BT_UI_BRANCH_A_AUTHORITY");
+  check(branchUiB.status === 200 && branchUiB.json.some(p => p.module === "warehouse")
+    && !branchUiB.json.some(p => p.module === "branch_supply"), "BT_UI_BRANCH_B_AUTHORITY");
   check((await request("/api/cashier-journals?branchId=" + A, { cookie: employee })).status === 403, "BT_A_REMOVED");
   check((await request("/api/cashier-journals?branchId=" + B, { cookie: employee })).status === 200, "BT_B_PRESERVED");
   check((await request("/api/quality-checks?branchId=" + A, { cookie: employee })).status === 200, "BT_A_ADDED");
@@ -99,7 +129,7 @@ try {
     check(response.status === 200, `BT_EXTENDED_READ_${route}_${response.status}`);
   }
   const second = await request(url, { cookie: manager });
-  for (const root of ["/api/warehouse/items", "/api/warehouse/material-transfers", "/api/central-kitchen-orders",
+  for (const root of ["/api/branch-stock-desk", "/api/warehouse/branch-stock/" + A, "/api/warehouse/items", "/api/warehouse/material-transfers", "/api/central-kitchen-orders",
     "/api/shift-management/bundle"]) {
     const result = await request(`${root}?branchId=${A}&startDate=2026-10-01&endDate=2026-10-07`, { cookie: employee });
     check(result.status === 200, `BT_OPERATIONS_${root}_${result.status}`);
@@ -109,6 +139,17 @@ try {
   }
   check((await request("/api/central-kitchen-orders/900002?branchId=" + A, { cookie: employee })).status === 403, "BT_KITCHEN_PERSISTED_BRANCH");
   check((await request(`/api/shift-management/bundle?branchId=${B}&startDate=2026-10-01&endDate=2026-10-07`, { cookie: employee })).status === 403, "BT_WORKFORCE_FOREIGN");
+  const outsideTransfers = await request("/api/warehouse/material-transfers?branchId=" + B, { cookie: employee });
+  check(outsideTransfers.status === 200 && outsideTransfers.json.some(t => t.id === 900001)
+    && !outsideTransfers.json.some(t => t.id === 900002), "BT_WAREHOUSE_OUTSIDE_BASE_PRESERVED");
+  check((await request("/api/warehouse/material-transfers/900001?branchId=" + A, { cookie: employee })).status === 200, "BT_WAREHOUSE_PERSISTED_SOURCE");
+  check((await request("/api/warehouse/material-transfers/900002?branchId=" + B, { cookie: employee })).status === 403, "BT_WAREHOUSE_NO_SOURCE_AUTHORITY");
+  check((await client.query("SELECT branch_id FROM users WHERE id=$1", [user])).rows[0].branch_id === B, "BT_ACCOUNT_DEFAULT_UNCHANGED");
+  check((await request("/api/smart-incentives/product-commission-achievement", {
+    method: "POST", cookie: employee, body: {
+      cashierId: user, commissionId: 900001, date: "2026-10-03", quantitySold: 1,
+    },
+  })).status === 200, "BT_EXPLICIT_BRANCH_COMMISSION_WITHOUT_DEFAULT_CHANGE");
   for (const root of ["/api/maintenance-tickets", "/api/branch-complaints"]) {
     const payload = root.includes("maintenance")
       ? { branchId: A, description: "Synthetic scoped maintenance" }
@@ -138,6 +179,48 @@ try {
   const afterRollback = await request(url, { cookie: manager });
   check(afterRollback.json.assignment.revision === stable.json.assignment.revision, "BT_ATOMIC_ROLLBACK");
   await client.query("DROP TRIGGER isolated_reject_branch_audit ON system_audit_logs; DROP FUNCTION isolated_reject_branch_audit()");
+  const restrictedDraft = await request("/api/rbac/job-template-drafts", { method: "POST", cookie: admin, body: { content: {
+    key: "isolated_restricted_base", name: "Synthetic restricted base", description: "Preserve other branch",
+    reviewNotes: "Resource and collection parity", scopeType: "branch", assignmentAuthority: "delegated_operations",
+    permissions: [{ module: "quality_control", actions: ["view"] }],
+  } } });
+  check(restrictedDraft.status === 201, "BT_RESTRICTED_DRAFT");
+  check((await request(`/api/rbac/job-template-drafts/${restrictedDraft.json.id}/approvals`, { method: "POST", cookie: admin,
+    body: { version: 1, expectedLatestVersion: 1, reason: "Synthetic restriction review", reviewed: true } })).status === 201, "BT_RESTRICTED_APPROVAL");
+  check((await request(url, { method: "POST", cookie: manager, body: {
+    templateId: restrictedDraft.json.id, version: 1, branchId: A, reason: "Remove only branch A performance",
+    expectedAssignmentRevision: afterRollback.json.expectedAssignmentRevision,
+  } })).status === 200, "BT_RESTRICTED_SAVE");
+  employee = await login("employee");
+  for (const root of ["/api/average-ticket-targets", "/api/average-ticket-targets/active"]) {
+    const collection = await request(root, { cookie: employee });
+    check(collection.status === 200 && collection.json.length === 1 && collection.json[0].branchId === B, `BT_OUTSIDE_FILTER_${root}`);
+    check((await request(root + "?branchId=" + A, { cookie: employee })).status === 403, `BT_REMOVED_PERFORMANCE_${root}`);
+  }
+  check((await request("/api/average-ticket-targets/900002?branchId=" + A, { cookie: employee })).status === 200, "BT_OUTSIDE_RESOURCE_PRESERVED");
+  check((await request("/api/average-ticket-targets/900001?branchId=" + B, { cookie: employee })).status === 403, "BT_RESOURCE_BRANCH_NOT_QUERY");
+  check((await request(`/api/cashier-shift-targets/branch/${B}/date/2026-10-03`, { cookie: employee })).status === 200, "BT_OUTSIDE_TARGETS_PRESERVED");
+  const home = await request("/api/dashboard/stats", { cookie: employee });
+  check(home.status === 200 && home.json.todaySales === 7, "BT_HOME_ONLY_AUTHORIZED_BRANCH_SALES");
+  check((await request("/api/dashboard/stats?branchId=" + A, { cookie: employee })).json.todaySales === 0, "BT_HOME_RESTRICTED_BRANCH");
+  const widgets = await request("/api/dashboard/widgets", { cookie: employee });
+  check(widgets.status === 200 && widgets.json.weekSales.reduce((sum, day) => sum + day.total, 0) === 7, "BT_WIDGETS_BRANCH_PARITY");
+  check(widgets.json.topBranchToday?.total === 7, "BT_TOP_BRANCH_NO_FOREIGN_SALES");
+  check((await request("/api/smart-incentives/product-commissions/900002", {
+    method: "PATCH", cookie: employee, body: { pointsOnTarget: 3 },
+  })).status === 200, "BT_OUTSIDE_COMMISSION_EDIT");
+  check((await request("/api/smart-incentives/product-commissions/900001?branchId=" + B, {
+    method: "PATCH", cookie: employee, body: { pointsOnTarget: 3 },
+  })).status === 403, "BT_DENIED_COMMISSION_EDIT");
+  check((await request("/api/smart-incentives/product-commissions/900002", {
+    method: "PATCH", cookie: employee, body: { branchId: A },
+  })).status === 404, "BT_COMMISSION_CANNOT_MOVE_INTO_DENIED_BRANCH");
+  const recorded = await request("/api/smart-incentives/product-commission-achievement", {
+    method: "POST", cookie: employee, body: {
+      cashierId: "isolated-fixture-manager", commissionId: 900002, date: "2026-10-03", quantitySold: 1,
+    },
+  });
+  check(recorded.status === 200, `BT_OUTSIDE_COMMISSION_CUSTOM_GUARD_${recorded.status}`);
   const driverDraft = await request("/api/rbac/job-template-drafts", { method: "POST", cookie: admin, body: { content: {
     key: "isolated_driver_base", name: "Synthetic driver", description: "Assigned task identity",
     reviewNotes: "No identity mutation", scopeType: "assigned_tasks", assignmentAuthority: "delegated_operations",

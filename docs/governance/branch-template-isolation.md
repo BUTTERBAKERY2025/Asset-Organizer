@@ -38,13 +38,19 @@ silently truncated.
 Explicit contexts currently cover journal list/filter/stats/report, journal
 creation and journal-ID resources, quality list/create/detail, and stock desk
 list/count, maintenance and complaint resources/attachments, cashier performance
-reads, incentive collection reads and branch-filtered points aggregation.
+reads (including shift targets, average ticket targets and alerts), incentive
+collection reads and branch-filtered points aggregation. Home sales/production
+summaries authorize contributing branches before aggregation instead of consulting
+a flattened whole-account permission.
 The maintenance and complaint custom guards use the contextual resolver for
 scoped accounts; an ordinary global permission lookup cannot authorize those
 requests. Workforce selects its guard using the requested branch, then verifies
 each employee/schedule. Supply transfer resources resolve the persisted destination,
 and kitchen order resources resolve the persisted requesting branch. Source
-warehouse/production actions retain their separate guards. Unknown routes receive
+warehouse/production actions retain their separate guards. Transfer route selection
+uses the requested branch or persisted source/destination rather than the union of
+all module names on the account. This preserves an existing warehouse grant in
+another branch when branch-supply authority is added locally. Unknown routes receive
 no invented branch. They can only use legacy
 base actions common to every replacement; new branch grants are not flattened.
 Consequently unsupported unscoped operations may be denied after a restrictive
@@ -88,6 +94,23 @@ simultaneous same-revision saves (200/409),
 transactional rollback on an injected audit failure, and manager-grant withdrawal.
 No production migration or deployment was performed.
 
-Latest verification: 56 real HTTP/database assertions, 120 targeted unit/API
-regression assertions, and the production build passed. The build retains
-existing duplicate-member/key warnings; this is not a clean whole-project type check.
+The isolated test also replaces the branch base a second time, removing performance
+from branch A, then proves branch B targets and home sales remain readable.
+It seeds nonzero sales in both branches and checks aggregate and top-branch outputs,
+including explicit denied-branch queries and forged resource query parameters.
+It also seeds an outbound transfer from the retained warehouse branch and a
+restricted transfer, verifying both list filtering and persisted-resource decisions.
+The linked account's default branch deliberately differs from the canonical
+employee branch: explicit branch bindings work without rewriting that default.
+
+Commission edits and achievement recording also use persisted branch ownership,
+including the additional authority needed to record for another cashier.
+Cross-branch reclassification of an existing incentive record is rejected.
+The transfer and kitchen-supply UI selects its permission module using the
+selected branch's projection, not the navigation union. The isolated test
+checks that this projection returns supply authority for A and the retained
+warehouse authority for B.
+
+Latest run: 84 isolated HTTP/database assertions and 125 targeted regression
+tests passed. The application build passed with existing duplicate-key/member
+warnings; this does not constitute a whole-project clean type check.
