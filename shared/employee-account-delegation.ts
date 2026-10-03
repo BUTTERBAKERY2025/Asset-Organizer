@@ -19,6 +19,8 @@ export interface EmployeeAccountPolicy {
 }
 
 export interface DelegatedEmployeeAccount {
+  /** Actual bound version, not the latest catalog version. Undefined = unavailable. */
+  templateAssignment?: { templateId: number; name: string | null; version: number; approved: boolean } | null;
   employeeId: number;
   employeeName: string;
   branchId: string;

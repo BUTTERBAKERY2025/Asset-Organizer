@@ -16,6 +16,7 @@ import {
   type EmployeeTemplatePilotResponse,
 } from "@shared/employee-account-delegation";
 import { assignmentSnapshotRevision, eligibleTemplatePermissions, eligibleAdminTemplatePermissions, validateAdminCashierPermissions, templateAssignmentInput } from "./employee-template-assignment-policy";
+import { readDirectoryTemplateAssignments } from "./employee-template-directory";
 import { readVerifiedTemplateBases, matchesVerifiedTemplateBase, canReviewLegacyTemplateBase } from "./employee-template-provenance";
 import {
   ADDITION_CAPABILITIES, additionInput, additionUpdateInput, additionDeleteInput,
@@ -454,6 +455,7 @@ async function roster(
     .where(scope).orderBy(branchEmployees.employeeName, branchEmployees.id);
   await budget();
   const accounts = await tx.select(accountProjection).from(users).where(inArray(users.id, linked));
+  const templateSummaries = await readDirectoryTemplateAssignments(tx, employees);
   const verifiedBases = await readVerifiedTemplateBases(tx, accounts.map(account => account.id));
   await budget();
   const access = await tx.select({ userId: userBranchAccess.userId, branchId: userBranchAccess.branchId })
@@ -534,6 +536,7 @@ async function roster(
     rows.push({
       employeeId: employee.id, employeeName: employee.employeeName, branchId: employee.branchId,
       branchName: employee.branchName, hasAccount: Boolean(employee.linkedUserId),
+      templateAssignment: templateSummaries ? templateSummaries.get(employee.id) ?? null : undefined,
       management: { allowed: reason === "allowed", reason, ...(reason === "protected_account" && blocker ? { blocker } : {}) }, account: reason === "allowed" ? account : null,
     });
   }

@@ -92,6 +92,28 @@ afterEach(async () => {
 });
 
 describe("operations employee account page", () => {
+  it("shows actual assigned historical version even for a protected account", async () => {
+    mocks.state.data = { ...data, employees: [{
+      ...data.employees[1], account: null,
+      management: { allowed: false, reason: "protected_account" },
+      templateAssignment: { templateId: 7, name: "كاشير تاريخي", version: 2, approved: true },
+    }], templates: [{ id: "latest", name: "كاشير جديد", permissions: [] }] };
+    await mount();
+    const text = JSON.stringify(renderer.toJSON());
+    expect(renderer.root.findByProps({ "data-testid": "employee-template-assignment-2" }).findByType("bdi").children).toEqual(["2"]);
+    expect(text).toContain("كاشير تاريخي");
+    expect(text).not.toContain("كاشير جديد");
+    expect(text).toContain("معتمد");
+  });
+  it.each([
+    [null, "لا يوجد قالب مسند"],
+    [undefined, "بيانات إسناد القالب غير متاحة"],
+    [{ templateId: 7, version: 2, name: null, approved: false }, "يحتاج مراجعة"],
+  ])("distinguishes absent, unavailable, and review-needed template: %s", async (templateAssignment, expected) => {
+    mocks.state.data = { ...data, employees: [{ ...data.employees[1], templateAssignment }] };
+    await mount();
+    expect(JSON.stringify(renderer.toJSON())).toContain(expected);
+  });
   it("classifies protected accounts as linked, hides all actions and retains empty authorized branches", async () => {
     mocks.state.data = { ...data, employees: [{ ...data.employees[1], account: null, management: { allowed: false, reason: "protected_account" } }] };
     await mount();

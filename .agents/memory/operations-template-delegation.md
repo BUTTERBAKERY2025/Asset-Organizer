@@ -27,6 +27,12 @@ Authorization test doubles must represent the historical approved template conte
 
 **How to apply:** Preserve historical content in test fixtures and verify proof-sensitive transitions against an owned real database, including drift made solely of otherwise permitted branch actions.
 
+The employee-account directory should show each employee's actually assigned template and version directly, including protected accounts, rather than implying that the newest approved version is assigned.
+
+**Why:** The user wants to identify assignments at a glance while managing large employee lists, with smaller controls and compact, readable spacing throughout this page.
+
+**How to apply:** Preserve the distinction between no assignment and unavailable information. Presentation changes must not change assignment or management authority.
+
 Keep journal submission/signing compatibility confined to approved templates also containing explicit create; do not translate submit/sign into create or change live accounts to repair a comparison.
 
 **Why:** The user approved fixing a blocked approved-template comparison without changing live account permissions. The journal submission endpoint still requires create; globally aliasing actions or changing that guard would change existing account behavior.
