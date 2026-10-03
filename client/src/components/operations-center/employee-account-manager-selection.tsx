@@ -157,7 +157,7 @@ function ManagerEmployees({ manager, refresh }: { manager: EmployeeAccountManage
             setSelected(previous => event.target.checked ? Array.from(new Set([...previous, row.employeeId])) : previous.filter(id => id !== row.employeeId));
             setSaved(false);
           }} />
-          <span className="min-w-0 text-xs leading-6"><span className="block font-bold">{row.employeeName}</span>{row.branchName} · {row.hasAccount ? row.reason === "protected_account" ? "حساب محمي — يتطلب مسؤول النظام" : "حساب مرتبط" : "بلا حساب"}
+          <span className="min-w-0 text-xs leading-6"><span className="block font-bold">{row.employeeName}</span>{row.branchName} · {row.hasAccount ? row.reason === "protected_account" ? "خارج نطاق الإدارة المفوّضة" : "حساب مرتبط" : "بلا حساب"}
             {!row.eligible && <span className="block text-amber-800">{employeeManagementExplanation(row.reason)}</span>}</span>
         </label>)}</div>}
     </>}

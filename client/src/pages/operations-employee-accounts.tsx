@@ -3,7 +3,7 @@ import { useIsMutating, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation, useSearch } from "wouter";
 import { AlertTriangle, ArrowRight, KeyRound, Lock, RefreshCw, Search, ShieldCheck, Unlock, UserCheck } from "lucide-react";
 import type { DelegatedEmployeeAccount, EmployeeAccountsResponse } from "@/lib/employee-account-types";
-import { employeeManagementExplanation } from "@/lib/employee-account-types";
+import { employeeManagementExplanation, employeeManagementLabel } from "@/lib/employee-account-types";
 import { Layout } from "@/components/layout";
 import { AccessDeniedPage } from "@/components/protected-route";
 import { Button } from "@/components/ui/button";
@@ -111,7 +111,7 @@ function EmployeeAccountsWorkspace({ actorId, actorRole, authScope }: { actorId:
       <div className={`flex items-start gap-2 rounded-lg border p-3 text-xs leading-6 ${delegationEnabled ? "border-violet-200 bg-violet-50/60 text-violet-900" : "border-amber-200 bg-amber-50 text-amber-900"}`}>
         <ShieldCheck className="mt-1 h-4 w-4 shrink-0" /><p>{delegationEnabled ? "اختر موظفًا ثم إصدارًا معتمدًا وفرعه المصرّح به. راجع الفرق قبل وبعد وأكّد تغيير حسابه وحده؛ الخادم يتحقق من أهلية الموظف والاعتماد وسقف السياسة. القالب الفارغ صالح وبوابة الموظف الذاتية مستقلة." : "التفويض معطّل. إسناد القوالب والإنشاء وإعادة الفتح غير متاحة؛ يبقى عرض الحسابات وتجميدها متاحًا."}{" "}تعطيل السياسة أو تضييقها لا يسحب تلقائيًا وصول الحسابات الحالية. لا توجد تغييرات جماعية أو تعديل يدوي للصلاحيات في هذه الصفحة؛ لتوقيف الدخول جمّد الحساب صراحةً.</p>
       </div>
-      {actorRole === "admin" && <p className="rounded-lg border border-amber-200 bg-amber-50/40 p-3 text-xs leading-6 text-amber-900">للأدمن: إدارة الإضافات المستقلة إجراء منفصل على حساب موظف مرتبط، ولا يغير القالب الأساسي أو الاستثناءات القديمة. النطاق العام ليس مقيدًا بفرع الموظف؛ المنح الإداري يبقي الحساب محميًا من مدير العمليات.</p>}
+      {actorRole === "admin" && <p className="rounded-lg border border-amber-200 bg-amber-50/40 p-3 text-xs leading-6 text-amber-900">للأدمن: استخدم «مقارنة وتجربة قالب» لمراجعة القوالب وإسنادها للحسابات المرتبطة. «خارج نطاق الإدارة المفوّضة» يخص صلاحية الإدارة عبر مسار التفويض، وليس حالة دخول الموظف. الإضافات المستقلة لا تغيّر القالب الأساسي أو الاستثناءات القديمة، والنطاق العام ليس مقيدًا بفرع الموظف.</p>}
       <section className="rounded-xl border border-border bg-card p-3 sm:p-4" aria-label="دليل حسابات الموظفين">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
           <div className="flex flex-wrap gap-2">
@@ -133,11 +133,11 @@ function EmployeeAccountsWorkspace({ actorId, actorRole, authScope }: { actorId:
           : <div className="space-y-2">{rows.map(employee => <article key={employee.employeeId} className="flex flex-col gap-3 rounded-lg border border-border bg-background p-3 sm:flex-row sm:items-center" data-testid={`employee-account-${employee.employeeId}`}>
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2"><h2 className="text-sm font-bold text-[#302840]">{employee.employeeName}</h2>
-                <span className={`rounded-full px-2 py-1 text-[10px] font-bold ${!employee.hasAccount ? "bg-violet-100 text-violet-800" : employee.management?.allowed ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}`}>{!employee.hasAccount ? "بلا حساب" : employee.management?.allowed && employee.account ? "حساب قابل للإدارة" : "حساب محمي — يتطلب مسؤول النظام"}</span>
+                <span className={`rounded-full px-2 py-1 text-[10px] font-bold ${!employee.hasAccount ? "bg-violet-100 text-violet-800" : employee.management?.allowed ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}`}>{!employee.hasAccount ? "بلا حساب" : employee.management?.allowed && employee.account ? "حساب قابل للإدارة" : employeeManagementLabel(employee.management?.reason ?? "not_selected")}</span>
                 {employee.account && <span className="text-[11px] text-muted-foreground">{employee.account.isActive === "active" ? "نشط" : "مجمّد"}</span>}</div>
               <p className="mt-1 text-xs text-muted-foreground">{employee.branchName}{employee.account && <> · <bdi className="font-mono">{employee.account.username ?? "اسم المستخدم غير متاح"}</bdi></>}</p>
               {employee.account?.isActive === "inactive" && !employee.account.canReactivate && <p className="mt-1 text-[11px] text-amber-800">غير مؤهل لإعادة الفتح وفق السياسة الحالية.</p>}
-              {!employee.management?.allowed && <p className="mt-1 text-[11px] text-amber-800">{employeeManagementExplanation(employee.management?.reason ?? "not_selected")}</p>}
+              {!employee.management?.allowed && <p className="mt-1 text-[11px] text-amber-800">{employeeManagementExplanation(employee.management?.reason ?? "not_selected", actorRole)}</p>}
             </div>
             {(employee.management?.allowed || (actorRole === "admin" && employee.hasAccount)) && <div className="flex flex-wrap gap-2">
               {employee.management?.allowed && (!employee.hasAccount ? <Button className="min-h-11 gap-2" disabled={!delegationEnabled || directory.isFetching} onClick={() => open(employee, "create")}><KeyRound className="h-4 w-4" />اختيار الموظف</Button> : employee.account && <>

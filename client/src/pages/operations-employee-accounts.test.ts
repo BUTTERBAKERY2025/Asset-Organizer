@@ -96,7 +96,9 @@ describe("operations employee account page", () => {
     mocks.state.data = { ...data, employees: [{ ...data.employees[1], account: null, management: { allowed: false, reason: "protected_account" } }] };
     await mount();
     expect(renderer.root.findAllByProps({ "data-testid": "employee-account-2" })).toHaveLength(1);
-    expect(JSON.stringify(renderer.toJSON())).toContain("حساب محمي — يتطلب مسؤول النظام");
+    expect(JSON.stringify(renderer.toJSON())).toContain("خارج نطاق الإدارة المفوّضة");
+    expect(JSON.stringify(renderer.toJSON())).toContain("هذه العلامة لا تعني أن الحساب موقوف");
+    expect(JSON.stringify(renderer.toJSON())).not.toContain("حساب محمي — يتطلب مسؤول النظام");
     expect(JSON.stringify(renderer.toJSON())).toContain("فرع بلا موظفين");
     expect(button("إسناد قالب معتمد")).toBeUndefined();
     expect(button("إعادة الفتح")).toBeUndefined();
@@ -261,6 +263,7 @@ describe("operations employee account page", () => {
     mocks.state.data = { ...data, employees: [{ ...data.employees[1], account: null, management: { allowed: false, reason: "protected_account" } }, data.employees[0]] };
     await renderAgain();
     expect(button("مقارنة وتجربة قالب")).toBeTruthy();
+    expect(JSON.stringify(renderer.toJSON())).toContain("بصفتك أدمن، استخدم «مقارنة وتجربة قالب»");
     expect(button("إسناد قالب معتمد")).toBeUndefined();
     await act(async () => button("مقارنة وتجربة قالب").props.onClick());
     expect(renderer.root.findByProps({ id: "pilot-employee" }).props.value).toBe(data.employees[1].employeeName);

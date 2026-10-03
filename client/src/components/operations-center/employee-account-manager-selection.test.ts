@@ -155,7 +155,7 @@ describe("per-manager employee selection", () => {
     await mount();
     await choose("a");
     expect(checkbox(2).props.disabled).toBe(true);
-    expect(JSON.stringify(renderer.toJSON())).toContain("حساب محمي — يتطلب مسؤول النظام");
+    expect(JSON.stringify(renderer.toJSON())).toContain("خارج نطاق الإدارة المفوّضة");
     await act(async () => renderer.root.findByProps({ id: "manager-employees-search" }).props.onChange({ target: { value: "موظف 2" } }));
     expect(renderer.root.findAllByProps({ "aria-label": "تفويض موظف 1" })).toHaveLength(0);
     expect(text(renderer.root.findByProps({ "data-testid": "manager-selection-count" }))).toContain("1");
