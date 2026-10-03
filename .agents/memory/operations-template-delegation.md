@@ -26,3 +26,9 @@ Authorization test doubles must represent the historical approved template conte
 **Why:** Metadata-only mocks concealed the distinction between a genuine assigned base and an existing but invalid binding.
 
 **How to apply:** Preserve historical content in test fixtures and verify proof-sensitive transitions against an owned real database, including drift made solely of otherwise permitted branch actions.
+
+Keep journal submission compatibility confined to approved templates containing both explicit submit and create actions; do not translate submit into create or change live accounts to repair a comparison.
+
+**Why:** The user approved fixing a blocked approved-template comparison without changing live account permissions. The journal submission endpoint still requires create; globally aliasing actions or changing that guard would change existing account behavior.
+
+**How to apply:** Preserve exact template actions and all branch/ownership checks. Reject submit without create with an explicit compatibility reason rather than silently adding authority.

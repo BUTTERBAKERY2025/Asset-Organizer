@@ -590,6 +590,32 @@ async function pilotConfirmation() {
     expectedComparisonRevision: preview.body.expectedComparisonRevision, acknowledgeChanges: true };
 }
 describe("phase6 actual admin comparison/application routes with strict offline IO", () => {
+  it("compares journal submit with create without mutating accounts, then applies only on confirmation", async () => {
+    state.content.permissions = [{ module: "cashier_journal", actions: ["view", "create", "submit"] }];
+    const original = structuredClone(state);
+    const preview = await invokePilot();
+    expect(preview.statusCode).toBe(200);
+    expect(preview.body.canApply).toBe(true);
+    expect(preview.body.comparisonStatus).toBe("known");
+    expect(preview.body.blockedReasons).toEqual([]);
+    expect(preview.body.differences.additions).toEqual([{ module: "cashier_journal", actions: ["create", "submit"] }]);
+    expect(state).toEqual(original);
+    expect(runtime.invalidate).not.toHaveBeenCalled();
+    const applied = await invokePilot("post", {
+      templateId: 1, version: 1, branchId: "A", reason: "Offline submit compatibility test",
+      expectedComparisonRevision: preview.body.expectedComparisonRevision, acknowledgeChanges: true,
+    });
+    expect(applied.statusCode).toBe(200);
+    expect(state.permissions).toEqual([{ module: "cashier_journal", actions: ["create", "submit", "view"] }]);
+  });
+  it("reports the explicit compatibility blocker for submit without create and never changes the account", async () => {
+    state.content.permissions = [{ module: "cashier_journal", actions: ["view", "submit"] }];
+    const original = structuredClone(state);
+    const preview = await invokePilot();
+    expect(preview.body.canApply).toBe(false);
+    expect(preview.body.blockedReasons.some((reason: any) => reason.code === "JOURNAL_SUBMIT_REQUIRES_CREATE")).toBe(true);
+    expect(state).toEqual(original);
+  });
   it("compares readonly actual before/after, with contextual source evidence", async () => {
     const original = structuredClone(state);
     const preview = await invokePilot();

@@ -16,12 +16,18 @@ export const ADMIN_CASHIER_PERMISSIONS = [
     "smart_incentives_bonus", "smart_incentives_wallet"].map(module => ({
     module, actions: ["view", "view_list", "view_details"],
   })),
+  // Submission still requires create at the journal route. Preserve this
+  // explicit template action; never alias it to create or grant create for it.
+  { module: "cashier_journal", actions: ["submit"] },
 ];
 export function validateAdminCashierPermissions(permissions: DelegatedPermission[]) {
   for (const p of permissions) for (const action of p.actions) {
     if (!ADMIN_CASHIER_PERMISSIONS.some(rule => rule.module === p.module && rule.actions.includes(action)))
       deny("ADMIN_TEMPLATE_PERMISSION_UNSUPPORTED", `صلاحية غير مدعومة لإسناد قوالب حسابات الفروع: ${p.module}:${action}. لم تُحذف من القالب.`);
   }
+  const journalActions = permissions.filter(p => p.module === "cashier_journal").flatMap(p => p.actions);
+  if (journalActions.includes("submit") && !journalActions.includes("create"))
+    deny("JOURNAL_SUBMIT_REQUIRES_CREATE", "إرسال يومية الكاشير يتطلب صلاحية إنشاء اليومية في المسار الحالي. أضفها صراحةً إلى إصدار القالب واعتمده؛ لم نضف صلاحيات تلقائيًا.");
   return permissions;
 }
 export function eligibleAdminTemplatePermissions(raw: unknown, jobTitle: string | null, role: string) {

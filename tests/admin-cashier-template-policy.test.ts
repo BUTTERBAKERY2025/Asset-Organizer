@@ -11,6 +11,44 @@ const content = {
   ],
 };
 describe("independent admin cashier template authority", () => {
+  const submissionTemplate = {
+    ...content,
+    permissions: [{ module: "cashier_journal", actions: ["create", "submit", "view"] }],
+  };
+  it("preserves explicit journal submission in admin and delegated approved templates", () => {
+    const original = structuredClone(submissionTemplate);
+    expect(eligibleAdminTemplatePermissions(submissionTemplate, null, "employee").permissions)
+      .toEqual(submissionTemplate.permissions);
+    expect(eligibleTemplatePermissions(submissionTemplate, { enabled: true, permissions: [] }).permissions)
+      .toEqual(submissionTemplate.permissions);
+    expect(submissionTemplate).toEqual(original);
+  });
+  it("does not manufacture create authority from a submit-only template", () => {
+    const withoutCreate = { ...submissionTemplate, permissions: [{ module: "cashier_journal", actions: ["submit", "view"] }] };
+    expect(() => eligibleAdminTemplatePermissions(withoutCreate, null, "employee"))
+      .toThrow("إرسال يومية الكاشير يتطلب صلاحية إنشاء");
+    expect(() => eligibleTemplatePermissions(withoutCreate, { enabled: true, permissions: [] }))
+      .toThrow("إرسال يومية الكاشير يتطلب صلاحية إنشاء");
+    expect(withoutCreate.permissions[0].actions).toEqual(["submit", "view"]);
+  });
+  it.each(["approve", "delete", "sign", "print"])("does not admit unrelated journal action %s", action => {
+    const invalid = { ...submissionTemplate, permissions: [{ module: "cashier_journal", actions: ["create", "view", action] }] };
+    expect(() => eligibleAdminTemplatePermissions(invalid, null, "employee")).toThrow();
+    expect(() => eligibleTemplatePermissions(invalid, { enabled: true, permissions: [] })).toThrow();
+  });
+  it("does not authorize submission for unrelated modules", () => {
+    expect(() => eligibleAdminTemplatePermissions({
+      ...content, permissions: [{ module: "smart_incentives_wallet", actions: ["submit", "view"] }],
+    }, null, "employee")).toThrow();
+  });
+  it("retains branch-scope, enabled-policy and view requirements for submission", () => {
+    expect(() => eligibleAdminTemplatePermissions({ ...submissionTemplate, scopeType: "branches" }, null, "employee")).toThrow();
+    expect(() => eligibleTemplatePermissions(submissionTemplate, { enabled: false, permissions: [] })).toThrow();
+    expect(() => eligibleTemplatePermissions({ ...submissionTemplate, assignmentAuthority: "admin" }, { enabled: true, permissions: [] })).toThrow();
+    expect(() => eligibleAdminTemplatePermissions({
+      ...submissionTemplate, permissions: [{ module: "cashier_journal", actions: ["create", "submit"] }],
+    }, null, "employee")).toThrow();
+  });
   it("preserves the chosen permissions without using the operations ceiling", () => {
     expect(eligibleAdminTemplatePermissions(content, null, "employee").permissions).toEqual(content.permissions);
     expect(eligibleTemplatePermissions(content, { enabled: true, permissions: [] }).permissions).toEqual(content.permissions);
