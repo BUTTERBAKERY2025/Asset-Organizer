@@ -186,6 +186,7 @@ import {
   insertPosEventSchema,
 } from "@shared/schema";
 import { computeSalaryClosing, type SalaryClosingRaw } from "./salary-closing-calc";
+import { loadHistoricalPayrollEmployees } from "./payroll-historical-employees";
 import { 
   generateSalaryClosingPdf, type SalaryClosingPdfData,
   generatePayslipPdf, type PayslipPdfData,
@@ -32569,8 +32570,7 @@ export async function registerRoutes(
     const [y, m] = month.split("-").map(Number);
     const lastDay = new Date(y, m, 0).getDate();
     const monthEnd = `${month}-${String(lastDay).padStart(2, "0")}`;
-    const [employees, attendance, schedules, signedTimesheets, deductions, leaveRequestsData, attendanceAdjustments] = await Promise.all([
-      readPayrollSource("employees", () => storage.getBranchEmployeesByBranch(branchId)),
+    const [attendance, schedules, signedTimesheets, deductions, leaveRequestsData, attendanceAdjustments] = await Promise.all([
       readPayrollSource("attendance", () => storage.getAllAttendanceRecords({ branchId, startDate: monthStart, endDate: monthEnd })),
       readPayrollSource("schedules", () => storage.getEmployeeSchedulesByBranchAndDateRange(branchId, monthStart, monthEnd)),
       readPayrollSource("signedTimesheets", () => storage.getFinalizedTimesheetEntriesByBranchAndDateRange(branchId, monthStart, monthEnd)),
@@ -32589,7 +32589,11 @@ export async function registerRoutes(
         )),
       readPayrollSource("attendanceAdjustments", () => storage.getAttendanceAdjustmentsByBranchAndMonth(branchId, month)),
     ]);
-    return { branchId, month, employees, attendance, schedules, signedTimesheets, deductions, leaveRequests: leaveRequestsData, attendanceAdjustments };
+    const { employees, warnings: membershipWarnings } = await readPayrollSource("historicalMembership",
+      () => loadHistoricalPayrollEmployees(branchId, month, [
+        ...attendance, ...schedules, ...signedTimesheets, ...leaveRequestsData, ...deductions, ...attendanceAdjustments,
+      ]));
+    return { branchId, month, employees, membershipWarnings, attendance, schedules, signedTimesheets, deductions, leaveRequests: leaveRequestsData, attendanceAdjustments };
   };
 
   const currentUserName = (req: any): string => {
@@ -32722,6 +32726,8 @@ export async function registerRoutes(
         readPayrollSource("payments", () => storage.getSalaryPaymentsByBranchAndMonth(scope.branchId, scope.month)),
       ]);
       if (!branch) return res.status(404).json({ error: "الفرع غير موجود؛ لم يُنشأ ملف التصدير" });
+      if (report.warnings.some(w => w.code === "historical_membership"))
+        return res.status(409).json({ error: "كشف غير مكتمل؛ راجع تبعية الموظفين وسجلات النقل قبل التصدير.", code: "PAYROLL_MEMBERSHIP_REVIEW_REQUIRED" });
       const data = buildOperationsPayrollExport({
         ...scope, branchName: branch.name, report,
         payments: rows.map(row => ({
@@ -32761,17 +32767,20 @@ export async function registerRoutes(
         readPayrollSource("employees", () => storage.getBranchEmployee(employeeId)),
         readPayrollSource("employees", () => storage.getBranchEmployeesByBranch(scope.branchId)),
       ]);
+      const historicalEmployees = !isLocked
+        ? (await fetchSalaryClosingRaw(scope.branchId, scope.month)).employees : [];
+      const historicalEmployee = historicalEmployees.find(e => e.id === employeeId);
       if (!savedEmployee && !currentEmployee) return res.status(404).json({ error: "الموظف غير موجود" });
-      if (!savedEmployee && currentEmployee?.branchId !== scope.branchId) {
+      if (!savedEmployee && !historicalEmployee) {
         return res.status(403).json({ error: "الموظف خارج نطاق الفرع والشهر المحددين" });
       }
       // Historical membership is established by the locked snapshot, never the
       // employee's current branch after a transfer. Only identity is enriched.
       const employee = savedEmployee
         ? { ...savedEmployee, id: employeeId, linkedUserId: currentEmployee?.linkedUserId ?? null }
-        : currentEmployee;
+        : historicalEmployee;
       const candidates = [
-        ...branchEmployees,
+        ...(isLocked ? branchEmployees : historicalEmployees),
         ...savedLines.map(line => ({ ...line, id: line.branchEmployeeId })),
       ];
       const monthStart = `${scope.month}-01`;
@@ -32989,6 +32998,12 @@ export async function registerRoutes(
       const raw = await fetchSalaryClosingRaw(branchId, month);
       const result = computeSalaryClosing(raw);
 
+      if (result.warnings.some(w => w.code === "historical_membership")) {
+        return res.status(409).json({
+          error: "لا يمكن إغلاق كشف غير مكتمل: راجع تبعية الموظفين وسجلات النقل لهذا الشهر أولاً.",
+          code: "PAYROLL_MEMBERSHIP_REVIEW_REQUIRED", warnings: result.warnings,
+        });
+      }
       if (result.lines.length === 0) {
         return res.status(400).json({ error: "لا يوجد موظفون فعّالون لهذا الفرع/الشهر." });
       }

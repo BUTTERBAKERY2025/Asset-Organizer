@@ -5,6 +5,12 @@ description: Constraints for the monthly salary-closing immutable snapshot + loc
 
 # Salary closing: snapshot + month lock
 
+Historical branch membership must remain tied to the payroll period even before final closing; a later employee transfer must not rewrite prior-month branch payroll.
+
+**Why:** The user explicitly requires previous-month reports to retain employees in their historical branch after transfer, including reports not yet closed.
+
+**How to apply:** Distinguish historical membership from an immutable financial snapshot. Do not invent a mid-month salary allocation policy, infer a transfer date from today's branch, or reopen existing closures as part of a membership correction.
+
 - A closed month must behave as an **immutable snapshot**. The preview endpoint must return the SAVED snapshot (salary_closure_lines + header totals/warnings), NOT a live recompute, whenever status==='closed'. Live recompute on a locked month silently lets numbers drift away from payslips/bank-file.
   **Why:** payslip PDF and bank file read saved lines; on-screen and report exports must match them.
 

@@ -76,6 +76,11 @@ function fixture() {
     app, storage: mockStorage, db, leaveRequests, operationsPayrollReviews: reviews,
     users: { firstName: "firstName", lastName: "lastName", username: "username", id: "id" },
     readPayrollSource, payrollReadError, payrollAttendanceEvidence, operationsHrManagerOnly,
+    // Membership resolution has its own mock-DB/chain tests. Route fixtures
+    // keep their authoritative employee source and never query a real database.
+    loadHistoricalPayrollEmployees: vi.fn(async (branchId: string) => ({
+      employees: await mockStorage.getBranchEmployeesByBranch(branchId), warnings: [],
+    })),
     operationsPayrollCsv, operationsPayrollFullCsv, buildOperationsPayrollExport, computeSalaryClosing: vi.fn(computeSalaryClosing),
     canAccessBranch, getAllowedBranchIds,
     requirePermission: (module: string, action: string) => Object.assign(requirePermission(module, action), { module, action }),
@@ -115,6 +120,33 @@ function fixture() {
 }
 
 describe("operations payroll authoritative report and read routes", () => {
+  it("historical preview retains full salary inputs after a later transfer", async () => {
+    const f = fixture();
+    const before = await f.helpers.buildBranchPreview("a", "2026-06");
+    f.employee.branchId = "b";
+    f.context.loadHistoricalPayrollEmployees.mockResolvedValue({
+      employees: [{ ...f.employee, branchId: "a" }], warnings: [],
+    });
+    const after = await f.helpers.buildBranchPreview("a", "2026-06");
+    expect(after.lines).toEqual(before.lines);
+    expect(after.totals).toEqual(before.totals);
+  });
+  it("historical preview never resolves live membership for a closed snapshot", async () => {
+    const f = fixture();
+    f.mockStorage.getSalaryClosureByBranchAndMonth.mockResolvedValue({
+      id: 99, status: "closed", employeeCount: 1, totalNet: 1234,
+    } as any);
+    f.mockStorage.getSalaryClosureLines.mockResolvedValue([{
+      id: 100, branchEmployeeId: 18, netSalary: 1234, employeeName: "Saved",
+    }] as any);
+    f.context.loadHistoricalPayrollEmployees.mockRejectedValue(new Error("must not read"));
+    const preview = await f.helpers.buildBranchPreview("a", "2026-06");
+    expect(preview.isLocked).toBe(true);
+    expect(preview.totals.totalNet).toBe(1234);
+    expect(preview.lines[0].netSalary).toBe(1234);
+    expect(f.context.loadHistoricalPayrollEmployees).not.toHaveBeenCalled();
+    expect(f.context.computeSalaryClosing).not.toHaveBeenCalled();
+  });
   it("returns exactly the same complete live financial/attendance calculation as HR", async () => {
     vi.useFakeTimers().setSystemTime(new Date("2026-07-15T10:00:00Z"));
     const f = fixture();

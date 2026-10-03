@@ -1187,6 +1187,7 @@ export default function SalaryClosingPage() {
   const salaryClosingUnlinkedSummary = salaryClosingPreview?.unlinkedSummary ?? { totalRecords: 0, presentRecords: 0, totalHours: 0 };
   const salaryClosingUnlinkedCount = salaryClosingUnlinkedSummary.totalRecords;
   const salaryClosingWarnings = salaryClosingPreview?.warnings ?? [];
+  const membershipWarnings = salaryClosingWarnings.filter(w => w.code === "historical_membership");
   const salaryClosingClosure = salaryClosingPreview?.closure ?? null;
   const salaryClosingIsLocked = !!salaryClosingPreview?.isLocked;
 
@@ -1479,9 +1480,15 @@ export default function SalaryClosingPage() {
     let data: any;
     try {
       const r = await salaryClosingPreviewQuery.refetch();
-      data = r.data ?? salaryClosingPreview;
+      if (r.isError || !r.data) throw new Error("preview unavailable");
+      data = r.data;
     } catch {
-      data = salaryClosingPreview;
+      toast({ title: "تعذر تحديث كشف الرواتب", description: "لم يتم التصدير؛ أعد المحاولة لضمان عدم استخدام بيانات قديمة.", variant: "destructive" });
+      return null;
+    }
+    if (data.warnings?.some((w: any) => w.code === "historical_membership")) {
+      toast({ title: "الكشف يحتاج مراجعة النقل", description: "لا يمكن تصدير كشف ناقص؛ راجع تنبيهات تبعية الموظفين أولاً.", variant: "destructive" });
+      return null;
     }
     // في وضع "كل الفروع": لو فشل حساب بعض الفروع، لا نصدّر بيانات ناقصة بدون تأكيد صريح
     const failed = (data as any)?.failedBranches as any[] | undefined;
@@ -2493,7 +2500,7 @@ export default function SalaryClosingPage() {
                       setAcknowledgeClose(false);
                       setShowCloseConfirm(true);
                     }}
-                    disabled={previewLoading || salaryClosingData.length === 0 || closeSalaryMutation.isPending}
+                    disabled={previewLoading || salaryClosingPreviewQuery.isError || membershipWarnings.length > 0 || salaryClosingData.length === 0 || closeSalaryMutation.isPending}
                     data-testid="button-close-month"
                   >
                     <CheckCircle2 className="w-4 h-4 ml-2" />
@@ -2564,6 +2571,18 @@ export default function SalaryClosingPage() {
           </Card>
         )}
 
+        {salaryClosingPreviewQuery.isError && (
+          <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+            تعذر التحقق من كشف الرواتب ومصادره. لا تعتمد الأرقام المعروضة سابقًا؛ أعد تحديث الصفحة قبل الإغلاق أو التصدير.
+          </div>
+        )}
+        {membershipWarnings.length > 0 && (
+          <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800" data-testid="payroll-membership-review">
+            <p className="font-bold">كشف غير مكتمل — يلزم مراجعة تبعية الموظفين قبل الإغلاق أو التصدير</p>
+            <p>الأرقام المعروضة لا تشمل الحالات غير المحسومة. لم يُوزّع أي راتب تلقائيًا بين فرعين.</p>
+            <ul className="mt-2 list-inside list-disc">{membershipWarnings.map((w, i) => <li key={i}>{w.message}</li>)}</ul>
+          </div>
+        )}
         {/* تحذير الموظفين بدون بيانات */}
         {!salaryClosingIsLocked && salaryClosingBlockingWarnings.length > 0 && (
           <Card className="border-red-200 bg-red-50" data-testid="card-blocking-warnings">
@@ -3566,6 +3585,7 @@ export default function SalaryClosingPage() {
                 className="bg-emerald-600 hover:bg-emerald-700 text-white"
                 disabled={
                   closeSalaryMutation.isPending ||
+                  salaryClosingPreviewQuery.isError || membershipWarnings.length > 0 ||
                   (salaryClosingBlockingWarnings.length > 0 && !acknowledgeClose)
                 }
                 onClick={() => {

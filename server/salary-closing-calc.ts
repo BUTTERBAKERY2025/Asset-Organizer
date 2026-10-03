@@ -15,6 +15,7 @@ export interface SalaryClosingRaw {
   deductions: any[];
   leaveRequests?: any[];
   attendanceAdjustments?: any[];
+  membershipWarnings?: SalaryClosingWarning[];
 }
 
 export interface SalaryClosingLine {
@@ -71,7 +72,7 @@ export interface SalaryClosingLine {
 export interface SalaryClosingWarning {
   branchEmployeeId: number | null;
   employeeName: string;
-  code: "no_work_at_all" | "missing_bank";
+  code: "no_work_at_all" | "missing_bank" | "historical_membership";
   message: string;
 }
 
@@ -322,7 +323,7 @@ export function computeSalaryClosing(raw: SalaryClosingRaw): SalaryClosingResult
   };
 
   const todayLocal = todayRiyadh();
-  const warnings: SalaryClosingWarning[] = [];
+  const warnings: SalaryClosingWarning[] = [...(raw.membershipWarnings ?? [])];
 
   // من يدخل التقرير: النشطون دائماً + غير النشطين الذين لهم دوام فعلي خلال الشهر
   // (سجلات حضور، أو تايم شيت موقّع، أو إجازة معتمدة متقاطعة مع الشهر)
