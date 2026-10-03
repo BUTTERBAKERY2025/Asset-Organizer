@@ -48,6 +48,8 @@ try {
   await client.query(`INSERT INTO user_permissions(user_id,module,actions)
     VALUES ($1,'warehouse',ARRAY['view'])`, [user]);
   await client.query(`INSERT INTO user_permissions(user_id,module,actions)
+    VALUES ($1,'event_pos',ARRAY['view','create','edit'])`, [user]);
+  await client.query(`INSERT INTO user_permissions(user_id,module,actions)
     VALUES ($1,'sales',ARRAY['view','create']),($1,'shifts',ARRAY['view'])`, [user]);
   await client.query(`INSERT INTO user_permissions(user_id,module,actions)
     VALUES ($1,'production',ARRAY['view','edit']),($1,'daily_closures',ARRAY['view','delete','approve'])`, [user]);
@@ -247,6 +249,17 @@ try {
       `BT_HR_DENIED_MOVE_${root}`);
   }
   const hrHistory = await request("/api/branch-employees/900012/attendance", { cookie: employee });
+  const posEvent = await request("/api/pos/events", {
+    method: "POST", cookie: employee, body: { branchId: B, name: "Synthetic POS", startDate: "2026-10-03", endDate: "2026-10-04" },
+  });
+  check(posEvent.status === 201, `BT_POS_OUTSIDE_CREATE_${posEvent.status}`);
+  check((await request("/api/pos/events", {
+    method: "POST", cookie: employee, body: { branchId: A, name: "Denied POS", startDate: "2026-10-03", endDate: "2026-10-04" },
+  })).status === 403, "BT_POS_DENIED_CREATE");
+  check((await request(`/api/pos/events/${posEvent.json.id}/report?branchId=${A}`, { cookie: employee })).status === 200,
+    "BT_POS_PERSISTED_EVENT");
+  check((await request(`/api/pos/events?branchId=${B}`, { cookie: employee })).status === 200, "BT_POS_OUTSIDE_LIST");
+  check((await request(`/api/pos/events?branchId=${A}`, { cookie: employee })).status === 403, "BT_POS_DENIED_LIST");
   check(hrHistory.status === 200 && hrHistory.json.length === 1 && hrHistory.json[0].branchId === B,
     "BT_HR_TRANSFER_HISTORY_FILTER");
   check((await request(`/api/attendance-check/bundle?branchId=${A}&shiftType=morning&date=2026-10-03`,

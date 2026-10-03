@@ -57,6 +57,18 @@ Consequently unsupported unscoped operations may be denied after a restrictive
 branch assignment, even though their original outside-branch grants remain stored.
 Further route adaptation is required for full behavioral parity.
 
+POS contexts now resolve persisted sale, event, shift, held-order and product
+ownership; branch-specific collections and create routes use the branch checked
+by their handlers. Cross-cashier shift statistics and closing use contextual edit
+authority instead of flattened permissions. Isolated HTTP checks verify retained
+event creation/reporting in another branch and rejection in the restricted branch.
+This is not an end-to-end certification of every payment/refund workflow.
+
+Marketing campaigns currently have no authoritative branch ownership column.
+Treating campaign paths as branch resources without an ownership policy would
+invent scope. A central-versus-branch-owned campaign policy must be resolved before
+claiming marketing compatibility or assigning existing campaigns to branches.
+
 HR route adaptation now covers employee lists/bundle/stats, employee-owned
 details and histories, attendance records and approval, attendance dashboards,
 attendance-check roster/check-in/check-out, consolidated employee reports and

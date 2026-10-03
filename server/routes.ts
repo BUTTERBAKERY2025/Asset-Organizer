@@ -43478,7 +43478,10 @@ export async function registerRoutes(
         const mp = perms.find((p: any) => p.module === "event_pos");
         const raw = mp?.actions as unknown;
         const acts = Array.isArray(raw) ? raw : typeof raw === "string" ? raw.replace(/[{}]/g, "").split(",").map((a: string) => a.trim()) : [];
-        if (!acts.includes("edit")) {
+        const snapshot = (req as any).authPermissionDecisionSnapshot;
+        if (!(snapshot?.branchTemplates?.length
+          ? contextualActionAllowed(req, snapshot, "event_pos", "edit", { branchId: shift.branchId })
+          : acts.includes("edit"))) {
           return res.status(403).json({ error: "لا يمكنك عرض إحصائيات وردية كاشير آخر" });
         }
       }
@@ -43508,7 +43511,10 @@ export async function registerRoutes(
         const mp = perms.find((p: any) => p.module === "event_pos");
         const raw = mp?.actions as unknown;
         const acts = Array.isArray(raw) ? raw : typeof raw === "string" ? raw.replace(/[{}]/g, "").split(",").map((a: string) => a.trim()) : [];
-        isManagerReq = acts.includes("edit");
+        const snapshot = (req as any).authPermissionDecisionSnapshot;
+        isManagerReq = snapshot?.branchTemplates?.length
+          ? contextualActionAllowed(req, snapshot, "event_pos", "edit", { branchId: shift.branchId })
+          : acts.includes("edit");
       }
       if (shift.cashierId !== currentUserId && !isManagerReq) {
         return res.status(403).json({ error: "لا يمكنك إغلاق وردية كاشير آخر" });
