@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { EmployeeAccountCredentials } from "./employee-account-credentials";
 import { EmployeeAccountAdditionsReadOnly } from "./employee-account-additions-list";
+import { employeeDialogBody, employeeDialogFooter, employeeDialogHeader, employeeDialogShell, useEmployeeAccountDialogLayout } from "./employee-account-dialog-layout";
 
 const moduleLabel = (module: string) => MODULE_LABELS[module as keyof typeof MODULE_LABELS] ?? module;
 const actionLabel = (action: string) => ACTION_LABELS[action as keyof typeof ACTION_LABELS] ?? action;
@@ -26,6 +27,7 @@ export function EmployeeTemplateAssignmentDialog({ employee, mode, directory, cl
   close: () => void;
   refresh: () => void;
 }) {
+  const dialogStyle = useEmployeeAccountDialogLayout();
   const review = useEmployeeTemplateAssignment(employee.employeeId);
   const [selection, setSelection] = useState("");
   const [branchId, setBranchId] = useState("");
@@ -141,12 +143,12 @@ export function EmployeeTemplateAssignmentDialog({ employee, mode, directory, cl
   };
 
   return <Dialog open onOpenChange={open => { if (!open) dismiss(); }}>
-    <DialogContent dir="rtl" className="max-h-[90dvh] max-w-2xl overflow-y-auto rounded-xl [&>button]:min-h-11 [&>button]:min-w-11">
-      <DialogHeader className="text-right">
-        <DialogTitle className="flex items-center gap-2 text-right"><ShieldCheck className="h-5 w-5 text-violet-700" />{credentials ? "تم إنشاء الحساب وإسناد القالب" : creating ? "إنشاء حساب بقالب معتمد" : "إسناد إصدار معتمد للحساب"}</DialogTitle>
+    <DialogContent dir="rtl" style={dialogStyle} className={`${employeeDialogShell} max-h-[94dvh] max-w-2xl`}>
+      <DialogHeader className={employeeDialogHeader}>
+        <DialogTitle className="flex items-center gap-2 text-right leading-6"><ShieldCheck className="h-5 w-5 shrink-0 text-violet-700" />{credentials ? "تم إنشاء الحساب وإسناد القالب" : creating ? "إنشاء حساب بقالب معتمد" : "إسناد إصدار معتمد للحساب"}</DialogTitle>
         <DialogDescription className="text-right">موظف واحد · إصدار محدد · مراجعة قبل التنفيذ. لا تتغير الأدوار الأمنية أو بيانات الموظف.</DialogDescription>
       </DialogHeader>
-      <div className="space-y-4">
+      <div className={employeeDialogBody} data-testid="employee-dialog-body">
         <div className="rounded-lg border border-border bg-muted/20 p-3">
           <label htmlFor="delegated-employee-name" className="mb-1 block text-xs font-bold">الموظف الذي اخترته · للقراءة فقط</label>
           <Input id="delegated-employee-name" value={employee.employeeName} readOnly className="min-h-11 bg-muted/40" />
@@ -156,7 +158,8 @@ export function EmployeeTemplateAssignmentDialog({ employee, mode, directory, cl
           <p className="rounded-lg border border-violet-200 bg-violet-50/60 p-3 text-xs leading-6 text-violet-900">{selected?.name} · الإصدار {selected?.version} · {employee.branchName}</p>
           <EmployeeAccountCredentials credentials={credentials} copied={copied} saved={handoffSaved} onCopy={copy} onSaved={saved => { setHandoffSaved(saved); setError(""); }} />
         </> : <>
-          <p className="text-xs leading-6 text-muted-foreground">يشمل نطاق مدير العمليات جميع الموظفين الحاليين والمستقبليين في فروعه المصرّح له بإدارتها والكتابة فيها، دون اختيار أسماء للتفويض. يمكن إنشاء حساب أو تحديث حساب عادي وفق قرار الخادم، حتى عند الانتقال من صلاحيات مباشرة معروفة بلا إسناد سابق. حدد موظفًا واحدًا وقالبًا معتمدًا ومؤهلًا لكل إجراء صريح؛ ليست الخيارات محصورة بالكاشير ولا بسقف الصلاحيات اليدوية القديم. يبقى تفعيل السياسة وتغطية الفرع وحدود الإجراءات والنطاقات المدعومة مطلوبًا؛ الأدوار الإدارية والنطاقات متعددة الفروع والاستثناءات غير المعروفة محمية. لا توجد منح تلقائية أو إسناد جماعي؛ القالب الفارغ لا يسحب الوصول الأصيل.</p>
+          <p className="text-xs leading-6 text-violet-900">اختر القالب والفرع، راجع الفرق ثم أكّد التنفيذ على هذا الموظف فقط. الإضافات والأدوار وبيانات الموظف لا تتغير.</p>
+          <details className="rounded-lg border p-3"><summary className="cursor-pointer text-xs font-bold leading-6">حدود التفويض والقوالب · لا توجد منح تلقائية</summary><p className="mt-2 text-xs leading-6 text-muted-foreground">يشمل نطاق مدير العمليات جميع الموظفين الحاليين والمستقبليين في فروعه المصرّح له بإدارتها والكتابة فيها، دون اختيار أسماء للتفويض. يمكن إنشاء حساب أو تحديث حساب عادي وفق قرار الخادم، حتى عند الانتقال من صلاحيات مباشرة معروفة بلا إسناد سابق. حدد موظفًا واحدًا وقالبًا معتمدًا ومؤهلًا لكل إجراء صريح؛ ليست الخيارات محصورة بالكاشير ولا بسقف الصلاحيات اليدوية القديم. يبقى تفعيل السياسة وتغطية الفرع وحدود الإجراءات والنطاقات المدعومة مطلوبًا؛ الأدوار الإدارية والنطاقات متعددة الفروع والاستثناءات غير المعروفة محمية. لا توجد منح تلقائية أو إسناد جماعي؛ القالب الفارغ لا يسحب الوصول الأصيل.</p></details>
           <p className="text-[11px] leading-6 text-muted-foreground">لوظيفة التوصيل وصول أصيل إلى عرض وتعديل مهام التوصيل. لا يسحبه قالب فارغ؛ الخادم يعرض فقط القوالب المتوافقة معه ولا يغيّر وظيفة الموظف.</p>
           {!allowed && <p role="alert" className="text-xs leading-6 text-destructive">التفويض أو السياسة الحالية لا يسمحان بالإسناد. لا يتم تعديل الحساب أو تجاوز حمايته.</p>}
           {review.loading ? <div role="status" className="space-y-3 rounded-lg border p-4"><div className="h-5 w-36 animate-pulse rounded bg-muted" /><div className="h-20 animate-pulse rounded bg-muted" /><span className="sr-only">جار التحقق من القوالب وحالة الحساب</span></div> : review.error ? <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-xs leading-6 text-destructive">{review.error}</div> : <>
@@ -201,15 +204,16 @@ export function EmployeeTemplateAssignmentDialog({ employee, mode, directory, cl
             {employee.account?.isActive === "inactive" && <p className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs leading-6 text-amber-900"><AlertTriangle className="mt-1 h-4 w-4 shrink-0" />الحساب مجمّد. إسناد القالب لا يعيد فتحه أو يولّد كلمة مرور جديدة؛ إعادة الفتح إجراء مستقل.</p>}
             <div><label htmlFor="employee-template-reason" className="mb-1 block text-xs font-bold">سبب الإسناد · مطلوب لسجل المراجعة</label><Input id="employee-template-reason" maxLength={2000} value={reason} disabled={pending} onChange={event => { setReason(event.target.value); setConfirmed(false); }} className="min-h-11" placeholder="مثال: اعتماد مهام الموظف في الفرع" /></div>
             <label className={`flex min-h-11 items-start gap-2 rounded-lg border p-3 text-xs leading-6 ${previewReady ? "border-violet-200 bg-violet-50/40" : "text-muted-foreground"}`}>
-              <input id="employee-template-confirm" type="checkbox" className="mt-1.5 h-4 w-4 shrink-0 accent-violet-700" checked={confirmed} disabled={!previewReady || pending} onChange={event => setConfirmed(event.target.checked)} />
+              <input id="employee-template-confirm" aria-describedby="employee-template-review-help" type="checkbox" className="mt-1.5 h-4 w-4 shrink-0 accent-violet-700" checked={confirmed} disabled={!previewReady || pending} onChange={event => setConfirmed(event.target.checked)} />
               راجعت الموظف والقالب والإصدار والفرع وفرق الأساس قبل وبعد والإضافات المستقلة التي تبقى محفوظة، وأؤكد تطبيق تغيير الأساس على حساب هذا الموظف فقط.
             </label>
+            <p id="employee-template-review-help" aria-live="polite" className="text-xs leading-6 text-amber-900">{pending ? "التنفيذ جارٍ؛ انتظر اكتماله." : invalidPreview ? error || "تغيّرت المعاينة؛ حدّث المعاينة والقوالب وأعد المراجعة." : !selected ? "اختر إصدارًا معتمدًا متاحًا قبل المراجعة." : !snapshot || snapshot.employeeId !== employee.employeeId ? "لم تتأكد لقطة هذا الموظف من الخادم؛ حدّث المعاينة." : !branchId || branchId !== snapshot.branchId || !branches.some(branch => branch.id === branchId) ? "اختر فرع الموظف المصرّح به؛ الفرع المختار لا يطابق اللقطة الحالية." : !reason.trim() ? "اكتب سبب الإسناد المطلوب قبل التنفيذ." : !allowed ? "التفويض أو السياسة الحالية لا يسمحان بالإسناد." : ""}</p>
           </>}
           <Button type="button" variant="outline" className="min-h-11 gap-2" disabled={pending || review.loading} onClick={reload}><RefreshCw className="h-4 w-4" />{invalidPreview ? "تحديث المعاينة والقوالب وإعادة المراجعة" : review.error ? "إعادة المحاولة" : "تحديث المعاينة والقوالب"}</Button>
         </>}
         {error && <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-xs leading-6 text-destructive">{error}</p>}
       </div>
-      <DialogFooter className="gap-2 sm:gap-2">
+      <DialogFooter className={employeeDialogFooter}>
         {!credentials && <Button type="button" className="min-h-11 gap-2" disabled={!canApply} onClick={apply}><KeyRound className="h-4 w-4" />{pending ? "جار التنفيذ…" : creating ? "تأكيد الإسناد وتوليد الحساب" : "تأكيد إسناد الإصدار"}</Button>}
         <Button type="button" variant="outline" className="min-h-11" disabled={!!credentials && !handoffSaved} onClick={dismiss}>{credentials ? "حفظت البيانات · إغلاق" : "إلغاء"}</Button>
       </DialogFooter>

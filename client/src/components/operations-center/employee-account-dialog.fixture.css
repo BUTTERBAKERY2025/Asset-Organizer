@@ -1,0 +1,4 @@
+@import "../../index.css";
+/* The isolated Vite root must scan the shared Radix dialog utilities too. */
+@source "../ui";
+@source ".";

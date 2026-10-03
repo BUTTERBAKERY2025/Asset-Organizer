@@ -93,6 +93,58 @@ afterEach(async () => {
 });
 
 describe("bounded admin template comparison and pilot", () => {
+  it("uses measured visual viewport bounds on keyboard resize and removes listeners on unmount", async () => {
+    const listeners = new Map<string, () => void>();
+    const viewport = {
+      height: 820, offsetTop: 0,
+      addEventListener: vi.fn((event: string, listener: () => void) => listeners.set(event, listener)),
+      removeEventListener: vi.fn(),
+    };
+    const removeWindowListener = vi.fn();
+    vi.stubGlobal("window", { innerHeight: 820, visualViewport: viewport, addEventListener: vi.fn(), removeEventListener: removeWindowListener });
+    vi.stubGlobal("requestAnimationFrame", vi.fn(() => 1));
+    vi.stubGlobal("cancelAnimationFrame", vi.fn());
+    await mount();
+    const shell = () => renderer.root.findByProps({ dir: "rtl" }).props.style;
+    expect(shell().height).toBe("770px");
+    viewport.height = 360;
+    viewport.offsetTop = 75;
+    await act(async () => listeners.get("resize")!());
+    expect(shell()).toMatchObject({ height: "338px", maxHeight: "338px", top: "255px", transitionDuration: "0ms", animationDuration: "0ms" });
+    await act(async () => renderer.unmount());
+    renderer = undefined;
+    expect(viewport.removeEventListener).toHaveBeenCalledWith("resize", expect.any(Function));
+    expect(viewport.removeEventListener).toHaveBeenCalledWith("scroll", expect.any(Function));
+    expect(removeWindowListener).toHaveBeenCalledWith("resize", expect.any(Function));
+    expect(write).not.toHaveBeenCalled();
+  });
+  it("keeps explicit step actions outside the sole scroll body and explains the disabled review nearby", async () => {
+    await mount();
+    const body = renderer.root.findByProps({ "data-testid": "employee-dialog-body" });
+    expect(body.props.className).toContain("overflow-y-auto");
+    expect(body.findAllByType("button").some((node: any) => text(node).includes("الانتقال إلى تأكيد الحساب الواحد"))).toBe(false);
+    expect(renderer.root.findByProps({ id: "pilot-review" }).props["aria-describedby"]).toBe("pilot-review-reasons");
+    expect(text(renderer.root.findByProps({ id: "pilot-review-reasons" }))).toContain("اكتب سبب التجربة");
+    await compare();
+    await change("pilot-reason", "مراجعة الاختبار");
+    expect(renderer.root.findByProps({ id: "pilot-review" }).props.disabled).toBe(false);
+    expect(renderer.root.findAllByProps({ id: "pilot-review-reasons" })).toHaveLength(0);
+    expect(write).not.toHaveBeenCalled();
+  });
+  it("repeats the exact server blocker near review without putting changes inside optional details", async () => {
+    preview = { ...initial, canApply: false, blockedReasons: [{ code: "PROTECTED_ACCOUNT", message: "استثناء محمي من الخادم" }] };
+    await mount();
+    await compare();
+    await change("pilot-reason", "سبب اختبار");
+    const help = renderer.root.findByProps({ id: "pilot-review-reasons" });
+    expect(text(help)).toContain("استثناء محمي من الخادم (PROTECTED_ACCOUNT)");
+    const base = renderer.root.findByProps({ "aria-label": "فرق الأساس المستقل في التجربة" });
+    expect(base.findAllByType("details")).toHaveLength(0);
+    expect(text(base)).toContain("قبل:");
+    expect(text(base)).toContain("بعد:");
+    expect(renderer.root.findByProps({ id: "pilot-review" }).props.disabled).toBe(true);
+    expect(write).not.toHaveBeenCalled();
+  });
   it.each(["operations_manager", "employee", "branch_manager"])("never mounts pilot resources or controls for %s", async role => {
     await mount(role);
     expect(fetchMock).not.toHaveBeenCalled();

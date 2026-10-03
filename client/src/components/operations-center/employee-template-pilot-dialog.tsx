@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { EmployeeTemplatePilotComparison, PilotAuthorityPanel, PilotPermissionList } from "./employee-template-pilot-comparison";
+import { employeeDialogBody, employeeDialogFooter, employeeDialogHeader, employeeDialogShell, useEmployeeAccountDialogLayout } from "./employee-account-dialog-layout";
 
 const pilotScopeLabels = { branch: "فرع", branches: "عدة فروع", self: "الموظف نفسه", assigned_tasks: "مهام مسندة" };
 
@@ -31,6 +32,7 @@ export function EmployeeTemplatePilotDialog(props: EmployeeTemplatePilotDialogPr
 }
 
 function AdminEmployeeTemplatePilotDialog({ employee, contextRevision, close, refresh }: EmployeeTemplatePilotDialogProps) {
+  const dialogStyle = useEmployeeAccountDialogLayout();
   const resource = useEmployeeTemplatePilot(employee.employeeId);
   const [selection, setSelection] = useState("");
   const [reason, setReason] = useState("");
@@ -85,6 +87,20 @@ function AdminEmployeeTemplatePilotDialog({ employee, contextRevision, close, re
   const canReview = employee.hasAccount && known && !invalid && !resource.comparing && !pending && !applied
     && !!reason.trim() && reason.trim().length <= 2000;
   const canApply = canReview && reviewed && finalStage && finalConfirmed;
+  const reviewReasons = [
+    !employee.hasAccount ? "لا يوجد حساب مرتبط؛ التجربة لا تنشئ حسابًا." : "",
+    !selected ? "اختر إصدارًا معتمدًا متاحًا أولًا." : "",
+    !comparison ? resource.comparisonError || "اطلب مقارنة من الخادم قبل المراجعة." : "",
+    ...(comparison?.blockedReasons.map(block => `${block.message} (${block.code})`) ?? []),
+    comparison && (comparison.branchId !== employee.branchId || comparison.scope.branchId !== employee.branchId) ? "فرع المقارنة لا يطابق فرع الموظف؛ حدّث الدليل وأعد فتح النافذة." : "",
+    comparison && (comparison.templateId !== selected?.templateId || comparison.version !== selected?.version) ? "المقارنة لا تطابق الإصدار المختار؛ أعد المقارنة." : "",
+    comparison && (comparison.comparisonStatus !== "known" || !comparison.before || !comparison.after || !comparison.differences) ? "أدلة المقارنة غير معروفة أو غير مكتملة؛ لا يمكن إقرار المراجعة." : "",
+    comparison && !comparison.canApply && !comparison.blockedReasons.length ? "الخادم لم يسمح بتطبيق هذه المقارنة." : "",
+    invalid ? error || "اللقطة قديمة؛ أعد المقارنة من الخادم ثم راجعها مجددًا." : "",
+    resource.comparing ? "انتظر اكتمال المقارنة الحالية." : "",
+    pending ? "التنفيذ جارٍ؛ المراجعة مقفلة حتى اكتماله." : "",
+    !reason.trim() ? "اكتب سبب التجربة المطلوب لسجل التدقيق." : reason.trim().length > 2000 ? "يجب ألا يتجاوز السبب 2000 حرف." : "",
+  ].filter(Boolean);
   const runComparison = async (reloadCatalog = false) => {
     if (pendingRef.current || completedRef.current || !selected) return;
     const chosen = selected;
@@ -139,12 +155,12 @@ function AdminEmployeeTemplatePilotDialog({ employee, contextRevision, close, re
     && verification.assignment?.version === applied?.assignment.version && verification.branchId === employee.branchId;
 
   return <Dialog open onOpenChange={open => { if (!open) dismiss(); }}>
-    <DialogContent dir="rtl" className="max-h-[90dvh] max-w-3xl overflow-y-auto rounded-xl">
-      <DialogHeader className="text-right"><DialogTitle className="flex items-center gap-2 text-right"><ShieldCheck className="h-5 w-5 text-violet-700" />مقارنة وتجربة قالب · الأدمن</DialogTitle>
+    <DialogContent dir="rtl" style={dialogStyle} className={`${employeeDialogShell} max-h-[94dvh] max-w-3xl`}>
+      <DialogHeader className={employeeDialogHeader}><DialogTitle className="flex items-center gap-2 text-right leading-6"><ShieldCheck className="h-5 w-5 shrink-0 text-violet-700" />مقارنة وتجربة قالب · الأدمن</DialogTitle>
         <DialogDescription className="text-right">{employee.employeeName} · {employee.branchName}. مقارنة لحساب مرتبط واحد، مستقلة عن إسناد مدير العمليات.</DialogDescription></DialogHeader>
-      <div className="space-y-4">
+      <div className={employeeDialogBody} data-testid="employee-dialog-body">
         <p className="rounded-lg border border-violet-200 bg-violet-50/40 p-3 text-xs leading-6 text-violet-900">المقارنة قراءة فقط. التجربة تطبيق صريح على الحساب المرتبط بهذا الموظف وحده؛ لا إنشاء حسابات أو اختيار مشاركين تلقائي أو إسناد جماعي أو رجوع تلقائي إلى القالب السابق.</p>
-        <p className="text-xs leading-6 text-amber-900">كتالوج الأدمن يعرض كل أحدث الإصدارات المعتمدة دون تصفية بسقف تفويض العمليات؛ ظهور القالب لا يعني السماح بتطبيقه. قد يكون وصول بعض المسارات القديمة عامًا: المقارنة عند فرع الموظف لا تضمن تقييد كل إجراء بهذا الفرع. تبقى قيود الموارد والمهام والملكية مستقلة، ويعرض الخادم أسباب منع التطبيق للقوالب غير المدعومة.</p>
+        <details className="rounded-lg border p-3"><summary className="cursor-pointer text-xs font-bold leading-6">حدود الكتالوج والنطاق · ظهور القالب لا يسمح بتطبيقه</summary><p className="mt-2 text-xs leading-6 text-amber-900">كتالوج الأدمن يعرض كل أحدث الإصدارات المعتمدة دون تصفية بسقف تفويض العمليات؛ ظهور القالب لا يعني السماح بتطبيقه. قد يكون وصول بعض المسارات القديمة عامًا: المقارنة عند فرع الموظف لا تضمن تقييد كل إجراء بهذا الفرع. تبقى قيود الموارد والمهام والملكية مستقلة، ويعرض الخادم أسباب منع التطبيق للقوالب غير المدعومة.</p></details>
         <div className="rounded-lg border bg-muted/20 p-3"><label htmlFor="pilot-employee" className="mb-1 block text-xs font-bold">الموظف الذي اخترته · حساب مرتبط موجود</label><Input id="pilot-employee" value={employee.employeeName} readOnly className="min-h-11" /><p className="mt-2 text-xs text-muted-foreground">الفرع المحفوظ: {employee.branchName} · لا يمكن نقله من هذه التجربة.</p></div>
         {resource.catalogLoading ? <div role="status" className="space-y-3 rounded-xl border p-4"><div className="h-5 w-48 animate-pulse rounded bg-muted" /><div className="h-12 animate-pulse rounded bg-muted" /><span className="sr-only">جار التحقق من خيارات القوالب المعتمدة</span></div> : resource.catalogError ? <div role="alert" className="rounded-lg border border-destructive/30 p-3 text-xs leading-6 text-destructive">{resource.catalogError}<Button type="button" variant="outline" className="mt-2 min-h-11" onClick={() => { resetAcknowledgements(); setInvalid(true); void resource.loadCatalog(); }}>إعادة تحميل الخيارات</Button></div> : <>
           <div><label htmlFor="pilot-template" className="mb-1 block text-xs font-bold">آخر إصدار معتمد · كتالوج الأدمن</label><select id="pilot-template" value={selection} disabled={pending || !!applied} className="min-h-11 w-full rounded-lg border border-input bg-background px-3 text-sm" onChange={event => {
@@ -162,19 +178,18 @@ function AdminEmployeeTemplatePilotDialog({ employee, contextRevision, close, re
         </>}
         {!applied && <section className="space-y-3 rounded-xl border p-3" aria-label="مراجعة تجربة حساب واحد">
           <div><label htmlFor="pilot-reason" className="mb-1 block text-xs font-bold">سبب التجربة · مطلوب لسجل التدقيق</label><Input id="pilot-reason" value={reason} maxLength={2000} disabled={pending} onChange={event => { setReason(event.target.value); resetAcknowledgements(); }} className="min-h-11" /></div>
-          <label className="flex min-h-11 items-start gap-2 text-xs leading-6"><input id="pilot-review" type="checkbox" className="mt-1.5 h-4 w-4 shrink-0 accent-violet-700" checked={reviewed} disabled={!canReview} onChange={event => { setReviewed(event.target.checked); setFinalStage(false); setFinalConfirmed(false); }} />راجعت مقارنة الخادم الحالية والمتوقعة ومصادرها، وفرق الأساس المستقل، والإضافات والمنع والوصول الأصيل والنطاق وحدود المقارنة.</label>
-          {!finalStage && <Button type="button" variant="outline" className="min-h-11" disabled={!canReview || !reviewed} onClick={() => { if (canReview && reviewed) setFinalStage(true); }}>الانتقال إلى تأكيد الحساب الواحد</Button>}
+          <label className="flex min-h-11 items-start gap-2 text-xs leading-6"><input id="pilot-review" aria-describedby={!canReview ? "pilot-review-reasons" : undefined} type="checkbox" className="mt-1.5 h-4 w-4 shrink-0 accent-violet-700" checked={reviewed} disabled={!canReview} onChange={event => { setReviewed(event.target.checked); setFinalStage(false); setFinalConfirmed(false); }} />راجعت مقارنة الخادم الحالية والمتوقعة ومصادرها، وفرق الأساس المستقل، والإضافات والمنع والوصول الأصيل والنطاق وحدود المقارنة.</label>
+          {!canReview && <div id="pilot-review-reasons" aria-live="polite" className="rounded-lg border border-amber-200 bg-amber-50/40 p-3 text-xs leading-6 text-amber-900"><p className="font-bold">قبل إقرار المراجعة</p><ul className="list-inside list-disc">{reviewReasons.map((message, index) => <li key={index}>{message}</li>)}</ul></div>}
           {finalStage && <div className="space-y-3 rounded-lg border border-amber-300 bg-amber-50 p-3">
             <p className="flex items-center gap-2 text-sm font-bold text-amber-900"><AlertTriangle className="h-4 w-4" />تأكيد نهائي · لا تطبيق قبل هذه الخطوة</p>
             <p className="text-xs leading-6">{employee.employeeName} · {selected?.name} · الإصدار {selected?.version} · {employee.branchName}<br />السبب: {reason.trim()}</p>
             <label className="flex min-h-11 items-start gap-2 text-xs leading-6"><input id="pilot-final-confirm" type="checkbox" className="mt-1.5 h-4 w-4 shrink-0 accent-amber-700" checked={finalConfirmed} disabled={!canReview || !reviewed} onChange={event => setFinalConfirmed(event.target.checked)} />أؤكد تطبيق هذا الإصدار على الحساب المرتبط بهذا الموظف فقط. لا تتغير الإضافات أو الأدوار أو بيانات الموظف، ولا يوجد رجوع أو إعادة منح تلقائي.</label>
-            <Button type="button" className="min-h-11" disabled={!canApply} onClick={apply}>{pending ? "جار تنفيذ التجربة…" : "تأكيد التطبيق على هذا الحساب وحده"}</Button>
           </div>}
         </section>}
         {applied && <section className="space-y-4 rounded-xl border border-emerald-300 bg-emerald-50/30 p-3" data-testid="pilot-success">
           <h3 className="text-sm font-bold text-emerald-900">نُفّذت التجربة على الحساب المحدد</h3>
           <p className="text-xs leading-6">سجل الإسناد المحفوظ: قالب #{applied.assignment.templateId} · الإصدار {applied.assignment.version} · الفرع <bdi>{applied.assignment.branchId}</bdi><br />السبب: {applied.assignment.reason} · الوقت: {additionDateLabel(applied.assignment.assignedAt)}</p>
-          <details className="rounded-lg border bg-background p-3" open><summary className="min-h-11 cursor-pointer text-xs font-bold">دليل المعاملة · المصادر والفرق الذي أعاد الخادم التحقق منه</summary><EmployeeTemplatePilotComparison comparison={applied.comparison} branchName={employee.branchName} /></details>
+          <details className="rounded-lg border bg-background p-3"><summary className="min-h-11 cursor-pointer text-xs font-bold">دليل المعاملة · المصادر والفرق الذي أعاد الخادم التحقق منه</summary><EmployeeTemplatePilotComparison comparison={applied.comparison} branchName={employee.branchName} /></details>
           {verification ? <div className="space-y-3" data-testid="pilot-fresh-verification">
             <p className={`rounded-lg border p-3 text-xs leading-6 ${verifiedAssignment ? "border-emerald-200 text-emerald-900" : "border-amber-300 text-amber-900"}`}>{verifiedAssignment ? "قراءة جديدة من الخادم: قالب الحساب وإصداره وفرعه يطابقون نتيجة التجربة." : "القراءة الجديدة لا تؤكد نفس الإسناد؛ راجع الحالة الحالية. لم نُرجع الحساب تلقائيًا."}<br />وقت القراءة: {additionDateLabel(verification.capturedAt)}</p>
             <p className="text-[11px] leading-6 text-muted-foreground">المطابقة أعلاه لسجل الإسناد. الوصول الفعلي أدناه قراءة مستقلة، وقد يختلف إذا تغيّر مصدر أو انتهت مدة بعد التنفيذ؛ لا نستنتج تطابقًا أو نجري رجوعًا تلقائيًا.</p>
@@ -186,7 +201,10 @@ function AdminEmployeeTemplatePilotDialog({ employee, contextRevision, close, re
         </section>}
         {error && <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-xs leading-6 text-destructive">{error}</p>}
       </div>
-      <DialogFooter><Button type="button" variant="outline" className="min-h-11" onClick={dismiss}>إغلاق</Button></DialogFooter>
+      <DialogFooter className={employeeDialogFooter}>
+        {!applied && (!finalStage ? <Button type="button" variant="outline" className="min-h-11 whitespace-normal" disabled={!canReview || !reviewed} onClick={() => { if (canReview && reviewed) setFinalStage(true); }}>الانتقال إلى تأكيد الحساب الواحد</Button> : <Button type="button" className="min-h-11 whitespace-normal" disabled={!canApply} onClick={apply}>{pending ? "جار تنفيذ التجربة…" : "تأكيد التطبيق على هذا الحساب وحده"}</Button>)}
+        <Button type="button" variant="outline" className="min-h-11" onClick={dismiss}>إغلاق</Button>
+      </DialogFooter>
     </DialogContent>
   </Dialog>;
 }

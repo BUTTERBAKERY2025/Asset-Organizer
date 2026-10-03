@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { EmployeeAccountPermissions } from "./employee-account-permissions";
 import { EmployeeAccountCredentials } from "./employee-account-credentials";
+import { employeeDialogBody, employeeDialogFooter, employeeDialogHeader, employeeDialogShell, useEmployeeAccountDialogLayout } from "./employee-account-dialog-layout";
 import { constrainDelegatedPermissions, createEmployeeAccountCommandGuard, EMPLOYEE_ACCOUNTS_ENDPOINT, employeeAccountErrorMessage, hasMissingViewPermission, hasUnapprovedPermissions, requestEmployeeAccount } from "@/lib/employee-account-delegation";
 
 export type EmployeeAccountDialogMode = "create" | "permissions" | "freeze" | "reopen";
@@ -19,6 +20,7 @@ export function EmployeeAccountDialog({ employee, mode, directory, close, refres
   close: () => void;
   refresh: () => void;
 }) {
+  const dialogStyle = useEmployeeAccountDialogLayout(640);
   // Admin gets the full safe catalog for the policy editor, but account grants
   // still use only the approved allowlist, exactly like an operations manager.
   const approved = constrainDelegatedPermissions(directory.availablePermissions, directory.policy.permissions);
@@ -124,10 +126,10 @@ export function EmployeeAccountDialog({ employee, mode, directory, close, refres
     }
   };
   return <Dialog open onOpenChange={open => { if (!open) dismiss(); }}>
-    <DialogContent dir="rtl" className="max-h-[90dvh] max-w-lg overflow-y-auto rounded-xl [&>button]:min-h-11 [&>button]:min-w-11">
-      <DialogHeader className="text-right"><DialogTitle className="flex items-center gap-2 text-right"><KeyRound className="h-5 w-5 text-violet-700" />{credentials ? "تم إنشاء الحساب" : title}</DialogTitle>
+    <DialogContent dir="rtl" style={dialogStyle} className={`${employeeDialogShell} max-h-[94dvh] max-w-lg`}>
+      <DialogHeader className={employeeDialogHeader}><DialogTitle className="flex items-center gap-2 text-right leading-6"><KeyRound className="h-5 w-5 shrink-0 text-violet-700" />{credentials ? "تم إنشاء الحساب" : title}</DialogTitle>
         <DialogDescription className="text-right">{employee.branchName} · حساب مرتبط بموظف موجود، دون تغيير بياناته.</DialogDescription></DialogHeader>
-      <div className="space-y-4">
+      <div className={employeeDialogBody} data-testid="employee-dialog-body">
         <div><label htmlFor="delegated-employee-name" className="mb-1 block text-xs font-bold">اسم الموظف · للقراءة فقط</label>
           <Input id="delegated-employee-name" value={employee.employeeName} readOnly className="min-h-11 bg-muted/40" /></div>
         {credentials ? <EmployeeAccountCredentials credentials={credentials} copied={copied} saved={handoffSaved} onCopy={copy} onSaved={saved => { setHandoffSaved(saved); setError(""); }} /> : statusMode ? <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm leading-7">
@@ -157,7 +159,7 @@ export function EmployeeAccountDialog({ employee, mode, directory, close, refres
         </>}
         {error && <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-xs leading-6 text-destructive">{error}</p>}
       </div>
-      <DialogFooter className="gap-2 sm:gap-2">
+      <DialogFooter className={employeeDialogFooter}>
         {!credentials && <Button type="button" className="min-h-11 gap-2" variant={mode === "freeze" ? "destructive" : "default"} disabled={!actionAllowed || pending || completed || (statusMode ? mode === "reopen" && (!directory.policy.enabled || !employee.account?.canReactivate) : missingView || emptyNewGrant || (mode === "create" && !canGrant))} onClick={act}>
           {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : mode === "freeze" ? <Lock className="h-4 w-4" /> : mode === "reopen" ? <Unlock className="h-4 w-4" /> : <KeyRound className="h-4 w-4" />}
           {pending ? "جار التنفيذ…" : mode === "create" ? "توليد وإنشاء الحساب" : mode === "permissions" ? reductionOnly ? "حفظ تخفيض الصلاحيات" : "حفظ الصلاحيات" : mode === "freeze" ? "تأكيد التجميد" : "تأكيد إعادة الفتح"}
