@@ -29261,6 +29261,11 @@ export async function registerRoutes(
         }
       }
       const partialData = insertAttendanceRecordSchema.partial().parse(req.body);
+      // The old record's authorization is not permission to move it elsewhere.
+      if (!isUserAdmin(req) && partialData.branchId && partialData.branchId !== existingRecord.branchId
+        && !await canAccessBranch(req, partialData.branchId)) {
+        return res.status(403).json({ error: "غير مصرح بنقل سجل الحضور لهذا الفرع" });
+      }
       const record = await storage.updateAttendanceRecord(id, partialData);
       res.json(record);
     } catch (error) {
@@ -30676,7 +30681,15 @@ export async function registerRoutes(
       if (month) filters.month = month;
       
       const summaries = await storage.getAllAttendanceSummaries(filters);
-      res.json(summaries);
+      let scopedSummaries = branchFilter.branchIds === null ? summaries
+        : summaries.filter(summary => branchFilter.branchIds!.includes(summary.branchId));
+      if ((req as any).authPermissionDecisionSnapshot?.branchTemplates?.length) {
+        const { monthlyAttendanceWithinBranches } = await import("./branch-template-hr-context");
+        const admitted = await Promise.all(scopedSummaries.map(summary => monthlyAttendanceWithinBranches(
+          summary.employeeId, summary.periodMonth, summary.branchId, branchFilter.branchIds)));
+        scopedSummaries = scopedSummaries.filter((_, index) => admitted[index]);
+      }
+      res.json(scopedSummaries);
     } catch (error) {
       console.error("Error fetching attendance summaries:", error);
       res.status(500).json({ error: "فشل في جلب ملخصات الحضور" });
@@ -30688,7 +30701,7 @@ export async function registerRoutes(
       const { employeeId, month } = req.params;
       
       // SECURITY: Verify branch access for non-admin users
-      if (!isUserAdmin(req)) {
+      if (!isUserAdmin(req) && !(req as any).authPermissionDecisionSnapshot?.branchTemplates?.length) {
         const employee = await storage.getBranchEmployee(parseInt(employeeId));
         if (employee && employee.branchId) {
           const hasAccess = await canAccessBranch(req, employee.branchId);
@@ -30702,6 +30715,11 @@ export async function registerRoutes(
       if (!summary) {
         return res.status(404).json({ error: "الملخص غير موجود" });
       }
+      if ((req as any).authPermissionDecisionSnapshot?.branchTemplates?.length) {
+        const { monthlyAttendanceWithinBranches } = await import("./branch-template-hr-context");
+        if (!await monthlyAttendanceWithinBranches(employeeId, month, summary.branchId, getAllowedBranchIds(req)))
+          return res.status(403).json({ error: "الملخص يشمل فروعًا خارج صلاحياتك" });
+      }
       res.json(summary);
     } catch (error) {
       console.error("Error fetching attendance summary:", error);
@@ -30714,7 +30732,7 @@ export async function registerRoutes(
       const { employeeId, month } = req.params;
       
       // SECURITY: Verify branch access for non-admin users
-      if (!isUserAdmin(req)) {
+      if (!isUserAdmin(req) && !(req as any).authPermissionDecisionSnapshot?.branchTemplates?.length) {
         const employee = await storage.getBranchEmployee(parseInt(employeeId));
         if (employee && employee.branchId) {
           const hasAccess = await canAccessBranch(req, employee.branchId);
@@ -30724,6 +30742,13 @@ export async function registerRoutes(
         }
       }
       
+      if ((req as any).authPermissionDecisionSnapshot?.branchTemplates?.length) {
+        const { monthlyAttendanceWithinBranches } = await import("./branch-template-hr-context");
+        // Same owner used by the authoritative calculator; no invented branch.
+        const owner = await storage.getUser(employeeId);
+        if (!owner?.branchId || !await monthlyAttendanceWithinBranches(employeeId, month, owner.branchId, getAllowedBranchIds(req)))
+          return res.status(403).json({ error: "لا يمكن إعادة حساب ملخص يشمل فروعًا خارج صلاحياتك" });
+      }
       const summary = await storage.calculateAndUpdateMonthlySummary(employeeId, month);
       res.json(summary);
     } catch (error) {
@@ -34374,7 +34399,8 @@ export async function registerRoutes(
       }
       
       const attendance = await storage.getAttendanceByBranchEmployeeId(id);
-      res.json(attendance);
+      const allowedBranches = getAllowedBranchIds(req);
+      res.json(allowedBranches === null ? attendance : attendance.filter(row => allowedBranches.includes(row.branchId)));
     } catch (error) {
       console.error("Error getting branch employee attendance:", error);
       res.status(500).json({ error: "فشل في جلب سجلات الحضور" });
@@ -34400,7 +34426,8 @@ export async function registerRoutes(
       }
       
       const timesheets = await storage.getTimesheetsByBranchEmployeeId(id);
-      res.json(timesheets);
+      const allowedBranches = getAllowedBranchIds(req);
+      res.json(allowedBranches === null ? timesheets : timesheets.filter(row => allowedBranches.includes(row.branchId)));
     } catch (error) {
       console.error("Error getting branch employee timesheets:", error);
       res.status(500).json({ error: "فشل في جلب تقارير الدوام" });
@@ -34425,7 +34452,8 @@ export async function registerRoutes(
       }
       
       const schedules = await storage.getSchedulesByBranchEmployeeId(id);
-      res.json(schedules);
+      const allowedBranches = getAllowedBranchIds(req);
+      res.json(allowedBranches === null ? schedules : schedules.filter(row => allowedBranches.includes(row.branchId)));
     } catch (error) {
       console.error("Error getting branch employee schedules:", error);
       res.status(500).json({ error: "فشل في جلب جداول الدوام" });

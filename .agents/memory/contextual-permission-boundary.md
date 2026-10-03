@@ -11,6 +11,12 @@ Complete branch-template isolation before recommending publication; do not repea
 
 **How to apply:** Treat known compatibility gaps as part of the requested work, not optional follow-up suggestions. Keep production publication and live employee activation separate from development verification.
 
+For whole-employee monthly aggregates, do not write an authorized branch subset into the shared monthly result.
+
+**Why:** A transferred employee's month can span multiple branches. A partial recalculation would change the common total used by users with broader authority.
+
+**How to apply:** Require authority over every contributing branch for shared recalculation. Branch-filtered reporting must remain separate from whole-employee cache writes.
+
 **Why:** Existing branch-view access previously amplified actions from a different assignment. An unknown resource context cannot establish that a scoped permission or deny applies.
 
 **How to apply:** Route-owned persisted-resource context and actual collection filtering are required for scoped grants. Unadapted routes fail closed; explicitly review their legitimate workflows before activating the new resolver. See docs/governance/phase2-contextual-permissions.md.

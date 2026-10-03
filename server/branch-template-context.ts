@@ -3,12 +3,17 @@ import { db } from "./db";
 import { branchComplaints, maintenanceTickets, materialTransfers, centralKitchenOrders, branchDailyClosures,
   cashierDailyChallenges, productCommissions, branchAchievementBonus, cashierPointsLedger, cashierProductSales } from "@shared/schema";
 import { eq } from "drizzle-orm";
+import { branchTemplateHrContext } from "./branch-template-hr-context";
 
 /**
  * Explicitly reviewed routes whose handlers enforce getEffectiveBranchFilter
  * or canAccessBranch. Unknown routes get no manufactured resource context.
  */
 export async function branchTemplateRouteContext(req: any, module: string, branches: string[]) {
+  if (["attendance", "attendance_check", "branch_employees"].includes(module)) {
+    const context = await branchTemplateHrContext(req, module, branches);
+    if (context !== undefined) return context;
+  }
   const path = req.path;
   const method = req.method;
   if (module === "daily_closures") {

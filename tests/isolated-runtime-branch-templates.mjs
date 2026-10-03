@@ -51,6 +51,25 @@ try {
     VALUES ($1,'sales',ARRAY['view','create']),($1,'shifts',ARRAY['view'])`, [user]);
   await client.query(`INSERT INTO user_permissions(user_id,module,actions)
     VALUES ($1,'production',ARRAY['view','edit']),($1,'daily_closures',ARRAY['view','delete','approve'])`, [user]);
+  await client.query(`INSERT INTO user_permissions(user_id,module,actions)
+    VALUES ($1,'attendance',ARRAY['view','create','edit']),
+      ($1,'branch_employees',ARRAY['view','create','edit'])`, [user]);
+  await client.query(`INSERT INTO branch_employees
+    (id,branch_id,employee_name,job_title,nationality,salary,status)
+    VALUES (900011,$1,'Synthetic HR A','cashier','Saudi',1,'active'),
+      (900012,$2,'Synthetic HR B','cashier','Saudi',1,'active')`, [A, B]);
+  await client.query(`INSERT INTO attendance_records
+    (id,employee_id,branch_employee_id,employee_name,branch_id,attendance_date,status)
+    VALUES (900011,'branch_emp_900011',900011,'Synthetic HR A',$1,'2026-10-03','present'),
+      (900012,'branch_emp_900012',900012,'Synthetic HR B',$2,'2026-10-03','present'),
+      (900013,'branch_emp_900012',900012,'Synthetic HR B',$1,'2026-10-02','present')`, [A, B]);
+  await client.query(`INSERT INTO attendance_records
+    (employee_id,employee_name,branch_id,attendance_date,status)
+    VALUES ($1,'Synthetic monthly',$2,'2026-10-01','present'),
+      ($1,'Synthetic monthly',$3,'2026-10-02','present')`, [user, A, B]);
+  await client.query(`INSERT INTO attendance_summary
+    (employee_id,employee_name,branch_id,period_month,total_present_days)
+    VALUES ($1,'Synthetic monthly',$2,'2026-10',2)`, [user, B]);
   await client.query(`INSERT INTO daily_production_batches
     (id,branch_id,product_name,quantity,destination,status)
     VALUES (900001,$1,'Synthetic A',1,'display_bar','in_progress'),
@@ -210,6 +229,40 @@ try {
     check(collection.status === 200 && collection.json.length === 1 && collection.json[0].branchId === B, `BT_OUTSIDE_FILTER_${root}`);
     check((await request(root + "?branchId=" + A, { cookie: employee })).status === 403, `BT_REMOVED_PERFORMANCE_${root}`);
   }
+  for (const root of ["/api/branch-employees", "/api/attendance"]) {
+    const list = await request(root, { cookie: employee });
+    check(list.status === 200 && list.json.length > 0 && list.json.every(row => row.branchId === B),
+      `BT_HR_LIST_${root}`);
+    check((await request(`${root}/900012?branchId=${A}`, { cookie: employee })).status === 200,
+      `BT_HR_OUTSIDE_RESOURCE_${root}`);
+    check((await request(`${root}/900011?branchId=${B}`, { cookie: employee })).status === 403,
+      `BT_HR_DENIED_RESOURCE_${root}`);
+  }
+  for (const [root, method] of [["/api/attendance", "PATCH"], ["/api/branch-employees", "PUT"]]) {
+    check((await request(`${root}/900012`, { method, cookie: employee, body: { notes: "Synthetic allowed edit" } })).status === 200,
+      `BT_HR_OUTSIDE_EDIT_${root}`);
+    check((await request(`${root}/900011`, { method, cookie: employee, body: { notes: "Must not write" } })).status === 403,
+      `BT_HR_DENIED_EDIT_${root}`);
+    check((await request(`${root}/900012`, { method, cookie: employee, body: { branchId: A } })).status === 403,
+      `BT_HR_DENIED_MOVE_${root}`);
+  }
+  const hrHistory = await request("/api/branch-employees/900012/attendance", { cookie: employee });
+  check(hrHistory.status === 200 && hrHistory.json.length === 1 && hrHistory.json[0].branchId === B,
+    "BT_HR_TRANSFER_HISTORY_FILTER");
+  check((await request(`/api/attendance-check/bundle?branchId=${A}&shiftType=morning&date=2026-10-03`,
+    { cookie: employee })).status === 403, "BT_HR_ATTENDANCE_CHECK_DENIED_BRANCH");
+  check((await client.query("SELECT notes FROM attendance_records WHERE id=900011")).rows[0].notes === null,
+    "BT_HR_DENIED_ROW_UNCHANGED");
+  check((await request(`/api/attendance-summary/${user}/2026-10`, { cookie: employee })).status === 403,
+    "BT_HR_MONTHLY_MIXED_BRANCH_DENIED");
+  check((await request(`/api/attendance-summary/calculate/${user}/2026-10`, {
+    method: "POST", cookie: employee,
+  })).status === 403, "BT_HR_MONTHLY_RECALC_DENIED");
+  const summaryList = await request("/api/attendance-summary?month=2026-10", { cookie: employee });
+  check(summaryList.status === 200 && !summaryList.json.some(row => row.employeeId === user),
+    "BT_HR_MONTHLY_LIST_NO_MIXED_BRANCH_TOTALS");
+  check(Number((await client.query("SELECT total_present_days FROM attendance_summary WHERE employee_id=$1", [user]))
+    .rows[0].total_present_days) === 2, "BT_HR_MONTHLY_CACHE_UNCHANGED");
   for (const root of ["/api/daily-production/batches", "/api/daily-production/unfinished"]) {
     const result = await request(root, { cookie: employee });
     check(result.status === 200 && result.json.length === 1 && result.json[0].branchId === B,

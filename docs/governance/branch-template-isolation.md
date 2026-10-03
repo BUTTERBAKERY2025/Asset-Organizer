@@ -57,6 +57,22 @@ Consequently unsupported unscoped operations may be denied after a restrictive
 branch assignment, even though their original outside-branch grants remain stored.
 Further route adaptation is required for full behavioral parity.
 
+HR route adaptation now covers employee lists/bundle/stats, employee-owned
+details and histories, attendance records and approval, attendance dashboards,
+attendance-check roster/check-in/check-out, consolidated employee reports and
+monthly summary routes. Historical attendance/schedule/timesheet rows are
+filtered individually, so a transferred employee's current branch is not proof
+of permission over every historical row. Attendance edits also validate a
+requested destination branch.
+
+Monthly attendance summaries remain whole-employee aggregates: scoped accounts
+must have access to the summary owner branch and all contributing attendance
+branches. Mixed-scope summaries are excluded from collections; detail and
+recalculation return 403. Do not replace the shared cache with an authorized
+subset of the employee's month. Administrative identity-link and deletion
+restrictions remain unchanged. This does not enable HR modules in delegated
+templates or certify unrelated HR, biometric, POS or marketing routes.
+
 Daily-closure list/preview/create/detail/close/delete routes now resolve branch
 contexts, retaining their existing financial policy (including admin-only
 deletion and separation of duties). Daily-production batch list, unfinished
