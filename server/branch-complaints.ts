@@ -22,6 +22,8 @@ import {
   OPERATIONS_MANAGER_PERMISSIONS,
   canAccessBranch,
   isAuthenticated,
+  requirePermission,
+  contextualActionAllowed,
 } from "./auth";
 import { storage } from "./storage";
 import { complaintAttachmentStorage } from "./branch-complaint-attachment-storage";
@@ -57,6 +59,11 @@ const requireFreshComplaintPermission = (action: "view" | "create" | "edit" | "a
       eq(users.id, sessionUserId), eq(users.isActive, "active"),
     )).limit(1);
     if (!freshUser) return res.status(403).json({ message: "الحساب غير نشط" });
+    if ((req as any).authPermissionDecisionSnapshot?.branchTemplates?.length) {
+      req.currentUser = freshUser;
+      (req as any).userBranchAccess = await db.select().from(userBranchAccess).where(eq(userBranchAccess.userId, freshUser.id));
+      return requirePermission(MODULE, action)(req, res, next);
+    }
     const allowed = intrinsicActions(freshUser.role).includes(action)
       || await storage.hasPermission(freshUser.id, MODULE, action);
     if (!allowed) return res.status(403).json({ message: `غير مسموح - صلاحية ${action} مطلوبة` });
@@ -99,6 +106,13 @@ async function isEligibleOwner(userId: string, branchId: string): Promise<boolea
   const [user] = await db.select({ id: users.id, role: users.role, branchId: users.branchId })
     .from(users).where(and(eq(users.id, userId), eq(users.isActive, "active"))).limit(1);
   if (!user) return false;
+  const snapshot = await storage.getPermissionDecisionSnapshot(userId);
+  if (snapshot.branchTemplates?.length) {
+    const grants = await db.select().from(userBranchAccess).where(eq(userBranchAccess.userId, userId));
+    const request = { currentUser: user, userBranchAccess: grants, method: "GET" };
+    return contextualActionAllowed(request, snapshot, MODULE, "view", { branchId })
+      && contextualActionAllowed(request, snapshot, MODULE, "edit", { branchId });
+  }
   const intrinsic = user.role === "admin"
     || (user.role === "operations_manager" && OPERATIONS_MANAGER_PERMISSIONS[MODULE]?.includes("edit"))
     || (user.role === "branch_manager" && BRANCH_MANAGER_INTRINSIC_PERMISSIONS[MODULE]?.includes("edit"));

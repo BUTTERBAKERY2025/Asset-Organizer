@@ -9,6 +9,12 @@ Keep action and scope in one decision. Navigation unions are display-only; never
 
 **How to apply:** Route-owned persisted-resource context and actual collection filtering are required for scoped grants. Unadapted routes fail closed; explicitly review their legitimate workflows before activating the new resolver. See docs/governance/phase2-contextual-permissions.md.
 
+Review custom permission helpers and aggregates as well as standard route guards when expanding branch-template coverage.
+
+**Why:** A fresh but flattened grant lookup can bypass a scoped replacement, and checking an aggregate afterward cannot recover which branches contributed to it.
+
+**How to apply:** Feed custom guards the same resource-context decision; filter source rows before aggregation. Test with nonzero contributions from both an allowed and a denied branch.
+
 Intentional empty direct replacement is not a request to inherit, manufacture permanent deny overrides, or erase independent denies.
 
 **Why:** Synthesizing omission-denies while switching to direct mode prevented later explicit restoration; erasing denies on checkbox changes undid independent restrictions.

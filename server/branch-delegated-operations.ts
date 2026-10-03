@@ -4,13 +4,18 @@ import { and, eq, or, isNull, inArray } from "drizzle-orm";
 import { branchStock, warehouseItems, employeeSchedules } from "@shared/schema";
 import { db } from "./db";
 import { storage } from "./storage";
-import { isAuthenticated, requirePermission, getAllowedBranchIds } from "./auth";
+import { isAuthenticated, requirePermission, getAllowedBranchIds, contextualActionAllowed } from "./auth";
 import { updateCatalogueBranchStock } from "./catalogue-branch-stock";
 
 /** Limited desks never borrow authority from the assigned branches list. */
 export function delegatedBranchAllowed(user: { branchId?: string | null }, allowed: string[] | null, branchId: unknown) {
   return typeof branchId === "string" && branchId !== "main_warehouse"
     && branchId === user.branchId && allowed !== null && allowed.includes(branchId);
+}
+function requestBranchAllowed(req: any, branchId: unknown) {
+  const bound = req.authPermissionDecisionSnapshot?.branchTemplates?.some((base: any) => base.branchId === branchId);
+  return delegatedBranchAllowed(bound ? { branchId: branchId as string } : req.currentUser,
+    getAllowedBranchIds(req), branchId);
 }
 
 export const operationalRoster = (e: any) => ({
@@ -29,7 +34,13 @@ export const operationalAttendance = (r: any) => ({
  */
 export function workforcePermission(module: "shifts" | "attendance_check", action: "view" | "create" | "edit"): RequestHandler {
   return async (req, res, next) => {
-    const grants = (req as any).authPermissions?.find((p: any) => p.module === "branch_workforce")?.actions ?? [];
+    let grants = (req as any).authPermissions?.find((p: any) => p.module === "branch_workforce")?.actions ?? [];
+    const snapshot = (req as any).authPermissionDecisionSnapshot;
+    const requestedBranch = req.method === "GET" ? req.query.branchId
+      : req.body?.branchId ?? req.body?.schedules?.[0]?.branchId;
+    if (snapshot?.branchTemplates?.length && typeof requestedBranch === "string")
+      grants = ["view", "create", "edit"].filter(a =>
+        contextualActionAllowed(req, snapshot, "branch_workforce", a, { branchId: requestedBranch }));
     const bulk = req.path === "/api/employee-schedules/bulk";
     const narrow = grants.includes(action) || (bulk && grants.includes("edit"));
     if (!narrow || req.currentUser?.role === "admin") {
@@ -45,7 +56,7 @@ export function workforcePermission(module: "shifts" | "attendance_check", actio
       const rows = req.path === "/api/employee-schedules/bulk" ? req.body?.schedules : [req.body];
       const branchId = req.method === "GET" ? req.query.branchId : req.body?.branchId;
       if (req.method === "GET") {
-        if (!delegatedBranchAllowed(req.currentUser!, getAllowedBranchIds(req), branchId))
+        if (!requestBranchAllowed(req, branchId))
           return res.status(403).json({ error: "الفرع خارج نطاق التفويض" });
         const start = String(req.query.startDate ?? ""), end = String(req.query.endDate ?? "");
         const span = Date.parse(end) - Date.parse(start);
@@ -63,7 +74,7 @@ export function workforcePermission(module: "shifts" | "attendance_check", actio
               : typeof row.employeeId === "string" ? await storage.getBranchEmployeeByLinkedUserId(row.employeeId) : undefined;
           const targetBranch = row.branchId ?? employee?.branchId;
           if (!employee || employee.status !== "active" || employee.branchId !== targetBranch
-            || !delegatedBranchAllowed(req.currentUser!, getAllowedBranchIds(req), targetBranch))
+            || !requestBranchAllowed(req, targetBranch))
             return res.status(403).json({ error: "الموظف أو الفرع خارج نطاق التفويض" });
           const identity = employee.linkedUserId || `branch_emp_${employee.id}`;
           if (row.employeeId !== identity && row.employeeId !== `branch_emp_${employee.id}`)
@@ -115,7 +126,7 @@ export function workforcePermission(module: "shifts" | "attendance_check", actio
 
 export function registerBranchStockDesk(app: Express) {
   app.get("/api/branch-stock-desk", isAuthenticated, requirePermission("branch_stock", "view"), async (req, res) => {
-    if (!req.currentUser || !delegatedBranchAllowed(req.currentUser, getAllowedBranchIds(req), req.query.branchId))
+    if (!req.currentUser || !requestBranchAllowed(req, req.query.branchId))
       return res.status(403).json({ error: "الفرع خارج نطاق التفويض" });
     try {
       const rows = await db.select({
@@ -137,7 +148,7 @@ export function registerBranchStockDesk(app: Express) {
     const parsed = count.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: "أدخل كمية جرد صحيحة (حتى ست منازل عشرية)" });
     const { branchId, itemId, quantity, expectedQuantity } = parsed.data;
-    if (!req.currentUser || !delegatedBranchAllowed(req.currentUser, getAllowedBranchIds(req), branchId))
+    if (!req.currentUser || !requestBranchAllowed(req, branchId))
       return res.status(403).json({ error: "الفرع خارج نطاق التفويض" });
     try {
       // Use the authoritative stock row and existing audited reconciliation.

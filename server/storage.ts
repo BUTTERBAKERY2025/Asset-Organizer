@@ -1216,7 +1216,7 @@ export interface IStorage {
   getBranchPointsLedger(branchId: string, dateFrom?: string, dateTo?: string): Promise<CashierPointsLedger[]>;
   createPointsEntry(entry: InsertCashierPointsLedger): Promise<CashierPointsLedger>;
   updatePointsEntryStatus(id: number, status: string, approvedBy?: string): Promise<CashierPointsLedger | undefined>;
-  getCashierPointsSummary(cashierId: string, yearMonth?: string): Promise<{ totalPoints: number; totalAmount: number; pendingPoints: number; pendingAmount: number; approvedPoints: number; approvedAmount: number }>;
+  getCashierPointsSummary(cashierId: string, yearMonth?: string, branchIds?: string[] | null): Promise<{ totalPoints: number; totalAmount: number; pendingPoints: number; pendingAmount: number; approvedPoints: number; approvedAmount: number }>;
   
   getTopCashiersByPoints(yearMonth: string, limit?: number): Promise<Array<{ cashierId: string; cashierName: string; branchId: string; branchName: string; totalPoints: number; totalAmount: number; challengeCount: number }>>;
 
@@ -17572,9 +17572,11 @@ export class DatabaseStorage implements IStorage {
     return updated || undefined;
   }
 
-  async getCashierPointsSummary(cashierId: string, yearMonth?: string): Promise<{ totalPoints: number; totalAmount: number; pendingPoints: number; pendingAmount: number; approvedPoints: number; approvedAmount: number }> {
+  async getCashierPointsSummary(cashierId: string, yearMonth?: string, branchIds?: string[] | null): Promise<{ totalPoints: number; totalAmount: number; pendingPoints: number; pendingAmount: number; approvedPoints: number; approvedAmount: number }> {
     try {
       const conditions = [eq(cashierPointsLedger.cashierId, cashierId)];
+      if (branchIds !== undefined && branchIds !== null)
+        conditions.push(branchIds.length ? inArray(cashierPointsLedger.branchId, branchIds) : sql`false`);
       if (yearMonth) {
         const [year, month] = yearMonth.split('-');
         const startDate = `${year}-${month}-01`;

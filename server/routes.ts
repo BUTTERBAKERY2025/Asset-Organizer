@@ -15303,6 +15303,8 @@ export async function registerRoutes(
       let challenges = activeOnly
         ? await storage.getActiveDailyChallenges(branchId)
         : await storage.getAllDailyChallenges();
+      if (!isUserAdmin(req) && branchId)
+        challenges = challenges.filter((c: any) => c.branchId === branchId);
       if (!branchId && branchFilter.branchIds) {
         challenges = challenges.filter((c: any) => branchFilter.branchIds!.includes(c.branchId));
       }
@@ -15503,6 +15505,8 @@ export async function registerRoutes(
       const allChallenges = await storage.getActiveDailyChallenges(branchId as string, targetDate);
 
       const validChallenges = allChallenges.filter(c => {
+        if (!isUserAdmin(req) && branchFilter.branchIds !== null
+          && !branchFilter.branchIds?.includes(c.branchId ?? "")) return false;
         if (c.validFrom > targetDate) return false;
         if (c.validTo && c.validTo < targetDate) return false;
         const cShift = (c.shiftType && c.shiftType !== 'null') ? c.shiftType : null;
@@ -15551,6 +15555,8 @@ export async function registerRoutes(
 
       const activeCommissions = await storage.getActiveProductCommissions(branchId as string);
       const validCommissions = activeCommissions.filter(c => {
+        if (!isUserAdmin(req) && branchFilter.branchIds !== null
+          && !branchFilter.branchIds?.includes(c.branchId ?? "")) return false;
         if (c.validFrom > targetDate) return false;
         if (c.validTo && c.validTo < targetDate) return false;
         return true;
@@ -15640,6 +15646,8 @@ export async function registerRoutes(
       let commissions = activeOnly
         ? await storage.getActiveProductCommissions(branchId)
         : await storage.getAllProductCommissions();
+      if (!isUserAdmin(req) && branchId)
+        commissions = commissions.filter((c: any) => c.branchId === branchId);
       if (!branchId && branchFilter.branchIds) {
         commissions = commissions.filter((c: any) => branchFilter.branchIds!.includes(c.branchId));
       }
@@ -16163,7 +16171,7 @@ export async function registerRoutes(
       const user = getCurrentUser(req);
       const { cashierId } = req.params;
       const yearMonth = req.query.yearMonth as string | undefined;
-      const summary = await storage.getCashierPointsSummary(cashierId, yearMonth);
+      const summary = await storage.getCashierPointsSummary(cashierId, yearMonth, isUserAdmin(req) ? null : getAllowedBranchIds(req));
       if (!isUserAdmin(req) && summary && (summary as any).branchId && !(await canAccessBranch(req, (summary as any).branchId))) {
         return res.status(403).json({ error: "غير مصرح بالوصول لبيانات هذا الكاشير" });
       }
@@ -36919,7 +36927,10 @@ export async function registerRoutes(
   const isWarehouseKeeper = (req: any) => req.currentUser?.role === "warehouse_keeper";
   const isBranchSupplyManager = (req: any) => req.currentUser?.role === "branch_manager"
     || (["employee", "viewer"].includes(req.currentUser?.role ?? "")
-      && req.authPermissions?.some((p: any) => p.module === "branch_supply"));
+      && (req.authPermissions?.some((p: any) => p.module === "branch_supply")
+        || req.authPermissionDecisionSnapshot?.tuples?.some((p: any) => p.module === "branch_supply")
+        || req.authPermissionDecisionSnapshot?.branchTemplates?.some((base: any) =>
+          base.permissions.some((p: any) => p.module === "branch_supply"))));
   // Branch requests use their own module, never a broad warehouse grant.
   const transferPermission = (action: "view" | "create" | "edit") =>
     (req: any, res: any, next: any) =>

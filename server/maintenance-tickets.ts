@@ -11,7 +11,7 @@ import {
 } from "@shared/maintenance-tickets";
 import { db } from "./db";
 import { storage } from "./storage";
-import { isAuthenticated, canAccessBranch, BRANCH_MANAGER_INTRINSIC_PERMISSIONS, OPERATIONS_MANAGER_PERMISSIONS } from "./auth";
+import { isAuthenticated, canAccessBranch, requirePermission, contextualActionAllowed, BRANCH_MANAGER_INTRINSIC_PERMISSIONS, OPERATIONS_MANAGER_PERMISSIONS } from "./auth";
 import { maintenanceTicketAttachmentStorage as photos } from "./maintenance-ticket-attachment-storage";
 
 const MODULE = "maintenance";
@@ -32,7 +32,7 @@ function idFrom(raw: unknown) {
   if (!Number.isSafeInteger(id) || id <= 0) fail(400, "المعرف أو النسخة غير صالحة");
   return id;
 }
-async function hasAction(user: typeof users.$inferSelect, action: string) {
+async function hasAction(user: typeof users.$inferSelect, action: string, branchId?: string) {
   if (user.role === "admin") return true;
   // Match requirePermission's hard role boundaries before intrinsic or stored
   // grants. Old/over-broad permission rows must never elevate restricted roles.
@@ -41,6 +41,14 @@ async function hasAction(user: typeof users.$inferSelect, action: string) {
   const intrinsic = user.role === "operations_manager" ? OPERATIONS_MANAGER_PERMISSIONS[MODULE]
     : user.role === "branch_manager" ? BRANCH_MANAGER_INTRINSIC_PERMISSIONS[MODULE] : [];
   if (intrinsic?.includes(action)) return true;
+  if (branchId) {
+    const snapshot = await storage.getPermissionDecisionSnapshot(user.id);
+    if (snapshot.branchTemplates?.length) {
+      const grants = await db.select().from(userBranchAccess).where(eq(userBranchAccess.userId, user.id));
+      return contextualActionAllowed({ currentUser: user, userBranchAccess: grants, method: "GET" },
+        snapshot, MODULE, action, { branchId });
+    }
+  }
   // Use the standard effective resolver, but bypass both auth and storage
   // caches: all direct rows OR active role assignments, then active overrides.
   const grants = await storage.getUserPermissions(user.id, { bypassCache: true });
@@ -51,6 +59,15 @@ const permission = (action: string | ((req: Request) => string)): RequestHandler
   const [user] = await db.select().from(users).where(and(eq(users.id, req.session.userId!), eq(users.isActive, "active"))).limit(1);
   if (!user) fail(403, "الحساب غير نشط");
   const required = typeof action === "function" ? action(req) : action;
+  if ((req as any).authPermissionDecisionSnapshot?.branchTemplates?.length) {
+    req.currentUser = user;
+    (req as any).userBranchAccess = await db.select().from(userBranchAccess).where(eq(userBranchAccess.userId, user.id));
+    let viewed = false;
+    await requirePermission(MODULE, "view")(req, res, () => { viewed = true; });
+    if (!viewed) return;
+    res.setHeader("Cache-Control", "private, no-store");
+    return required === "view" ? next() : requirePermission(MODULE, required)(req, res, next);
+  }
   if (!(await hasAction(user, "view")) || (required !== "view" && !(await hasAction(user, required))))
     fail(403, `صلاحية ${required} مطلوبة`);
   req.currentUser = user;
@@ -68,7 +85,7 @@ async function accessible(req: Request, id: number) {
 }
 async function eligible(userId: string, branchId: string) {
   const [user] = await db.select().from(users).where(and(eq(users.id, userId), eq(users.isActive, "active"))).limit(1);
-  if (!user || !(await hasAction(user, "view")) || !(await hasAction(user, "edit"))) return false;
+  if (!user || !(await hasAction(user, "view", branchId)) || !(await hasAction(user, "edit", branchId))) return false;
   const grants = await db.select().from(userBranchAccess).where(eq(userBranchAccess.userId, user.id));
   return canAccessBranch({ currentUser: user, userBranchAccess: grants }, branchId);
 }

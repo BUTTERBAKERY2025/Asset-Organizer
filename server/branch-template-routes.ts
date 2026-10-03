@@ -26,6 +26,8 @@ export function registerBranchTemplateRoutes(app: any, deps: any) {
     if (employee.status !== "active") deny("EMPLOYEE_INACTIVE", "الموظف غير نشط");
     if (!employee.linked_user_id || employee.linked_user_id === actorId || !["employee", "viewer"].includes(employee.role))
       deny("PROTECTED_ACCOUNT", "يجب ربط حساب موظف عادي؛ الحسابات الإدارية وحسابك الشخصي محمية");
+    if (!["active", "inactive"].includes(employee.is_active))
+      deny("PROTECTED_ACCOUNT", "حالة الحساب تتطلب مراجعة مسؤول النظام");
     const duplicates = await tx.execute(sql`SELECT count(*)::integer AS count FROM branch_employees WHERE linked_user_id=${employee.linked_user_id}`);
     if (duplicates.rows[0]?.count !== 1) deny("AMBIGUOUS_ACCOUNT_LINK", "الحساب مرتبط بأكثر من موظف؛ يلزم تصحيح الربط");
     const source = await storage.getPermissionDecisionSnapshot(employee.linked_user_id, tx);
@@ -44,8 +46,14 @@ export function registerBranchTemplateRoutes(app: any, deps: any) {
     for (const row of catalog.rows) {
       try {
         const { content, permissions } = eligibleTemplatePermissions(row.content, approved, employee.job_title, employee.role);
-        const supported = new Set(["cashier_journal", "quality_control", "branch_stock"]);
+        const supported = new Set(["cashier_journal", "quality_control", "branch_stock",
+          "maintenance", "branch_complaints", "branch_workforce", "branch_supply", "central_kitchen_orders", "delivery_tasks",
+          "platform_home", "dashboard", "cashier", "incentives", "cashier_performance",
+          "smart_incentives_challenges", "smart_incentives_commissions", "smart_incentives_bonus", "smart_incentives_wallet"]);
         const unsupported = permissions.filter(p => !supported.has(p.module));
+        if (permissions.some(p => p.module === "delivery_tasks")
+          && (employee.role !== "employee" || employee.job_title !== "delivery"))
+          deny("DELIVERY_IDENTITY_REQUIRED", "قالب التوصيل يتطلب حساب سائق مرتبطًا بوظيفة التوصيل؛ القالب لا يغيّر وظيفة الحساب أو هوية المهمة");
         if (unsupported.length)
           deny("BRANCH_CONTEXT_NOT_SUPPORTED", `هذا القالب يحتوي وحدات لم يكتمل عزلها حسب الفرع: ${unsupported.map(p => p.module).join("، ")}. لا يمكن إسناده بأمان لهذا النطاق بعد.`);
         templates.push({ templateId: row.templateId, version: row.version, name: content.name, permissions });

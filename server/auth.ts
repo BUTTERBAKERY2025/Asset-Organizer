@@ -1562,7 +1562,8 @@ export function projectNavigationPermissions(
   for (const map of roleMaps) for (const [module, actions] of Object.entries(map)) {
     for (const action of actions) add(module, action);
   }
-  const branches = user.role === "warehouse_keeper" ? ["main_warehouse"] : [...new Set(branchCandidates)];
+  const branches = user.role === "warehouse_keeper" ? ["main_warehouse"]
+    : [...new Set([...branchCandidates, ...(snapshot.branchTemplates ?? []).map(base => base.branchId)])];
   const departments = [...new Set(snapshot.tuples.flatMap(tuple => tuple.departmentId == null ? [] : [tuple.departmentId]))];
   const contexts: PermissionContext[] = user.role === "warehouse_keeper" ? [] : [{}];
   for (const branchId of branches) {

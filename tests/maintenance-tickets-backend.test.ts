@@ -31,8 +31,13 @@ vi.mock("../server/db", async () => {
         if (!write && name === "users") rows = f.userRows.length ? f.userRows.shift()
           : f.active ? [{ id: "u1", role: f.role, isActive: "active", username: "tester", branchId: "a" }] : [];
         else if (!write && name === "user_permissions") rows = f.directRows ?? [{ module: "maintenance", actions: [...f.permissions] }];
-        else if (!write && name === "user_assignments") rows = f.roleGrants;
-        else if (!write && name === "user_permission_overrides") rows = f.overrides;
+        else if (!write && name === "user_permission_source_modes") rows = [];
+        else if (!write && name === "user_assignments") rows = f.roleGrants.map(r => ({
+          scopeType: "global", branchId: null, departmentId: null, startDate: null, endDate: null, isActive: true, ...r,
+        }));
+        else if (!write && name === "user_permission_overrides") rows = f.overrides.map(r => ({
+          branchId: null, departmentId: null, startDate: null, expiresAt: null, ...r,
+        }));
         else if (!write && name === "user_branch_access") rows = [{ branchId: "a" }];
         else rows = f.rows.shift() ?? [];
         return Promise.resolve(rows).then(resolve, reject);
@@ -40,7 +45,8 @@ vi.mock("../server/db", async () => {
     };
     return result;
   }
-  const db: any = { select: () => builder(), insert: (t: any) => builder(t, true), update: (t: any) => builder(t, true) };
+  const db: any = { select: () => builder(), insert: (t: any) => builder(t, true), update: (t: any) => builder(t, true),
+    execute: async () => ({ rows: [{ ready: false }] }) };
   db.transaction = async (work: any) => {
     const before = f.writes.length;
     try { const result = await work(db); f.committed.push(...f.writes.slice(before)); return result; }
@@ -141,8 +147,8 @@ describe("maintenance registered API security and transactions", () => {
       const warm = await storage.getUserPermissions("u1");
       expect(warm.find(p => p.module === "maintenance")?.actions).toContain(action);
       f.overrides = [{ module: "maintenance", action, allow: false, expiresAt: null }];
-      // The ordinary resolver is intentionally still cached; maintenance must not use it.
-      expect((await storage.getUserPermissions("u1")).find(p => p.module === "maintenance")?.actions).toContain(action);
+      // Contextual reads must observe a new deny even after warming the resolver.
+      expect((await storage.getUserPermissions("u1")).find(p => p.module === "maintenance")?.actions ?? []).not.toContain(action);
       const response = await invoke(method, suffix, { body: { version: 1, description: "تعديل", branchId: "a" } });
       expect(response.statusCode).toBe(403);
       expect(f.writes).toHaveLength(0);
@@ -163,8 +169,9 @@ describe("maintenance registered API security and transactions", () => {
       f.roleGrants = ["view", "create"].map(action => ({ module: "maintenance", action }));
       f.rows.push([ticket], [], []);
       expect((await invoke("post", "", { body: { branchId: "a", description: "عطل" } })).statusCode).toBe(201);
-      const queries = f.predicates.map(p => new PgDialect().sqlToQuery(p));
-      expect(queries.some(q => q.sql.includes('"user_assignments"."is_active" =') && q.params.includes(true))).toBe(true);
+      // Current scope/time is enforced by the decision layer, not SQL filtering.
+      f.roleGrants = f.roleGrants.map(row => ({ ...row, isActive: false }));
+      expect((await invoke("post", "", { body: { branchId: "a", description: "طلب غير مصرح" } })).statusCode).toBe(403);
     });
     it("applies deny overrides to RBAC-only grants too", async () => {
       f.directRows = [];

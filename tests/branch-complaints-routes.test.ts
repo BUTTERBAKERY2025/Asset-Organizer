@@ -54,7 +54,10 @@ vi.mock("../server/branch-complaint-attachment-storage", () => ({
   },
 }));
 vi.mock("../server/storage", () => ({
-  storage: { hasPermission: vi.fn(async (_id: string, _module: string, action: string) => fakes.permissions.has(action)) },
+  storage: {
+    getPermissionDecisionSnapshot: vi.fn(async () => ({ branchTemplates: [] })),
+    hasPermission: vi.fn(async (_id: string, _module: string, action: string) => fakes.permissions.has(action)),
+  },
 }));
 vi.mock("multer", () => {
   const multer: any = () => ({
